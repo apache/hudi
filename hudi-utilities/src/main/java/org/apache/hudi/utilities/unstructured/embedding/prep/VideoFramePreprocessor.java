@@ -58,7 +58,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * Data prep of a video file, {@value #NAME} ("video -> images (no resize)"): it runs a {@link FrameExtractionStrategy} (by default
+ * Data prep of a video file, {@value #PREPROCESSOR_NAME} ("video -> images (no resize)"): it runs a {@link FrameExtractionStrategy} (by default
  * {@value #FFMPEG_STRATEGY_CLASS}, the closest keyframe every X with consecutive repeats dropped) and emits ONE chunk per kept
  * frame, {@code modality=image} (a frame is an image to the model), no text, carrying its {@link Chunk#getFrameIndex() frame index},
  * whose payload is the frame encoded as the strategy encodes it (JPEG quality 90 at the frame's NATIVE size for the default): the
@@ -101,9 +101,9 @@ import java.util.function.Supplier;
  */
 public class VideoFramePreprocessor implements FilePreprocessor, AutoCloseable {
 
-  public static final String NAME = "video-frames-v1";
+  public static final String PREPROCESSOR_NAME = "video-frames-v1";
   /** {@link EmbeddingTableSchema#AUX_INPUT_LOGIC} of a stored FFmpeg frame: a kept frame, encoded at its native size. */
-  public static final String INPUT_LOGIC = NAME;
+  public static final String INPUT_LOGIC = PREPROCESSOR_NAME;
   public static final String AUX_SIZE_BYTES = "size_bytes";
   public static final String AUX_EXTENSION = "extension";
   /** Aux key: the frame's time in milliseconds from the container start, clamped at 0. */
@@ -166,7 +166,7 @@ public class VideoFramePreprocessor implements FilePreprocessor, AutoCloseable {
 
   /** The configuration error of a default (FFmpeg) strategy whose classes or natives cannot be linked. */
   private static PreprocessorConfigurationException ffmpegMissing(Throwable cause) {
-    return new PreprocessorConfigurationException("Video preprocessor " + NAME + " (the default of "
+    return new PreprocessorConfigurationException("Video preprocessor " + PREPROCESSOR_NAME + " (the default of "
         + EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key() + ") prepares video with FFmpeg, which Hudi does not ship and "
         + "this JVM cannot load: " + FFMPEG_JARS + "; or set " + EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key()
         + " to the non-video extensions the job prepares (e.g. pdf,png,jpg) so it prepares no video; or set "
@@ -175,7 +175,7 @@ public class VideoFramePreprocessor implements FilePreprocessor, AutoCloseable {
 
   @Override
   public String name() {
-    return NAME;
+    return PREPROCESSOR_NAME;
   }
 
   /**
@@ -313,7 +313,7 @@ public class VideoFramePreprocessor implements FilePreprocessor, AutoCloseable {
           }
         }
       } catch (RuntimeException e) {
-        throw new PreprocessorConfigurationException("The audio implementations of " + NAME + " cannot be built", e);
+        throw new PreprocessorConfigurationException("The audio implementations of " + PREPROCESSOR_NAME + " cannot be built", e);
       } catch (LinkageError e) {
         throw audioLinkage(e);
       }
@@ -323,7 +323,7 @@ public class VideoFramePreprocessor implements FilePreprocessor, AutoCloseable {
 
   /** The configuration error of audio implementations whose classes or natives cannot be linked (the default needs FFmpeg). */
   private static PreprocessorConfigurationException audioLinkage(Throwable cause) {
-    return new PreprocessorConfigurationException("The audio implementations of " + NAME + " cannot be linked ("
+    return new PreprocessorConfigurationException("The audio implementations of " + PREPROCESSOR_NAME + " cannot be linked ("
         + AudioConfigKeys.SEGMENT_SOURCE_CLASS.key() + ", " + AudioConfigKeys.TRANSCRIBER_CLASS.key() + "); the default "
         + "segment source prepares speech with FFmpeg, which Hudi does not ship and this JVM cannot load: " + FFMPEG_JARS
         + "; or set " + AudioConfigKeys.ENABLED.key() + " to false; or set " + AudioConfigKeys.SEGMENT_SOURCE_CLASS.key()

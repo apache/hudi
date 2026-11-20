@@ -73,7 +73,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * vector column. The video is the job's only file. A rerun over the same version of the object changes nothing.
  */
 @Tag("functional")
-public class TestVideoEmbeddingRound extends EmbeddingRoundTestBase {
+class TestVideoEmbeddingRound extends EmbeddingRoundTestBase {
 
   /**
    * Spark 3.5's Parquet caps inline values at 80 KiB: the 29 KB clip and its small frames sit under it, the clip under the blob
@@ -116,7 +116,7 @@ public class TestVideoEmbeddingRound extends EmbeddingRoundTestBase {
   @ParameterizedTest(name = "{0}, {1}")
   @CsvSource({"COPY_ON_WRITE, prep_only", "COPY_ON_WRITE, prep_and_compute",
       "MERGE_ON_READ, prep_only", "MERGE_ON_READ, prep_and_compute"})
-  public void videoFramesBecomeImageRowsInOneCommit(HoodieTableType tableType, String mode) throws Exception {
+  void videoFramesBecomeImageRowsInOneCommit(HoodieTableType tableType, String mode) throws Exception {
     FixtureFile video = object("videos/clip.mp4", Files.readAllBytes(CLIP));
     assertTrue(video.bytes.length <= VIDEO_INLINE_MAX_BYTES, "the clip is inline: " + video.bytes.length);
     announce(video);
@@ -144,19 +144,7 @@ public class TestVideoEmbeddingRound extends EmbeddingRoundTestBase {
     for (int k = 0; k < frames.size(); k++) {
       ExtractedFrame frame = frames.get(k);
       Row row = rows.get(key(video, EmbeddingTableSchema.MODALITY_IMAGE, k));
-      assertEquals(video.sha, row.getAs(EmbeddingTableSchema.SOURCE_PATH_SHA));
-      assertEquals(video.sourcePath, row.getAs(EmbeddingTableSchema.SOURCE_FILE_PATH));
-      assertEquals(video.extension, row.getAs(EmbeddingTableSchema.SOURCE_FILE_EXTENSION));
-      assertEquals((long) video.bytes.length, (long) row.getAs(EmbeddingTableSchema.SOURCE_FILE_SIZE));
-      assertNull(row.getAs(EmbeddingTableSchema.PREPARED_TEXT_CHUNK));
-      scala.collection.Map<String, String> aux = row.getAs(EmbeddingTableSchema.AUX);
-      assertEquals(String.valueOf(k), aux.apply(EmbeddingTableSchema.AUX_FRAME_INDEX));
-      assertEquals(String.valueOf(frame.getTimeMs()), aux.apply(VideoFramePreprocessor.AUX_TIMESTAMP_MS));
-      assertEquals(frame.getDedupKey(), aux.apply(VideoFramePreprocessor.AUX_DEDUP_KEY));
-      assertEquals(String.valueOf(frame.getWidth()), aux.apply(EmbeddingTableSchema.AUX_INPUT_WIDTH));
-      assertEquals(String.valueOf(frame.getHeight()), aux.apply(EmbeddingTableSchema.AUX_INPUT_HEIGHT));
-      assertEquals(prepLogicVersion("video"), aux.apply(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION));
-      assertEquals(ImageContentTypes.JPEG, frame.getMimeType());
+      assertFrameColumns(row, video, k, frame);
 
       Row prepared = row.getAs(EmbeddingTableSchema.PREPARED_IMAGE);
       assertEquals(HoodieSchema.Blob.INLINE, prepared.getAs(HoodieSchema.Blob.TYPE), "a frame is stored inline");
@@ -181,6 +169,23 @@ public class TestVideoEmbeddingRound extends EmbeddingRoundTestBase {
     Round rerun = EmbeddingStreamers.round(spark(), props, cfg -> cfg.tableType = tableType.name());
     assertEquals(1, rerun.getCompleted().size(), rerun.toString());
     assertEquals(before, describeWithFrames(rows(table())));
+  }
+
+  /** Frame {@code k}'s row: the video's source columns, no text, and the frame's index, time, dedup key and size in aux. */
+  private void assertFrameColumns(Row row, FixtureFile video, int k, ExtractedFrame frame) {
+    assertEquals(video.sha, row.getAs(EmbeddingTableSchema.SOURCE_PATH_SHA));
+    assertEquals(video.sourcePath, row.getAs(EmbeddingTableSchema.SOURCE_FILE_PATH));
+    assertEquals(video.extension, row.getAs(EmbeddingTableSchema.SOURCE_FILE_EXTENSION));
+    assertEquals((long) video.bytes.length, (long) row.getAs(EmbeddingTableSchema.SOURCE_FILE_SIZE));
+    assertNull(row.getAs(EmbeddingTableSchema.PREPARED_TEXT_CHUNK));
+    scala.collection.Map<String, String> aux = row.getAs(EmbeddingTableSchema.AUX);
+    assertEquals(String.valueOf(k), aux.apply(EmbeddingTableSchema.AUX_FRAME_INDEX));
+    assertEquals(String.valueOf(frame.getTimeMs()), aux.apply(VideoFramePreprocessor.AUX_TIMESTAMP_MS));
+    assertEquals(frame.getDedupKey(), aux.apply(VideoFramePreprocessor.AUX_DEDUP_KEY));
+    assertEquals(String.valueOf(frame.getWidth()), aux.apply(EmbeddingTableSchema.AUX_INPUT_WIDTH));
+    assertEquals(String.valueOf(frame.getHeight()), aux.apply(EmbeddingTableSchema.AUX_INPUT_HEIGHT));
+    assertEquals(prepLogicVersion("video"), aux.apply(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION));
+    assertEquals(ImageContentTypes.JPEG, frame.getMimeType());
   }
 
   /** {@link #describe} with each inline frame's bytes by content (a byte array prints by identity). */

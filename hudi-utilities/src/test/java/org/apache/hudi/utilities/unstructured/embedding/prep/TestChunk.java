@@ -32,10 +32,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** {@link Chunk} and {@link SequentialChunkIdScheme}: the unit a preprocessor yields and how its id is assigned. */
-public class TestChunk {
+class TestChunk {
 
   @Test
-  public void builderCopiesTheAuxMap() {
+  void builderCopiesTheAuxMap() {
     Map<String, String> aux = new HashMap<>();
     aux.put("page", "1");
     Chunk chunk = Chunk.builder(EmbeddingTableSchema.MODALITY_TEXT).text("hello").tokenCount(1).aux(aux).build();
@@ -45,22 +45,24 @@ public class TestChunk {
     assertEquals("hello", chunk.getText());
     assertEquals(1, chunk.getTokenCount());
     assertEquals(Collections.singletonMap("page", "1"), chunk.getAux());
-    assertThrows(UnsupportedOperationException.class, () -> chunk.getAux().put("page", "3"));
+    Map<String, String> chunkAux = chunk.getAux();
+    assertThrows(UnsupportedOperationException.class, () -> chunkAux.put("page", "3"));
   }
 
   @Test
-  public void constructorCopiesTheAuxMap() {
+  void constructorCopiesTheAuxMap() {
     Map<String, String> aux = new HashMap<>();
     aux.put("page", "1");
     Chunk chunk = new Chunk(EmbeddingTableSchema.MODALITY_TEXT, "hello", 1, aux);
     aux.put("page", "9");
 
     assertEquals(Collections.singletonMap("page", "1"), chunk.getAux());
-    assertThrows(UnsupportedOperationException.class, () -> chunk.getAux().put("page", "3"));
+    Map<String, String> chunkAux = chunk.getAux();
+    assertThrows(UnsupportedOperationException.class, () -> chunkAux.put("page", "3"));
   }
 
   @Test
-  public void optionalFieldsDefaultToEmpty() {
+  void optionalFieldsDefaultToEmpty() {
     Chunk chunk = Chunk.builder(EmbeddingTableSchema.MODALITY_TEXT).aux(null).build();
 
     assertNull(chunk.getText());
@@ -70,12 +72,12 @@ public class TestChunk {
   }
 
   @Test
-  public void builderNeedsAModality() {
+  void builderNeedsAModality() {
     assertThrows(NullPointerException.class, () -> Chunk.builder(null));
   }
 
   @Test
-  public void sequentialChunkIdsAreTheOrdinals() {
+  void sequentialChunkIdsAreTheOrdinals() {
     SequentialChunkIdScheme scheme = new SequentialChunkIdScheme();
 
     assertEquals(0L, scheme.chunkId(0L));

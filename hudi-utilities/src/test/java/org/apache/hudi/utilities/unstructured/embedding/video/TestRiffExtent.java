@@ -32,13 +32,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /** {@link RiffExtent} over synthetic RIFF layouts: what fits, what a cut leaves, and the sizes it cannot judge. */
-public class TestRiffExtent {
+class TestRiffExtent {
 
   @TempDir
   Path dir;
 
   @Test
-  public void chunksThatFitTheFileAreAccepted() throws IOException {
+  void chunksThatFitTheFileAreAccepted() throws IOException {
     assertNull(extent(riff("AVI ", 100)));
     // an AVI past 1 GiB continues in AVIX chunks: each is walked
     assertNull(extent(concat(riff("AVI ", 100), riff("AVIX", 64))));
@@ -49,7 +49,7 @@ public class TestRiffExtent {
   }
 
   @Test
-  public void chunkThatOverrunsTheFileIsATruncation() throws IOException {
+  void chunkThatOverrunsTheFileIsATruncation() throws IOException {
     byte[] whole = riff("AVI ", 100);
     assertEquals("has a RIFF chunk at offset 0 declaring 104 bytes, but the file ends at 60",
         extent(Arrays.copyOf(whole, 60)));
@@ -60,7 +60,7 @@ public class TestRiffExtent {
 
   /** A size the writer never patched (FFmpeg's placeholder on a pipe) or zero says nothing about the file's length. */
   @Test
-  public void unpatchedSizeIsNotJudged() throws IOException {
+  void unpatchedSizeIsNotJudged() throws IOException {
     byte[] unpatched = riff("AVI ", 100);
     unpatched[4] = (byte) 0xFF;
     unpatched[5] = (byte) 0xFF;

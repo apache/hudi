@@ -491,16 +491,13 @@ public class TestPreprocessingIteratorPrefetch {
     PrepCounters counters = new PrepCounters(new LongAccumulator(), new LongAccumulator(), new LongAccumulator(),
         new LongAccumulator(), new LongAccumulator());
     PayloadDestination destination = new PayloadDestination(HadoopFSUtils.getStorageConf(new Configuration()), embeddingTable, props);
-    PreprocessingIterator iterator = new PreprocessingIterator(
-        rows.iterator(),
-        EmbeddingTableConfig.from(props),
-        "001",
-        source,
-        new PreprocessorRegistry(props),
-        new WordCountTokenizer(),
-        counters,
-        null,
-        destination);
+    PreprocessingIterator iterator = PreprocessingIterator.builder(rows.iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(source)
+        .registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer())
+        .counters(counters)
+        .destination(destination)
+        .build();
     StoredRun run = new StoredRun();
     List<Row> prepared = new ArrayList<>();
     try {
@@ -865,15 +862,12 @@ public class TestPreprocessingIteratorPrefetch {
     if (sourceOverride != null) {
       source = sourceOverride;
     }
-    return new PreprocessingIterator(
-        rows.iterator(),
-        EmbeddingTableConfig.from(props),
-        "001",
-        source,
-        new PreprocessorRegistry(props),
-        new WordCountTokenizer(),
-        counters,
-        null);
+    return PreprocessingIterator.builder(rows.iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(source)
+        .registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer())
+        .counters(counters)
+        .build();
   }
 
   private TypedProperties props() {

@@ -50,6 +50,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -60,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * catches up from its own checkpoint.
  */
 @Tag("functional")
-public class TestBlobAndEmbeddingStreamsConcurrently extends EmbeddingRoundTestBase {
+class TestBlobAndEmbeddingStreamsConcurrently extends EmbeddingRoundTestBase {
 
   /** Objects above this many bytes are out of line, in both jobs. */
   private static final long INLINE_CEILING = 40;
@@ -77,6 +78,7 @@ public class TestBlobAndEmbeddingStreamsConcurrently extends EmbeddingRoundTestB
 
   private Callable<Void> blobRound() throws Exception {
     TypedProperties props = objects().jobProperties(INLINE_CEILING);
+    props.setProperty("hoodie.enable.data.skipping", "false");
     return () -> {
       HoodieStreamer streamer = new HoodieStreamer(BlobJobHarness.streamerConfig(blobTable()), jsc(), Option.of(props));
       try {
@@ -90,6 +92,7 @@ public class TestBlobAndEmbeddingStreamsConcurrently extends EmbeddingRoundTestB
 
   private Callable<Void> embeddingRound() {
     TypedProperties props = props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, INLINE_CEILING);
+    props.setProperty("hoodie.enable.data.skipping", "false");
     // the shared Spark catalog cache is cleared once both rounds are done, not while the blob round still runs
     return () -> {
       EmbeddingStreamers.round(spark(), props, cfg -> { }, false);
@@ -99,10 +102,10 @@ public class TestBlobAndEmbeddingStreamsConcurrently extends EmbeddingRoundTestB
 
   /** Runs both rounds at once; returns their outcomes, blob first. */
   private List<Future<Void>> together(Callable<Void> blob, Callable<Void> embedding) throws Exception {
+    spark().conf().set("hoodie.enable.data.skipping", "false");
     ExecutorService pool = Executors.newFixedThreadPool(2);
     try {
-      List<Future<Void>> outcomes = pool.invokeAll(Arrays.asList(blob, embedding), 10, TimeUnit.MINUTES);
-      return outcomes;
+      return pool.invokeAll(Arrays.asList(blob, embedding), 10, TimeUnit.MINUTES);
     } finally {
       pool.shutdownNow();
       spark().catalog().clearCache();
@@ -129,7 +132,7 @@ public class TestBlobAndEmbeddingStreamsConcurrently extends EmbeddingRoundTestB
   }
 
   @Test
-  public void bothStreamsCompleteWithTheirOwnCheckpointsAndNeitherAffectsTheOther() throws Exception {
+  void bothStreamsCompleteWithTheirOwnCheckpointsAndNeitherAffectsTheOther() throws Exception {
     FixtureFile a = text("a", "alpha");
     FixtureFile b = text("b", "a long first chunk of text", "a long second chunk of text");
     announce(a, b);
@@ -166,7 +169,7 @@ public class TestBlobAndEmbeddingStreamsConcurrently extends EmbeddingRoundTestB
     assertEquals(2, EmbeddingStreamers.commits(blobTable(), storage()).size(), "the idle blob round commits nothing");
     assertEquals(2, EmbeddingStreamers.commits(table(), storage()).size());
     for (Row row : rows(table()).values()) {
-      assertTrue(vector(row) != null, "every embedding row has its embedding: " + row);
+      assertNotNull(vector(row), "every embedding row has its embedding: " + row);
     }
   }
 }

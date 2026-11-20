@@ -52,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The source's whole-file references retain embedding prep's existing listed-version check. */
 @Tag("functional")
-public class TestPrepRoundSourceObjects extends SparkClientFunctionalTestHarness {
+class TestPrepRoundSourceObjects extends SparkClientFunctionalTestHarness {
 
   /**
    * The rows the source's own {@link BlobRowBuilder} builds for objects above its inline threshold (an unmanaged reference to the
@@ -61,7 +61,7 @@ public class TestPrepRoundSourceObjects extends SparkClientFunctionalTestHarness
    * or by size, and an unchanged one passes the same check.
    */
   @Test
-  public void inPlaceReferenceIsCheckedAgainstTheListedVersion(@TempDir Path folder) throws IOException {
+  void inPlaceReferenceIsCheckedAgainstTheListedVersion(@TempDir Path folder) throws IOException {
     byte[] listed = "%PDF listed".getBytes(StandardCharsets.UTF_8);
     List<CloudObjectMetadata> objects = new ArrayList<>();
     for (String name : Arrays.asList("touched.pdf", "grown.pdf", "kept.pdf")) {

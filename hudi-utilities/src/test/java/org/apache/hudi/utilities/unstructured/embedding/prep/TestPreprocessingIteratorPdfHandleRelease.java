@@ -66,7 +66,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * consumer closes it with the PDF half read. Outside Spark the staging root is {@code java.io.tmpdir}, which these tests point at
  * a temp dir of their own.
  */
-public class TestPreprocessingIteratorPdfHandleRelease {
+class TestPreprocessingIteratorPdfHandleRelease {
 
   private static final StructType BLOB = (StructType) BlobType.dataType();
   private static final StructType BLOB_ROW = DataTypes.createStructType(new StructField[] {
@@ -85,12 +85,12 @@ public class TestPreprocessingIteratorPdfHandleRelease {
   private String embeddingTable;
 
   @BeforeAll
-  public static void fontCache(@TempDir Path cache) {
+  static void fontCache(@TempDir Path cache) {
     System.setProperty("pdfbox.fontcache", cache.toString());
   }
 
   @BeforeEach
-  public void setUp() throws IOException {
+  void setUp() throws IOException {
     // outside Spark the PDF staging root is java.io.tmpdir; a live SparkEnv may point it at a Spark local dir instead
     assumeTrue(SparkEnv.get() == null, "no SparkEnv: the PDF staging root is java.io.tmpdir");
     embeddingTable = temp.resolve("embedding").toUri().toString();
@@ -104,12 +104,12 @@ public class TestPreprocessingIteratorPdfHandleRelease {
   }
 
   @AfterEach
-  public void restoreTmpDir() {
+  void restoreTmpDir() {
     System.setProperty("java.io.tmpdir", savedTmpDir);
   }
 
   @Test
-  public void pdfHalfReadThenClosedLeavesNoScratch() throws IOException {
+  void pdfHalfReadThenClosedLeavesNoScratch() throws IOException {
     PreprocessingIterator iterator = iterator(pdfRow("sha-a", PdfFixtures.prose(21L, 12, 60)));
     assertTrue(iterator.hasNext());
     iterator.next();
@@ -119,7 +119,7 @@ public class TestPreprocessingIteratorPdfHandleRelease {
   }
 
   @Test
-  public void pdfsReadToTheEndLeaveNoScratch() throws IOException {
+  void pdfsReadToTheEndLeaveNoScratch() throws IOException {
     PreprocessingIterator iterator = iterator(pdfRow("sha-a", PdfFixtures.prose(22L, 12, 60)),
         pdfRow("sha-b", "%PDF-1.7 broken".getBytes(StandardCharsets.US_ASCII)), pdfRow("sha-c", PdfFixtures.prose(23L, 3, 30)));
     int rows = 0;
@@ -142,12 +142,12 @@ public class TestPreprocessingIteratorPdfHandleRelease {
     props.setProperty(EmbeddingTableConfig.MODELS.key(), "m1");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1" + EmbeddingTableConfig.MODEL_DIMENSIONS_SUFFIX, "4");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1" + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, "dummy");
-    return new PreprocessingIterator(Arrays.asList(rows).iterator(), EmbeddingTableConfig.from(props), "001",
-        new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())), new PreprocessorRegistry(props),
-        new WordCountTokenizer(),
-        new PrepCounters(new LongAccumulator(), new LongAccumulator(), new LongAccumulator(), new LongAccumulator(),
-            new LongAccumulator()),
-        null);
+    return PreprocessingIterator.builder(Arrays.asList(rows).iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())))
+        .registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer())
+        .counters(new PrepCounters(new LongAccumulator(), new LongAccumulator(), new LongAccumulator(), new LongAccumulator(), new LongAccumulator()))
+        .build();
   }
 
   private static Row pdfRow(String sha, byte[] pdf) {

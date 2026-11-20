@@ -158,7 +158,7 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
     StructType tableSchema = EmbeddingTableSchema.outputSchema(config, table, model);
     Map<String, Integer> writtenVectors = EmbeddingColumnInfoConfig.vectorColumns(Option.of(tableSchema));
     Map<String, EmbeddingColumnInfoStore.Identity> identities = new LinkedHashMap<>();
-    for (EmbeddingModelSpec declared : config.models()) {
+    for (EmbeddingModelSpec declared : config.modelSpecs()) {
       if (writtenVectors.containsKey(declared.getColumn())) {
         identities.put(declared.getColumn(), EmbeddingColumnInfoConfig.identity(declared, properties));
       }
@@ -177,7 +177,7 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
       return new StartedColumnInfo(properties, identities, store, update);
     });
     try {
-      Dataset<Row> output = round(jsc, sparkSession, rowDataset, config, model, storageConf, tableSchema, instantTime);
+      Dataset<Row> output = round(sparkSession, rowDataset, config, model, storageConf, tableSchema, instantTime);
       pendingColumnInfo.put(target, new PendingColumnInfo(instantTime, started.store,
           started.update.withExistingColumns(EmbeddingColumnInfoConfig.vectorColumns(table))));
       return output;
@@ -394,7 +394,7 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
 
   // ------------------------------------------------------------------------------------------------------------ the round
 
-  private Dataset<Row> round(JavaSparkContext jsc, SparkSession spark, Dataset<Row> blobRows, EmbeddingTableConfig config,
+  private Dataset<Row> round(SparkSession spark, Dataset<Row> blobRows, EmbeddingTableConfig config,
                              Option<EmbeddingModelSpec> computedModel, StorageConfiguration<?> storageConf, StructType tableSchema,
                              String instant) {
     TypedProperties props = config.getProps();
@@ -403,7 +403,7 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
     StorageLevel level = EmbeddingTableConfig.persistLevel(props);
     RoundCaches caches = new RoundCaches();
     try {
-      PrepRound.Prepared prepared = PrepRound.prepare(spark, blobRows, config, storageConf, tableSchema, outputSchema, instant, level);
+      PrepRound.Prepared prepared = PrepRound.prepare(spark, blobRows, config, storageConf, outputSchema, instant, level);
       caches.outputs.add(prepared.output);
       caches.balance = prepared.balance;
       if (!computedModel.isPresent()) {
@@ -419,10 +419,12 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
         retainRound(target, caches);
         return routed(prepErrors, props);
       }
-      int parallelism = config.computeParallelism(jsc.defaultParallelism());
-      ComputeCounters counters = ComputeCounters.register(jsc.sc());
+      int parallelism = config.computeParallelism(spark.sparkContext().defaultParallelism());
+      ComputeCounters counters = ComputeCounters.register(spark.sparkContext());
+      ComputeRound.Resources resources =
+          new ComputeRound.Resources(new BlobBytesSource(target, storageConf, config.prepSourceRetry()), counters, level);
       Dataset<Row> embedded = ComputeRound.embed(spark, ComputeRound.hashPartitionByKey(toEmbed, parallelism), tableSchema, model, props,
-          new BlobBytesSource(target, storageConf, config.prepSourceRetry()), counters, level);
+          resources);
       caches.outputs.add(embedded);
       pendingCompute.put(target, new ComputeCheck(instant, model, counters));
       LOG.info("Embedding round of {} at instant {}: model {} over {} task(s): {} row(s) embedded, {} failed for good", target,

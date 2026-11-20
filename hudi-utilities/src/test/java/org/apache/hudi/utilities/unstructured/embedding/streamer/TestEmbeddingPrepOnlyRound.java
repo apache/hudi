@@ -38,10 +38,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * one up. One streamer round is driven directly here, the way a rendered job runs it.
  */
 @Tag("functional")
-public class TestEmbeddingPrepOnlyRound extends EmbeddingRoundTestBase {
+class TestEmbeddingPrepOnlyRound extends EmbeddingRoundTestBase {
 
   @Test
-  public void prepOnlyRoundCommitsThePreparedRowsWithoutAModel() throws Exception {
+  void prepOnlyRoundCommitsThePreparedRowsWithoutAModel() throws Exception {
     FixtureFile a = text("a", "alpha", "beta");
     announce(a);
     TypedProperties props = props(table(), EmbeddingTableConfig.MODE_PREP_ONLY);
@@ -62,7 +62,7 @@ public class TestEmbeddingPrepOnlyRound extends EmbeddingRoundTestBase {
 
   /** The embedding source runs its transformer when the job names no transformer: the same round commits the same rows. */
   @Test
-  public void embeddingTransformerRunsWhenTheJobNamesNone() throws Exception {
+  void embeddingTransformerRunsWhenTheJobNamesNone() throws Exception {
     FixtureFile a = text("a", "alpha", "beta");
     announce(a);
     HoodieStreamer.Config cfg = EmbeddingStreamers.config(table());

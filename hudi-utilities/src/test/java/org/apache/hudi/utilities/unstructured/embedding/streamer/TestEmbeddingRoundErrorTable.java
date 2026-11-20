@@ -51,10 +51,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * model. With the error table off, either fails the round and nothing is committed.
  */
 @Tag("functional")
-public class TestEmbeddingRoundErrorTable extends EmbeddingRoundTestBase {
+class TestEmbeddingRoundErrorTable extends EmbeddingRoundTestBase {
 
   @Test
-  public void prepAndComputeFailuresLandInTheOneErrorTableAndTheDataRowKeepsItsText() throws Exception {
+  void prepAndComputeFailuresLandInTheOneErrorTableAndTheDataRowKeepsItsText() throws Exception {
     FixtureFile good = text("good", "alpha", "beta");
     FixtureFile broken = text("broken", TextPipePreprocessor.BROKEN);
     FixtureFile permanent = text("permanent", "gamma", "delta " + ScriptedEmbeddingClient.PERMANENT);
@@ -90,7 +90,7 @@ public class TestEmbeddingRoundErrorTable extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void withTheErrorTableOffAPermanentInputFailsTheRound() throws Exception {
+  void withTheErrorTableOffAPermanentInputFailsTheRound() throws Exception {
     announce(text("permanent", "gamma " + ScriptedEmbeddingClient.PERMANENT));
     // only text is prepared: content of a modality the text model does not declare is refused at start with the error table off
     TypedProperties props = props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
@@ -104,7 +104,7 @@ public class TestEmbeddingRoundErrorTable extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void withTheErrorTableOffAFailedFileFailsTheRound() throws Exception {
+  void withTheErrorTableOffAFailedFileFailsTheRound() throws Exception {
     announce(text("good", "alpha"), text("broken", TextPipePreprocessor.BROKEN));
     TypedProperties props = props(table(), EmbeddingTableConfig.MODE_PREP_ONLY,
         HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), "false");

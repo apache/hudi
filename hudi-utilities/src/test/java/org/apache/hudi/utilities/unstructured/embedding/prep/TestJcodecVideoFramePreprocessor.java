@@ -26,6 +26,7 @@ import org.apache.hudi.utilities.unstructured.embedding.audio.AudioConfigKeys;
 import org.apache.hudi.utilities.unstructured.embedding.audio.StubAudioSegmentSource;
 import org.apache.hudi.utilities.unstructured.embedding.image.ImageContentTypes;
 import org.apache.hudi.utilities.unstructured.embedding.source.FileMeta;
+import org.apache.hudi.utilities.unstructured.embedding.text.Tokenizer;
 import org.apache.hudi.utilities.unstructured.embedding.text.TokenizerFactory;
 import org.apache.hudi.utilities.unstructured.embedding.video.JcodecKeyframeVideoFrameSource;
 import org.apache.hudi.utilities.unstructured.embedding.video.VideoClips;
@@ -55,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The JCodec video preprocessor ({@link JcodecVideoFramePreprocessor}): picked by the video key for every video extension while
  * the default stays FFmpeg; it refuses audio on the driver, naming the key; its rows have the FFmpeg rows' shape with its own names.
  */
-public class TestJcodecVideoFramePreprocessor {
+class TestJcodecVideoFramePreprocessor {
 
   private static final String C01 = "/video/codec-matrix/c01-h264-aac.mp4";
 
@@ -66,12 +67,12 @@ public class TestJcodecVideoFramePreprocessor {
   }
 
   @Test
-  public void testTheVideoKeySelectsJcodecForEveryVideoExtension() {
+  void testTheVideoKeySelectsJcodecForEveryVideoExtension() {
     PreprocessorRegistry registry = new PreprocessorRegistry(jcodecProps());
     for (String extension : PreprocessorRegistry.VIDEO_EXTENSIONS) {
       FilePreprocessor preprocessor = registry.forExtension(extension).get();
       assertEquals(JcodecVideoFramePreprocessor.class, preprocessor.getClass(), extension);
-      assertEquals(JcodecVideoFramePreprocessor.NAME, preprocessor.name(), extension);
+      assertEquals(JcodecVideoFramePreprocessor.PREPROCESSOR_NAME, preprocessor.name(), extension);
     }
     FilePreprocessor jcodec = registry.forExtension("mp4").get();
     assertEquals("video-frames-h264mp4-v1", jcodec.name());
@@ -82,7 +83,7 @@ public class TestJcodecVideoFramePreprocessor {
   }
 
   @Test
-  public void testTheDefaultStaysFfmpeg() {
+  void testTheDefaultStaysFfmpeg() {
     PreprocessorRegistry registry = new PreprocessorRegistry(new TypedProperties());
     for (String extension : PreprocessorRegistry.VIDEO_EXTENSIONS) {
       assertEquals(VideoFramePreprocessor.class, registry.forExtension(extension).get().getClass(), extension);
@@ -90,15 +91,16 @@ public class TestJcodecVideoFramePreprocessor {
   }
 
   @Test
-  public void testAudioIsRefusedOnTheDriverNamingTheKey() {
+  void testAudioIsRefusedOnTheDriverNamingTheKey() {
     TypedProperties props = jcodecProps();
     props.setProperty(AudioConfigKeys.ENABLED.key(), "true");
     props.setProperty(AudioConfigKeys.SEGMENT_SOURCE_CLASS.key(), StubAudioSegmentSource.class.getName());
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> new PreprocessorRegistry(props).validateConfig(props, TokenizerFactory.create(props)));
+    PreprocessorRegistry registry = new PreprocessorRegistry(props);
+    Tokenizer tokenizer = TokenizerFactory.create(props);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> registry.validateConfig(props, tokenizer));
     String message = refused.getMessage();
     assertTrue(message.contains(AudioConfigKeys.ENABLED.key()), message);
-    assertTrue(message.contains(JcodecVideoFramePreprocessor.NAME), message);
+    assertTrue(message.contains(JcodecVideoFramePreprocessor.PREPROCESSOR_NAME), message);
     assertTrue(message.contains(VideoFramePreprocessor.class.getName()), message);
     assertTrue(message.contains("frames only"), message);
     assertFalse(message.contains("FFmpeg"), message);
@@ -109,7 +111,7 @@ public class TestJcodecVideoFramePreprocessor {
 
   /** A JCodec frame row: the FFmpeg row's shape (modality image, the frame index, every aux key) under JCodec's own names. */
   @Test
-  public void testFrameRowsHaveTheFfmpegShapeWithJcodecNames() throws Exception {
+  void testFrameRowsHaveTheFfmpegShapeWithJcodecNames() throws Exception {
     Path c01 = Paths.get(TestJcodecVideoFramePreprocessor.class.getResource(C01).toURI());
     TypedProperties props = jcodecProps();
     FileMeta file = new FileMeta("sha-c01", "mp4", Files.size(c01));
@@ -131,7 +133,7 @@ public class TestJcodecVideoFramePreprocessor {
         assertEquals(Long.valueOf(index), chunk.getFrameIndex());
         assertEquals(String.valueOf(index), aux.get(EmbeddingTableSchema.AUX_FRAME_INDEX));
         assertEquals(JcodecKeyframeVideoFrameSource.LOGIC_VERSION, aux.get(VideoFramePreprocessor.AUX_VIDEO_LOGIC));
-        assertEquals(JcodecVideoFramePreprocessor.NAME, aux.get(EmbeddingTableSchema.AUX_INPUT_LOGIC));
+        assertEquals(JcodecVideoFramePreprocessor.PREPROCESSOR_NAME, aux.get(EmbeddingTableSchema.AUX_INPUT_LOGIC));
         assertEquals("160", aux.get(VideoFramePreprocessor.AUX_WIDTH));
         assertEquals("120", aux.get(EmbeddingTableSchema.AUX_INPUT_HEIGHT));
         assertEquals("mp4", aux.get(VideoFramePreprocessor.AUX_EXTENSION));

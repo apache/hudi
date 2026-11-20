@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Provider-level request rejection policy and pacing reach the micro-batch iterator without dropping prepared row values. */
-public class TestProviderRejectionPolicy {
+class TestProviderRejectionPolicy {
 
   private static final String POLICY = "test.rejection.policy";
   private static final StructType SCHEMA = new StructType()
@@ -97,7 +97,7 @@ public class TestProviderRejectionPolicy {
   }
 
   @Test
-  public void equalPermanentRejectionsAcrossFilesFailTheRound() {
+  void equalPermanentRejectionsAcrossFilesEndTheTaskWithARefusalMarker() {
     ComputeCounters counters = counters();
     List<Row> result = drain("uniform", counters, row("a", 0, "bad"), row("b", 0, "bad"));
     assertEquals(1, result.size());
@@ -113,7 +113,7 @@ public class TestProviderRejectionPolicy {
   }
 
   @Test
-  public void equalPermanentRejectionsOfOneFileRemainRowErrors() {
+  void equalPermanentRejectionsOfOneFileRemainRowErrors() {
     List<Row> rows = drain("uniform", counters(), row("a", 0, "bad"), row("a", 1, "bad"));
     assertEquals(2, rows.size());
     for (Row row : rows) {
@@ -124,14 +124,14 @@ public class TestProviderRejectionPolicy {
   }
 
   @Test
-  public void anIndependentInputClientKeepsCrossFileRejectionsAsRowErrors() {
+  void anIndependentInputClientKeepsCrossFileRejectionsAsRowErrors() {
     List<Row> rows = drain("independent", counters(), row("a", 0, "bad"), row("b", 0, "bad"));
     assertEquals(2, rows.size());
     rows.forEach(row -> assertEquals("provider rejected input", row.getString(8)));
   }
 
   @Test
-  public void successfulNeighbourKeepsOneBadInputFromFailingTheRound() {
+  void successfulNeighbourKeepsOneBadInputFromFailingTheRound() {
     List<Row> rows = drain("uniform", counters(), row("a", 0, "bad"), row("b", 0, "ok"));
     assertEquals("bad", rows.get(0).getString(5));
     assertNull(rows.get(0).get(7));
@@ -142,7 +142,7 @@ public class TestProviderRejectionPolicy {
   }
 
   @Test
-  public void rateWaitIncludesThrowingBatchAndItsSuccessfulSingleInputRetries() {
+  void rateWaitIncludesThrowingBatchAndItsSuccessfulSingleInputRetries() {
     ComputeCounters counters = counters();
     List<Row> rows = drain("retry", counters, row("a", 0, "bad"), row("b", 0, "bad"));
     assertEquals(2, rows.size());
@@ -152,7 +152,7 @@ public class TestProviderRejectionPolicy {
   }
 
   @Test
-  public void rateWaitIncludesAConfigurationException() {
+  void rateWaitIncludesAConfigurationException() {
     ComputeCounters counters = counters();
     List<Row> result = drain("throw", counters, row("a", 0, "bad"));
     assertEquals(1, result.size());

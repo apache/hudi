@@ -62,9 +62,9 @@ public final class BlobInlineCeiling {
   static final String SPARK_TASK_CPUS = "spark.task.cpus";
   private static final long MIB = 1024L * 1024L;
   /** local, local[N], local[*], local[N,F], local[*,F] (spaces allowed around the comma, as Spark does); group 1 is N or *. */
-  private static final Pattern LOCAL = Pattern.compile("local(?:\\[([0-9]+|\\*)(?:\\s*,\\s*[0-9]+)?\\])?");
+  private static final Pattern LOCAL = Pattern.compile("local(?:\\[(\\d+|\\*)(?:\\s*,\\s*\\d+)?\\])?");
   /** local-cluster[workers,coresPerWorker,memoryPerWorkerMiB]. */
-  private static final Pattern LOCAL_CLUSTER = Pattern.compile("local-cluster\\[\\s*[0-9]+\\s*,\\s*([0-9]+)\\s*,\\s*[0-9]+\\s*]");
+  private static final Pattern LOCAL_CLUSTER = Pattern.compile("local-cluster\\[\\s*\\d+\\s*,\\s*(\\d+)\\s*,\\s*\\d+\\s*]");
 
   private final double fraction;
   private final long executorHeapBytes;

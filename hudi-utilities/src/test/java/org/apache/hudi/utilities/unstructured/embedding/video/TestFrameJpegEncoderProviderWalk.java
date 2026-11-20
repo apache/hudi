@@ -47,13 +47,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * frame encoder: one whose create method throws IOException (ImageIO then yields a null candidate) and one that throws
  * unchecked. The encoder still gets the JDK's JPEG writer and encodes a frame.
  */
-public class TestFrameJpegEncoderProviderWalk {
+class TestFrameJpegEncoderProviderWalk {
 
   private final IIORegistry registry = IIORegistry.getDefaultInstance();
 
   @ParameterizedTest(name = "checked={0}, foreignFirst={1}")
   @CsvSource({"true,true", "true,false", "false,true", "false,false"})
-  public void failingForeignJpegWriterIsSkipped(boolean checked, boolean foreignFirst) throws IOException {
+  void failingForeignJpegWriterIsSkipped(boolean checked, boolean foreignFirst) throws IOException {
     FailingJpegWriterSpi foreign = new FailingJpegWriterSpi(checked);
     registry.registerServiceProvider(foreign, ImageWriterSpi.class);
     try {
@@ -73,7 +73,10 @@ public class TestFrameJpegEncoderProviderWalk {
         jpeg = encoder.encode(new BufferedImage(16, 8, BufferedImage.TYPE_3BYTE_BGR), new FileMeta("fid-walk", "mp4", 1));
       }
       assertTrue(foreign.attempts > 0, "the walk met the failing provider");
-      BufferedImage decoded = ImageIO.read(new ByteArrayInputStream(jpeg));
+      BufferedImage decoded;
+      try (ByteArrayInputStream in = new ByteArrayInputStream(jpeg)) {
+        decoded = ImageIO.read(in);
+      }
       assertNotNull(decoded, "the frame was encoded as a JPEG");
       assertEquals(16, decoded.getWidth());
       assertEquals(8, decoded.getHeight());

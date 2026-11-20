@@ -115,7 +115,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * {@code read}, see {@link BlobRoundMemoryChild}) next to its log; {@code -Dblob.memory.events=<announced>:<deleted>} replaces the
  * object counts of the events cells.
  */
-public class TestBlobRoundMemoryCells {
+class TestBlobRoundMemoryCells {
 
   static final String REFERENCE_HEAP = TestEmbeddingRoundMemoryCells.REFERENCE_HEAP;
   /** The log block size and the read's and the write's merge buffers of the cells, scaled to the small heap. */
@@ -154,7 +154,7 @@ public class TestBlobRoundMemoryCells {
 
   @ParameterizedTest(name = "cell {0}")
   @ValueSource(strings = {"mor-inline-light", "mor-inline", "cow-inline"})
-  public void cellPassesAtTheReferenceHeap(String cell) throws Exception {
+  void cellPassesAtTheReferenceHeap(String cell) throws Exception {
     // a report of an earlier run must not stand for this one
     Files.deleteIfExists(Paths.get("target", "memory-cells", cell + ".txt"));
     assumeTrue(selected(cell), "memory cell " + cell + " not selected (-Dblob.memory.cells)");
@@ -222,7 +222,7 @@ public class TestBlobRoundMemoryCells {
    * threshold the cell configures, on either Parquet.
    */
   @Test
-  public void inlineCeilingRefusedCell() throws Exception {
+  void inlineCeilingRefusedCell() throws Exception {
     String cell = "inline-ceiling-refused";
     // a report of an earlier run must not stand for this one
     Files.deleteIfExists(Paths.get("target", "memory-cells", cell + ".txt"));
@@ -265,7 +265,7 @@ public class TestBlobRoundMemoryCells {
    */
   @ParameterizedTest(name = "cell {0}")
   @ValueSource(strings = {"inline-ceiling-4-light", "inline-ceiling-4"})
-  public void inlineCeilingFourTasksCell(String cell) throws Exception {
+  void inlineCeilingFourTasksCell(String cell) throws Exception {
     // a report of an earlier run must not stand for this one
     Files.deleteIfExists(Paths.get("target", "memory-cells", cell + ".txt"));
     assumeTrue(selected(cell), "memory cell " + cell + " not selected (-Dblob.memory.cells)");
@@ -322,7 +322,7 @@ public class TestBlobRoundMemoryCells {
    */
   @ParameterizedTest(name = "cell {0}")
   @ValueSource(strings = {"events-light", "events-100k"})
-  public void eventsCell(String cell) throws Exception {
+  void eventsCell(String cell) throws Exception {
     // a report of an earlier run must not stand for this one
     Files.deleteIfExists(Paths.get("target", "memory-cells", cell + ".txt"));
     assumeTrue(selected(cell), "memory cell " + cell + " not selected (-Dblob.memory.cells)");

@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * skew of the prepared rows, and each row's task depends on its own key columns and the parallelism alone.
  */
 @Tag("functional")
-public class TestComputeShuffleBalance extends SparkClientFunctionalTestHarness {
+class TestComputeShuffleBalance extends SparkClientFunctionalTestHarness {
 
   private static final StructType SCHEMA = new StructType()
       .add(EmbeddingTableSchema.SOURCE_PATH_SHA, DataTypes.StringType, false)
@@ -109,13 +109,13 @@ public class TestComputeShuffleBalance extends SparkClientFunctionalTestHarness 
     input.collectAsList().forEach(row -> expected.add(row.toString()));
     List<String> actual = new ArrayList<>();
     dealt.collect().forEach(row -> actual.add(row.toString()));
-    Collections.sort(expected);
-    Collections.sort(actual);
+    expected.sort(null);
+    actual.sort(null);
     assertEquals(expected, actual, "every row dealt exactly once");
   }
 
   @Test
-  public void skewedInputIsDealtToEveryTaskOnce() {
+  void skewedInputIsDealtToEveryTaskOnce() {
     Dataset<Row> input = skewed(61, 1, 1, 1);
     List<Integer> before = counts(input.javaRDD());
     assertEquals(61, (int) Collections.max(before), "the fixture is skewed: " + before);
@@ -132,7 +132,7 @@ public class TestComputeShuffleBalance extends SparkClientFunctionalTestHarness 
 
   /** At N/P = 1000 rows per task the task counts stay within 10% of the mean, and every task has rows. */
   @Test
-  public void largeInputIsBalancedInExpectation() {
+  void largeInputIsBalancedInExpectation() {
     int parallelism = 4;
     Dataset<Row> input = skewed(4000, 0, 0);
     List<Integer> after = counts(ComputeRound.hashPartitionByKey(input, parallelism));
@@ -173,7 +173,7 @@ public class TestComputeShuffleBalance extends SparkClientFunctionalTestHarness 
   }
 
   @Test
-  public void twoDealsOfTheSameInputAgree() {
+  void twoDealsOfTheSameInputAgree() {
     Dataset<Row> input = skewed(20, 5, 0, 7).cache();
     try {
       assertEquals(tasksOf(ComputeRound.hashPartitionByKey(input, 3)), tasksOf(ComputeRound.hashPartitionByKey(input, 3)));
@@ -188,7 +188,7 @@ public class TestComputeShuffleBalance extends SparkClientFunctionalTestHarness 
    * deal every row to the same task.
    */
   @Test
-  public void eachRowsTaskDependsOnTheKeysAndTheParallelismAlone() {
+  void eachRowsTaskDependsOnTheKeysAndTheParallelismAlone() {
     List<Row> rows = new ArrayList<>();
     for (int i = 0; i < 61; i++) {
       rows.add(RowFactory.create(String.format("sha-%02d", i % 23), 100L + i % 3, 10L + i % 5, i % 4 == 0 ? "image" : "text",
@@ -249,7 +249,7 @@ public class TestComputeShuffleBalance extends SparkClientFunctionalTestHarness 
    * single task over the whole input.
    */
   @Test
-  public void noStageOfTheDealRunsInOneTask() throws Exception {
+  void noStageOfTheDealRunsInOneTask() throws Exception {
     Map<String, String> settings = new HashMap<>();
     settings.put("spark.sql.adaptive.enabled", "false");
     settings.put("spark.sql.shuffle.partitions", "4");
@@ -284,7 +284,7 @@ public class TestComputeShuffleBalance extends SparkClientFunctionalTestHarness 
    * and P alone.
    */
   @Test
-  public void eachRowsTaskIsTheHashOfItsKeyColumns() {
+  void eachRowsTaskIsTheHashOfItsKeyColumns() {
     List<Row> rows = new ArrayList<>();
     for (int i = 0; i < 50; i++) {
       rows.add(RowFactory.create("sha-" + i, 100L + i % 3, 10L + i % 7, i % 2 == 0 ? "image" : "text", (long) (i % 4)));
@@ -319,7 +319,7 @@ public class TestComputeShuffleBalance extends SparkClientFunctionalTestHarness 
    * which would coalesce a shuffle to its advisory partition size, keeps the P tasks the deal asks for.
    */
   @Test
-  public void theDealShufflesTheRowsOnceIntoExactlyPTasksWithAdaptiveExecutionOn() throws Exception {
+  void theDealShufflesTheRowsOnceIntoExactlyPTasksWithAdaptiveExecutionOn() throws Exception {
     // random letters, so the shuffle's compression cannot shrink the rows below their size
     Random random = new Random(7);
     int keyChars = 512;
@@ -369,14 +369,16 @@ public class TestComputeShuffleBalance extends SparkClientFunctionalTestHarness 
   }
 
   @Test
-  public void theParallelismDefaultsToTheDefaultParallelismAndMustBePositive() {
+  void theParallelismDefaultsToTheDefaultParallelismAndMustBePositive() {
     TypedProperties props = new TypedProperties();
     int defaultParallelism = jsc().defaultParallelism();
     assertEquals(defaultParallelism, EmbeddingTableConfig.from(props).computeParallelism(defaultParallelism));
     props.setProperty(EmbeddingTableConfig.COMPUTE_PARALLELISM.key(), "7");
     assertEquals(7, EmbeddingTableConfig.from(props).computeParallelism(defaultParallelism));
     props.setProperty(EmbeddingTableConfig.COMPUTE_PARALLELISM.key(), "0");
-    assertThrows(IllegalArgumentException.class, () -> EmbeddingTableConfig.from(props).computeParallelism(defaultParallelism));
-    assertThrows(IllegalArgumentException.class, () -> ComputeRound.hashPartitionByKey(skewed(1), 0));
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    assertThrows(IllegalArgumentException.class, () -> config.computeParallelism(defaultParallelism));
+    Dataset<Row> one = skewed(1);
+    assertThrows(IllegalArgumentException.class, () -> ComputeRound.hashPartitionByKey(one, 0));
   }
 }

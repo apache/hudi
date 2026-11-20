@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * dummy client's vector; an image row's vector depends on its prepared image's bytes only, deterministically; a failed
  * preparation is that input's outcome.
  */
-public class TestDummyMultimodalEmbeddingClient {
+class TestDummyMultimodalEmbeddingClient {
 
   private static final int DIMENSION = 8;
   private static final ImagePreparer PREPARER = new ImagePreparer(new ImagePreprocessingSpec(
@@ -54,7 +54,7 @@ public class TestDummyMultimodalEmbeddingClient {
       InProcessImageDecoder.class.getName()));
 
   @Test
-  public void providerResolvesToTheMultimodalDummy() {
+  void providerResolvesToTheMultimodalDummy() {
     EmbeddingModelSpec spec = spec();
     assertEquals(DummyMultimodalEmbeddingClient.class.getName(), EmbeddingClientFactory.clientClassName(spec));
     assertTrue(EmbeddingClientNames.PROVIDERS.contains(DummyMultimodalEmbeddingClient.PROVIDER));
@@ -63,7 +63,7 @@ public class TestDummyMultimodalEmbeddingClient {
   }
 
   @Test
-  public void textRowsGetTheDummyVectorAndImageRowsAVectorOfTheirPreparedImage() throws IOException {
+  void textRowsGetTheDummyVectorAndImageRowsAVectorOfTheirPreparedImage() throws IOException {
     byte[] first = ImageFixtures.image("png", 900, 600);
     byte[] other = ImageFixtures.image("jpeg", 300, 200);
     List<EmbeddingResult> results = client().embed(Arrays.asList(
@@ -83,7 +83,7 @@ public class TestDummyMultimodalEmbeddingClient {
   }
 
   @Test
-  public void failedPreparationIsThatInputsOutcome() {
+  void failedPreparationIsThatInputsOutcome() {
     EmbeddingInput refused = EmbeddingInput.storedImage("r", 0, EmbeddingTableSchema.MODALITY_IMAGE, null, () -> {
       throw new ImageRefusedException(ImageRefusedException.REFUSED_BEFORE_DECODE + "too many pixels");
     });
@@ -99,9 +99,11 @@ public class TestDummyMultimodalEmbeddingClient {
   }
 
   @Test
-  public void imageInputWithoutItsPreparationBreaksTheInvariant() {
+  void imageInputWithoutItsPreparationBreaksTheInvariant() {
     EmbeddingInput bare = EmbeddingInput.storedImage("x", 0, EmbeddingTableSchema.MODALITY_IMAGE, null, null);
-    assertThrows(EmbeddingComputePlatformException.class, () -> client().embed(Collections.singletonList(bare)));
+    DummyMultimodalEmbeddingClient client = client();
+    List<EmbeddingInput> inputs = Collections.singletonList(bare);
+    assertThrows(EmbeddingComputePlatformException.class, () -> client.embed(inputs));
   }
 
   private static EmbeddingInput image(String sourcePathSha, byte[] bytes) {

@@ -65,7 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * classification: 429 and 409 retried, a rejected input isolated and quarantined, a rejected configuration failing the call,
  * the outage short-circuit, and one rate-limit token per attempt.
  */
-public class TestJinaEmbeddingClient {
+class TestJinaEmbeddingClient {
 
   private static final String ALIAS = "jn";
   private static final String KEY = "jina_stubkey_0123456789abcdef";
@@ -76,7 +76,7 @@ public class TestJinaEmbeddingClient {
   private TypedProperties props;
 
   @BeforeEach
-  public void setUp() throws IOException {
+  void setUp() throws IOException {
     stub = new ScriptedHttpStub();
     Path keyFile = tempDir.resolve("jina.key");
     Files.write(keyFile, (KEY + "\n").getBytes(StandardCharsets.UTF_8));
@@ -88,12 +88,12 @@ public class TestJinaEmbeddingClient {
   }
 
   @AfterEach
-  public void tearDown() {
+  void tearDown() {
     stub.close();
   }
 
   @Test
-  public void textsArePackedAsObjectInputsWithTheKeyFromTheFile() throws Exception {
+  void textsArePackedAsObjectInputsWithTheKeyFromTheFile() throws InterruptedException {
     stub.otherwise(JinaStubReplies.embeddings(256));
     JinaEmbeddingClient client = client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256);
     List<EmbeddingResult> results = client.embed(Arrays.asList(text("a", "one"), text("b", "two")));
@@ -114,7 +114,7 @@ public class TestJinaEmbeddingClient {
   }
 
   @Test
-  public void maxInputsBoundsEachRequest() throws Exception {
+  void maxInputsBoundsEachRequest() throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.REQUEST_MAX_INPUTS_SUFFIX), "2");
     stub.otherwise(JinaStubReplies.embeddings(64));
     List<EmbeddingResult> results = client(new JinaEmbeddingClient(), "jina-embeddings-v3", 64)
@@ -124,7 +124,7 @@ public class TestJinaEmbeddingClient {
   }
 
   @Test
-  public void unsupportedModalityOnTheTextClientIsPermanentWithoutARequest() throws Exception {
+  void unsupportedModalityOnTheTextClientIsPermanentWithoutARequest() throws InterruptedException {
     EmbeddingResult result = client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256)
         .embed(Collections.singletonList(new EmbeddingInput("unsupported", 0, "unsupported", null))).get(0);
     assertEquals(EmbeddingResult.Status.PERMANENT_FAILURE, result.getStatus());
@@ -132,7 +132,7 @@ public class TestJinaEmbeddingClient {
   }
 
   @Test
-  public void rateLimitedAndBusyAnswersAreRetriedHonouringRetryAfter() throws Exception {
+  void rateLimitedAndBusyAnswersAreRetriedHonouringRetryAfter() throws InterruptedException {
     stub.then(JinaStubReplies.error(429, "RATE_REQUEST_LIMIT_EXCEEDED", "slow down").withHeader("Retry-After", "3"))
         .then(JinaStubReplies.error(409, "CONFLICT_RESOURCE_BUSY", "busy"))
         .otherwise(JinaStubReplies.embeddings(256));
@@ -147,7 +147,7 @@ public class TestJinaEmbeddingClient {
   }
 
   @Test
-  public void persistentServerErrorLeavesInputsRetryableAndOpensTheOutage() throws Exception {
+  void persistentServerErrorLeavesInputsRetryableAndOpensTheOutage() throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.RETRY_MAX_ATTEMPTS_SUFFIX), "2");
     props.setProperty(key(OpenAiClientConfig.OUTAGE_CONSECUTIVE_FAILURES_SUFFIX), "1");
     props.setProperty(key(OpenAiClientConfig.REQUEST_MAX_INPUTS_SUFFIX), "1");
@@ -158,11 +158,12 @@ public class TestJinaEmbeddingClient {
     assertTrue(results.get(0).getError().contains("after 2 attempts"), results.get(0).getError());
     assertTrue(results.get(1).getError().contains("outage"), results.get(1).getError());
     assertEquals(2, stub.requests().size());
-    assertThrows(EmbeddingProviderUnavailableException.class, () -> client.embed(Collections.singletonList(text("c", "z"))));
+    List<EmbeddingInput> next = Collections.singletonList(text("c", "z"));
+    assertThrows(EmbeddingProviderUnavailableException.class, () -> client.embed(next));
   }
 
   @Test
-  public void rejectedInputIsIsolatedAndPermanent() throws Exception {
+  void rejectedInputIsIsolatedAndPermanent() throws InterruptedException {
     stub.otherwise(request -> {
       JsonNode input = request.json().get("input");
       boolean bad = false;
@@ -187,93 +188,105 @@ public class TestJinaEmbeddingClient {
    * configuration's, so the call fails instead of quarantining every row.
    */
   @Test
-  public void schemaRejectionIsAConfigFailureNotAQuarantine() throws InterruptedException {
+  void schemaRejectionIsAConfigFailureNotAQuarantine() throws InterruptedException {
     stub.otherwise(request -> JinaStubReplies.error(422, "INPUT_VALIDATION", "body -> dimensions: must be one of 64, 96, 128"));
-    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new JinaEmbeddingClient(), "jina-some-future-model", 256)
-            .embed(Arrays.asList(text("a", "x"), new EmbeddingInput("unsupported", 0, "unsupported", null))));
+    JinaEmbeddingClient client = client(new JinaEmbeddingClient(), "jina-some-future-model", 256);
+    List<EmbeddingInput> inputs = Arrays.asList(text("a", "x"), new EmbeddingInput("unsupported", 0, "unsupported", null));
+    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class, () -> client.embed(inputs));
     assertTrue(e.getMessage().contains("HTTP 422"), e.getMessage());
     assertEquals(1, stub.requests().size(), "the configuration is not retried or isolated");
   }
 
   @Test
-  public void nonDenseAnswerIsAConfigFailure() {
+  void nonDenseAnswerIsAConfigFailure() {
     stub.otherwise(request -> ScriptedHttpStub.Reply.json(200,
         "{\"data\":[{\"object\":\"embeddings\",\"index\":0,\"embeddings\":[[0.1,0.2],[0.3,0.4]]}],"
             + "\"usage\":{\"total_tokens\":2}}"));
-    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new JinaEmbeddingClient(), "jina-some-future-model", 2).embed(Collections.singletonList(text("a", "x"))));
+    JinaEmbeddingClient client = client(new JinaEmbeddingClient(), "jina-some-future-model", 2);
+    List<EmbeddingInput> inputs = Collections.singletonList(text("a", "x"));
+    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class, () -> client.embed(inputs));
     assertTrue(e.getMessage().contains("multi-vector"), e.getMessage());
     assertEquals(1, stub.requests().size());
   }
 
   @Test
-  public void documentedModelBoundsAreCheckedAtInit() throws InterruptedException {
-    assertThrows(EmbeddingClientConfigException.class, () -> client(new JinaEmbeddingClient(), "jina-colbert-v2", 128));
-    assertThrows(EmbeddingClientConfigException.class, () -> client(new JinaEmbeddingClient(), "jina-code-embeddings-0.5b", 1024));
-    assertThrows(EmbeddingClientConfigException.class, () -> client(new JinaEmbeddingClient(), "jina-embeddings-v5-text-small", 2048));
-    assertThrows(EmbeddingClientConfigException.class, () -> client(new JinaEmbeddingClient(), "jina-embeddings-v2-base-en", 512));
+  void documentedModelBoundsAreCheckedAtInit() throws InterruptedException {
+    JinaEmbeddingClient colbert = new JinaEmbeddingClient();
+    assertThrows(EmbeddingClientConfigException.class, () -> client(colbert, "jina-colbert-v2", 128));
+    JinaEmbeddingClient code = new JinaEmbeddingClient();
+    assertThrows(EmbeddingClientConfigException.class, () -> client(code, "jina-code-embeddings-0.5b", 1024));
+    JinaEmbeddingClient v5 = new JinaEmbeddingClient();
+    assertThrows(EmbeddingClientConfigException.class, () -> client(v5, "jina-embeddings-v5-text-small", 2048));
+    JinaEmbeddingClient v2 = new JinaEmbeddingClient();
+    assertThrows(EmbeddingClientConfigException.class, () -> client(v2, "jina-embeddings-v2-base-en", 512));
     stub.otherwise(JinaStubReplies.embeddings(768));
     client(new JinaEmbeddingClient(), "jina-embeddings-v2-base-en", 768).embed(Collections.singletonList(text("a", "x")));
     assertFalse(stub.requests().get(0).json().has("dimensions"), "a fixed-width model gets no dimensions");
   }
 
   @Test
-  public void sparseAnswerIsAConfigFailure() {
+  void sparseAnswerIsAConfigFailure() {
     stub.otherwise(request -> ScriptedHttpStub.Reply.json(200, "{\"data\":[{\"hello\":0.4,\"world\":0.2}]}"));
-    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new JinaEmbeddingClient(), "jina-some-future-model", 2).embed(Collections.singletonList(text("a", "x"))));
+    JinaEmbeddingClient client = client(new JinaEmbeddingClient(), "jina-some-future-model", 2);
+    List<EmbeddingInput> inputs = Collections.singletonList(text("a", "x"));
+    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class, () -> client.embed(inputs));
     assertTrue(e.getMessage().contains("sparse"), e.getMessage());
   }
 
   @Test
-  public void unknownModelIsAConfigFailure() {
+  void unknownModelIsAConfigFailure() {
     stub.otherwise(request -> JinaStubReplies.error(400, "INPUT_MODEL_NOT_FOUND", "Model not found"));
-    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new JinaEmbeddingClient(), "jina-embeddings-v9", 256).embed(Collections.singletonList(text("a", "x"))));
+    JinaEmbeddingClient client = client(new JinaEmbeddingClient(), "jina-embeddings-v9", 256);
+    List<EmbeddingInput> inputs = Collections.singletonList(text("a", "x"));
+    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class, () -> client.embed(inputs));
     assertTrue(e.getMessage().contains("INPUT_MODEL_NOT_FOUND"), e.getMessage());
   }
 
   @Test
-  public void rejectedKeyIsAConfigFailureThatNeverEchoesIt() {
+  void rejectedKeyIsAConfigFailureThatNeverEchoesIt() {
     stub.otherwise(request -> JinaStubReplies.error(401, "AUTH_INVALID_API_KEY", "Invalid API key " + KEY));
-    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256).embed(Collections.singletonList(text("a", "x"))));
+    JinaEmbeddingClient client = client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256);
+    List<EmbeddingInput> inputs = Collections.singletonList(text("a", "x"));
+    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class, () -> client.embed(inputs));
     assertTrue(e.getMessage().contains("HTTP 401"), e.getMessage());
     assertFalse(e.getMessage().contains(KEY), e.getMessage());
     assertTrue(e.getMessage().contains("file "), e.getMessage());
     assertEquals(1, stub.requests().size());
     stub.otherwise(request -> JinaStubReplies.error(403, "AUTHZ_INSUFFICIENT_BALANCE", "no balance"));
-    assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256).embed(Collections.singletonList(text("a", "x"))));
+    JinaEmbeddingClient balanceClient = client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256);
+    List<EmbeddingInput> balanceInputs = Collections.singletonList(text("a", "x"));
+    assertThrows(EmbeddingClientConfigException.class, () -> balanceClient.embed(balanceInputs));
   }
 
   /** Providers echo part of the presented key in auth errors ("sk-ab***"): a 401/403 keeps only its code, never the detail. */
   @Test
-  public void rejectedKeyFailureWithholdsTheProviderDetail() {
+  void rejectedKeyFailureWithholdsTheProviderDetail() {
     String prefix = KEY.substring(0, 8);
     stub.otherwise(request -> JinaStubReplies.error(401, "AUTH_INVALID_API_KEY", "Invalid API key " + prefix + "***"));
-    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256).embed(Collections.singletonList(text("a", "x"))));
+    JinaEmbeddingClient client = client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256);
+    List<EmbeddingInput> inputs = Collections.singletonList(text("a", "x"));
+    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class, () -> client.embed(inputs));
     assertTrue(e.getMessage().contains("HTTP 401 AUTH_INVALID_API_KEY"), e.getMessage());
     assertFalse(e.getMessage().contains(prefix), e.getMessage());
     assertFalse(e.getMessage().contains("Invalid API key"), e.getMessage());
     stub.otherwise(request -> JinaStubReplies.error(403, "AUTHZ_INSUFFICIENT_BALANCE", "no balance for " + prefix + "***"));
-    e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256).embed(Collections.singletonList(text("a", "x"))));
+    JinaEmbeddingClient balanceClient = client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256);
+    List<EmbeddingInput> balanceInputs = Collections.singletonList(text("a", "x"));
+    e = assertThrows(EmbeddingClientConfigException.class, () -> balanceClient.embed(balanceInputs));
     assertTrue(e.getMessage().contains("HTTP 403 AUTHZ_INSUFFICIENT_BALANCE"), e.getMessage());
     assertFalse(e.getMessage().contains(prefix), e.getMessage());
   }
 
   @Test
-  public void wrongDimensionAnswerIsAConfigFailure() {
+  void wrongDimensionAnswerIsAConfigFailure() {
     stub.otherwise(JinaStubReplies.embeddings(128));
-    assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256).embed(Collections.singletonList(text("a", "x"))));
+    JinaEmbeddingClient client = client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256);
+    List<EmbeddingInput> inputs = Collections.singletonList(text("a", "x"));
+    assertThrows(EmbeddingClientConfigException.class, () -> client.embed(inputs));
   }
 
   @Test
-  public void everyAttemptTakesARateLimitToken() throws Exception {
+  void everyAttemptTakesARateLimitToken() throws InterruptedException {
     props.setProperty(key(RequestRateLimiter.RATE_LIMIT_REQUESTS_PER_SECOND_SUFFIX), "2");
     props.setProperty(key(OpenAiClientConfig.REQUEST_MAX_INPUTS_SUFFIX), "1");
     stub.then(JinaStubReplies.error(429, "RATE_REQUEST_LIMIT_EXCEEDED", "slow")).otherwise(JinaStubReplies.embeddings(256));
@@ -286,7 +299,7 @@ public class TestJinaEmbeddingClient {
   }
 
   @Test
-  public void keyFromTheEnvironmentAndMissingKeyRefusedAtInit() throws Exception {
+  void keyFromTheEnvironmentAndMissingKeyRefusedAtInit() throws InterruptedException {
     props.remove(key(JinaClientConfig.CREDENTIAL_FILE_SUFFIX));
     stub.otherwise(JinaStubReplies.embeddings(256));
     JinaEmbeddingClient fromEnv = new JinaEmbeddingClient(System::currentTimeMillis, Thread::sleep, new Random(1),
@@ -298,13 +311,13 @@ public class TestJinaEmbeddingClient {
         () -> client(noKey, "jina-embeddings-v3", 256));
     assertTrue(e.getMessage().contains("env " + JinaClientConfig.DEFAULT_CREDENTIAL_ENV), e.getMessage());
     props.setProperty(key(JinaClientConfig.CREDENTIAL_ENV_SUFFIX), KEY + "-pasted value");
-    IllegalArgumentException pasted = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingClientFactory.checkConfig(spec("jina-embeddings-v3", 256), props));
+    EmbeddingModelSpec pastedSpec = spec("jina-embeddings-v3", 256);
+    IllegalArgumentException pasted = assertThrows(IllegalArgumentException.class, () -> EmbeddingClientFactory.checkConfig(pastedSpec, props));
     assertFalse(pasted.getMessage().contains(KEY));
   }
 
   @Test
-  public void emptyTextIsPermanentWithoutARequest() throws Exception {
+  void emptyTextIsPermanentWithoutARequest() throws InterruptedException {
     EmbeddingResult result = client(new JinaEmbeddingClient(), "jina-embeddings-v3", 256)
         .embed(Collections.singletonList(text("a", ""))).get(0);
     assertEquals(EmbeddingResult.Status.PERMANENT_FAILURE, result.getStatus());
@@ -342,7 +355,7 @@ public class TestJinaEmbeddingClient {
 
   @ParameterizedTest
   @ValueSource(strings = {"1e100", "NaN"})
-  public void nonFiniteVectorElementsAreRetryable(String element) throws Exception {
+  void nonFiniteVectorElementsAreRetryable(String element) throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.RETRY_MAX_ATTEMPTS_SUFFIX), "1");
     String values = element + ",0.25".repeat(255);
     stub.otherwise(request -> Reply.json(200, "{\"data\":[{\"index\":0,\"embedding\":[" + values + "]}]}"));

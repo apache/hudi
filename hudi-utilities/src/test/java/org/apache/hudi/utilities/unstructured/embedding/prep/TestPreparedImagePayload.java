@@ -256,29 +256,23 @@ class TestPreparedImagePayload {
   }
 
   private PreprocessingIterator iterator(TypedProperties props, Row... rows) {
-    return new PreprocessingIterator(
-        Arrays.asList(rows).iterator(),
-        EmbeddingTableConfig.from(props),
-        "001",
-        new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
-        new PreprocessorRegistry(props),
-        new WordCountTokenizer(),
-        counters(),
-        null);
+    return PreprocessingIterator.builder(Arrays.asList(rows).iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())))
+        .registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer())
+        .counters(counters())
+        .build();
   }
 
   /** {@link #iterator} with the input store writing out-of-line payloads under {@code table}. */
   private PreprocessingIterator storingIterator(TypedProperties props, String table, Row... rows) {
-    return new PreprocessingIterator(
-        Arrays.asList(rows).iterator(),
-        EmbeddingTableConfig.from(props),
-        "001",
-        new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
-        new PreprocessorRegistry(props),
-        new WordCountTokenizer(),
-        counters(),
-        null,
-        new PayloadDestination(HadoopFSUtils.getStorageConf(new Configuration()), table, props));
+    return PreprocessingIterator.builder(Arrays.asList(rows).iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())))
+        .registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer())
+        .counters(counters())
+        .destination(new PayloadDestination(HadoopFSUtils.getStorageConf(new Configuration()), table, props))
+        .build();
   }
 
   /** The payload files under the embedding table's blob folder, relative to its base, the checksum files left out. */
@@ -418,16 +412,14 @@ class TestPreparedImagePayload {
         throw closeFailure;
       }
     };
-    PreprocessingIterator iterator = new PreprocessingIterator(
-        Collections.singletonList(inlineRow("sha-fail", "one", new byte[] {1})).iterator(),
-        EmbeddingTableConfig.from(props),
-        "001",
-        new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
-        registry,
-        new WordCountTokenizer(),
-        counters(),
-        null,
-        new PayloadDestination(HadoopFSUtils.getStorageConf(new Configuration()), embeddingTable, props));
+    PreprocessingIterator iterator = PreprocessingIterator.builder(
+            Collections.singletonList(inlineRow("sha-fail", "one", new byte[] {1})).iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())))
+        .registry(registry)
+        .tokenizer(new WordCountTokenizer())
+        .counters(counters())
+        .destination(new PayloadDestination(HadoopFSUtils.getStorageConf(new Configuration()), embeddingTable, props))
+        .build();
 
     assertTrue(iterator.hasNext());
     iterator.next();

@@ -52,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Provider writer assertions on the single prep_and_compute commit over the unstructured data source on S3 and the stock checkpoint. */
 @Tag("functional")
-public class TestBedrockEmbeddingComputeWriter extends RestProviderRoundTestBase {
+class TestBedrockEmbeddingComputeWriter extends RestProviderRoundTestBase {
 
   private static final int DIM = 256;
   private static final String FAKE_KEY = "fake-rest-provider-key";
@@ -63,7 +63,7 @@ public class TestBedrockEmbeddingComputeWriter extends RestProviderRoundTestBase
   private String savedKey;
   private String savedSecret;
   @BeforeEach
-  public void startEndpoint() throws Exception {
+  void startEndpoint() throws Exception {
     server = new ScriptedHttpStub();
     keyFile = secrets.resolve("fake.key");
     Files.writeString(keyFile, FAKE_KEY);
@@ -74,7 +74,7 @@ public class TestBedrockEmbeddingComputeWriter extends RestProviderRoundTestBase
   }
 
   @AfterEach
-  public void stopEndpoint() {
+  void stopEndpoint() {
     server.close();
     restore("aws.accessKeyId", savedKey);
     restore("aws.secretAccessKey", savedSecret);
@@ -88,7 +88,7 @@ public class TestBedrockEmbeddingComputeWriter extends RestProviderRoundTestBase
   }
 
   @Test
-  public void testModelFillsVectors() throws Exception {
+  void testModelFillsVectors() throws Exception {
     announce(pdf("a"), pdf("b"));
     server.otherwise(BedrockStubReplies.embeddings(DIM));
     ComputeRoundCounters.Counted report = ComputeRoundCounters.round(spark(), providerProps());
@@ -113,7 +113,7 @@ public class TestBedrockEmbeddingComputeWriter extends RestProviderRoundTestBase
   }
 
   @Test
-  public void testRejectedInputIsQuarantinedAndItsBatchMatesEmbed() throws Exception {
+  void testRejectedInputIsQuarantinedAndItsBatchMatesEmbed() throws Exception {
     announce(pdf("a"), pdf("b"));
     server.otherwise(request -> request.body.contains("Hudi") ? ScriptedHttpStub.Reply.awsError(400, "ValidationException", "bad document chunk") : BedrockStubReplies.embeddings(DIM).apply(request));
     Round report = round(providerProps());
@@ -139,7 +139,7 @@ public class TestBedrockEmbeddingComputeWriter extends RestProviderRoundTestBase
 
   @ParameterizedTest
   @ValueSource(ints = {403, 503})
-  public void testRejectedConfigurationFailsTheSyncWithNothingCommitted(int status) throws Exception {
+  void testRejectedConfigurationFailsTheSyncWithNothingCommitted(int status) throws Exception {
     server.otherwise(BedrockStubReplies.embeddings(DIM));
     announce(pdf("first"));
     TypedProperties props = providerProps();
@@ -168,7 +168,7 @@ public class TestBedrockEmbeddingComputeWriter extends RestProviderRoundTestBase
   }
 
   @Test
-  public void testOnePendingRowRejectedIsItsErrorNotAFailedRound() throws Exception {
+  void testOnePendingRowRejectedIsItsErrorNotAFailedRound() throws Exception {
     announce(pdf("one"));
     TypedProperties props = providerProps();
     props.setProperty(EmbeddingTableConfig.CHUNK_MAX_TOKENS.key(), "200");

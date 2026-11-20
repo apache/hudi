@@ -115,9 +115,12 @@ class TestPdfDecodeLoss {
         "s3a://bucket/input.pdf", "input.pdf"}, sourceType);
     TypedProperties props = new TypedProperties();
     PrepCounters counters = PrepCounters.local();
-    try (PreprocessingIterator iterator = new PreprocessingIterator(List.of(row).iterator(), EmbeddingTableConfig.from(props), "001",
-        new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())), new PreprocessorRegistry(props),
-        new WordCountTokenizer(), counters, null)) {
+    try (PreprocessingIterator iterator = PreprocessingIterator.builder(List.of(row).iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())))
+        .registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer())
+        .counters(counters)
+        .build()) {
       assertFalse(iterator.hasNext());
       assertEquals(1, iterator.getSideOutputs().size());
       PrepSideOutput failure = iterator.getSideOutputs().get(0);

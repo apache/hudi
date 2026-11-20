@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * {@link RequestRateLimiter} on a fake clock: a sleep only advances it, so every wait is exact and nothing sleeps.
  */
-public class TestRequestRateLimiter {
+class TestRequestRateLimiter {
 
   private static final String ALIAS = "m";
   private static final String RATE_KEY = EmbeddingTableConfig.MODEL_PREFIX + ALIAS
@@ -54,7 +54,7 @@ public class TestRequestRateLimiter {
    * request already waits a full interval.
    */
   @Test
-  public void testBurstAfterIdleThenSteadyRate() throws InterruptedException {
+  void testBurstAfterIdleThenSteadyRate() throws InterruptedException {
     RequestRateLimiter limiter = limiter(props("4", "3"));
     // idle start: the bucket is full, three tokens go at once
     assertEquals(Arrays.asList(0L, 0L, 0L), acquire(limiter, 3));
@@ -73,7 +73,7 @@ public class TestRequestRateLimiter {
 
   /** A fractional rate: 0.5/s is one request every 2 s. */
   @Test
-  public void testFractionalRate() throws InterruptedException {
+  void testFractionalRate() throws InterruptedException {
     RequestRateLimiter limiter = limiter(props("0.5", null));
     assertEquals(Arrays.asList(0L, 2_000L, 2_000L), acquire(limiter, 3));
     assertEquals(0.5d, limiter.requestsPerSecond(), 0d);
@@ -81,7 +81,7 @@ public class TestRequestRateLimiter {
 
   /** A partial refill counts: a token half refilled waits only the other half. */
   @Test
-  public void testPartialRefillWaitsTheRemainder() throws InterruptedException {
+  void testPartialRefillWaitsTheRemainder() throws InterruptedException {
     RequestRateLimiter limiter = limiter(props("10", null));
     assertEquals(0L, limiter.acquire());
     now.addAndGet(40L);
@@ -90,7 +90,7 @@ public class TestRequestRateLimiter {
 
   /** Without a rate the limiter never waits, never reads the clock's progress, never sleeps. */
   @Test
-  public void testNoRateIsUnlimited() throws InterruptedException {
+  void testNoRateIsUnlimited() throws InterruptedException {
     RequestRateLimiter limiter = limiter(new TypedProperties());
     assertFalse(limiter.isLimited());
     for (int i = 0; i < 1000; i++) {
@@ -115,17 +115,18 @@ public class TestRequestRateLimiter {
       "5, 1.5, burst",
       "5, x, burst",
       "NULL, 3, burst"}, nullValues = "NULL")
-  public void testBadConfigRefusedNamingTheKey(String rate, String burst, String badKey) {
+  void testBadConfigRefusedNamingTheKey(String rate, String burst, String badKey) {
     TypedProperties props = props(rate, burst);
+    EmbeddingModelSpec model = spec();
     EmbeddingClientConfigException thrown = assertThrows(EmbeddingClientConfigException.class,
-        () -> RequestRateLimiter.validate(spec(), props));
+        () -> RequestRateLimiter.validate(model, props));
     String key = "rate".equals(badKey) ? RATE_KEY : BURST_KEY;
     assertTrue(thrown.getMessage().contains(key), thrown.getMessage());
     assertThrows(EmbeddingClientConfigException.class, () -> limiter(props));
   }
 
   @Test
-  public void testValidConfigAccepted() {
+  void testValidConfigAccepted() {
     RequestRateLimiter.validate(spec(), props("2.5", "10"));
     RequestRateLimiter.validate(spec(), props(" 7 ", null));
     RequestRateLimiter.validate(spec(), new TypedProperties());
@@ -136,7 +137,7 @@ public class TestRequestRateLimiter {
 
   /** An interrupt during the wait takes no token: the next acquire still finds the bucket where it was. */
   @Test
-  public void testInterruptedWaitTakesNoToken() throws InterruptedException {
+  void testInterruptedWaitTakesNoToken() throws InterruptedException {
     boolean[] interrupt = {false};
     RequestRateLimiter limiter = RequestRateLimiter.from(spec(), props("1", null), now::get, millis -> {
       if (interrupt[0]) {
@@ -153,7 +154,7 @@ public class TestRequestRateLimiter {
 
   /** A clock stepped back does not freeze the refill: the next token comes one interval after the step, not after the old time. */
   @Test
-  public void testClockSteppedBackKeepsRefilling() throws InterruptedException {
+  void testClockSteppedBackKeepsRefilling() throws InterruptedException {
     RequestRateLimiter limiter = limiter(props("2", null));
     assertEquals(0L, limiter.acquire());
     now.addAndGet(-60_000L);

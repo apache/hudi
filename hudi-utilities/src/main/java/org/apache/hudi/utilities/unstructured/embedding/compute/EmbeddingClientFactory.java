@@ -36,7 +36,7 @@ import org.apache.hudi.utilities.unstructured.embedding.compute.openai.OpenAiPro
 import org.apache.hudi.utilities.unstructured.embedding.compute.vertex.VertexClientConfig;
 import org.apache.hudi.utilities.unstructured.embedding.compute.vertex.VertexMultimodalEmbeddingClient;
 
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 /**
@@ -45,7 +45,7 @@ import java.util.Map;
 public final class EmbeddingClientFactory {
 
   /** The client class of each Bedrock model family. */
-  private static final Map<BedrockModelFamily, String> BEDROCK_CLIENTS = new HashMap<>();
+  private static final Map<BedrockModelFamily, String> BEDROCK_CLIENTS = new EnumMap<>(BedrockModelFamily.class);
 
   static {
     BEDROCK_CLIENTS.put(BedrockModelFamily.TITAN_EMBED_TEXT_V2, BedrockTitanTextEmbeddingClient.class.getName());

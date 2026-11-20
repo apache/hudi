@@ -31,11 +31,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Handle release of the JPEG writer the video frame encoder ({@link FrameJpegEncoder}) chooses: a JDK-named spy JPEG writer,
  * ordered ahead of the JDK's own, is the chosen one, so a test can see whether it was disposed.
  */
-public class TestFrameJpegEncoderHandleRelease {
+class TestFrameJpegEncoderHandleRelease {
 
   /** Control: the spy reaches the chosen path, and the encoder's close disposes it. */
   @Test
-  public void chosenWriterIsDisposedByClose() {
+  void chosenWriterIsDisposedByClose() {
     try (ImageProviderLeakSpies spies = ImageProviderLeakSpies.installJpeg(false, false)) {
       FrameJpegEncoder encoder = new FrameJpegEncoder();
       assertEquals(1, spies.spyWriter().created().size(), "the encoder chose the JDK-named spy JPEG writer");
@@ -47,7 +47,7 @@ public class TestFrameJpegEncoderHandleRelease {
   }
 
   @Test
-  public void chosenWriterIsDisposedWhenALaterProviderFails() {
+  void chosenWriterIsDisposedWhenALaterProviderFails() {
     try (ImageProviderLeakSpies spies = ImageProviderLeakSpies.installJpeg(true, false)) {
       FrameJpegEncoder[] built = new FrameJpegEncoder[1];
       ImageProviderLeakSpies.runEitherOutcome(() -> built[0] = new FrameJpegEncoder());

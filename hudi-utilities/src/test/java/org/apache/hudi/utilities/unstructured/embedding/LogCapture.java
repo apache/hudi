@@ -36,6 +36,7 @@ import java.util.UUID;
 public final class LogCapture extends AbstractAppender implements AutoCloseable {
 
   private final List<String> lines = Collections.synchronizedList(new ArrayList<>());
+  private final List<Throwable> thrown = Collections.synchronizedList(new ArrayList<>());
   private final Logger logger;
   private final Level previousLevel;
 
@@ -58,6 +59,16 @@ public final class LogCapture extends AbstractAppender implements AutoCloseable 
   public void append(LogEvent event) {
     lines.add(event.getLevel() + " " + event.getMessage().getFormattedMessage()
         + (event.getThrown() == null ? "" : " " + event.getThrown()));
+    if (event.getThrown() != null) {
+      thrown.add(event.getThrown());
+    }
+  }
+
+  /** The throwables the captured events carried, in order. */
+  public List<Throwable> thrown() {
+    synchronized (thrown) {
+      return new ArrayList<>(thrown);
+    }
   }
 
   /** Every event captured so far, as {@code LEVEL message}. */

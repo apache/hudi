@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Every storage stream {@link BlobBytesSource} opens is closed: by the caller once it holds the stream or blob, and by the source
  * itself on each path where the caller never receives it (a failed seek to the range, a retried open).
  */
-public class TestBlobBytesSourceHandleRelease {
+class TestBlobBytesSourceHandleRelease {
 
   private static final StructType BLOB = (StructType) BlobType.dataType();
   private static final StructType REFERENCE = (StructType) BLOB.apply(HoodieSchema.Blob.EXTERNAL_REFERENCE).dataType();
@@ -60,19 +60,19 @@ public class TestBlobBytesSourceHandleRelease {
   private Path file;
 
   @BeforeEach
-  public void writeFile() throws IOException {
+  void writeFile() throws IOException {
     HandleCountingFileSystem.reset();
     file = tempDir.resolve("object.bin");
     Files.write(file, sequence(300));
   }
 
   @AfterEach
-  public void resetRegistry() {
+  void resetRegistry() {
     HandleCountingFileSystem.reset();
   }
 
   @Test
-  public void mainPathStreamsAndBlobsAreReleasedOnClose() throws IOException {
+  void mainPathStreamsAndBlobsAreReleasedOnClose() throws IOException {
     BlobBytesSource source = source(TransientRetry.NONE);
     try (InputStream in = source.open(outOfLine(HandleCountingFileSystem.url(file), null, null))) {
       assertEquals(300, readAll(in).length);
@@ -95,7 +95,7 @@ public class TestBlobBytesSourceHandleRelease {
   }
 
   @Test
-  public void truncatedRangeReadIsReleasedByTheCaller() throws IOException {
+  void truncatedRangeReadIsReleasedByTheCaller() throws IOException {
     BlobBytesSource source = source(TransientRetry.NONE);
     try (InputStream in = source.open(outOfLine(HandleCountingFileSystem.url(file), 200L, 500L))) {
       assertThrows(BlobTruncatedException.class, () -> readAll(in));
@@ -104,7 +104,7 @@ public class TestBlobBytesSourceHandleRelease {
   }
 
   @Test
-  public void failedSeekToTheRangeReleasesTheStreamTheCallerNeverReceives() {
+  void failedSeekToTheRangeReleasesTheStreamTheCallerNeverReceives() {
     HandleCountingFileSystem.inject(file, HandleCountingFileSystem.Fault.SEEK, 2);
     BlobBytesSource source = source(TransientRetry.NONE);
     assertThrows(IOException.class, () -> source.open(outOfLine(HandleCountingFileSystem.url(file), 100L, 50L)));
@@ -114,7 +114,7 @@ public class TestBlobBytesSourceHandleRelease {
   }
 
   @Test
-  public void retriedOpenReleasesEveryFailedAttempt() throws IOException {
+  void retriedOpenReleasesEveryFailedAttempt() throws IOException {
     // two transient seek failures, then the third attempt opens
     HandleCountingFileSystem.inject(file, HandleCountingFileSystem.Fault.SEEK, 2);
     BlobBytesSource source = source(new TransientRetry(3, 0L));
@@ -130,7 +130,7 @@ public class TestBlobBytesSourceHandleRelease {
   }
 
   @Test
-  public void failedReadOfAnOpenedStreamIsReleasedByTheCaller() throws IOException {
+  void failedReadOfAnOpenedStreamIsReleasedByTheCaller() throws IOException {
     HandleCountingFileSystem.inject(file, HandleCountingFileSystem.Fault.READ, 1);
     BlobBytesSource source = source(TransientRetry.NONE);
     try (InputStream in = source.open(outOfLine(HandleCountingFileSystem.url(file), null, null))) {

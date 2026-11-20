@@ -161,7 +161,7 @@ public class TestImageRowRouting {
   }
 
   @Test
-  public void textOnlyDeclarationNeverSendsAnImageRowAndTheRowFailsForGood() {
+  void textOnlyDeclarationNeverSendsAnImageRowAndTheRowFailsForGood() {
     List<Row> rows = drain(TextOnlyClient.class, "text", storedInputs(), textRow("a"), imageRow("b", new byte[] {9}), textRow("c"));
 
     assertEquals(3, rows.size());
@@ -178,7 +178,7 @@ public class TestImageRowRouting {
   }
 
   @Test
-  public void batchOfImageRowsOnlyIsNeverSentUnderATextOnlyDeclaration() {
+  void batchOfImageRowsOnlyIsNeverSentUnderATextOnlyDeclaration() {
     List<Row> rows = drain(TextOnlyClient.class, "TEXT", storedInputs(), imageRow("a", new byte[] {1}), imageRow("b", new byte[] {2}));
 
     assertTrue(SEEN.isEmpty());
@@ -186,7 +186,7 @@ public class TestImageRowRouting {
   }
 
   @Test
-  public void multimodalClientReadsTheStoredInput() {
+  void multimodalClientReadsTheStoredInput() {
     List<Row> rows = drain(ImageClient.class, "text,image", storedInputs(), imageRow("a", new byte[] {7, 8, 9}), textRow("b"));
 
     assertEquals(2, SEEN.size());
@@ -202,16 +202,18 @@ public class TestImageRowRouting {
   }
 
   @Test
-  public void imageRowWithoutAPreparedImageBreaksTheInvariant() {
+  void imageRowWithoutAPreparedImageBreaksTheInvariant() {
+    BlobBytesSource stored = storedInputs();
+    Row unstoredImage = imageRow("a", null);
     EmbeddingComputePlatformException failure = assertThrows(EmbeddingComputePlatformException.class,
-        () -> drain(ImageClient.class, "image,text", storedInputs(), imageRow("a", null)));
+        () -> drain(ImageClient.class, "image,text", stored, unstoredImage));
     assertTrue(failure.getMessage().startsWith("EMBED-COMPUTE-NO-STORED-IMAGE model=m "), failure.getMessage());
     assertTrue(failure.getMessage().contains("source_path_sha=a source_modification_time=" + MODIFICATION_TIME + " source_file_size="
         + FILE_SIZE + " modality=" + EmbeddingTableSchema.MODALITY_IMAGE + " chunk_id=0:"), "the full key names the row: " + failure.getMessage());
   }
 
   @Test
-  public void imageOnlyDeclarationNeverSendsATextRowAndTheRowFailsForGood() {
+  void imageOnlyDeclarationNeverSendsATextRowAndTheRowFailsForGood() {
     List<Row> rows = drain(ImageClient.class, "image", storedInputs(), textRow("a"), imageRow("b", new byte[] {4, 5}));
 
     assertEquals(1, SEEN.size(), "only the image row reaches the client");
@@ -224,7 +226,7 @@ public class TestImageRowRouting {
   }
 
   @Test
-  public void textAndImageDeclarationWritesBothIntoTheOneColumnAtOneLength() {
+  void textAndImageDeclarationWritesBothIntoTheOneColumnAtOneLength() {
     List<Row> rows = drain(ImageClient.class, "text,image", storedInputs(), textRow("a"), imageRow("b", new byte[] {6}));
 
     assertEquals(2, SEEN.size());
@@ -234,9 +236,11 @@ public class TestImageRowRouting {
   }
 
   @Test
-  public void modelWithoutADeclarationIsRefusedBeforeTheClientStarts() {
+  void modelWithoutADeclarationIsRefusedBeforeTheClientStarts() {
+    BlobBytesSource stored = storedInputs();
+    Row text = textRow("a");
     EmbeddingClientConfigException failure = assertThrows(EmbeddingClientConfigException.class,
-        () -> drain(TextOnlyClient.class, null, storedInputs(), textRow("a")));
+        () -> drain(TextOnlyClient.class, null, stored, text));
     assertEquals("Config hoodie.unstructured.embedding.model.m.modalities is not set: declare the modalities model m embeds "
         + "(text, image or text,image)", failure.getMessage());
     assertTrue(SEEN.isEmpty());

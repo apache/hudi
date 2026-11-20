@@ -31,6 +31,7 @@ import java.io.IOException;
  * chain, {@link PrepFailures#roundFailure}), failing the round, instead of committing the file's quarantine entry past a source a
  * later run can still read.
  */
+// by design: a HoodieIOException, so the catch sites of storage failures see it; the depth is the upstream hierarchy's
 public class SourceReadException extends HoodieIOException {
 
   private static final long serialVersionUID = 1L;

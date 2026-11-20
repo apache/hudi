@@ -56,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@link BlobBytesSource#openSeekable}: random access to INLINE and OUT_OF_LINE blob bytes, restricted to the referenced range,
  * with the row checks, the open retry and the failure classification of {@link BlobBytesSource#open}.
  */
-public class TestBlobBytesSourceSeekable {
+class TestBlobBytesSourceSeekable {
 
   private static final StructType BLOB = (StructType) BlobType.dataType();
   private static final StructType REFERENCE = (StructType) BLOB.apply(HoodieSchema.Blob.EXTERNAL_REFERENCE).dataType();
@@ -65,12 +65,12 @@ public class TestBlobBytesSourceSeekable {
   Path tempDir;
 
   @AfterEach
-  public void clearHooks() {
+  void clearHooks() {
     SourceOpenHooks.clear();
   }
 
   @Test
-  public void inlineSeekAndRead() throws IOException {
+  void inlineSeekAndRead() throws IOException {
     byte[] data = sequence(200);
     try (SeekableBlob seekable = source().openSeekable(inline(data))) {
       assertEquals(200, seekable.length());
@@ -86,7 +86,7 @@ public class TestBlobBytesSourceSeekable {
   }
 
   @Test
-  public void outOfLineRangeIsExact() throws IOException {
+  void outOfLineRangeIsExact() throws IOException {
     byte[] file = sequence(300);
     String path = write("ranged.bin", file);
     try (SeekableBlob seekable = source().openSeekable(outOfLine(path, 10L, 100L))) {
@@ -105,7 +105,7 @@ public class TestBlobBytesSourceSeekable {
   }
 
   @Test
-  public void outOfLineWithoutARangeIsTheWholeFile() throws IOException {
+  void outOfLineWithoutARangeIsTheWholeFile() throws IOException {
     byte[] file = sequence(120);
     String path = write("whole.bin", file);
     try (SeekableBlob seekable = source().openSeekable(outOfLine(path, null, null))) {
@@ -115,7 +115,7 @@ public class TestBlobBytesSourceSeekable {
   }
 
   @Test
-  public void truncatedOutOfLineFileFailsInsteadOfReturningAShortBlob() throws IOException {
+  void truncatedOutOfLineFileFailsInsteadOfReturningAShortBlob() throws IOException {
     String path = write("short.bin", sequence(40));
     try (SeekableBlob seekable = source().openSeekable(outOfLine(path, 0L, 100L))) {
       BlobTruncatedException truncated = assertThrows(BlobTruncatedException.class, () -> readAll(seekable));
@@ -131,11 +131,14 @@ public class TestBlobBytesSourceSeekable {
   }
 
   @Test
-  public void missingFileIsAContentFailure() {
+  void missingFileIsAContentFailure() {
     String path = tempDir.resolve("gone.bin").toUri().toString();
-    Exception missing = assertThrows(Exception.class, () -> source().openSeekable(outOfLine(path, null, null)).close());
+    BlobBytesSource source = source();
+    Row whole = outOfLine(path, null, null);
+    Exception missing = assertThrows(Exception.class, () -> source.openSeekable(whole));
     assertTrue(SourceFailures.isContentFailure(missing), missing.toString());
-    Exception missingRange = assertThrows(Exception.class, () -> source().openSeekable(outOfLine(path, 0L, 4L)).close());
+    Row range = outOfLine(path, 0L, 4L);
+    Exception missingRange = assertThrows(Exception.class, () -> source.openSeekable(range));
     assertTrue(SourceFailures.isContentFailure(missingRange), missingRange.toString());
   }
 
@@ -144,7 +147,7 @@ public class TestBlobBytesSourceSeekable {
    * relative path, a range {@code read_blob()} refuses) is a {@link BlobReferenceException} of both readers, before any read.
    */
   @Test
-  public void malformedRowsAreRefusedByBothReaders() throws IOException {
+  void malformedRowsAreRefusedByBothReaders() throws IOException {
     String path = write("x.bin", sequence(64));
     Row[] malformed = {
         null,
@@ -165,7 +168,7 @@ public class TestBlobBytesSourceSeekable {
 
   /** A transient failure to open is retried in the round as {@link BlobBytesSource#open} retries it; the third try reads. */
   @Test
-  public void transientOpenFailureIsRetried() throws IOException {
+  void transientOpenFailureIsRetried() throws IOException {
     byte[] file = sequence(50);
     Path local = bucketFile("retried.bin", file);
     AtomicInteger attempts = new AtomicInteger();
@@ -185,7 +188,7 @@ public class TestBlobBytesSourceSeekable {
    * failure; an access denial is never retried.
    */
   @Test
-  public void exhaustedRetriesAndAccessDenialsFailWithTheStorageFailure() throws IOException {
+  void exhaustedRetriesAndAccessDenialsFailWithTheStorageFailure() throws IOException {
     Path local = bucketFile("denied.bin", sequence(50));
     AtomicInteger attempts = new AtomicInteger();
     SourceOpenHooks.beforeOpen(local.toAbsolutePath().toString(), () -> {
@@ -193,8 +196,8 @@ public class TestBlobBytesSourceSeekable {
       throw new IOException("injected connection reset");
     });
     BlobBytesSource source = bucketSource(new TransientRetry(2, 0L));
-    Exception exhausted = assertThrows(Exception.class,
-        () -> source.openSeekable(outOfLine(bucketPath("denied.bin"), null, null)).close());
+    Row deniedObject = outOfLine(bucketPath("denied.bin"), null, null);
+    Exception exhausted = assertThrows(Exception.class, () -> source.openSeekable(deniedObject));
     assertFalse(SourceFailures.isContentFailure(exhausted), exhausted.toString());
     assertEquals(2, attempts.get());
 
@@ -203,8 +206,7 @@ public class TestBlobBytesSourceSeekable {
       attempts.incrementAndGet();
       throw new AccessDeniedException(local.toString(), null, "injected 403");
     });
-    Exception denied = assertThrows(Exception.class,
-        () -> source.openSeekable(outOfLine(bucketPath("denied.bin"), null, null)).close());
+    Exception denied = assertThrows(Exception.class, () -> source.openSeekable(deniedObject));
     assertFalse(SourceFailures.isContentFailure(denied), denied.toString());
     assertFalse(BlobBytesSource.isTransient(denied));
     assertEquals(1, attempts.get(), "an access denial is not retried");
@@ -215,14 +217,14 @@ public class TestBlobBytesSourceSeekable {
       attempts.incrementAndGet();
       throw new FileNotFoundException("injected unreadable object");
     });
-    Exception unreadable = assertThrows(Exception.class,
-        () -> source.openSeekable(outOfLine(bucketPath("denied.bin"), 0L, 10L)).close());
+    Row deniedRange = outOfLine(bucketPath("denied.bin"), 0L, 10L);
+    Exception unreadable = assertThrows(Exception.class, () -> source.openSeekable(deniedRange));
     assertFalse(SourceFailures.isContentFailure(unreadable), unreadable.toString());
     assertEquals(1, attempts.get());
   }
 
   @Test
-  public void imageIoReadsTheHeaderThroughTheSeekableStream() throws IOException {
+  void imageIoReadsTheHeaderThroughTheSeekableStream() throws IOException {
     byte[] png = ImageFixtures.image("png", 321, 123);
     byte[] file = new byte[png.length + 7];
     System.arraycopy(png, 0, file, 7, png.length);

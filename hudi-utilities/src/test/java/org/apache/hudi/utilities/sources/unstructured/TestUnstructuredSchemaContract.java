@@ -145,12 +145,14 @@ public class TestUnstructuredSchemaContract {
     StructType table = contract(UnstructuredMode.EMBEDDING, embedding("prep_and_compute", "m1"));
     StructType contract = UnstructuredSchemaContract.contract(UnstructuredMode.EMBEDDING, declared, Option.of(table));
     StructType newTable = contract(UnstructuredMode.EMBEDDING, declared);
+    StructType reservedName = contract.add(vector("emb_m2", 8));
     HoodieSchemaException refused = assertThrows(HoodieSchemaException.class, () -> UnstructuredSchemaContract.checkOutput(
-        UnstructuredMode.EMBEDDING, contract, newTable, contract.add(vector("emb_m2", 8)), "the rows", false));
+        UnstructuredMode.EMBEDDING, contract, newTable, reservedName, "the rows", false));
     assertTrue(refused.getMessage().contains("the column emb_m2 has a reserved name"), refused.getMessage());
+    StructField image = EmbeddingTableSchema.preparedImageField();
+    StructType upperCaseReserved = contract.add(image.copy("EMB_M2", image.dataType(), true, image.metadata()));
     assertThrows(HoodieSchemaException.class, () -> UnstructuredSchemaContract.checkOutput(UnstructuredMode.EMBEDDING, contract, newTable,
-        contract.add(EmbeddingTableSchema.preparedImageField().copy("EMB_M2", EmbeddingTableSchema.preparedImageField().dataType(),
-            true, EmbeddingTableSchema.preparedImageField().metadata())), "the rows", false));
+        upperCaseReserved, "the rows", false));
     // a customer VECTOR or BLOB of another name is the customer's
     UnstructuredSchemaContract.checkOutput(UnstructuredMode.EMBEDDING, contract, newTable, contract.add(vector("user_vector", 8))
         .add(EmbeddingTableSchema.preparedImageField().copy("user_blob", EmbeddingTableSchema.preparedImageField().dataType(), true,

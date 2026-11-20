@@ -105,7 +105,7 @@ public class ConcurrencyCountingMultimodalClient extends DummyMultimodalEmbeddin
       }
     }
     // an end sorts before a start at the same instant, so touching intervals do not count as overlapping
-    events.sort((a, b) -> a[0] != b[0] ? Long.compare(a[0], b[0]) : Long.compare(a[1], b[1]));
+    events.sort((a, b) -> a[0] == b[0] ? Long.compare(a[1], b[1]) : Long.compare(a[0], b[0]));
     int current = 0;
     int max = 0;
     for (long[] event : events) {

@@ -22,6 +22,7 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingRoundTestBase;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingStreamers.Round;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.FixtureFile;
+import org.apache.hudi.utilities.unstructured.embedding.compute.ComputeRound;
 import org.apache.hudi.utilities.unstructured.embedding.compute.ScriptedEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.prep.TextPipePreprocessor;
 
@@ -40,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Spark runs {@code local[4,2]} here, so a task gets a second attempt.
  */
 @Tag("functional")
-public class TestComputeTaskRetryNoPrepRerun extends EmbeddingRoundTestBase {
+class TestComputeTaskRetryNoPrepRerun extends EmbeddingRoundTestBase {
 
   private static final int FILES = 6;
 
@@ -50,7 +51,7 @@ public class TestComputeTaskRetryNoPrepRerun extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void failedComputeTaskIsRetriedAloneWithTheSameOutputAndNoPrepRerun() throws Exception {
+  void failedComputeTaskIsRetriedAloneWithTheSameOutputAndNoPrepRerun() throws Exception {
     FixtureFile[] files = new FixtureFile[FILES];
     for (int i = 0; i < FILES; i++) {
       files[i] = text("f" + i, "one " + i, "two " + i, "three " + i);
@@ -64,11 +65,14 @@ public class TestComputeTaskRetryNoPrepRerun extends EmbeddingRoundTestBase {
 
     int cleanCalls = ScriptedEmbeddingClient.CALLS.getAndSet(0);
     TextPipePreprocessor.OPENED.set(0);
-    ScriptedEmbeddingClient.FAIL_FIRST_ATTEMPT_OF_PARTITION.set(0);
+    int failedPartition = ComputeRound.hashPartitionByKey(spark().read().format("hudi").load(table("clean")), 4)
+        .mapPartitionsWithIndex((index, iterator) -> iterator.hasNext()
+            ? Collections.singletonList(index).iterator() : Collections.<Integer>emptyList().iterator(), true).first();
+    ScriptedEmbeddingClient.FAIL_FIRST_ATTEMPT_OF_PARTITION.set(failedPartition);
     Round faulted = round(props(table("faulted"), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
         EmbeddingTableConfig.COMPUTE_PARALLELISM.key(), "4"));
 
-    assertEquals(1, ScriptedEmbeddingClient.TASK_FAILURES.get(), "the first attempt of compute task 0 failed once");
+    assertEquals(1, ScriptedEmbeddingClient.TASK_FAILURES.get(), "the first attempt of compute task " + failedPartition + " failed once");
     assertEquals(FILES, TextPipePreprocessor.OPENED.get(), "prep ran once per file: the compute retry did not re-run it");
     assertEquals(cleanCalls + 1, ScriptedEmbeddingClient.CALLS.get(),
         "only the failed task ran again: one more model call than the clean round (the call that failed)");

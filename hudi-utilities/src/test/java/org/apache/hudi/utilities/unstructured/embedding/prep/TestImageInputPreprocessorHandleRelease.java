@@ -48,13 +48,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Handle release of {@link ImageInputPreprocessor}: the header read closes the seekable blob or the stream it opened, on a stored
  * image and on every refusal, and disposes the ImageIO reader it chose.
  */
-public class TestImageInputPreprocessorHandleRelease {
+class TestImageInputPreprocessorHandleRelease {
 
   private final AtomicInteger opened = new AtomicInteger();
   private final AtomicInteger closed = new AtomicInteger();
 
   @Test
-  public void storedImageClosesTheSeekableBlob() throws IOException {
+  void storedImageClosesTheSeekableBlob() throws IOException {
     byte[] png = ImageFixtures.image("png", 40, 20);
     try (ClosableIterator<Chunk> chunks = open(seekable(png, -1), png.length, new TypedProperties())) {
       assertTrue(chunks.hasNext());
@@ -67,7 +67,7 @@ public class TestImageInputPreprocessorHandleRelease {
   }
 
   @Test
-  public void storedImageClosesTheStreamOfAPlainSupplier() throws IOException {
+  void storedImageClosesTheStreamOfAPlainSupplier() throws IOException {
     byte[] jpeg = ImageFixtures.image("jpeg", 40, 20);
     try (ClosableIterator<Chunk> chunks = open(stream(jpeg), jpeg.length, new TypedProperties())) {
       assertTrue(chunks.hasNext());
@@ -76,7 +76,7 @@ public class TestImageInputPreprocessorHandleRelease {
   }
 
   @Test
-  public void unrecognisedContentClosesTheSource() {
+  void unrecognisedContentClosesTheSource() {
     assertThrows(ImageHeaderException.class, () -> open(seekable(ImageFixtures.garbage(), -1), 64, new TypedProperties()));
     assertThrows(ImageHeaderException.class, () -> open(stream(ImageFixtures.garbage()), 64, new TypedProperties()));
     assertEquals(2, opened.get());
@@ -84,7 +84,7 @@ public class TestImageInputPreprocessorHandleRelease {
   }
 
   @Test
-  public void headerCapClosesTheSource() {
+  void headerCapClosesTheSource() {
     byte[] png = ImageFixtures.image("png", 40, 20);
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_HEADER_MAX_BYTES.key(), "8");
@@ -95,23 +95,26 @@ public class TestImageInputPreprocessorHandleRelease {
   }
 
   @Test
-  public void pixelRefusalClosesTheSource() {
+  void pixelRefusalClosesTheSource() {
     byte[] png = ImageFixtures.image("png", 40, 20);
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_MAX_PIXELS.key(), "10");
-    assertThrows(PreprocessingException.class, () -> open(seekable(png, -1), png.length, props));
+    SeekableBlobBytesSupplier intact = seekable(png, -1);
+    assertThrows(PreprocessingException.class, () -> open(intact, png.length, props));
     assertAllClosed("after a pixel refusal");
   }
 
   @Test
-  public void storageFailureMidReadClosesTheSource() {
+  void storageFailureMidReadClosesTheSource() {
     byte[] png = ImageFixtures.image("png", 40, 20);
-    assertThrows(RuntimeException.class, () -> open(seekable(png, 8), png.length, new TypedProperties()));
+    SeekableBlobBytesSupplier failing = seekable(png, 8);
+    TypedProperties none = new TypedProperties();
+    assertThrows(RuntimeException.class, () -> open(failing, png.length, none));
     assertAllClosed("after a storage failure mid header read");
   }
 
   @Test
-  public void chosenReaderIsDisposedWhenALaterProviderFails() {
+  void chosenReaderIsDisposedWhenALaterProviderFails() {
     try (ImageProviderLeakSpies spies = ImageProviderLeakSpies.install()) {
       byte[] content = ImageProviderLeakSpies.spyContent();
       ImageProviderLeakSpies.runEitherOutcome(() -> {

@@ -37,10 +37,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * commits nothing.
  */
 @Tag("functional")
-public class TestComputeInStepRetries extends EmbeddingRoundTestBase {
+class TestComputeInStepRetries extends EmbeddingRoundTestBase {
 
   @Test
-  public void retryableAnswerIsRetriedInsideTheStepAndTheRoundCommits() throws Exception {
+  void retryableAnswerIsRetriedInsideTheStepAndTheRoundCommits() throws Exception {
     announce(text("a", "alpha", "beta"));
     ScriptedEmbeddingClient.RETRYABLE.set(1);
 
@@ -52,7 +52,7 @@ public class TestComputeInStepRetries extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void anInputStillRetryableAfterItsLastTryFailsTheRound() throws Exception {
+  void anInputStillRetryableAfterItsLastTryFailsTheRound() throws Exception {
     announce(text("a", "alpha", "beta"));
     ScriptedEmbeddingClient.RETRYABLE.set(Integer.MAX_VALUE);
 

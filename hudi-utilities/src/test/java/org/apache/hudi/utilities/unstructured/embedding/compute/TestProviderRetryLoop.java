@@ -39,14 +39,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** {@link ProviderRetryLoop} on a fake clock: retries, hints, deadline, interrupt and outage. */
-public class TestProviderRetryLoop {
+class TestProviderRetryLoop {
 
   private static final String ALIAS = "m";
   private final AtomicLong now = new AtomicLong(10_000L);
   private final List<Long> sleeps = new ArrayList<>();
 
   @Test
-  public void transientAnswersAreRetriedThenTheLastErrorIsReported() {
+  void transientAnswersAreRetriedThenTheLastErrorIsReported() {
     ProviderRetryLoop loop = loop(props("3", "100000", "60000", "5"));
     loop.startCall();
     AtomicInteger attempts = new AtomicInteger();
@@ -63,7 +63,7 @@ public class TestProviderRetryLoop {
   }
 
   @Test
-  public void providerHintIsWaitedAndAHintOverTheMaxBackoffEndsTheRequest() {
+  void providerHintIsWaitedAndAHintOverTheMaxBackoffEndsTheRequest() {
     ProviderRetryLoop loop = loop(props("5", "100000", "4000", "5"));
     loop.startCall();
     List<Answer<String>> script = new ArrayList<>(Arrays.asList(
@@ -81,7 +81,7 @@ public class TestProviderRetryLoop {
   }
 
   @Test
-  public void retryThatWouldPassTheDeadlineIsNotWaitedFor() {
+  void retryThatWouldPassTheDeadlineIsNotWaitedFor() {
     ProviderRetryLoop loop = loop(props("5", "2000", "60000", "5"));
     loop.startCall();
     Answer<String> answer = loop.send(() -> Answer.failed(ProviderResponseKind.RETRYABLE, "busy", 2500));
@@ -92,7 +92,7 @@ public class TestProviderRetryLoop {
   }
 
   @Test
-  public void nonTransientAnswersAreNotRetried() {
+  void nonTransientAnswersAreNotRetried() {
     ProviderRetryLoop loop = loop(props("5", "100000", "60000", "5"));
     loop.startCall();
     for (ProviderResponseKind kind : new ProviderResponseKind[] {ProviderResponseKind.INPUT, ProviderResponseKind.CONFIG}) {
@@ -107,7 +107,7 @@ public class TestProviderRetryLoop {
   }
 
   @Test
-  public void interruptStopsTheCallWithoutCountingAnOutage() {
+  void interruptStopsTheCallWithoutCountingAnOutage() {
     ProviderRetryLoop loop = loop(props("5", "100000", "60000", "1"));
     loop.startCall();
     Answer<String> answer;
@@ -125,7 +125,7 @@ public class TestProviderRetryLoop {
   }
 
   @Test
-  public void consecutiveFailedRequestsOpenTheOutageAndASuccessResetsTheCount() {
+  void consecutiveFailedRequestsOpenTheOutageAndASuccessResetsTheCount() {
     ProviderRetryLoop loop = loop(props("1", "100000", "60000", "2"));
     loop.startCall();
     loop.send(() -> Answer.failed(ProviderResponseKind.RETRYABLE, "down", -1));
@@ -140,7 +140,7 @@ public class TestProviderRetryLoop {
 
   @ParameterizedTest
   @ValueSource(strings = {"0.1", "1"})
-  public void rateWaitStopsAtDeadlineWithoutSending(String rate) {
+  void rateWaitStopsAtDeadlineWithoutSending(String rate) {
     TypedProperties properties = props("3", "1000", "60000", "1");
     properties.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + RequestRateLimiter.RATE_LIMIT_REQUESTS_PER_SECOND_SUFFIX, rate);
     ProviderRetryLoop loop = loop(properties);
@@ -170,7 +170,7 @@ public class TestProviderRetryLoop {
   }
 
   @Test
-  public void retryRateWaitDoesNotSendAfterDeadline() {
+  void retryRateWaitDoesNotSendAfterDeadline() {
     TypedProperties properties = props("3", "1000", "60000", "5");
     properties.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + RequestRateLimiter.RATE_LIMIT_REQUESTS_PER_SECOND_SUFFIX, "0.1");
     ProviderRetryLoop loop = loop(properties);
@@ -187,7 +187,7 @@ public class TestProviderRetryLoop {
   }
 
   @Test
-  public void alreadyExpiredCallDoesNotSend() {
+  void alreadyExpiredCallDoesNotSend() {
     ProviderRetryLoop loop = loop(props("3", "1000", "60000", "5"));
     loop.startCall();
     now.addAndGet(1000L);
@@ -202,7 +202,7 @@ public class TestProviderRetryLoop {
   }
 
   @Test
-  public void delayedWakeupDoesNotSendAtDeadline() {
+  void delayedWakeupDoesNotSendAtDeadline() {
     TypedProperties properties = props("3", "1000", "60000", "5");
     properties.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + RequestRateLimiter.RATE_LIMIT_REQUESTS_PER_SECOND_SUFFIX, "2");
     EmbeddingModelSpec spec = new EmbeddingModelSpec(ALIAS, "emb_" + ALIAS, 8, null, "jina", "x");

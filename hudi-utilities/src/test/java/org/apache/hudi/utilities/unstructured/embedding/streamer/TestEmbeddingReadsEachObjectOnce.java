@@ -44,22 +44,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the inline ceiling when preprocessing streams it. Compute reads only the prepared rows, never an object.
  */
 @Tag("functional")
-public class TestEmbeddingReadsEachObjectOnce extends EmbeddingRoundTestBase {
+class TestEmbeddingReadsEachObjectOnce extends EmbeddingRoundTestBase {
 
   private static final long INLINE_CEILING = 32;
 
   @AfterEach
-  public void clearOpens() {
+  void clearOpens() {
     SourceOpenHooks.clear();
   }
 
   @Test
-  public void inlineObjectsAreReadOnlyWhenTheSourceBuildsTheirRows() throws Exception {
+  void inlineObjectsAreReadOnlyWhenTheSourceBuildsTheirRows() throws Exception {
     assertEachObjectOpenedOnce(Arrays.asList(text("a", "alpha", "beta"), text("b", "gamma"), text("c", "delta", "epsilon")), 5);
   }
 
   @Test
-  public void eachObjectIsOpenedOncePerRound() throws Exception {
+  void eachObjectIsOpenedOncePerRound() throws Exception {
     List<FixtureFile> files = Arrays.asList(text("a", "alpha", "beta"), text("b", "gamma"), text("c", "delta", "epsilon"),
         text("d", "zeta zeta zeta zeta", "eta eta eta eta eta", "theta theta theta"));
     assertTrue(files.get(3).bytes.length > INLINE_CEILING && files.get(0).bytes.length <= INLINE_CEILING);

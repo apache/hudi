@@ -33,6 +33,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -40,10 +41,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The video frame value type and the frame-extraction seam: the value invariants, and that {@link FrameExtractionStrategy} can be
  * implemented as stated (data prep's video preprocessor drives it).
  */
-public class TestVideoInterfaces {
+class TestVideoInterfaces {
 
   @Test
-  public void extractedFrameValidatesItsFields() {
+  void extractedFrameValidatesItsFields() {
     BlobBytesSupplier image = () -> new ByteArrayInputStream(new byte[] {1, 2, 3});
     ExtractedFrame frame = new ExtractedFrame(2000, 48, true, "00ff", new ExtractedFrame.EncodedImage(640, 360, "image/jpeg", 3, image));
     assertEquals(2000, frame.getTimeMs());
@@ -54,22 +55,25 @@ public class TestVideoInterfaces {
     assertEquals("image/jpeg", frame.getMimeType());
     assertEquals(3, frame.getSizeBytes());
     assertEquals("00ff", frame.getDedupKey());
+    assertSame(image, frame.getImage());
 
-    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(-1, 0, true, "k", new ExtractedFrame.EncodedImage(1, 1, "image/jpeg", 3, image)));
-    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(0, -1, true, "k", new ExtractedFrame.EncodedImage(1, 1, "image/jpeg", 3, image)));
-    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(0, 0, true, "k", new ExtractedFrame.EncodedImage(0, 1, "image/jpeg", 3, image)));
-    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(0, 0, true, "k", new ExtractedFrame.EncodedImage(1, 1, "", 3, image)));
-    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(0, 0, true, "k", new ExtractedFrame.EncodedImage(1, 1, "image/jpeg", -1, image)));
-    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(0, 0, true, "", new ExtractedFrame.EncodedImage(1, 1, "image/jpeg", 3, image)));
-    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(0, 0, true, "k", new ExtractedFrame.EncodedImage(1, 1, "image/jpeg", 3, null)));
+    ExtractedFrame.EncodedImage valid = new ExtractedFrame.EncodedImage(1, 1, "image/jpeg", 3, image);
+    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(-1, 0, true, "k", valid));
+    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(0, -1, true, "k", valid));
+    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(0, 0, true, "", valid));
+    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame(0, 0, true, "k", null));
+    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame.EncodedImage(0, 1, "image/jpeg", 3, image));
+    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame.EncodedImage(1, 1, "", 3, image));
+    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame.EncodedImage(1, 1, "image/jpeg", -1, image));
+    assertThrows(IllegalArgumentException.class, () -> new ExtractedFrame.EncodedImage(1, 1, "image/jpeg", 3, null));
   }
 
   /** The interface compiles and can be implemented as stated: a strategy over a fixed list, drained as a caller would. */
   @Test
-  public void interfacesCanBeImplementedAsStated() throws IOException {
+  void interfacesCanBeImplementedAsStated() throws IOException {
     BlobBytesSupplier image = () -> new ByteArrayInputStream(new byte[0]);
-    List<ExtractedFrame> frames = Arrays.asList(new ExtractedFrame(0, 0, true, "a", new ExtractedFrame.EncodedImage(2, 2, "image/jpeg", 0, image)),
-        new ExtractedFrame(2000, 1, true, "b", new ExtractedFrame.EncodedImage(2, 2, "image/jpeg", 0, image)));
+    ExtractedFrame.EncodedImage encoded = new ExtractedFrame.EncodedImage(2, 2, "image/jpeg", 0, image);
+    List<ExtractedFrame> frames = Arrays.asList(new ExtractedFrame(0, 0, true, "a", encoded), new ExtractedFrame(2000, 1, true, "b", encoded));
     FrameExtractionStrategy strategy = new FrameExtractionStrategy() {
       @Override
       public String name() {
@@ -92,6 +96,7 @@ public class TestVideoInterfaces {
     return new ClosableIterator<T>() {
       @Override
       public void close() {
+        // nothing to release: the iterator is over an in-memory list
       }
 
       @Override

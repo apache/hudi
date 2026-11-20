@@ -288,15 +288,10 @@ public class TestPreprocessingIterator {
     props.setProperty("test.propagate.close.failure", String.valueOf(propagate));
     CloseStatusFileSystem.failStatus = false;
     CloseIgnoringPreprocessor.CLOSE_FAILURES.set(0);
-    try (PreprocessingIterator iterator = new PreprocessingIterator(
-        Collections.singletonList(row).iterator(),
-        EmbeddingTableConfig.from(props),
-        "001",
-        new BlobBytesSource(HadoopFSUtils.getStorageConf(conf)),
-        new PreprocessorRegistry(props),
-        new WordCountTokenizer(),
-        new PrepCounters(filesOk, filesFailed, chunks, new LongAccumulator(), new LongAccumulator()),
-        null)) {
+    try (PreprocessingIterator iterator = PreprocessingIterator.builder(Collections.singletonList(row).iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(conf)))
+        .registry(new PreprocessorRegistry(props)).tokenizer(new WordCountTokenizer())
+        .counters(new PrepCounters(filesOk, filesFailed, chunks, new LongAccumulator(), new LongAccumulator())).build()) {
       SourceReadException failure = assertThrows(SourceReadException.class, () -> drain(iterator));
       assertFalse(failure.getMessage().contains("Self-suppression"), failure.getMessage());
       assertEquals(1, CloseIgnoringPreprocessor.CLOSE_FAILURES.get());
@@ -406,15 +401,12 @@ public class TestPreprocessingIterator {
   }
 
   private PreprocessingIterator iterator(TypedProperties props, Row... rows) {
-    return new PreprocessingIterator(
-        Arrays.asList(rows).iterator(),
-        EmbeddingTableConfig.from(props),
-        "001",
-        new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
-        new PreprocessorRegistry(props),
-        new WordCountTokenizer(),
-        new PrepCounters(filesOk, filesFailed, chunks, new LongAccumulator(), new LongAccumulator()),
-        null);
+    return PreprocessingIterator.builder(Arrays.asList(rows).iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())))
+        .registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer())
+        .counters(new PrepCounters(filesOk, filesFailed, chunks, new LongAccumulator(), new LongAccumulator()))
+        .build();
   }
 
   /** The value of {@code name} in an output row (a schemaless RowFactory row): looked up through the table layout. */
@@ -767,16 +759,14 @@ public class TestPreprocessingIterator {
       }
     };
     Set<Thread> before = writeThreads();
-    PreprocessingIterator iterator = new PreprocessingIterator(
-        Collections.singletonList(blobRow("sha-a", "img", "x")).iterator(),
-        EmbeddingTableConfig.from(props),
-        "001",
-        new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
-        registry,
-        new WordCountTokenizer(),
-        new PrepCounters(filesOk, filesFailed, chunks, new LongAccumulator(), new LongAccumulator()),
-        null,
-        new PayloadDestination(HadoopFSUtils.getStorageConf(new Configuration()), embeddingTable, props));
+    PreprocessingIterator iterator = PreprocessingIterator.builder(Collections.singletonList(blobRow("sha-a", "img", "x")).iterator(),
+            EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())))
+        .registry(registry)
+        .tokenizer(new WordCountTokenizer())
+        .counters(new PrepCounters(filesOk, filesFailed, chunks, new LongAccumulator(), new LongAccumulator()))
+        .destination(new PayloadDestination(HadoopFSUtils.getStorageConf(new Configuration()), embeddingTable, props))
+        .build();
     assertTrue(iterator.hasNext());
     iterator.next();
     Set<Thread> started = writeThreads();

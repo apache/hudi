@@ -50,12 +50,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * values, the refusals of an unset key, of a modality the model's client has no request format for and of one beyond a known
  * model, and the prepared content against the declaration with the error table off (refused) and on (started).
  */
-public class TestModelModalityChecks {
+class TestModelModalityChecks {
 
   private static final String KEY = "hoodie.unstructured.embedding.model.m1.modalities";
 
   @Test
-  public void valuesAreASubsetOfTextAndImageInAnyCaseAndOrder() {
+  void valuesAreASubsetOfTextAndImageInAnyCaseAndOrder() {
     assertEquals(set("text"), model("dummy", "m", "text").getModalities());
     assertEquals(set("image"), model("dummy", "m", " IMAGE ").getModalities());
     assertEquals(set("image", "text"), model("dummy", "m", "Image,text").getModalities());
@@ -64,7 +64,7 @@ public class TestModelModalityChecks {
   }
 
   @Test
-  public void invalidValueIsRefusedNamingTheKey() {
+  void invalidValueIsRefusedNamingTheKey() {
     IllegalArgumentException video = assertThrows(IllegalArgumentException.class, () -> model("dummy", "m", "text,video"));
     assertEquals("Config " + KEY + "=text,video names modality 'video'; the modalities are text and image, e.g. " + KEY
         + "=text,image", video.getMessage());
@@ -73,9 +73,9 @@ public class TestModelModalityChecks {
   }
 
   @Test
-  public void unsetKeyIsRefusedNamingIt() {
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> ModelModalityChecks.checkDeclaration(model("dummy", "m", null)));
+  void unsetKeyIsRefusedNamingIt() {
+    EmbeddingModelSpec unset = model("dummy", "m", null);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> ModelModalityChecks.checkDeclaration(unset));
     assertEquals("Missing required config " + KEY + ": declare the modalities model m1 embeds: text, image or text,image. "
         + "Nothing was written", refused.getMessage());
   }
@@ -95,7 +95,7 @@ public class TestModelModalityChecks {
       "azure-openai|text-embedding-3-large|text",
       "hf-tei|BAAI/bge-small-en-v1.5|text",
       "jina|jina-embeddings-v3|text"})
-  public void declarationTheClientCanSendStarts(String provider, String name, String modalities) {
+  void declarationTheClientCanSendStarts(String provider, String name, String modalities) {
     ModelModalityChecks.checkDeclaration(model(provider, name, modalities));
   }
 
@@ -111,29 +111,29 @@ public class TestModelModalityChecks {
           + "OpenAiCompatibleEmbeddingClient|[text]| (the OpenAI embeddings API takes no image input)",
       "hf-tei|clip|org.apache.hudi.utilities.unstructured.embedding.compute.openai.OpenAiCompatibleEmbeddingClient|[text]"
           + "| (image input for OpenAI-compatible servers is not supported)"})
-  public void imageDeclarationTheClientCannotSendIsRefused(String provider, String name, String client, String supported,
-                                                              String reason) {
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> ModelModalityChecks.checkDeclaration(model(provider, name, "text,image")));
+  void imageDeclarationTheClientCannotSendIsRefused(String provider, String name, String client, String supported,
+                                                       String reason) {
+    EmbeddingModelSpec model = model(provider, name, "text,image");
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> ModelModalityChecks.checkDeclaration(model));
     assertEquals("Config " + KEY + "=image,text declares [image], which provider " + provider + " has no request format for "
         + "with model " + name + (reason == null ? "" : " " + reason) + "; its client " + client + " embeds " + supported
         + ". Nothing was written", refused.getMessage());
   }
 
   @Test
-  public void declarationBeyondAKnownModelIsRefused() {
+  void declarationBeyondAKnownModelIsRefused() {
     // a client that sends images, serving a model known to embed text only
     TypedProperties props = props("dummy", "amazon.titan-embed-text-v2:0", "text,image");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1" + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX,
         TestImageRowRouting.ImageClient.class.getName());
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> ModelModalityChecks.checkDeclaration(EmbeddingTableConfig.from(props).model("m1")));
+    EmbeddingModelSpec model = EmbeddingTableConfig.from(props).model("m1");
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> ModelModalityChecks.checkDeclaration(model));
     assertEquals("Config " + KEY + "=image,text declares [image], but model amazon.titan-embed-text-v2:0 (provider dummy) "
         + "embeds only [text]. Nothing was written", refused.getMessage());
   }
 
   @Test
-  public void modelOutsideTheTableIsTrustedAsDeclared() {
+  void modelOutsideTheTableIsTrustedAsDeclared() {
     TypedProperties props = props("bedrock", "arn:aws:bedrock:us-east-1:123456789012:provisioned-model/abc", "text,image");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1" + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX,
         BedrockCohereEmbeddingClient.class.getName());
@@ -150,12 +150,12 @@ public class TestModelModalityChecks {
       "multimodalembedding@001|image,text",
       "text-embedding-3-small|text",
       "TEXT-EMBEDDING-3-LARGE|text"})
-  public void knownModels(String name, String modalities) {
+  void knownModels(String name, String modalities) {
     assertEquals(set(modalities.split(",")), KnownEmbeddingModels.modalities(name).get());
   }
 
   @Test
-  public void unknownModelsHaveNoEntry() {
+  void unknownModelsHaveNoEntry() {
     for (String name : Arrays.asList("cohere.embed-english-v3", "multimodalembedding", "text-embedding-ada-002",
         "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/xyz", "BAAI/bge-small-en-v1.5")) {
       assertFalse(KnownEmbeddingModels.modalities(name).isPresent(), name);
@@ -164,7 +164,7 @@ public class TestModelModalityChecks {
   }
 
   @Test
-  public void preparedModalitiesFollowTheExtensionsAndTheAudioSetting() {
+  void preparedModalitiesFollowTheExtensionsAndTheAudioSetting() {
     assertEquals(map("text", "pdf"), prepared(props("dummy", "m", "text", "pdf")));
     assertEquals(map("image", "jpg,png", "text", "pdf"), prepared(props("dummy", "m", "text", "PDF,png,jpg")));
     assertEquals(map("image", "mp4"), prepared(props("dummy", "m", "text", "mp4")));
@@ -178,7 +178,7 @@ public class TestModelModalityChecks {
   }
 
   @Test
-  public void contentOfDeclaredModalitiesStartsWhateverTheErrorTable() {
+  void contentOfDeclaredModalitiesStartsWhateverTheErrorTable() {
     for (String errorTable : Arrays.asList("true", "false")) {
       assertEquals(Collections.emptyMap(), content(props("dummy", "m", "text", "pdf"), errorTable));
       assertEquals(Collections.emptyMap(), content(props("dummy-multimodal", "m", "image", "png,mp4"), errorTable));
@@ -187,29 +187,29 @@ public class TestModelModalityChecks {
   }
 
   @Test
-  public void contentOfAnUndeclaredModalityIsRefusedWithTheErrorTableOff() {
-    IllegalArgumentException images = assertThrows(IllegalArgumentException.class,
-        () -> content(props("dummy", "m", "text", "pdf,png,jpg"), "false"));
+  void contentOfAnUndeclaredModalityIsRefusedWithTheErrorTableOff() {
+    TypedProperties imageProps = props("dummy", "m", "text", "pdf,png,jpg");
+    IllegalArgumentException images = assertThrows(IllegalArgumentException.class, () -> content(imageProps, "false"));
     assertEquals("Config hoodie.unstructured.embedding.prep.file.extensions=jpg,pdf,png prepares image rows (from jpg, png), which "
         + KEY + "=text does not declare, and the error table is off (hoodie.errortable.enable): the first batch holding such a row "
         + "would fail its round on every sync. List only extensions of declared modalities in "
         + "hoodie.unstructured.embedding.prep.file.extensions, declare the modalities in " + KEY + ", or turn the error table on. "
         + "Nothing was written", images.getMessage());
-    IllegalArgumentException texts = assertThrows(IllegalArgumentException.class,
-        () -> content(props("dummy-multimodal", "m", "image", "pdf,png"), "false"));
+    TypedProperties textProps = props("dummy-multimodal", "m", "image", "pdf,png");
+    IllegalArgumentException texts = assertThrows(IllegalArgumentException.class, () -> content(textProps, "false"));
     assertEquals("Config hoodie.unstructured.embedding.prep.file.extensions=pdf,png prepares text rows (from pdf), which " + KEY
         + "=image does not declare, and the error table is off (hoodie.errortable.enable): the first batch holding such a row "
         + "would fail its round on every sync. List only extensions of declared modalities in "
         + "hoodie.unstructured.embedding.prep.file.extensions, declare the modalities in " + KEY + ", or turn the error table on. "
         + "Nothing was written", texts.getMessage());
-    IllegalArgumentException unset = assertThrows(IllegalArgumentException.class,
-        () -> content(props("dummy", "m", "text", null), "false"));
+    TypedProperties unsetProps = props("dummy", "m", "text", null);
+    IllegalArgumentException unset = assertThrows(IllegalArgumentException.class, () -> content(unsetProps, "false"));
     assertTrue(unset.getMessage().startsWith("Config hoodie.unstructured.embedding.prep.file.extensions=(unset: every "
         + "mapped extension) prepares image rows (from avi, bmp, gif,"), unset.getMessage());
   }
 
   @Test
-  public void contentOfAnUndeclaredModalityStartsWithTheErrorTableOn() {
+  void contentOfAnUndeclaredModalityStartsWithTheErrorTableOn() {
     assertEquals(map("image", "png"), content(props("dummy", "m", "text", "pdf,png"), "true"));
     TypedProperties speech = props("dummy-multimodal", "m", "image", "mp4");
     speech.setProperty(AudioConfigKeys.ENABLED.key(), "true");

@@ -59,7 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the stub chunker; {@code chunk.max.tokens} = 16 packs two lines per chunk, so every expected speech chunk follows from the
  * segments the source cuts when run alone (the oracle).
  */
-public class TestVideoSpeechTimeline {
+class TestVideoSpeechTimeline {
 
   private static final String SPEECH = "/video/h264-aac-speech-12s.mp4";
   private static final String DELAYED = "/video/h264-aac-speech-video-delayed-1500ms.mp4";
@@ -76,7 +76,7 @@ public class TestVideoSpeechTimeline {
    * frame interval.
    */
   @Test
-  public void framesAndSpeechAreTimedFromTheContainerStart() throws IOException {
+  void framesAndSpeechAreTimedFromTheContainerStart() throws IOException {
     List<Chunk> original = prepare(clip(SPEECH, "original.mp4"), "original");
     List<Chunk> delayed = prepare(clip(DELAYED, "delayed.mp4"), "delayed");
     long originalFrame = first(original, EmbeddingTableSchema.MODALITY_IMAGE, VideoFramePreprocessor.AUX_TIMESTAMP_MS);
@@ -96,7 +96,7 @@ public class TestVideoSpeechTimeline {
    * failure.
    */
   @Test
-  public void speechIsWrittenWhenNoFrameIsKept() throws IOException {
+  void speechIsWrittenWhenNoFrameIsKept() throws IOException {
     Path noise = clip(NOISE, "noise.mp4");
     // prepare() fails the test on any failure of the file
     List<Chunk> chunks = prepare(noise, "noise");

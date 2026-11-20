@@ -33,15 +33,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** {@link TransientRetry}: bounded, backoff doubling and capped, never retries an interruption or a non-transient failure. */
-public class TestTransientRetry {
+class TestTransientRetry {
 
   @AfterEach
-  public void clearInterrupt() {
+  void clearInterrupt() {
     Thread.interrupted();
   }
 
   @Test
-  public void callersCanUseDifferentBackoffCaps() {
+  void callersCanUseDifferentBackoffCaps() {
     TransientRetry source = new TransientRetry(5, 20_000L);
     TransientRetry compute = new TransientRetry(5, 20_000L, 60_000L);
     assertEquals(20_000L, source.waitBefore(2));
@@ -52,7 +52,7 @@ public class TestTransientRetry {
   }
 
   @Test
-  public void transientFailureIsRetriedUntilItSucceeds() throws IOException {
+  void transientFailureIsRetriedUntilItSucceeds() throws IOException {
     AtomicInteger tries = new AtomicInteger();
     String value = new TransientRetry(3, 0).call("step", () -> {
       if (tries.incrementAndGet() < 3) {
@@ -65,7 +65,7 @@ public class TestTransientRetry {
   }
 
   @Test
-  public void lastFailureCarriesTheFirstAsSuppressedWhenTheBoundIsSpent() {
+  void lastFailureCarriesTheFirstAsSuppressedWhenTheBoundIsSpent() {
     AtomicInteger tries = new AtomicInteger();
     IOException last = assertThrows(IOException.class, () -> new TransientRetry(3, 0).call("step", () -> {
       throw new IOException("try " + tries.incrementAndGet());
@@ -76,7 +76,7 @@ public class TestTransientRetry {
   }
 
   @Test
-  public void nonTransientFailureIsNeverRetried() {
+  void nonTransientFailureIsNeverRetried() {
     AtomicInteger tries = new AtomicInteger();
     IOException denied = new IOException("403 Forbidden");
     assertSame(denied, assertThrows(IOException.class, () -> new TransientRetry(3, 0).call("step", () -> {
@@ -88,7 +88,7 @@ public class TestTransientRetry {
 
   /** A killed task is never retried, whatever the stage's classifier answers. */
   @Test
-  public void interruptionIsNeverRetried() {
+  void interruptionIsNeverRetried() {
     AtomicInteger tries = new AtomicInteger();
     assertThrows(InterruptedIOException.class, () -> new TransientRetry(3, 0).call("step", () -> {
       tries.incrementAndGet();
@@ -108,7 +108,7 @@ public class TestTransientRetry {
 
   /** A timed-out request is an InterruptedIOException by type, but transient: it is retried within the bound. */
   @Test
-  public void timeoutsAreRetried() throws IOException {
+  void timeoutsAreRetried() throws IOException {
     for (IOException timeout : new IOException[] {new SocketTimeoutException("read timed out"),
         new ConnectTimeoutException("connect timed out")}) {
       AtomicInteger tries = new AtomicInteger();
@@ -124,7 +124,7 @@ public class TestTransientRetry {
   }
 
   @Test
-  public void backoffDoublesAndIsCapped() {
+  void backoffDoublesAndIsCapped() {
     TransientRetry retry = new TransientRetry(10, 1000);
     assertEquals(1000, retry.waitBefore(2));
     assertEquals(2000, retry.waitBefore(3));
@@ -132,7 +132,7 @@ public class TestTransientRetry {
   }
 
   @Test
-  public void boundsAreValidated() {
+  void boundsAreValidated() {
     assertThrows(IllegalArgumentException.class, () -> new TransientRetry(0, 0));
     assertThrows(IllegalArgumentException.class, () -> new TransientRetry(1, -1));
   }

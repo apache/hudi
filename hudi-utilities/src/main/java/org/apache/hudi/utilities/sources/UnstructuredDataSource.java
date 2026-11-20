@@ -42,7 +42,6 @@ import org.apache.hudi.utilities.sources.unstructured.UnstructuredCloud;
 import org.apache.hudi.utilities.sources.unstructured.UnstructuredMode;
 import org.apache.hudi.utilities.sources.unstructured.UnstructuredObjectMaterializer;
 import org.apache.hudi.utilities.sources.unstructured.UnstructuredSchemaContract;
-import org.apache.hudi.utilities.sources.unstructured.UnstructuredSchemaGuard;
 import org.apache.hudi.utilities.sources.unstructured.UnstructuredSourceContract;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
@@ -171,8 +170,7 @@ public class UnstructuredDataSource extends HoodieIncrSource {
   /** Plans the job's chain without reading source data, before constructing the source. */
   public static void validate(UnstructuredMode mode, JavaSparkContext jsc, SparkSession spark, List<String> chain,
                               TypedProperties props, Option<HoodieSchema> targetSchema, Option<StructType> tableSchema) {
-    UnstructuredSchemaContract.checkChainPlan(mode, mode.requiredTransformer(), UnstructuredSchemaGuard.class, chain,
-        jsc, spark, props, targetSchema, tableSchema);
+    UnstructuredSchemaContract.checkChainPlan(mode, chain, jsc, spark, props, targetSchema, tableSchema);
   }
 
   /** The name every refusal of {@code mode}'s job carries, such as {@code UnstructuredDataSource (mode blob)}. */

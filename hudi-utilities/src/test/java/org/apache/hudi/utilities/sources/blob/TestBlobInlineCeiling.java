@@ -73,7 +73,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the re-check in the task before its first inline read.
  */
 @Tag("functional")
-public class TestBlobInlineCeiling extends UtilitiesTestBase {
+class TestBlobInlineCeiling extends UtilitiesTestBase {
 
   private static final long MIB = 1024L * 1024L;
   private static final long GIB = 1024L * MIB;
@@ -86,17 +86,17 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
   private Level previousLevel;
 
   @BeforeAll
-  public static void initClass() throws Exception {
+  static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
-  public static void cleanupClass() throws Exception {
+  static void cleanupClass() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
-  public void captureLogs() {
+  void captureLogs() {
     logs = new CapturingAppender();
     ceilingLogger = (Logger) LogManager.getLogger(BlobInlineCeiling.class);
     previousLevel = ceilingLogger.getLevel();
@@ -106,7 +106,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
   }
 
   @AfterEach
-  public void releaseLogs() {
+  void releaseLogs() {
     ceilingLogger.removeAppender(logs);
     ceilingLogger.setLevel(previousLevel);
     logs.stop();
@@ -121,7 +121,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
   }
 
   @Test
-  public void executorCoresComeFromTheMasterOrTheExecutorConf() {
+  void executorCoresComeFromTheMasterOrTheExecutorConf() {
     assertEquals(1, BlobInlineCeiling.executorCores(conf("local"), "local"));
     assertEquals(3, BlobInlineCeiling.executorCores(conf("local[3]"), "local[3]"));
     assertEquals(4, BlobInlineCeiling.executorCores(conf("local[4,1]"), "local[4,1]"));
@@ -143,7 +143,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
   }
 
   @Test
-  public void slotsAreExecutorCoresOverTaskCpus() {
+  void slotsAreExecutorCoresOverTaskCpus() {
     assertEquals(4, BlobInlineCeiling.onDriver(conf("yarn", "spark.executor.cores", "8", "spark.task.cpus", "2"), 0.5).slots());
     assertEquals(2, BlobInlineCeiling.onDriver(conf("yarn", "spark.executor.cores", "5", "spark.task.cpus", "2"), 0.5).slots());
     assertEquals(1, BlobInlineCeiling.onDriver(conf("yarn", "spark.executor.cores", "1", "spark.task.cpus", "2"), 0.5).slots());
@@ -151,7 +151,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
   }
 
   @Test
-  public void reserveFollowsSparksReservedSystemMemoryRule() {
+  void reserveFollowsSparksReservedSystemMemoryRule() {
     assertEquals(300 * MIB, BlobInlineCeiling.reservedBytes(conf("yarn")));
     assertEquals(0L, BlobInlineCeiling.reservedBytes(conf("yarn", "spark.testing", "true")));
     assertEquals(123L, BlobInlineCeiling.reservedBytes(conf("yarn", "spark.testing", "true", "spark.testing.reservedMemory", "123")));
@@ -161,7 +161,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
   }
 
   @Test
-  public void driverCeilingUsesExecutorMemoryOnAClusterAndThisHeapInLocalMode() {
+  void driverCeilingUsesExecutorMemoryOnAClusterAndThisHeapInLocalMode() {
     BlobInlineCeiling cluster = BlobInlineCeiling.onDriver(
         conf("yarn", "spark.executor.memory", "4g", "spark.executor.cores", "4"), 1.0 / 64);
     assertEquals(4 * GIB, cluster.getExecutorHeapBytes());
@@ -179,7 +179,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
   }
 
   @Test
-  public void thresholdAtTheCeilingPassesAndOneByteAboveIsRefusedNamingBothNumbers() {
+  void thresholdAtTheCeilingPassesAndOneByteAboveIsRefusedNamingBothNumbers() {
     BlobInlineCeiling ceiling = new BlobInlineCeiling(1.0 / 64, 4 * GIB, "spark.executor.memory", 300 * MIB, 4, 1);
     long c = ceiling.ceilingBytes();
     assertEquals(15_548_416L, c);
@@ -197,7 +197,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
   }
 
   @Test
-  public void enforceFalseWarnsAndLetsTheThresholdThrough() {
+  void enforceFalseWarnsAndLetsTheThresholdThrough() {
     BlobInlineCeiling ceiling = new BlobInlineCeiling(1.0 / 64, 4 * GIB, "spark.executor.memory", 300 * MIB, 4, 1);
     ceiling.check(GIB, false, "here");
     String text = logs.text();
@@ -208,14 +208,14 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
 
   @ParameterizedTest
   @ValueSource(strings = {"0", "-0.5", "1.5", "NaN", "Infinity", "abc"})
-  public void fractionOutsideZeroToOneIsRejected(String fraction) {
+  void fractionOutsideZeroToOneIsRejected(String fraction) {
     TypedProperties props = new TypedProperties();
     props.setProperty(BlobTableConfig.INLINE_MAX_HEAP_FRACTION.key(), fraction);
     assertThrows(IllegalArgumentException.class, () -> BlobInlineCeiling.fraction(props));
   }
 
   @Test
-  public void defaultFractionIsOneSixtyFourthAndOneIsAllowed() {
+  void defaultFractionIsOneSixtyFourthAndOneIsAllowed() {
     assertEquals(1.0 / 64, BlobInlineCeiling.fraction(new TypedProperties()));
     TypedProperties props = new TypedProperties();
     props.setProperty(BlobTableConfig.INLINE_MAX_HEAP_FRACTION.key(), "1");
@@ -223,7 +223,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
   }
 
   @Test
-  public void checkOnDriverReadsTheJobProperties() {
+  void checkOnDriverReadsTheJobProperties() {
     SparkConf yarn = conf("yarn", "spark.executor.memory", "1g", "spark.executor.cores", "1");
     TypedProperties props = new TypedProperties();
     // default threshold 1 MiB under the default ceiling floor((1 GiB - 300 MiB) / 64) = 11,862,016
@@ -244,7 +244,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
 
   /** The streamer with a threshold above the ceiling fails at the source's first fetch: no task runs, nothing is written. */
   @Test
-  public void streamerRefusesAThresholdAboveTheCeilingBeforeAnyTask() throws Exception {
+  void streamerRefusesAThresholdAboveTheCeilingBeforeAnyTask() throws Exception {
     BlobJobHarness harness = BlobJobHarness.under(tempDir.resolve("src")).install(jsc.hadoopConfiguration());
     harness.announce(sparkSession, Collections.singletonList(harness.put("docs/a.pdf", randomBytes(4096, 1))));
     String tableBasePath = tempDir.resolve("refused").toUri().toString();
@@ -262,8 +262,8 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
     jsc.sc().addSparkListener(counter);
     Throwable thrown;
     try {
-      thrown = assertThrows(Throwable.class, () -> new HoodieStreamer(
-          BlobJobHarness.streamerConfig(tableBasePath), jsc, Option.of(props)).sync());
+      HoodieStreamer.Config cfg = BlobJobHarness.streamerConfig(tableBasePath);
+      thrown = assertThrows(Throwable.class, () -> syncNewStreamer(cfg, props));
       jsc.sc().listenerBus().waitUntilEmpty();
     } finally {
       // the context is shared by the class: no listener outlives its test
@@ -281,7 +281,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
 
   /** enforce=false: the same threshold is used as configured (never clamped): the file above the ceiling is stored INLINE. */
   @Test
-  public void streamerWithEnforceOffStoresTheFileInlineAsConfigured() throws Exception {
+  void streamerWithEnforceOffStoresTheFileInlineAsConfigured() throws Exception {
     BlobJobHarness harness = BlobJobHarness.under(tempDir.resolve("src")).install(jsc.hadoopConfiguration());
     byte[] bytes = randomBytes(4096, 2);
     harness.announce(sparkSession, Collections.singletonList(harness.put("docs/a.pdf", bytes)));
@@ -308,7 +308,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
    * file is refused before reading it; a partition of out-of-line files only is not affected.
    */
   @Test
-  public void taskRefusesBeforeItsFirstInlineRead() throws Exception {
+  void taskRefusesBeforeItsFirstInlineRead() throws Exception {
     Path sourceRoot = Files.createDirectories(tempDir.resolve("src"));
     Path small = sourceRoot.resolve("docs/small.pdf");
     Path big = sourceRoot.resolve("docs/big.pdf");
@@ -335,7 +335,7 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
 
   /** Outside a Spark task (no TaskContext in the thread) a builder has no task heap to check and inlines as configured. */
   @Test
-  public void builderOutsideATaskIsNotChecked() throws Exception {
+  void builderOutsideATaskIsNotChecked() throws Exception {
     Path file = tempDir.resolve("src/docs/small.pdf");
     byte[] bytes = randomBytes(100, 5);
     BlobJobHarness.writeFile(file, bytes);
@@ -398,5 +398,10 @@ public class TestBlobInlineCeiling extends UtilitiesTestBase {
     String text() {
       return String.join("\n", lines);
     }
+  }
+
+  /** Builds a streamer on the class's context and runs one sync. */
+  private void syncNewStreamer(HoodieStreamer.Config cfg, TypedProperties props) throws Exception {
+    new HoodieStreamer(cfg, jsc, Option.of(props)).sync();
   }
 }

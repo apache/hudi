@@ -62,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * start of each round, before the round's instant.
  */
 @Tag("functional")
-public class TestUnstructuredDataSourceTargetSchema extends UtilitiesTestBase {
+class TestUnstructuredDataSourceTargetSchema extends UtilitiesTestBase {
 
   private static final long INLINE_MAX = 64;
 
@@ -70,17 +70,17 @@ public class TestUnstructuredDataSourceTargetSchema extends UtilitiesTestBase {
   Path tempDir;
 
   @BeforeAll
-  public static void initClass() throws Exception {
+  static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
-  public static void cleanupClass() throws Exception {
+  static void cleanupClass() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @AfterEach
-  public void resetSchema() {
+  void resetSchema() {
     UserTargetSchemaProvider.target = null;
   }
 
@@ -128,11 +128,13 @@ public class TestUnstructuredDataSourceTargetSchema extends UtilitiesTestBase {
   }
 
   @Test
-  public void userSchemaMissingBlobRefusedAtStart() throws Exception {
+  void userSchemaMissingBlobRefusedAtStart() throws Exception {
     BlobJobHarness harness = harness();
     harness.putAndAnnounce(sparkSession, Collections.singletonMap("a.pdf", 32));
     UserTargetSchemaProvider.target = schema(withoutBlob());
-    Exception failure = assertThrows(Exception.class, () -> sync(config(table(), true), harness.jobProperties(INLINE_MAX)));
+    HoodieStreamer.Config cfg = config(table(), true);
+    TypedProperties jobProps = harness.jobProperties(INLINE_MAX);
+    Exception failure = assertThrows(Exception.class, () -> sync(cfg, jobProps));
     String refusal = EmbeddingStreamers.causeOf(failure, HoodieSchemaException.class)
         .orElseThrow(() -> new AssertionError(EmbeddingStreamers.causes(failure))).getMessage();
     assertTrue(refusal.startsWith("UnstructuredDataSource (mode blob) refuses the target schema: column blob must be "), refusal);
@@ -142,7 +144,7 @@ public class TestUnstructuredDataSourceTargetSchema extends UtilitiesTestBase {
   }
 
   @Test
-  public void compatibleUserSchemaWithExtraColumnStarts() throws Exception {
+  void compatibleUserSchemaWithExtraColumnStarts() throws Exception {
     BlobJobHarness harness = harness();
     harness.putAndAnnounce(sparkSession, Collections.singletonMap("a.pdf", 32));
     UserTargetSchemaProvider.target = schema(withExtra());
@@ -152,7 +154,7 @@ public class TestUnstructuredDataSourceTargetSchema extends UtilitiesTestBase {
   }
 
   @Test
-  public void providerSchemaChangedBeforeRound2RefusedBeforeInstant() throws Exception {
+  void providerSchemaChangedBeforeRound2RefusedBeforeInstant() throws Exception {
     BlobJobHarness harness = harness();
     harness.putAndAnnounce(sparkSession, Collections.singletonMap("a.pdf", 32));
     UserTargetSchemaProvider.target = schema(withExtra());
@@ -178,7 +180,7 @@ public class TestUnstructuredDataSourceTargetSchema extends UtilitiesTestBase {
   }
 
   @Test
-  public void noSchemaProviderStartsUnchanged() throws Exception {
+  void noSchemaProviderStartsUnchanged() throws Exception {
     BlobJobHarness harness = harness();
     harness.putAndAnnounce(sparkSession, Collections.singletonMap("a.pdf", 32));
     sync(config(table(), false), harness.jobProperties(INLINE_MAX));

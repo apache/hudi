@@ -110,8 +110,8 @@ class TestProviderRefusalMaterialization extends SparkClientFunctionalTestHarnes
         RowFactory.create("first", 1L, 2L, "text", 0L, message, null, null)), SCHEMA);
     EmbeddingModelSpec model = EmbeddingTableConfig.from(properties).activeModel();
     ComputeCounters counters = ComputeCounters.register(jsc().sc());
-    Dataset<Row> embedded = ComputeRound.embed(spark(), input.javaRDD(), SCHEMA, model, properties, null, counters,
-        StorageLevel.MEMORY_AND_DISK());
+    Dataset<Row> embedded = ComputeRound.embed(spark(), input.javaRDD(), SCHEMA, model, properties,
+        new ComputeRound.Resources(null, counters, StorageLevel.MEMORY_AND_DISK()));
     try {
       List<Row> errors = ComputeRound.errorRows(embedded,
           SCHEMA.add(ComputeRound.CORRUPT_RECORD, DataTypes.StringType, true), model).collectAsList();
@@ -139,7 +139,8 @@ class TestProviderRefusalMaterialization extends SparkClientFunctionalTestHarnes
         RowFactory.create("first", 1L, 2L, "text", 0L, "first chunk", null, null),
         RowFactory.create("second", 1L, 2L, "text", 0L, "second chunk", null, null)), SCHEMA).coalesce(1);
     EmbeddingModelSpec model = EmbeddingTableConfig.from(props).activeModel();
-    return ComputeRound.embed(spark(), input.javaRDD(), SCHEMA, model, props, null, counters, StorageLevel.MEMORY_AND_DISK());
+    return ComputeRound.embed(spark(), input.javaRDD(), SCHEMA, model, props,
+        new ComputeRound.Resources(null, counters, StorageLevel.MEMORY_AND_DISK()));
   }
 
   private static TypedProperties props(Class<?> client) {

@@ -70,7 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * configured), and the outcome classification: throttling retried, a rejected input isolated and quarantined, a rejected
  * configuration failing the call, the outage short-circuit, and one rate-limit token per attempt.
  */
-public class TestBedrockEmbeddingClient {
+class TestBedrockEmbeddingClient {
 
   private static final String ALIAS = "br";
   private static final String KEY_ID = "AKIDSTUBTEST0001";
@@ -85,7 +85,7 @@ public class TestBedrockEmbeddingClient {
   private TypedProperties props;
 
   @BeforeAll
-  public static void credentialsOnTheDefaultChain() {
+  static void credentialsOnTheDefaultChain() {
     // the first link of the SDK default chain: system properties; nothing is configured on the client
     savedKeyId = System.getProperty("aws.accessKeyId");
     savedSecret = System.getProperty("aws.secretAccessKey");
@@ -94,13 +94,13 @@ public class TestBedrockEmbeddingClient {
   }
 
   @AfterAll
-  public static void restoreCredentials() {
+  static void restoreCredentials() {
     restore("aws.accessKeyId", savedKeyId);
     restore("aws.secretAccessKey", savedSecret);
   }
 
   @BeforeEach
-  public void setUp() throws IOException {
+  void setUp() throws IOException {
     stub = new ScriptedHttpStub();
     props = new TypedProperties();
     props.setProperty(key(BedrockClientConfig.ENDPOINT_SUFFIX), stub.url());
@@ -110,12 +110,12 @@ public class TestBedrockEmbeddingClient {
   }
 
   @AfterEach
-  public void tearDown() {
+  void tearDown() {
     stub.close();
   }
 
   @Test
-  public void titanTextRequestIsSignedByTheDefaultChainAndReturnsTheVector() throws Exception {
+  void titanTextRequestIsSignedByTheDefaultChainAndReturnsTheVector() throws InterruptedException {
     stub.otherwise(BedrockStubReplies.embeddings(256));
     BedrockEmbeddingClient client = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256);
     List<EmbeddingResult> results = client.embed(Collections.singletonList(text("a", "a cat on a mat")));
@@ -135,7 +135,7 @@ public class TestBedrockEmbeddingClient {
 
   /** The SDK client is built with no credentials provider, so it uses the SDK default chain. */
   @Test
-  public void sdkClientHasNoCredentialsProviderOverride() {
+  void sdkClientHasNoCredentialsProviderOverride() {
     BedrockClientConfig config = BedrockClientConfig.from(spec(TITAN_TEXT, 256), props, BedrockModelFamily.TITAN_EMBED_TEXT_V2);
     try (BedrockRuntimeClient client = SdkBedrockInvoker.buildClient(config)) {
       IdentityProvider<? extends AwsCredentialsIdentity> provider = client.serviceClientConfiguration().credentialsProvider();
@@ -146,16 +146,15 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void regionFallsBackToTheDefaultRegionChain() throws Exception {
+  void regionFallsBackToTheDefaultRegionChain() throws InterruptedException {
     props.remove(key(BedrockClientConfig.REGION_SUFFIX));
     // a timeout no other test uses: its own SDK client, built with no region
     props.setProperty(key(OpenAiClientConfig.REQUEST_TIMEOUT_MS_SUFFIX), "29001");
     String saved = System.getProperty("aws.region");
     System.setProperty("aws.region", "eu-central-1");
-    try {
-      stub.otherwise(BedrockStubReplies.embeddings(256));
-      EmbeddingResult result = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256)
-          .embed(Collections.singletonList(text("a", "hello"))).get(0);
+    stub.otherwise(BedrockStubReplies.embeddings(256));
+    try (BedrockEmbeddingClient bedrock = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256)) {
+      EmbeddingResult result = bedrock.embed(Collections.singletonList(text("a", "hello"))).get(0);
       assertEquals(EmbeddingResult.Status.OK, result.getStatus(), result.getError());
       assertTrue(stub.requests().get(0).header("Authorization").contains("/eu-central-1/bedrock/aws4_request"));
     } finally {
@@ -164,7 +163,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void cohereTextsArePackedIntoOneRequestInOrder() throws Exception {
+  void cohereTextsArePackedIntoOneRequestInOrder() throws InterruptedException {
     stub.otherwise(BedrockStubReplies.embeddings(512));
     BedrockEmbeddingClient client = client(new BedrockCohereEmbeddingClient(), COHERE, 512);
     List<EmbeddingResult> results = client.embed(Arrays.asList(text("a", "one"), text("b", "two"), text("c", "three")));
@@ -183,7 +182,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void cohereRequestsRespectMaxInputs() throws Exception {
+  void cohereRequestsRespectMaxInputs() throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.REQUEST_MAX_INPUTS_SUFFIX), "2");
     stub.otherwise(BedrockStubReplies.embeddings(256));
     List<EmbeddingResult> results = client(new BedrockCohereEmbeddingClient(), COHERE, 256)
@@ -193,7 +192,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void unsupportedModalityOnTheTextFamilyIsPermanentWithoutARequest() throws Exception {
+  void unsupportedModalityOnTheTextFamilyIsPermanentWithoutARequest() throws InterruptedException {
     EmbeddingResult result = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256)
         .embed(Collections.singletonList(new EmbeddingInput("unsupported", 0, "unsupported", null))).get(0);
     assertEquals(EmbeddingResult.Status.PERMANENT_FAILURE, result.getStatus());
@@ -202,7 +201,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void throttlingIsRetriedHonouringRetryAfter() throws Exception {
+  void throttlingIsRetriedHonouringRetryAfter() throws InterruptedException {
     stub.then(Reply.awsError(429, "ThrottlingException", "Too many requests").withHeader("Retry-After", "2"))
         .otherwise(BedrockStubReplies.embeddings(256));
     List<Long> sleeps = new ArrayList<>();
@@ -218,7 +217,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void throttlingThatPersistsLeavesTheInputRetryable() throws Exception {
+  void throttlingThatPersistsLeavesTheInputRetryable() throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.RETRY_MAX_ATTEMPTS_SUFFIX), "3");
     stub.otherwise(request -> Reply.awsError(429, "ThrottlingException", "Too many requests"));
     EmbeddingResult result = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256)
@@ -235,7 +234,7 @@ public class TestBedrockEmbeddingClient {
    * adjusts its clock offset on the failed response, so the next attempt is signed again with the corrected time.
    */
   @Test
-  public void clockSkewIsRetriedThenSucceeds() throws Exception {
+  void clockSkewIsRetriedThenSucceeds() throws InterruptedException {
     stub.then(Reply.awsError(400, "RequestExpired", "The request is no longer valid due to expired timestamps."))
         .then(Reply.awsError(403, "RequestTimeTooSkewed", "The difference between the request time and the current time is too large."))
         .then(Reply.awsError(400, "RequestInTheFuture", "Request is in the future."))
@@ -248,7 +247,7 @@ public class TestBedrockEmbeddingClient {
 
   /** A skew that persists past the retries leaves its rows RETRYABLE, so the run fails, never PERMANENT row errors. */
   @Test
-  public void clockSkewThatPersistsIsNeverARowError() throws Exception {
+  void clockSkewThatPersistsIsNeverARowError() throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.RETRY_MAX_ATTEMPTS_SUFFIX), "2");
     props.setProperty(key(OpenAiClientConfig.OUTAGE_CONSECUTIVE_FAILURES_SUFFIX), "10");
     stub.then(BedrockStubReplies.embeddings(256))
@@ -269,21 +268,23 @@ public class TestBedrockEmbeddingClient {
    * configuration, also after the client embedded something: never a row error.
    */
   @Test
-  public void notAuthorizedIsAConfigFailureEvenAfterASuccess() throws Exception {
+  void notAuthorizedIsAConfigFailureEvenAfterASuccess() {
     stub.then(BedrockStubReplies.embeddings(256))
         .otherwise(request -> Reply.awsError(400, "NotAuthorized", "You don't have permission to perform this action."));
-    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256).embed(Arrays.asList(text("a", "x"), text("b", "y"))));
+    BedrockEmbeddingClient titan = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256);
+    List<EmbeddingInput> inputs = Arrays.asList(text("a", "x"), text("b", "y"));
+    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class, () -> titan.embed(inputs));
     assertTrue(e.getMessage().contains("NotAuthorized"), e.getMessage());
   }
 
   /** InvalidClientTokenId (403, "The X.509 certificate or AWS access key ID provided does not exist in our records.") too. */
   @Test
-  public void invalidClientTokenIdIsAConfigFailure() throws Exception {
+  void invalidClientTokenIdIsAConfigFailure() {
     stub.then(BedrockStubReplies.embeddings(256))
         .otherwise(request -> Reply.awsError(403, "InvalidClientTokenId", "The security token included in the request is invalid."));
-    assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256).embed(Arrays.asList(text("a", "x"), text("b", "y"))));
+    BedrockEmbeddingClient titan = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256);
+    List<EmbeddingInput> inputs = Arrays.asList(text("a", "x"), text("b", "y"));
+    assertThrows(EmbeddingClientConfigException.class, () -> titan.embed(inputs));
   }
 
   /**
@@ -291,7 +292,7 @@ public class TestBedrockEmbeddingClient {
    * https://docs.aws.amazon.com/bedrock/latest/APIReference/CommonErrors.html, read 2026-10-27) is retried.
    */
   @Test
-  public void abortedRequestIsRetriedThenSucceeds() throws Exception {
+  void abortedRequestIsRetriedThenSucceeds() throws InterruptedException {
     stub.then(Reply.awsError(400, "RequestAbortedException", "The request was aborted before a response could be returned."))
         .otherwise(BedrockStubReplies.embeddings(256));
     EmbeddingResult result = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256)
@@ -302,7 +303,7 @@ public class TestBedrockEmbeddingClient {
 
   /** An abort that persists past the retries leaves its rows RETRYABLE (the run fails), never PERMANENT row errors. */
   @Test
-  public void abortedRequestThatPersistsIsNeverARowError() throws Exception {
+  void abortedRequestThatPersistsIsNeverARowError() throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.RETRY_MAX_ATTEMPTS_SUFFIX), "2");
     props.setProperty(key(OpenAiClientConfig.OUTAGE_CONSECUTIVE_FAILURES_SUFFIX), "10");
     stub.then(BedrockStubReplies.embeddings(256))
@@ -318,7 +319,7 @@ public class TestBedrockEmbeddingClient {
    * skew), so it is retried and signed again, like RequestExpired; any other InvalidSignatureException stays the configuration.
    */
   @Test
-  public void expiredSignatureIsRetriedOtherSignatureFailuresAreConfig() throws Exception {
+  void expiredSignatureIsRetriedOtherSignatureFailuresAreConfig() throws InterruptedException {
     stub.then(Reply.awsError(403, "InvalidSignatureException", "Signature expired: 20261027T000000Z is now earlier than 20261027T001000Z"))
         .otherwise(BedrockStubReplies.embeddings(256));
     EmbeddingResult result = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256)
@@ -327,20 +328,21 @@ public class TestBedrockEmbeddingClient {
     assertEquals(2, stub.requests().size());
 
     stub.otherwise(request -> Reply.awsError(403, "InvalidSignatureException", "The request signature we calculated does not match"));
-    assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256).embed(Collections.singletonList(text("b", "y"))));
+    BedrockEmbeddingClient titan = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256);
+    List<EmbeddingInput> inputs = Collections.singletonList(text("b", "y"));
+    assertThrows(EmbeddingClientConfigException.class, () -> titan.embed(inputs));
   }
 
   /** Cohere Embed v4 is asked to refuse an over-long input ("NONE returns an error if the input exceeds the limit"), never to cut it. */
   @Test
-  public void cohereRequestRefusesTruncation() throws Exception {
+  void cohereRequestRefusesTruncation() throws InterruptedException {
     stub.otherwise(BedrockStubReplies.embeddings(256));
     client(new BedrockCohereEmbeddingClient(), COHERE, 256).embed(Collections.singletonList(text("a", "x")));
     assertEquals("NONE", stub.requests().get(0).json().path("truncate").asText());
   }
 
   @Test
-  public void transientServerErrorsAreRetried() throws Exception {
+  void transientServerErrorsAreRetried() throws InterruptedException {
     stub.then(Reply.awsError(503, "ServiceUnavailableException", "busy"))
         .then(Reply.awsError(408, "ModelTimeoutException", "slow"))
         .then(Reply.awsError(429, "ModelNotReadyException", "warming"))
@@ -352,7 +354,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void everyAttemptTakesARateLimitToken() throws Exception {
+  void everyAttemptTakesARateLimitToken() throws InterruptedException {
     props.setProperty(key(RequestRateLimiter.RATE_LIMIT_REQUESTS_PER_SECOND_SUFFIX), "1");
     stub.then(Reply.awsError(429, "ThrottlingException", "slow down")).otherwise(BedrockStubReplies.embeddings(256));
     List<Long> sleeps = new ArrayList<>();
@@ -367,7 +369,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void rejectedInputAfterASuccessIsPermanentAndItsBatchMatesEmbed() throws Exception {
+  void rejectedInputAfterASuccessIsPermanentAndItsBatchMatesEmbed() throws InterruptedException {
     stub.otherwise(request -> request.json().path("texts").size() > 1
         || request.json().path("texts").path(0).asText().equals("bad")
         ? Reply.awsError(400, "ValidationException", "Malformed input request")
@@ -383,10 +385,11 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void rejectionBeforeAnythingWasEmbeddedFailsAsConfiguration() throws Exception {
+  void rejectionBeforeAnythingWasEmbeddedFailsAsConfiguration() {
     stub.otherwise(request -> Reply.awsError(400, "ValidationException", "The provided model identifier is invalid."));
-    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256).embed(Arrays.asList(text("a", "x"), text("b", "y"))));
+    BedrockEmbeddingClient titan = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256);
+    List<EmbeddingInput> inputs = Arrays.asList(text("a", "x"), text("b", "y"));
+    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class, () -> titan.embed(inputs));
     assertTrue(e.getMessage().contains("model identifier is invalid"), e.getMessage());
   }
 
@@ -395,7 +398,7 @@ public class TestBedrockEmbeddingClient {
    * rejected input cannot tell the binding's fault from the row's, and failing the run would fail every later run on that row.
    */
   @Test
-  public void singleRejectedInputBeforeAnythingWasEmbeddedIsPermanent() throws Exception {
+  void singleRejectedInputBeforeAnythingWasEmbeddedIsPermanent() throws InterruptedException {
     stub.otherwise(request -> Reply.awsError(400, "ValidationException", "Too many input tokens"));
     List<EmbeddingResult> results = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256)
         .embed(Collections.singletonList(text("a", "an over-long text")));
@@ -405,7 +408,7 @@ public class TestBedrockEmbeddingClient {
 
   /** A rejection beside inputs that were only throttled proves nothing about the configuration yet: all stay RETRYABLE. */
   @Test
-  public void rejectionBesideThrottledInputsIsRetriedNotAConfigFailure() throws Exception {
+  void rejectionBesideThrottledInputsIsRetriedNotAConfigFailure() throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.RETRY_MAX_ATTEMPTS_SUFFIX), "1");
     props.setProperty(key(OpenAiClientConfig.OUTAGE_CONSECUTIVE_FAILURES_SUFFIX), "10");
     stub.otherwise(request -> request.json().path("inputText").asText().equals("bad")
@@ -419,7 +422,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void unresolvableCredentialsAreAConfigFailure() {
+  void unresolvableCredentialsAreAConfigFailure() {
     BedrockEmbeddingClient client = new BedrockEmbeddingClient(config -> (modelId, body) -> BedrockInvoker.BedrockReply.error(
         BedrockInvoker.BedrockReply.NO_CREDENTIALS, "CredentialsUnavailable", "Unable to load credentials from any of the "
             + "providers in the chain", null), System::currentTimeMillis, Thread::sleep, new Random(1)) {
@@ -428,13 +431,14 @@ public class TestBedrockEmbeddingClient {
         return BedrockModelFamily.TITAN_EMBED_TEXT_V2;
       }
     };
-    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(client, TITAN_TEXT, 256).embed(Collections.singletonList(text("a", "x"))));
+    BedrockEmbeddingClient titan = client(client, TITAN_TEXT, 256);
+    List<EmbeddingInput> inputs = Collections.singletonList(text("a", "x"));
+    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class, () -> titan.embed(inputs));
     assertTrue(e.getMessage().contains("CredentialsUnavailable"), e.getMessage());
   }
 
   @Test
-  public void transientCredentialChainFailuresAreRecognised() {
+  void transientCredentialChainFailuresAreRecognised() {
     assertTrue(SdkBedrockInvoker.hasTransientMarker("Unable to load credentials from any of the providers in the chain "
         + "AwsCredentialsProviderChain(...): [WebIdentityTokenCredentialsProvider(): Rate exceeded (Service: Sts, Status Code: 400)"));
     // the instance-metadata link's whole text in auth 2.29.52, whatever the cause (a timeout included)
@@ -446,7 +450,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void interruptedCallStopsImmediatelyAndIsNotAnOutage() throws Exception {
+  void interruptedCallStopsImmediatelyAndIsNotAnOutage() throws Exception {
     props.setProperty(key(OpenAiClientConfig.OUTAGE_CONSECUTIVE_FAILURES_SUFFIX), "1");
     stub.otherwise(BedrockStubReplies.embeddings(256));
     BedrockEmbeddingClient client = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256);
@@ -461,24 +465,26 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void accessDeniedIsAConfigFailureWithoutSecrets() {
+  void accessDeniedIsAConfigFailureWithoutSecrets() {
     stub.otherwise(request -> Reply.awsError(403, "AccessDeniedException", "You don't have access to the model"));
-    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256).embed(Collections.singletonList(text("a", "x"))));
+    BedrockEmbeddingClient titan = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256);
+    List<EmbeddingInput> inputs = Collections.singletonList(text("a", "x"));
+    EmbeddingClientConfigException e = assertThrows(EmbeddingClientConfigException.class, () -> titan.embed(inputs));
     assertTrue(e.getMessage().contains("AccessDeniedException"), e.getMessage());
     assertFalse(e.getMessage().contains(SECRET));
     assertEquals(1, stub.requests().size(), "a config failure is not retried");
   }
 
   @Test
-  public void wrongDimensionAnswerIsAConfigFailure() {
+  void wrongDimensionAnswerIsAConfigFailure() {
     stub.otherwise(BedrockStubReplies.embeddings(1024));
-    assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256).embed(Collections.singletonList(text("a", "x"))));
+    BedrockEmbeddingClient titan = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256);
+    List<EmbeddingInput> inputs = Collections.singletonList(text("a", "x"));
+    assertThrows(EmbeddingClientConfigException.class, () -> titan.embed(inputs));
   }
 
   @Test
-  public void malformedAnswerIsRetryable() throws Exception {
+  void malformedAnswerIsRetryable() throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.RETRY_MAX_ATTEMPTS_SUFFIX), "1");
     stub.otherwise(request -> Reply.json(200, "{\"embeddings\":{\"float\":[]}}"));
     EmbeddingResult result = client(new BedrockCohereEmbeddingClient(), COHERE, 256)
@@ -488,7 +494,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void outageShortCircuitStopsCalling() throws Exception {
+  void outageShortCircuitStopsCalling() throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.RETRY_MAX_ATTEMPTS_SUFFIX), "1");
     props.setProperty(key(OpenAiClientConfig.OUTAGE_CONSECUTIVE_FAILURES_SUFFIX), "2");
     stub.otherwise(request -> Reply.awsError(500, "InternalServerException", "boom"));
@@ -497,23 +503,26 @@ public class TestBedrockEmbeddingClient {
     results.forEach(r -> assertEquals(EmbeddingResult.Status.RETRYABLE_FAILURE, r.getStatus()));
     assertTrue(results.get(2).getError().contains("outage"), results.get(2).getError());
     assertEquals(2, stub.requests().size());
-    assertThrows(EmbeddingProviderUnavailableException.class, () -> client.embed(Collections.singletonList(text("d", "w"))));
+    List<EmbeddingInput> next = Collections.singletonList(text("d", "w"));
+    assertThrows(EmbeddingProviderUnavailableException.class, () -> client.embed(next));
   }
 
   @Test
-  public void configurationIsCheckedAtInit() {
-    assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 1536), "Titan text v2 has no 1536 output");
-    assertThrows(EmbeddingClientConfigException.class,
-        () -> client(new BedrockCohereEmbeddingClient(), TITAN_TEXT, 256), "a Titan id on the Cohere client");
+  void configurationIsCheckedAtInit() {
+    BedrockTitanTextEmbeddingClient titan = new BedrockTitanTextEmbeddingClient();
+    assertThrows(EmbeddingClientConfigException.class, () -> client(titan, TITAN_TEXT, 1536), "Titan text v2 has no 1536 output");
+    BedrockCohereEmbeddingClient cohereWithTitanId = new BedrockCohereEmbeddingClient();
+    assertThrows(EmbeddingClientConfigException.class, () -> client(cohereWithTitanId, TITAN_TEXT, 256), "a Titan id on the Cohere client");
     props.setProperty(key(BedrockClientConfig.ENDPOINT_SUFFIX), "https://user:pw@bedrock.example.com");
-    assertThrows(EmbeddingClientConfigException.class, () -> client(new BedrockCohereEmbeddingClient(), COHERE, 256));
+    BedrockCohereEmbeddingClient cohere = new BedrockCohereEmbeddingClient();
+    assertThrows(EmbeddingClientConfigException.class, () -> client(cohere, COHERE, 256));
     // the driver-side check of the factory refuses the same configuration before any Spark work
-    assertThrows(IllegalArgumentException.class, () -> EmbeddingClientFactory.checkConfig(spec(COHERE, 256), props));
+    EmbeddingModelSpec spec = spec(COHERE, 256);
+    assertThrows(IllegalArgumentException.class, () -> EmbeddingClientFactory.checkConfig(spec, props));
   }
 
   @Test
-  public void opaqueArnIsServedByTheClientClassItNames() throws Exception {
+  void opaqueArnIsServedByTheClientClassItNames() throws InterruptedException {
     String arn = "arn:aws:bedrock:us-west-2:123456789012:application-inference-profile/abc123";
     stub.otherwise(BedrockStubReplies.embeddings(256));
     EmbeddingResult result = client(new BedrockCohereEmbeddingClient(), arn, 256)
@@ -523,7 +532,7 @@ public class TestBedrockEmbeddingClient {
   }
 
   @Test
-  public void emptyTextIsPermanentWithoutARequest() throws Exception {
+  void emptyTextIsPermanentWithoutARequest() throws InterruptedException {
     EmbeddingResult result = client(new BedrockTitanTextEmbeddingClient(), TITAN_TEXT, 256)
         .embed(Collections.singletonList(text("a", "  "))).get(0);
     assertEquals(EmbeddingResult.Status.PERMANENT_FAILURE, result.getStatus());
@@ -535,7 +544,7 @@ public class TestBedrockEmbeddingClient {
 
   @ParameterizedTest
   @ValueSource(strings = {"1e100", "NaN"})
-  public void nonFiniteVectorElementsAreRetryable(String element) throws Exception {
+  void nonFiniteVectorElementsAreRetryable(String element) throws InterruptedException {
     props.setProperty(key(OpenAiClientConfig.RETRY_MAX_ATTEMPTS_SUFFIX), "1");
     String values = element + ",0.25".repeat(255);
     stub.otherwise(request -> Reply.json(200, "{\"embedding\":[" + values + "]}"));

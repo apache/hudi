@@ -30,17 +30,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestBlobTableConfig {
+class TestBlobTableConfig {
 
   @Test
-  public void defaultsSelectPdfAndOneMiBInline() {
+  void defaultsSelectPdfAndOneMiBInline() {
     TypedProperties props = new TypedProperties();
     assertEquals(hasColumnStatisticsSwitch() ? 1048576L : 10240L, BlobTableConfig.inlineMaxBytes(props));
     assertTrue(BlobTableConfig.fileExtensions(props).contains("pdf"));
   }
 
   @Test
-  public void configuredThresholdAndSelectorsAreUsed() {
+  void configuredThresholdAndSelectorsAreUsed() {
     TypedProperties props = new TypedProperties();
     props.setProperty(BlobTableConfig.INLINE_MAX_BYTES.key(), "4096");
     props.setProperty(BlobTableConfig.FILE_EXTENSIONS.key(), " pdf, , PDF ");
@@ -49,7 +49,7 @@ public class TestBlobTableConfig {
   }
 
   @Test
-  public void largestByteArrayThresholdIsAccepted() {
+  void largestByteArrayThresholdIsAccepted() {
     TypedProperties props = new TypedProperties();
     props.setProperty(BlobTableConfig.INLINE_MAX_BYTES.key(), "2147483639");
     assertEquals(2147483639L, BlobTableConfig.inlineMaxBytes(props, true));
@@ -58,7 +58,7 @@ public class TestBlobTableConfig {
 
   @ParameterizedTest
   @ValueSource(longs = {2147483640L, Integer.MAX_VALUE, 4294967296L, Long.MAX_VALUE})
-  public void thresholdBeyondTheLargestByteArrayIsRefused(long threshold) {
+  void thresholdBeyondTheLargestByteArrayIsRefused(long threshold) {
     TypedProperties props = new TypedProperties();
     props.setProperty(BlobTableConfig.INLINE_MAX_BYTES.key(), String.valueOf(threshold));
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> BlobTableConfig.inlineMaxBytes(props));

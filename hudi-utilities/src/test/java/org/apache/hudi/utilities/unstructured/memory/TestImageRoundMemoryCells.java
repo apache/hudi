@@ -94,7 +94,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *   object, and compute decodes it subsampled from a seekable stream, never holding the file whole.</li>
  * </ul>
  */
-public class TestImageRoundMemoryCells extends EmbeddingRoundTestBase {
+class TestImageRoundMemoryCells extends EmbeddingRoundTestBase {
 
   static final String REFERENCE_HEAP = TestEmbeddingRoundMemoryCells.REFERENCE_HEAP;
   private static final long CELL_TIMEOUT_MINUTES = 15;
@@ -135,7 +135,7 @@ public class TestImageRoundMemoryCells extends EmbeddingRoundTestBase {
 
   @ParameterizedTest(name = "cell {0}")
   @ValueSource(strings = {"image-light", "image-formats", "image-large"})
-  public void cellPassesAtTheReferenceHeap(String cell) throws Exception {
+  void cellPassesAtTheReferenceHeap(String cell) throws Exception {
     assumeTrue(selectedCells().contains(cell), "memory cell " + cell + " not selected (-Dimage.memory.cells)");
     Path work = localPath(basePath()).resolve("cell-" + cell);
     Path generated = Files.createDirectories(work.resolve("generated"));

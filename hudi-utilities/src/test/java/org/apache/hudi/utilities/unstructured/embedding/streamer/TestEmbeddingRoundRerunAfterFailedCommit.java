@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * is rolled back, and the keys are deterministic).
  */
 @Tag("functional")
-public class TestEmbeddingRoundRerunAfterFailedCommit extends EmbeddingRoundTestBase {
+class TestEmbeddingRoundRerunAfterFailedCommit extends EmbeddingRoundTestBase {
 
   private void announceFirstObject() throws Exception {
     announce(text("a", "alpha", "beta"));
@@ -56,7 +56,7 @@ public class TestEmbeddingRoundRerunAfterFailedCommit extends EmbeddingRoundTest
   }
 
   @Test
-  public void afterAFailedCommitTheCheckpointHoldsAndTheRerunCommitsTheKeysOfACleanRun() throws Exception {
+  void afterAFailedCommitTheCheckpointHoldsAndTheRerunCommitsTheKeysOfACleanRun() throws Exception {
     announceFirstObject();
     TypedProperties props = props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
     round(props);
@@ -81,7 +81,7 @@ public class TestEmbeddingRoundRerunAfterFailedCommit extends EmbeddingRoundTest
   }
 
   @Test
-  public void afterAComputeFailureTheRerunCommitsTheKeysOfACleanRun() throws Exception {
+  void afterAComputeFailureTheRerunCommitsTheKeysOfACleanRun() throws Exception {
     announceFirstObject();
     TypedProperties props = props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
     ScriptedEmbeddingClient.OUTAGE.set(Integer.MAX_VALUE);

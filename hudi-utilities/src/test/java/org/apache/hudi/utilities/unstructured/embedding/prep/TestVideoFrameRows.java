@@ -68,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * pinned at chunk_id = the index; a frame index at or below the file's last image chunk_id is a duplicate record key and fails
  * the file.
  */
-public class TestVideoFrameRows {
+class TestVideoFrameRows {
 
   private static final StructType BLOB = (StructType) BlobType.dataType();
   private static final StructType SOURCE_ROW = DataTypes.createStructType(new StructField[] {
@@ -120,7 +120,7 @@ public class TestVideoFrameRows {
   private String embeddingTable;
 
   @BeforeEach
-  public void createTable() throws IOException {
+  void createTable() throws IOException {
     embeddingTable = temp.resolve("embedding").toUri().toString();
     HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(UnstructuredTableTestProperties.layoutOne())
         .setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("embedding")
@@ -136,9 +136,12 @@ public class TestVideoFrameRows {
     byte[] bytes = script.getBytes(StandardCharsets.UTF_8);
     Row blob = new GenericRowWithSchema(new Object[] {INLINE, bytes, null}, BLOB);
     Row source = new GenericRowWithSchema(new Object[] {"sha-video", "mp4", (long) bytes.length, 1L, blob, "s3://bucket/sha-video.mp4", "sha-video.mp4"}, SOURCE_ROW);
-    return new PreprocessingIterator(Collections.singletonList(source).iterator(), EmbeddingTableConfig.from(props), "001",
-        new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())), new PreprocessorRegistry(props),
-        new WordCountTokenizer(), counters(), null);
+    return PreprocessingIterator.builder(Collections.singletonList(source).iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())))
+        .registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer())
+        .counters(counters())
+        .build();
   }
 
   private static PrepCounters counters() {
@@ -165,7 +168,7 @@ public class TestVideoFrameRows {
   }
 
   @Test
-  public void framesArePinnedAtTheirIndexAndStoreTheirImageInline() {
+  void framesArePinnedAtTheirIndexAndStoreTheirImageInline() {
     PreprocessingIterator iterator = iterator("0,1,2");
     List<Row> rows = drain(iterator);
 
@@ -182,7 +185,7 @@ public class TestVideoFrameRows {
 
   /** A frame index that does not increase is a duplicate record key: the file fails, and its frames before it are kept. */
   @Test
-  public void repeatedFrameIndexFailsTheFileAsADuplicateRecordKey() {
+  void repeatedFrameIndexFailsTheFileAsADuplicateRecordKey() {
     PreprocessingIterator iterator = iterator("0,1,1");
     List<Row> rows = drain(iterator);
 
@@ -195,9 +198,9 @@ public class TestVideoFrameRows {
   }
 
   @Test
-  public void negativeFrameIndexIsRefusedByTheBuilder() {
-    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-        () -> Chunk.builder(EmbeddingTableSchema.MODALITY_IMAGE).frameIndex(-1));
+  void negativeFrameIndexIsRefusedByTheBuilder() {
+    Chunk.Builder builder = Chunk.builder(EmbeddingTableSchema.MODALITY_IMAGE);
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> builder.frameIndex(-1));
     assertTrue(e.getMessage().contains("frame index must be >= 0"), e.getMessage());
     assertEquals(Long.valueOf(4L), Chunk.builder(EmbeddingTableSchema.MODALITY_IMAGE).frameIndex(4).build().getFrameIndex());
     assertNull(Chunk.builder(EmbeddingTableSchema.MODALITY_IMAGE).build().getFrameIndex());
@@ -205,7 +208,7 @@ public class TestVideoFrameRows {
 
   /** Every video extension, in any letter case, resolves to the configured video preprocessor. */
   @Test
-  public void everyVideoExtensionResolvesToTheVideoPreprocessor() {
+  void everyVideoExtensionResolvesToTheVideoPreprocessor() {
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key(), ScriptedFramePreprocessor.class.getName());
     PreprocessorRegistry registry = new PreprocessorRegistry(props);

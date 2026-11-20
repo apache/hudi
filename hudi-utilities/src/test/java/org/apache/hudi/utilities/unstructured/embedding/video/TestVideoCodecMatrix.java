@@ -56,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@link FfmpegKeyframeVideoFrameSource} with the real FFmpeg natives. Each cell records its frames (count and times), or the
  * failure that would be the file's FAILED row; the matrix is written to {@code target/codec-matrix/matrix.txt}.
  */
-public class TestVideoCodecMatrix {
+class TestVideoCodecMatrix {
 
   private static final String RESOURCES = "/video/codec-matrix/";
   private static final Map<String, String> MATRIX = new TreeMap<>();
@@ -90,7 +90,7 @@ public class TestVideoCodecMatrix {
   }
 
   @BeforeAll
-  public static void copyClips() throws IOException {
+  static void copyClips() throws IOException {
     for (String[] cell : cells()) {
       try (InputStream in = TestVideoCodecMatrix.class.getResourceAsStream(RESOURCES + cell[0])) {
         assertNotNull(in, cell[0]);
@@ -100,7 +100,7 @@ public class TestVideoCodecMatrix {
   }
 
   @AfterAll
-  public static void writeMatrix() throws IOException {
+  static void writeMatrix() throws IOException {
     Path out = Paths.get("target", "codec-matrix", "matrix.txt");
     Files.createDirectories(out.getParent());
     List<String> lines = new ArrayList<>();
@@ -111,7 +111,7 @@ public class TestVideoCodecMatrix {
 
   @ParameterizedTest(name = "{index} {0}")
   @MethodSource("cells")
-  public void cellDecodesThroughTheFrameSource(String file, String cell, String container, String video, String audio,
+  void cellDecodesThroughTheFrameSource(String file, String cell, String container, String video, String audio,
                                                String startMs, String keyframesMs) throws IOException {
     Path clip = dir.resolve(file);
     TypedProperties props = new TypedProperties();

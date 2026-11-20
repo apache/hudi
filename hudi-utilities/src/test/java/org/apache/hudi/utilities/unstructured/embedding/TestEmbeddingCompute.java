@@ -30,13 +30,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Validates configured client classes through the compute factory. */
-public class TestEmbeddingCompute {
+class TestEmbeddingCompute {
 
   private static final String MODEL = "m1";
   private TypedProperties props;
 
   @BeforeEach
-  public void setUp() {
+  void setUp() {
     props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.MODELS.key(), MODEL);
     props.setProperty(modelKey(EmbeddingTableConfig.MODEL_DIMENSIONS_SUFFIX), "4");
@@ -44,12 +44,13 @@ public class TestEmbeddingCompute {
   }
 
   @Test
-  public void testFactoryRejectsAClientClassThatIsNotAnEmbeddingClient() {
+  void testFactoryRejectsAClientClassThatIsNotAnEmbeddingClient() {
     String key = modelKey(EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX);
     for (String className : new String[] {String.class.getName(), "org.apache.hudi.no.such.Client"}) {
       props.setProperty(key, className);
+      EmbeddingModelSpec spec = config().model(MODEL);
       IllegalArgumentException invalid = assertThrows(IllegalArgumentException.class,
-          () -> EmbeddingClientFactory.clientClassName(config().model(MODEL)), className);
+          () -> EmbeddingClientFactory.clientClassName(spec), className);
       assertTrue(invalid.getMessage().contains(key) && invalid.getMessage().contains(className), invalid.getMessage());
     }
     props.setProperty(key, InitFailingClient.class.getName());

@@ -501,6 +501,7 @@ public final class BlobRoundMemoryChild {
         String stageName = name;
         Thread thread = new Thread(() -> {
           try {
+            // by design: the heap is dumped a fixed delay into the phase, so the sleep is the point in time, not a wait
             Thread.sleep(millis);
             System.out.println("PHASE_DUMP start phase=" + target + " stage=" + start.stageId() + " (" + stageName + ") at "
                 + Instant.now());

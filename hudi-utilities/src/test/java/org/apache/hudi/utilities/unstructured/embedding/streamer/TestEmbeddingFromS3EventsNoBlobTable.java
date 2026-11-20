@@ -58,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * under the stock S3 events checkpoint.
  */
 @Tag("functional")
-public class TestEmbeddingFromS3EventsNoBlobTable extends EmbeddingRoundTestBase {
+class TestEmbeddingFromS3EventsNoBlobTable extends EmbeddingRoundTestBase {
 
   /** Objects above this many bytes are out of line. */
   private static final long INLINE_CEILING = 64;
@@ -69,7 +69,7 @@ public class TestEmbeddingFromS3EventsNoBlobTable extends EmbeddingRoundTestBase
   }
 
   @Test
-  public void inlineAndOutOfLineObjectsAreEmbeddedInOneCommitWithNoBlobTable() throws Exception {
+  void inlineAndOutOfLineObjectsAreEmbeddedInOneCommitWithNoBlobTable() throws Exception {
     FixtureFile small = text("docs/small", "alpha", "beta");
     FixtureFile large = text("docs/large", "gamma gamma gamma gamma gamma", "delta delta delta delta delta",
         "epsilon epsilon epsilon epsilon");
@@ -123,7 +123,7 @@ public class TestEmbeddingFromS3EventsNoBlobTable extends EmbeddingRoundTestBase
   }
 
   @Test
-  public void roundWithoutNewEventsCommitsNothingAndTheNextEventsCommitIsReadOnce() throws Exception {
+  void roundWithoutNewEventsCommitsNothingAndTheNextEventsCommitIsReadOnce() throws Exception {
     announce(text("a", "alpha", "beta"));
     assertTrue(round(prepAndCompute()).getCommit().isPresent());
 

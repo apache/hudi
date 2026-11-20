@@ -54,7 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * nothing and the rerun resumes from the same key.
  */
 @Tag("functional")
-public class TestEmbeddingSplitRoundResume extends EmbeddingRoundTestBase {
+class TestEmbeddingSplitRoundResume extends EmbeddingRoundTestBase {
 
   /** At most two objects per round, by the stock files-per-sync budget. */
   private TypedProperties twoPerRound() {
@@ -73,7 +73,7 @@ public class TestEmbeddingSplitRoundResume extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void oneEventsCommitSplitAcrossRoundsResumesAtTheExactKey() throws Exception {
+  void oneEventsCommitSplitAcrossRoundsResumesAtTheExactKey() throws Exception {
     List<FixtureFile> files = Arrays.asList(text("a", "alpha"), text("b", "beta"), text("c", "gamma"));
     announce(files.toArray(new FixtureFile[0]));
     String events = EmbeddingStreamers.commits(objects().eventsPath(), storage()).get(0).requestedTime();
@@ -92,7 +92,7 @@ public class TestEmbeddingSplitRoundResume extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void roundThatFailsMidCommitCommitsNothingAndTheRerunResumesFromTheSameKey() throws Exception {
+  void roundThatFailsMidCommitCommitsNothingAndTheRerunResumesFromTheSameKey() throws Exception {
     List<FixtureFile> files = Arrays.asList(text("a", "alpha"), text("b", "beta"), text("c", "gamma"));
     announce(files.toArray(new FixtureFile[0]));
     String events = EmbeddingStreamers.commits(objects().eventsPath(), storage()).get(0).requestedTime();

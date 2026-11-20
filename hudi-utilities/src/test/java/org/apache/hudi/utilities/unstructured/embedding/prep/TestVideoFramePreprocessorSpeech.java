@@ -78,7 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * implementations are built once and closed with the preprocessor. Real FFmpeg frames over a generated clip; the stub audio
  * implementations.
  */
-public class TestVideoFramePreprocessorSpeech {
+class TestVideoFramePreprocessorSpeech {
 
   @TempDir
   static Path dir;
@@ -86,13 +86,13 @@ public class TestVideoFramePreprocessorSpeech {
   private static Path clip;
 
   @BeforeAll
-  public static void generate() throws IOException {
+  static void generate() throws IOException {
     clip = VideoClips.generate(dir.resolve("clip.mp4"), 6, 10, 2, 160, 120, -1, -1);
   }
 
   /** One chunk per kept frame, then the speech chunks the stub source, transcriber and chunker make; audio off: frames only. */
   @Test
-  public void framesThenTheirSpeechWithAudioOnAndFramesOnlyWithAudioOff() throws IOException {
+  void framesThenTheirSpeechWithAudioOnAndFramesOnlyWithAudioOff() throws IOException {
     TypedProperties props = AudioStubs.named(new TypedProperties());
     props.setProperty(AudioConfigKeys.ENABLED.key(), "true");
     Tokenizer tokenizer = TokenizerFactory.create(props);
@@ -131,41 +131,43 @@ public class TestVideoFramePreprocessorSpeech {
    * frames before it, the speech is still prepared, and the frames' failure is thrown after it (the file's FAILED marker).
    */
   @Test
-  public void framesThatFailStillLeaveTheirSpeechBeforeTheFailure() throws IOException {
+  void framesThatFailStillLeaveTheirSpeechBeforeTheFailure() throws IOException {
     TypedProperties props = audioOn();
     VideoDecodeException noVideo = new VideoDecodeException("video v has no video stream");
     List<Chunk> before = new ArrayList<>();
-    VideoDecodeException atOpen = assertThrows(VideoDecodeException.class, () -> drainInto(new FailingFramesPreprocessor(0, noVideo,
-        FailingFramesPreprocessor.AT_OPEN).open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props), before));
+    ClosableIterator<Chunk> noFrames = new FailingFramesPreprocessor(0, noVideo, FailingFramesPreprocessor.AT_OPEN)
+        .open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props);
+    VideoDecodeException atOpen = assertThrows(VideoDecodeException.class, () -> drainInto(noFrames, before));
     assertSame(noVideo, atOpen);
     assertEquals(Collections.singletonList(EmbeddingTableSchema.MODALITY_TEXT), modalities(before), "the speech only");
 
     VideoDecodeException corrupt = new VideoDecodeException("video v cannot be decoded at 4000000us");
     before.clear();
-    assertSame(corrupt, assertThrows(VideoDecodeException.class, () -> drainInto(new FailingFramesPreprocessor(2, corrupt,
-        FailingFramesPreprocessor.IN_HAS_NEXT).open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props),
-        before)));
+    ClosableIterator<Chunk> failingInHasNext = new FailingFramesPreprocessor(2, corrupt, FailingFramesPreprocessor.IN_HAS_NEXT)
+        .open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props);
+    assertSame(corrupt, assertThrows(VideoDecodeException.class, () -> drainInto(failingInHasNext, before)));
     assertEquals(Arrays.asList(EmbeddingTableSchema.MODALITY_IMAGE, EmbeddingTableSchema.MODALITY_IMAGE,
         EmbeddingTableSchema.MODALITY_TEXT), modalities(before), "the frames before the failure, then the speech");
 
     // a content failure met in the strategy's next(), or when its frames are closed after a clean end, is held too
     before.clear();
-    assertSame(corrupt, assertThrows(VideoDecodeException.class, () -> drainInto(new FailingFramesPreprocessor(2, corrupt,
-        FailingFramesPreprocessor.IN_NEXT).open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props),
-        before)));
+    ClosableIterator<Chunk> failingInNext = new FailingFramesPreprocessor(2, corrupt, FailingFramesPreprocessor.IN_NEXT)
+        .open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props);
+    assertSame(corrupt, assertThrows(VideoDecodeException.class, () -> drainInto(failingInNext, before)));
     assertEquals(Arrays.asList(EmbeddingTableSchema.MODALITY_IMAGE, EmbeddingTableSchema.MODALITY_IMAGE,
         EmbeddingTableSchema.MODALITY_TEXT), modalities(before), "a failure in next(): the frames before it, then the speech");
     before.clear();
-    assertSame(corrupt, assertThrows(VideoDecodeException.class, () -> drainInto(new FailingFramesPreprocessor(-1, corrupt,
-        FailingFramesPreprocessor.AT_CLOSE).open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props),
-        before)));
+    ClosableIterator<Chunk> failingAtClose = new FailingFramesPreprocessor(-1, corrupt, FailingFramesPreprocessor.AT_CLOSE)
+        .open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props);
+    assertSame(corrupt, assertThrows(VideoDecodeException.class, () -> drainInto(failingAtClose, before)));
     assertEquals(Arrays.asList(EmbeddingTableSchema.MODALITY_IMAGE, EmbeddingTableSchema.MODALITY_IMAGE,
         EmbeddingTableSchema.MODALITY_IMAGE, EmbeddingTableSchema.MODALITY_TEXT), modalities(before),
         "a failure closing the frames: every frame, then the speech");
 
     // audio off: the frames' failure ends the file at once
-    assertThrows(VideoDecodeException.class, () -> drain(new FailingFramesPreprocessor(2, corrupt, FailingFramesPreprocessor.IN_HAS_NEXT)
-        .open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), new TypedProperties())));
+    ClosableIterator<Chunk> audioOff = new FailingFramesPreprocessor(2, corrupt, FailingFramesPreprocessor.IN_HAS_NEXT)
+        .open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), new TypedProperties());
+    assertThrows(VideoDecodeException.class, () -> drain(audioOff));
   }
 
   /**
@@ -173,70 +175,73 @@ public class TestVideoFramePreprocessorSpeech {
    * is never held behind the speech: it leaves at once, so no speech row of the video is prepared and no quarantine entry is built.
    */
   @Test
-  public void framesThatFailTheRoundAreNotHeldBehindTheSpeech() throws IOException {
+  void framesThatFailTheRoundAreNotHeldBehindTheSpeech() throws IOException {
     TypedProperties props = audioOn();
     PrepPlatformException platform = new PrepPlatformException("no JPEG writer", null);
     int[] places = {FailingFramesPreprocessor.AT_OPEN, FailingFramesPreprocessor.IN_HAS_NEXT, FailingFramesPreprocessor.IN_NEXT,
         FailingFramesPreprocessor.AT_CLOSE};
     for (int where : places) {
       List<Chunk> before = new ArrayList<>();
-      RuntimeException failure = assertThrows(RuntimeException.class, () -> drainInto(new FailingFramesPreprocessor(
-          where == FailingFramesPreprocessor.AT_CLOSE ? -1 : 1, platform, where).open(VideoClips.supplier(clip),
-          file(Files.size(clip)), new WordCountTokenizer(), props), before));
+      RuntimeException failure = assertThrows(RuntimeException.class, () -> openAndDrainInto(where, platform, props, before));
       assertSame(platform, PrepFailures.roundFailure(failure), where + ": " + failure);
       assertFalse(modalities(before).contains(EmbeddingTableSchema.MODALITY_TEXT), where + ": no speech row: " + modalities(before));
     }
     // wrapped by the strategy, it still fails the round at once
     List<Chunk> before = new ArrayList<>();
-    RuntimeException wrapped = assertThrows(RuntimeException.class, () -> drainInto(new FailingFramesPreprocessor(1,
+    ClosableIterator<Chunk> wrappedFailure = new FailingFramesPreprocessor(1,
         new VideoDecodeException("video v frame 1 cannot be encoded", platform), FailingFramesPreprocessor.IN_HAS_NEXT)
-        .open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props), before));
+        .open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props);
+    RuntimeException wrapped = assertThrows(RuntimeException.class, () -> drainInto(wrappedFailure, before));
     assertTrue(PrepFailures.roundFailure(wrapped) instanceof PrepPlatformException, wrapped.toString());
     assertFalse(modalities(before).contains(EmbeddingTableSchema.MODALITY_TEXT), modalities(before).toString());
   }
 
   @Test
-  public void framesAndSpeechThatBothFailMakeOneFailureNamingBoth() throws IOException {
+  void framesAndSpeechThatBothFailMakeOneFailureNamingBoth() throws IOException {
     TypedProperties props = audioOn();
     props.setProperty(AudioConfigKeys.TRANSCRIBER_CLASS.key(), RefusingTranscriber.class.getName());
     VideoFramePreprocessor failingFrames = new FailingFramesPreprocessor(1, new VideoDecodeException("video v cannot be decoded"),
         FailingFramesPreprocessor.IN_HAS_NEXT);
-    PreprocessingException both = assertThrows(PreprocessingException.class, () -> drain(failingFrames.open(
-        VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props)));
+    ClosableIterator<Chunk> bothFailing = failingFrames.open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props);
+    PreprocessingException both = assertThrows(PreprocessingException.class, () -> drain(bothFailing));
     assertEquals(VideoFramePreprocessor.FRAMES_PREFIX + "VideoDecodeException: video v cannot be decoded; "
         + VideoSpeechChunks.SPEECH_PREFIX + "IllegalStateException: the engine refused segment 0", both.getMessage());
     // the speech alone failing: its own failure, after the frames
     List<Chunk> before = new ArrayList<>();
-    PreprocessingException speech = assertThrows(PreprocessingException.class, () -> drainInto(new VideoFramePreprocessor()
-        .open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props), before));
+    ClosableIterator<Chunk> speechFailing = new VideoFramePreprocessor()
+        .open(VideoClips.supplier(clip), file(Files.size(clip)), new WordCountTokenizer(), props);
+    PreprocessingException speech = assertThrows(PreprocessingException.class, () -> drainInto(speechFailing, before));
     assertEquals(VideoSpeechChunks.SPEECH_PREFIX + "IllegalStateException: the engine refused segment 0", speech.getMessage());
     assertEquals(3, before.size(), "the frames stay");
   }
 
   /** The size guard reads nothing, speech included. */
   @Test
-  public void videoAboveTheSizeGuardWithAudioOnReadsNothing() {
+  void videoAboveTheSizeGuardWithAudioOnReadsNothing() {
     BlobBytesSupplier never = () -> {
       throw new AssertionError("an oversized video is never read");
     };
     TypedProperties props = audioOn();
     props.setProperty(EmbeddingTableConfig.PREP_VIDEO_MAX_BYTES.key(), "4999");
-    assertThrows(PreprocessingException.class, () -> new VideoFramePreprocessor().open(never, file(5000L),
-        new WordCountTokenizer(), props));
+    VideoFramePreprocessor preprocessor = new VideoFramePreprocessor();
+    FileMeta oversized = file(5000L);
+    WordCountTokenizer tokenizer = new WordCountTokenizer();
+    assertThrows(PreprocessingException.class, () -> preprocessor.open(never, oversized, tokenizer, props));
   }
 
   /** A storage failure while the audio is read, after the frames: an interruption of the round, never a FAILED row. */
   @Test
-  public void storageFailureReadingTheAudioIsAnInterruption() throws IOException {
+  void storageFailureReadingTheAudioIsAnInterruption() throws IOException {
     TypedProperties props = audioOn();
     props.setProperty(AudioConfigKeys.SEGMENT_SOURCE_CLASS.key(), UnreadableAudioSource.class.getName());
-    assertThrows(SourceReadException.class, () -> drain(new VideoFramePreprocessor().open(VideoClips.supplier(clip),
-        file(Files.size(clip)), new WordCountTokenizer(), props)));
+    ClosableIterator<Chunk> unreadableAudio = new VideoFramePreprocessor().open(VideoClips.supplier(clip),
+        file(Files.size(clip)), new WordCountTokenizer(), props);
+    assertThrows(SourceReadException.class, () -> drain(unreadableAudio));
   }
 
   /** One instance of each audio implementation per task, validated once, closed once with the preprocessor (lifecycle). */
   @Test
-  public void theTasksAudioImplementationsAreBuiltOnceAndClosedWithThePreprocessor() throws IOException {
+  void theTasksAudioImplementationsAreBuiltOnceAndClosedWithThePreprocessor() throws IOException {
     TypedProperties props = audioOn();
     props.setProperty(AudioConfigKeys.TRANSCRIBER_CLASS.key(), CountingTranscriber.class.getName());
     CountingTranscriber.CREATED.set(0);
@@ -261,7 +266,7 @@ public class TestVideoFramePreprocessorSpeech {
    * version.
    */
   @Test
-  public void theFfmpegLinkageGuardTurnsEveryLinkageErrorIntoTheConfigurationError() throws IOException {
+  void theFfmpegLinkageGuardTurnsEveryLinkageErrorIntoTheConfigurationError() {
     for (int where = 0; where < 3; where++) {
       int failAt = where;
       AudioSegmentSource unlinkable = new StubAudioSegmentSource() {
@@ -286,18 +291,14 @@ public class TestVideoFramePreprocessorSpeech {
 
             @Override
             public void close() {
+              // the stub iterator holds no resource
             }
           };
         }
       };
       VideoFramePreprocessor.FfmpegLinkageGuard guard = new VideoFramePreprocessor.FfmpegLinkageGuard(unlinkable);
-      PreprocessorConfigurationException refused = assertThrows(PreprocessorConfigurationException.class, () -> {
-        try (ClosableIterator<AudioSegment> segments = guard.segments(null, 0, 0, new TypedProperties())) {
-          if (segments.hasNext()) {
-            segments.next();
-          }
-        }
-      }, "linkage error at step " + failAt);
+      PreprocessorConfigurationException refused = assertThrows(PreprocessorConfigurationException.class, () -> readFirstSegment(guard),
+          "linkage error at step " + failAt);
       assertTrue(refused.getMessage().contains(VideoFramePreprocessor.FFMPEG_JARS_SETTING), refused.getMessage());
       assertTrue(refused.getMessage().contains(AudioConfigKeys.SEGMENT_SOURCE_CLASS.key()), refused.getMessage());
       assertTrue(refused.getCause() instanceof LinkageError, String.valueOf(refused.getCause()));
@@ -422,6 +423,19 @@ public class TestVideoFramePreprocessorSpeech {
     List<String> modalities = new ArrayList<>();
     chunks.forEach(chunk -> modalities.add(chunk.getModality()));
     return modalities;
+  }
+
+  private static void openAndDrainInto(int where, RuntimeException failure, TypedProperties props, List<Chunk> chunks) throws IOException {
+    drainInto(new FailingFramesPreprocessor(where == FailingFramesPreprocessor.AT_CLOSE ? -1 : 1, failure, where).open(VideoClips.supplier(clip),
+        file(Files.size(clip)), new WordCountTokenizer(), props), chunks);
+  }
+
+  private static void readFirstSegment(VideoFramePreprocessor.FfmpegLinkageGuard guard) throws IOException {
+    try (ClosableIterator<AudioSegment> segments = guard.segments(null, 0, 0, new TypedProperties())) {
+      if (segments.hasNext()) {
+        segments.next();
+      }
+    }
   }
 
   private static void drainInto(ClosableIterator<Chunk> iterator, List<Chunk> chunks) {

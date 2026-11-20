@@ -44,11 +44,12 @@ import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Objects are version-keyed by the status observed at read time; every historical version's chunks stay. */
 @Tag("functional")
-public class TestEmbeddingOverwriteConverges extends EmbeddingRoundTestBase {
+class TestEmbeddingOverwriteConverges extends EmbeddingRoundTestBase {
 
   /** Objects above this many bytes are out of line. */
   private static final long INLINE_CEILING = 40;
@@ -95,7 +96,7 @@ public class TestEmbeddingOverwriteConverges extends EmbeddingRoundTestBase {
    */
   @ParameterizedTest(name = "announced out of line: {0}")
   @ValueSource(booleans = {false, true})
-  public void anOverwriteBeforeTheReadIsIngestedUnderTheVersionRead(boolean announcedOutOfLine) throws Exception {
+  void anOverwriteBeforeTheReadIsIngestedUnderTheVersionRead(boolean announcedOutOfLine) throws Exception {
     String longPart = " with enough words to pass the inline ceiling";
     String[] announced = announcedOutOfLine ? new String[] {"first" + longPart, "second" + longPart} : new String[] {"first", "second"};
     String[] current = announcedOutOfLine ? new String[] {"third", "fourth", "fifth"}
@@ -131,10 +132,10 @@ public class TestEmbeddingOverwriteConverges extends EmbeddingRoundTestBase {
    * batch, with two sizes. The source builds one row for the path, so the round prepares and embeds the current content once.
    */
   @Test
-  public void anObjectAnnouncedTwiceInOneBatchIsPreparedOnce() throws Exception {
+  void anObjectAnnouncedTwiceInOneBatchIsPreparedOnce() throws Exception {
     FixtureFile first = text("a", "alpha", "beta");
     FixtureFile overwrite = text("a", "gamma", "delta", "epsilon");
-    assertTrue(first.bytes.length != overwrite.bytes.length, "two announced sizes survive the fetcher's selection as two entries");
+    assertNotEquals(first.bytes.length, overwrite.bytes.length, "two announced sizes survive the fetcher's selection as two entries");
     announce(first, overwrite);
 
     Round round = round(prepAndCompute());
@@ -148,7 +149,7 @@ public class TestEmbeddingOverwriteConverges extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void anOverwriteInALaterBatchAddsVersionRowsAndKeepsTheOld() throws Exception {
+  void anOverwriteInALaterBatchAddsVersionRowsAndKeepsTheOld() throws Exception {
     FixtureFile a = text("a", "alpha", "beta", "gamma");
     announce(a);
     touch(a, Instant.parse("2026-01-02T10:00:00Z"));
@@ -173,7 +174,7 @@ public class TestEmbeddingOverwriteConverges extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void anUnchangedObjectInALaterBatchIsIdempotent() throws Exception {
+  void anUnchangedObjectInALaterBatchIsIdempotent() throws Exception {
     FixtureFile a = text("a", "alpha", "beta", "gamma");
     announce(a);
     Version version = versionOf(a);
@@ -190,7 +191,7 @@ public class TestEmbeddingOverwriteConverges extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void newVersionThatFailsToPrepareLeavesTheOldRowsAndRecordsTheFailure() throws Exception {
+  void newVersionThatFailsToPrepareLeavesTheOldRowsAndRecordsTheFailure() throws Exception {
     FixtureFile a = text("a", "alpha", "beta");
     announce(a);
     Version old = versionOf(a);

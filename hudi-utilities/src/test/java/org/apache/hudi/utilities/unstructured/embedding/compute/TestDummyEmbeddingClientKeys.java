@@ -36,12 +36,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  * The production dummy client reads no failure-injection key: those keys belong to test code, as
  * the prep dummy preprocessors' key does.
  */
-public class TestDummyEmbeddingClientKeys {
+class TestDummyEmbeddingClientKeys {
 
   private static final String ALIAS = "m";
 
   @Test
-  public void productionDummyClientIgnoresTheTestFaultKeys() {
+  void productionDummyClientIgnoresTheTestFaultKeys() {
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + ".dummy.fail.source_path_shas", "a");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + ".dummy.permanent.source_path_shas", "a");
@@ -53,7 +53,7 @@ public class TestDummyEmbeddingClientKeys {
   }
 
   @Test
-  public void productionDummyClientDeclaresNoDummyKey() throws IllegalAccessException {
+  void productionDummyClientDeclaresNoDummyKey() throws IllegalAccessException {
     for (Field field : DummyEmbeddingClient.class.getDeclaredFields()) {
       if (Modifier.isStatic(field.getModifiers()) && field.getType() == String.class) {
         field.setAccessible(true);

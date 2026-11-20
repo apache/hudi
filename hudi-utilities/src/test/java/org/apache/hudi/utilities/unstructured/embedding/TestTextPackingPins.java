@@ -48,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * stream as a sequential chunk id, its modality, text, token count and aux (page bounds). A failure here means persisted
  * values would change.
  */
-public class TestTextPackingPins {
+class TestTextPackingPins {
 
   private static final SequentialChunkIdScheme IDS = new SequentialChunkIdScheme();
 
@@ -61,12 +61,12 @@ public class TestTextPackingPins {
       "31:107c65cd4634f921b0e541360ff7f8467ee0d4ad7c54b6bb2f8f1ce8667cfae2";
 
   @BeforeAll
-  public static void fontCache(@TempDir Path cache) {
+  static void fontCache(@TempDir Path cache) {
     System.setProperty("pdfbox.fontcache", cache.toString());
   }
 
   @Test
-  public void configKeySpellingsArePinned() {
+  void configKeySpellingsArePinned() {
     assertEquals("hoodie.unstructured.chunk.tokenizer.class", EmbeddingTableConfig.TOKENIZER_CLASS.key());
     assertEquals("hoodie.unstructured.chunk.tokenizer.type", EmbeddingTableConfig.TOKENIZER_TYPE.key());
     assertEquals("hoodie.unstructured.chunk.tokenizer.encoding", EmbeddingTableConfig.TOKENIZER_ENCODING.key());
@@ -75,7 +75,7 @@ public class TestTextPackingPins {
   }
 
   @Test
-  public void pdfChunksArePinned() throws Exception {
+  void pdfChunksArePinned() throws Exception {
     byte[] pdf = PdfFixtures.prose(11, 4, 30);
     // [BPE default limits, BPE 64/32, words 48/8]: chunk count and SHA-256 of the chunk stream
     assertEquals(Arrays.asList(PDF_BPE_DEFAULT, PDF_BPE_SMALL, PDF_WORDS_SMALL), Arrays.asList(
@@ -109,8 +109,8 @@ public class TestTextPackingPins {
     return props;
   }
 
-  private static void update(MessageDigest digest, String record) {
-    digest.update((record + "\1").getBytes(StandardCharsets.UTF_8));
+  private static void update(MessageDigest digest, String entry) {
+    digest.update((entry + "\1").getBytes(StandardCharsets.UTF_8));
   }
 
   private static String hex(MessageDigest digest) {

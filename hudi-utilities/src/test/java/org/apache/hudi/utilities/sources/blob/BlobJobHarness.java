@@ -140,8 +140,7 @@ public final class BlobJobHarness {
     Path file = BucketFolderFileSystem.file(objectsRoot, bucket, key);
     Files.createDirectories(file.getParent());
     Files.write(file, bytes);
-    S3EventsTableFixture.Event event = S3EventsTableFixture.created(bucket, key, bytes.length, EVENT_TIME);
-    return event;
+    return S3EventsTableFixture.created(bucket, key, bytes.length, EVENT_TIME);
   }
 
   /**

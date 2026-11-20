@@ -133,7 +133,7 @@ public final class EmbeddingTableSchema {
     fields.add(DataTypes.createStructField(CHUNK_TOKEN_COUNT, DataTypes.IntegerType, true));
     fields.add(DataTypes.createStructField(AUX, DataTypes.createMapType(DataTypes.StringType, DataTypes.StringType), true));
     fields.add(preparedImageField());
-    for (EmbeddingModelSpec model : config.models()) {
+    for (EmbeddingModelSpec model : config.modelSpecs()) {
       fields.add(vectorField(model));
     }
     for (String column : userPartitionColumns(config.getProps())) {

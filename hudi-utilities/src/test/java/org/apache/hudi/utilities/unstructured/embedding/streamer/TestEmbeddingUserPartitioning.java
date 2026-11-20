@@ -46,10 +46,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** A path partition column follows each prepared chunk into the user's embedding table partition. */
 @Tag("functional")
-public class TestEmbeddingUserPartitioning extends EmbeddingRoundTestBase {
+class TestEmbeddingUserPartitioning extends EmbeddingRoundTestBase {
 
   @Test
-  public void droppingTheProducedPartitionFieldIsRefusedBeforeAnotherRound() throws Exception {
+  void droppingTheProducedPartitionFieldIsRefusedBeforeAnotherRound() throws Exception {
     announce(text("region=west/a", "alpha"));
     TypedProperties partitioned = props(table(), EmbeddingTableConfig.MODE_PREP_ONLY,
         "hoodie.streamer.source.cloud.data.partition.fields.from.path", "region",
@@ -65,7 +65,7 @@ public class TestEmbeddingUserPartitioning extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void userPathPartitionColumnsPartitionTheEmbeddingTable() throws Exception {
+  void userPathPartitionColumnsPartitionTheEmbeddingTable() throws Exception {
     FixtureFile blue = text("team=blue/a", "alpha", "beta");
     FixtureFile red = text("team=red/b", "gamma");
     announce(blue, red);

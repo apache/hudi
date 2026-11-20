@@ -54,7 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** Prep retains each source version of a path. */
 @Tag("functional")
-public class TestPrepRoundTwoVersions extends SparkClientFunctionalTestHarness {
+class TestPrepRoundTwoVersions extends SparkClientFunctionalTestHarness {
 
   private static final StructType SOURCE = DataTypes.createStructType(new StructField[] {
       DataTypes.createStructField(BlobColumns.SOURCE_PATH_SHA, DataTypes.StringType, false),
@@ -96,7 +96,7 @@ public class TestPrepRoundTwoVersions extends SparkClientFunctionalTestHarness {
     StructType table = EmbeddingTableSchema.build(config);
     StructType output = table.add(PrepRound.CORRUPT_RECORD, DataTypes.StringType, true);
     return PrepRound.prepare(spark(), spark().createDataFrame(Arrays.asList(rows), SOURCE), config,
-        HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()), table, output, "001", StorageLevel.MEMORY_AND_DISK());
+        HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()), output, "001", StorageLevel.MEMORY_AND_DISK());
   }
 
   private static List<Row> data(Dataset<Row> rows) {
@@ -119,7 +119,7 @@ public class TestPrepRoundTwoVersions extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void twoVersionsOfOnePathInOneBatchAreBothPrepared() throws Exception {
+  void twoVersionsOfOnePathInOneBatchAreBothPrepared() throws Exception {
     PrepRound.Prepared prepared = prepare(source(1000L, 5L, "alpha"), source(2000L, 9L, "beta|gamma"));
     try {
       assertEquals(Arrays.asList(expected(1000L, 5L, 0L, "alpha"), expected(2000L, 9L, 0L, "beta"),
@@ -133,7 +133,7 @@ public class TestPrepRoundTwoVersions extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void differentSizeIsAnotherVersion() throws Exception {
+  void differentSizeIsAnotherVersion() throws Exception {
     PrepRound.Prepared prepared = prepare(source(1000L, 5L, "alpha"), source(1000L, 4L, "beta"));
     try {
       assertEquals(Arrays.asList(expected(1000L, 4L, 0L, "beta"), expected(1000L, 5L, 0L, "alpha")), data(prepared.output));

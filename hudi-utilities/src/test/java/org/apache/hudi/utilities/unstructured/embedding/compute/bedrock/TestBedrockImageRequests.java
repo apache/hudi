@@ -68,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * cannot take (type, encoded size, side) and a failed preparation fail the input for good without a request; a text and an
  * image vector land at the one configured length.
  */
-public class TestBedrockImageRequests {
+class TestBedrockImageRequests {
 
   private static final String ALIAS = "br";
   private static final String COHERE = "cohere.embed-v4:0";
@@ -82,13 +82,13 @@ public class TestBedrockImageRequests {
   private TypedProperties props;
 
   @BeforeEach
-  public void setUp() {
+  void setUp() {
     props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + BedrockClientConfig.REGION_SUFFIX, "us-west-2");
   }
 
   @Test
-  public void familiesReportTheirModalities() {
+  void familiesReportTheirModalities() {
     assertEquals(EmbeddingClient.TEXT_ONLY, new BedrockTitanTextEmbeddingClient().supportedModalities("amazon.titan-embed-text-v2:0"));
     assertEquals(EmbeddingClient.TEXT_AND_IMAGE, new BedrockCohereEmbeddingClient().supportedModalities(COHERE));
     assertEquals(EmbeddingClient.TEXT_AND_IMAGE, new BedrockTitanMultimodalEmbeddingClient().supportedModalities(TITAN_MULTIMODAL));
@@ -101,7 +101,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void coherePacksTheCallsImagesIntoOneRequestOfDataUrisApartFromItsTexts() throws Exception {
+  void coherePacksTheCallsImagesIntoOneRequestOfDataUrisApartFromItsTexts() throws InterruptedException {
     byte[] first = "first-jpeg".getBytes(StandardCharsets.UTF_8);
     byte[] second = "second-png".getBytes(StandardCharsets.UTF_8);
     BedrockEmbeddingClient client = client(BedrockModelFamily.COHERE_EMBED_V4, COHERE, 1024);
@@ -130,7 +130,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void cohereImageRequestsRespectMaxInputs() throws Exception {
+  void cohereImageRequestsRespectMaxInputs() throws InterruptedException {
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + ProviderClientSettings.REQUEST_MAX_INPUTS_SUFFIX, "2");
     List<EmbeddingInput> inputs = new ArrayList<>();
     for (int i = 0; i < 5; i++) {
@@ -143,7 +143,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void cohereImageRequestsStayWithinTheRequestPayload() throws Exception {
+  void cohereImageRequestsStayWithinTheRequestPayload() throws InterruptedException {
     // each data URI is 5,333,359 characters: three fit in 20,000,000, a fourth does not
     List<EmbeddingInput> inputs = new ArrayList<>();
     for (int i = 0; i < 6; i++) {
@@ -156,7 +156,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void cohereImageRequestsStayWithinTheRequestTokenBudget() throws Exception {
+  void cohereImageRequestsStayWithinTheRequestTokenBudget() throws InterruptedException {
     // 2000 x 2000 is resampled to 2,458,624 pixels, 12,544 tokens: ten fit in 128,000, an eleventh does not
     List<EmbeddingInput> inputs = new ArrayList<>();
     for (int i = 0; i < 12; i++) {
@@ -168,7 +168,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void rejectedImageRequestIsIsolatedImageByImage() throws Exception {
+  void rejectedImageRequestIsIsolatedImageByImage() throws InterruptedException {
     script.add(BedrockReply.error(400, "ValidationException", "one image is malformed", null));
     script.add(null);
     script.add(BedrockReply.error(400, "ValidationException", "image b is malformed", null));
@@ -185,7 +185,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void cohereImageOverItsByteCapIsPermanentWithoutARequest() throws Exception {
+  void cohereImageOverItsByteCapIsPermanentWithoutARequest() throws InterruptedException {
     BedrockEmbeddingClient client = client(BedrockModelFamily.COHERE_EMBED_V4, COHERE, 256);
     List<EmbeddingResult> results = client.embed(Arrays.asList(
         image("big", new PreparedImage(new byte[5_000_001], "image/jpeg", 10, 10, 1)),
@@ -199,7 +199,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void imageOfATypeTheFamilyDoesNotAcceptIsPermanentWithoutARequest() throws Exception {
+  void imageOfATypeTheFamilyDoesNotAcceptIsPermanentWithoutARequest() throws InterruptedException {
     EmbeddingResult result = client(BedrockModelFamily.TITAN_EMBED_IMAGE_V1, TITAN_MULTIMODAL, 1024)
         .embed(Collections.singletonList(image("gif", new PreparedImage(new byte[] {1}, "image/gif", 1, 1, 1)))).get(0);
 
@@ -209,7 +209,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void imagePreparationFailureIsTheInputsOwnOutcome() throws Exception {
+  void imagePreparationFailureIsTheInputsOwnOutcome() throws InterruptedException {
     PreparedImageSupplier refused = () -> {
       throw new ImageRefusedException("declares 200000000 pixels, over the limit");
     };
@@ -224,16 +224,16 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void imageWithoutAPreparedInputBreaksTheComputeInvariant() {
+  void imageWithoutAPreparedInputBreaksTheComputeInvariant() {
     BedrockEmbeddingClient client = client(BedrockModelFamily.COHERE_EMBED_V4, COHERE, 256);
-    EmbeddingComputePlatformException failure = assertThrows(EmbeddingComputePlatformException.class, () -> client.embed(
-        Collections.singletonList(EmbeddingInput.storedImage("a", 0L, EmbeddingTableSchema.MODALITY_IMAGE, () -> null, null))));
+    List<EmbeddingInput> inputs = Collections.singletonList(EmbeddingInput.storedImage("a", 0L, EmbeddingTableSchema.MODALITY_IMAGE, () -> null, null));
+    EmbeddingComputePlatformException failure = assertThrows(EmbeddingComputePlatformException.class, () -> client.embed(inputs));
     assertEquals(BedrockEmbeddingClient.IMAGE_WITHOUT_PREPARED_INPUT + " (model " + ALIAS + ")", failure.getMessage());
     assertTrue(bodies.isEmpty());
   }
 
   @Test
-  public void imageRejectedByBedrockIsPermanentForThatInput() throws Exception {
+  void imageRejectedByBedrockIsPermanentForThatInput() throws InterruptedException {
     script.add(BedrockReply.error(400, "ValidationException", "Malformed input image", null));
     EmbeddingResult result = client(BedrockModelFamily.COHERE_EMBED_V4, COHERE, 256)
         .embed(Collections.singletonList(image("a", new PreparedImage(new byte[] {1}, "image/jpeg", 1, 1, 1)))).get(0);
@@ -243,7 +243,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void titanMultimodalSendsTextAndImageInItsOwnFormatOneInputPerRequest() throws Exception {
+  void titanMultimodalSendsTextAndImageInItsOwnFormatOneInputPerRequest() throws InterruptedException {
     byte[] pixels = "jpeg-bytes".getBytes(StandardCharsets.UTF_8);
     List<EmbeddingResult> results = client(BedrockModelFamily.TITAN_EMBED_IMAGE_V1, TITAN_MULTIMODAL, 384).embed(Arrays.asList(
         text("a", "one"), text("b", "two"), image("c", new PreparedImage(pixels, "image/jpeg", 2048, 1024, 1))));
@@ -266,7 +266,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void titanMultimodalImageBeyondItsSideOrByteLimitIsPermanentWithoutARequest() throws Exception {
+  void titanMultimodalImageBeyondItsSideOrByteLimitIsPermanentWithoutARequest() throws InterruptedException {
     List<EmbeddingResult> results = client(BedrockModelFamily.TITAN_EMBED_IMAGE_V1, TITAN_MULTIMODAL, 1024).embed(Arrays.asList(
         image("wide", new PreparedImage(new byte[] {1}, "image/png", 2049, 10, 1)),
         image("heavy", new PreparedImage(new byte[25_000_001], "image/jpeg", 100, 100, 1))));
@@ -279,22 +279,24 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void titanMultimodalAcceptsItsOwnOutputLengthsOnly() {
+  void titanMultimodalAcceptsItsOwnOutputLengthsOnly() {
     for (int dimension : Arrays.asList(256, 384, 1024)) {
       BedrockClientConfig.from(spec(TITAN_MULTIMODAL, dimension, EmbeddingClient.TEXT_AND_IMAGE), props,
           BedrockModelFamily.TITAN_EMBED_IMAGE_V1);
     }
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> BedrockClientConfig.from(
-        spec(TITAN_MULTIMODAL, 512, EmbeddingClient.TEXT_AND_IMAGE), props, BedrockModelFamily.TITAN_EMBED_IMAGE_V1));
+    EmbeddingModelSpec spec = spec(TITAN_MULTIMODAL, 512, EmbeddingClient.TEXT_AND_IMAGE);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> BedrockClientConfig.from(spec, props, BedrockModelFamily.TITAN_EMBED_IMAGE_V1));
     assertEquals("hoodie.unstructured.embedding.model.br.dimensions=512 is not an output dimension TITAN_EMBED_IMAGE_V1 supports: "
         + "[256, 384, 1024]", refused.getMessage());
   }
 
   @Test
-  public void titanMultimodalRefusesAnImageLongSideBeyondItsLimitOnlyWhenImagesAreDeclared() {
+  void titanMultimodalRefusesAnImageLongSideBeyondItsLimitOnlyWhenImagesAreDeclared() {
     props.setProperty(EmbeddingTableConfig.COMPUTE_IMAGE_LONG_SIDE.key(), "2049");
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> BedrockClientConfig.from(
-        spec(TITAN_MULTIMODAL, 1024, EmbeddingClient.TEXT_AND_IMAGE), props, BedrockModelFamily.TITAN_EMBED_IMAGE_V1));
+    EmbeddingModelSpec spec = spec(TITAN_MULTIMODAL, 1024, EmbeddingClient.TEXT_AND_IMAGE);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> BedrockClientConfig.from(spec, props, BedrockModelFamily.TITAN_EMBED_IMAGE_V1));
     assertEquals(EmbeddingTableConfig.COMPUTE_IMAGE_LONG_SIDE.key() + "=2049 resizes images beyond the 2048 pixels per side "
         + "TITAN_EMBED_IMAGE_V1 accepts, and model br declares image (hoodie.unstructured.embedding.model.br.modalities); set it "
         + "to at most 2048", refused.getMessage());
@@ -305,14 +307,14 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void titanMultimodalClientInitRefusesAWrongDimensionAsConfiguration() {
+  void titanMultimodalClientInitRefusesAWrongDimensionAsConfiguration() {
     EmbeddingClientConfigException refused = assertThrows(EmbeddingClientConfigException.class,
         () -> client(BedrockModelFamily.TITAN_EMBED_IMAGE_V1, TITAN_MULTIMODAL, 1536));
     assertTrue(refused.getMessage().contains("[256, 384, 1024]"), refused.getMessage());
   }
 
   @Test
-  public void firstCallOfAFailedPreparationAndOneRejectedImageIsPermanentNotConfiguration() throws Exception {
+  void firstCallOfAFailedPreparationAndOneRejectedImageIsPermanentNotConfiguration() throws InterruptedException {
     // one input reached Bedrock: its rejection cannot tell the row from the binding, so it stays a row outcome
     script.add(BedrockReply.error(400, "ValidationException", "Malformed input image", null));
     PreparedImageSupplier refused = () -> {
@@ -329,20 +331,21 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void firstCallWhoseEverySentImageIsRejectedFailsAsConfiguration() {
+  void firstCallWhoseEverySentImageIsRejectedFailsAsConfiguration() {
     for (int i = 0; i < 3; i++) {
       script.add(BedrockReply.error(400, "ValidationException", "The provided model identifier is invalid", null));
     }
     BedrockEmbeddingClient client = client(BedrockModelFamily.COHERE_EMBED_V4, COHERE, 256);
-    EmbeddingClientConfigException refused = assertThrows(EmbeddingClientConfigException.class, () -> client.embed(Arrays.asList(
+    List<EmbeddingInput> inputs = Arrays.asList(
         image("a", new PreparedImage(new byte[] {1}, "image/jpeg", 1, 1, 1)),
-        image("b", new PreparedImage(new byte[] {2}, "image/jpeg", 1, 1, 1)))));
+        image("b", new PreparedImage(new byte[] {2}, "image/jpeg", 1, 1, 1)));
+    EmbeddingClientConfigException refused = assertThrows(EmbeddingClientConfigException.class, () -> client.embed(inputs));
     assertTrue(refused.getMessage().contains("2 input(s) rejected"), refused.getMessage());
     assertEquals(Arrays.asList(2, 1, 1), imageCounts(), "the packed request, then each image alone");
   }
 
   @Test
-  public void throttledTextsBesideARejectedImageStayRetryable() throws Exception {
+  void throttledTextsBesideARejectedImageStayRetryable() throws InterruptedException {
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + ProviderClientSettings.RETRY_MAX_ATTEMPTS_SUFFIX, "3");
     for (int i = 0; i < 3; i++) {
       script.add(BedrockReply.error(429, "ThrottlingException", "Too many requests", null));
@@ -357,7 +360,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void imagesAfterAnOpenOutageAreRetryableAndNeverPrepared() throws Exception {
+  void imagesAfterAnOpenOutageAreRetryableAndNeverPrepared() throws InterruptedException {
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + ProviderClientSettings.REQUEST_MAX_INPUTS_SUFFIX, "1");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + ProviderClientSettings.OUTAGE_CONSECUTIVE_FAILURES_SUFFIX, "1");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + ALIAS + ProviderClientSettings.RETRY_MAX_ATTEMPTS_SUFFIX, "3");
@@ -380,7 +383,7 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void coherePayloadCountsTheEnvelopeAndEachUrisQuotesAndSeparator() throws Exception {
+  void coherePayloadCountsTheEnvelopeAndEachUrisQuotesAndSeparator() throws InterruptedException {
     // four data URIs of 4,999,999 characters each (3,749,982-byte images, under the 5 MB image cap) sum to 19,999,996: within
     // 20,000,000 by their lengths alone, over it once the JSON envelope and each URI's quotes and separator are counted
     long prefix = "data:image/jpeg;base64,".length();
@@ -397,10 +400,11 @@ public class TestBedrockImageRequests {
   }
 
   @Test
-  public void titanMultimodalRefusesAChunkSizeBeyondItsTextTokensOnlyWhenTextIsDeclared() {
+  void titanMultimodalRefusesAChunkSizeBeyondItsTextTokensOnlyWhenTextIsDeclared() {
     props.setProperty(EmbeddingTableConfig.CHUNK_MAX_TOKENS.key(), "257");
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> BedrockClientConfig.from(
-        spec(TITAN_MULTIMODAL, 1024, EmbeddingClient.TEXT_AND_IMAGE), props, BedrockModelFamily.TITAN_EMBED_IMAGE_V1));
+    EmbeddingModelSpec spec = spec(TITAN_MULTIMODAL, 1024, EmbeddingClient.TEXT_AND_IMAGE);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> BedrockClientConfig.from(spec, props, BedrockModelFamily.TITAN_EMBED_IMAGE_V1));
     assertEquals(EmbeddingTableConfig.CHUNK_MAX_TOKENS.key() + "=257 cuts text chunks beyond the 256 text tokens "
         + "TITAN_EMBED_IMAGE_V1 accepts, and model br declares text (hoodie.unstructured.embedding.model.br.modalities); set it "
         + "to at most 256", refused.getMessage());

@@ -75,7 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * version of the object changes nothing.
  */
 @Tag("functional")
-public class TestSpeechEmbeddingRound extends EmbeddingRoundTestBase {
+class TestSpeechEmbeddingRound extends EmbeddingRoundTestBase {
 
   /** Spark 3.5's Parquet caps inline values at 80 KiB: the clip is stored out of line, its frames inline. */
   private static final long VIDEO_INLINE_MAX_BYTES = 80L * 1024;
@@ -128,7 +128,7 @@ public class TestSpeechEmbeddingRound extends EmbeddingRoundTestBase {
   @ParameterizedTest(name = "{0}, {1}")
   @CsvSource({"COPY_ON_WRITE, prep_only", "COPY_ON_WRITE, prep_and_compute",
       "MERGE_ON_READ, prep_only", "MERGE_ON_READ, prep_and_compute"})
-  public void videoFramesAndSpeechBecomeRowsInOneCommit(HoodieTableType tableType, String mode) throws Exception {
+  void videoFramesAndSpeechBecomeRowsInOneCommit(HoodieTableType tableType, String mode) throws Exception {
     FixtureFile video = object("videos/speech.mp4", Files.readAllBytes(CLIP));
     announce(video);
     TypedProperties props = speechProps(mode);
@@ -160,6 +160,28 @@ public class TestSpeechEmbeddingRound extends EmbeddingRoundTestBase {
     }
     assertEquals(expectedKeys, rows.keySet());
 
+    checkSpeechRows(video, speech, rows, mode);
+    for (int k = 0; k < frames.size(); k++) {
+      Row row = rows.get(key(video, EmbeddingTableSchema.MODALITY_IMAGE, k));
+      assertNull(row.getAs(EmbeddingTableSchema.PREPARED_TEXT_CHUNK));
+      scala.collection.Map<String, String> aux = row.getAs(EmbeddingTableSchema.AUX);
+      assertEquals(String.valueOf(k), aux.apply(EmbeddingTableSchema.AUX_FRAME_INDEX));
+      if (!EmbeddingTableConfig.MODE_PREP_ONLY.equals(mode)) {
+        assertEquals(EmbeddingStreamers.MODEL_DIMENSIONS, vector(row).length, "frame " + k + " is embedded");
+      }
+    }
+
+    // the same version announced again (same modification time and size): the same keys and values, no new rows
+    List<String> before = describeByContent(rows);
+    Version version = versionOf(video);
+    announce(video);
+    touch(video, Instant.ofEpochMilli(version.modificationTime));
+    Round rerun = EmbeddingStreamers.round(spark(), props, cfg -> cfg.tableType = tableType.name());
+    assertEquals(1, rerun.getCompleted().size(), rerun.toString());
+    assertEquals(before, describeByContent(rows(table())));
+  }
+
+  private void checkSpeechRows(FixtureFile video, List<Chunk> speech, Map<String, Row> rows, String mode) {
     long previousStart = -1;
     for (int k = 0; k < speech.size(); k++) {
       Chunk chunk = speech.get(k);
@@ -187,24 +209,6 @@ public class TestSpeechEmbeddingRound extends EmbeddingRoundTestBase {
             "speech chunk " + k);
       }
     }
-    for (int k = 0; k < frames.size(); k++) {
-      Row row = rows.get(key(video, EmbeddingTableSchema.MODALITY_IMAGE, k));
-      assertNull(row.getAs(EmbeddingTableSchema.PREPARED_TEXT_CHUNK));
-      scala.collection.Map<String, String> aux = row.getAs(EmbeddingTableSchema.AUX);
-      assertEquals(String.valueOf(k), aux.apply(EmbeddingTableSchema.AUX_FRAME_INDEX));
-      if (!EmbeddingTableConfig.MODE_PREP_ONLY.equals(mode)) {
-        assertEquals(EmbeddingStreamers.MODEL_DIMENSIONS, vector(row).length, "frame " + k + " is embedded");
-      }
-    }
-
-    // the same version announced again (same modification time and size): the same keys and values, no new rows
-    List<String> before = describeByContent(rows);
-    Version version = versionOf(video);
-    announce(video);
-    touch(video, Instant.ofEpochMilli(version.modificationTime));
-    Round rerun = EmbeddingStreamers.round(spark(), props, cfg -> cfg.tableType = tableType.name());
-    assertEquals(1, rerun.getCompleted().size(), rerun.toString());
-    assertEquals(before, describeByContent(rows(table())));
   }
 
   /**
@@ -215,7 +219,7 @@ public class TestSpeechEmbeddingRound extends EmbeddingRoundTestBase {
   @ParameterizedTest(name = "{0}, {1}")
   @CsvSource({"COPY_ON_WRITE, prep_only", "COPY_ON_WRITE, prep_and_compute",
       "MERGE_ON_READ, prep_only", "MERGE_ON_READ, prep_and_compute"})
-  public void anAudioOnlyFileWritesItsSpeechThenFailsForItsMissingVideoStream(HoodieTableType tableType, String mode)
+  void anAudioOnlyFileWritesItsSpeechThenFailsForItsMissingVideoStream(HoodieTableType tableType, String mode)
       throws Exception {
     FixtureFile video = object("videos/speech.mp4", Files.readAllBytes(CLIP));
     FixtureFile audioOnly = object("videos/audio-only.mp4", Files.readAllBytes(AUDIO_ONLY));

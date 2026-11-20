@@ -43,10 +43,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@value VideoFramePreprocessor#FFMPEG_JARS_SETTING} and the segment source key, and that a round holding a PDF then a video
  * fails after the PDF's rows with no quarantine entry for the video (a configuration error, never a FAILED file).
  */
-public class TestAudioFfmpegAbsent {
+class TestAudioFfmpegAbsent {
 
   @Test
-  public void defaultAudioSegmentSourceNeedsFfmpegOnlyForAVideosSpeech() throws Exception {
+  void defaultAudioSegmentSourceNeedsFfmpegOnlyForAVideosSpeech() throws Exception {
     String report;
     Thread thread = Thread.currentThread();
     ClassLoader previous = thread.getContextClassLoader();

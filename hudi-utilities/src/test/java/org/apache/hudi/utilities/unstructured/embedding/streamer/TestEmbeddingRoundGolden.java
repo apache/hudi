@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * holds only the columns compared here.
  */
 @Tag("functional")
-public class TestEmbeddingRoundGolden extends EmbeddingRoundTestBase {
+class TestEmbeddingRoundGolden extends EmbeddingRoundTestBase {
 
   private static final String GOLDEN = "/unstructured/embedding/golden/";
   /** How the golden's corpus named its objects. */
@@ -92,7 +92,7 @@ public class TestEmbeddingRoundGolden extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void roundOverEventsSourceMatchesGolden() throws Exception {
+  void roundOverEventsSourceMatchesGolden() throws Exception {
     List<FixtureFile> files = new ArrayList<>();
     List<String> manifest = new ArrayList<>();
     Map<String, String> goldenShaByFile = new TreeMap<>();

@@ -34,17 +34,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * child's outcome of every scenario test is asserted here, its failures and the tail of its log in the message.
  */
 @Tag("functional")
-public class TestJcodecVideoRoundWithoutFfmpeg {
+class TestJcodecVideoRoundWithoutFfmpeg {
 
   /** The JCodec video round on both table types and in both modes: 4 cases. */
   @Test
-  public void jcodecVideoRoundOnBothTableTypesAndModes(@TempDir Path workDir) throws Exception {
+  void jcodecVideoRoundOnBothTableTypesAndModes(@TempDir Path workDir) throws Exception {
     assertAllSucceed(ScenarioJvm.run(workDir, JcodecVideoRoundScenarios.class.getName(), JcodecVideoRoundScenarios.JCODEC_ROUND), 4);
   }
 
   /** The harness itself: a round without video in the child JVM, which also checks FFmpeg is absent there. */
   @Test
-  public void roundWithoutVideoRunsInTheChildJvm(@TempDir Path workDir) throws Exception {
+  void roundWithoutVideoRunsInTheChildJvm(@TempDir Path workDir) throws Exception {
     assertAllSucceed(ScenarioJvm.run(workDir, JcodecVideoRoundScenarios.class.getName(), JcodecVideoRoundScenarios.SANITY), 1);
   }
 

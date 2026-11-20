@@ -65,7 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * images. A file that is not an image is quarantined at prep; a text-only provider refuses image rows into the error table.
  */
 @Tag("functional")
-public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
+class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
 
   /** Objects up to this size are inline in their source row; the large image is above it. */
   private static final long IMAGE_INLINE_MAX_BYTES = 1024;
@@ -89,7 +89,7 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
   @ParameterizedTest(name = "{0}, {1}")
   @CsvSource({"COPY_ON_WRITE, prep_only", "COPY_ON_WRITE, prep_and_compute",
       "MERGE_ON_READ, prep_only", "MERGE_ON_READ, prep_and_compute"})
-  public void imageFilesBecomeOneImageRowEachInOneCommit(HoodieTableType tableType, String mode) throws Exception {
+  void imageFilesBecomeOneImageRowEachInOneCommit(HoodieTableType tableType, String mode) throws Exception {
     assertTrue(small.bytes.length <= IMAGE_INLINE_MAX_BYTES, "small.png is inline: " + small.bytes.length);
     assertTrue(large.bytes.length > IMAGE_INLINE_MAX_BYTES, "large.jpg is above the inline threshold: " + large.bytes.length);
     announce(small, large, notAnImage);
@@ -116,18 +116,7 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
     assertImageRow(smallRow, small, 8, 6, "png");
     assertImageRow(largeRow, large, 320, 200, "jpeg");
 
-    Row smallImage = smallRow.getAs(EmbeddingTableSchema.PREPARED_IMAGE);
-    assertEquals(HoodieSchema.Blob.INLINE, smallImage.getAs(HoodieSchema.Blob.TYPE));
-    assertArrayEquals(small.bytes, (byte[]) smallImage.getAs(HoodieSchema.Blob.INLINE_DATA_FIELD));
-    Row largeImage = largeRow.getAs(EmbeddingTableSchema.PREPARED_IMAGE);
-    assertEquals(HoodieSchema.Blob.OUT_OF_LINE, largeImage.getAs(HoodieSchema.Blob.TYPE));
-    Row reference = largeImage.getAs(HoodieSchema.Blob.EXTERNAL_REFERENCE);
-    assertEquals(large.sourcePath, reference.getAs(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH));
-    assertEquals(Boolean.FALSE, reference.getAs(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED),
-        "an unmanaged reference to the source object: the embedding table stores no copy");
-    // both stored forms read back as the source's bytes
-    assertArrayEquals(small.bytes, read(smallImage));
-    assertArrayEquals(large.bytes, read(largeImage));
+    assertStoredForms(smallRow, largeRow);
 
     if (EmbeddingTableConfig.MODE_PREP_ONLY.equals(mode)) {
       for (Row row : rows.values()) {
@@ -155,8 +144,24 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
     assertEquals(before, describeImages(rows(table())));
   }
 
+  /** The small image is stored inline, the large one as an unmanaged reference to its source; both read back as the source. */
+  private void assertStoredForms(Row smallRow, Row largeRow) throws Exception {
+    Row smallImage = smallRow.getAs(EmbeddingTableSchema.PREPARED_IMAGE);
+    assertEquals(HoodieSchema.Blob.INLINE, smallImage.getAs(HoodieSchema.Blob.TYPE));
+    assertArrayEquals(small.bytes, (byte[]) smallImage.getAs(HoodieSchema.Blob.INLINE_DATA_FIELD));
+    Row largeImage = largeRow.getAs(EmbeddingTableSchema.PREPARED_IMAGE);
+    assertEquals(HoodieSchema.Blob.OUT_OF_LINE, largeImage.getAs(HoodieSchema.Blob.TYPE));
+    Row reference = largeImage.getAs(HoodieSchema.Blob.EXTERNAL_REFERENCE);
+    assertEquals(large.sourcePath, reference.getAs(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH));
+    assertEquals(Boolean.FALSE, reference.getAs(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED),
+        "an unmanaged reference to the source object: the embedding table stores no copy");
+    // both stored forms read back as the source's bytes
+    assertArrayEquals(small.bytes, read(smallImage));
+    assertArrayEquals(large.bytes, read(largeImage));
+  }
+
   @Test
-  public void textOnlyDeclarationRefusesImageRowsAndEmbedsTextRows() throws Exception {
+  void textOnlyDeclarationRefusesImageRowsAndEmbedsTextRows() throws Exception {
     FixtureFile text = text("notes", "alpha", "beta");
     announce(small, text);
     TypedProperties props = imageProps(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, DummyEmbeddingClient.PROVIDER);
@@ -183,7 +188,7 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
 
   /** An image-only declaration meets text rows: they get no call, a NULL vector and an error record; the image is embedded. */
   @Test
-  public void imageOnlyDeclarationRefusesTextRowsAndEmbedsImageRows() throws Exception {
+  void imageOnlyDeclarationRefusesTextRowsAndEmbedsImageRows() throws Exception {
     FixtureFile text = text("notes", "alpha", "beta");
     announce(small, text);
     TypedProperties props = imageProps(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, DummyMultimodalEmbeddingClient.PROVIDER);
@@ -214,7 +219,7 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
    * written, rather than a round failing on every sync once a batch holds such a row.
    */
   @Test
-  public void textOnlyDeclarationWithImageContentIsRefusedAtStartWhenTheErrorTableIsOff() throws Exception {
+  void textOnlyDeclarationWithImageContentIsRefusedAtStartWhenTheErrorTableIsOff() throws Exception {
     FixtureFile text = text("notes", "alpha", "beta");
     announce(small, text);
     TypedProperties props = imageProps(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, DummyEmbeddingClient.PROVIDER);
@@ -232,7 +237,7 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
 
   /** The same job with only the text extension prepared starts and embeds its text rows. */
   @Test
-  public void textOnlyDeclarationWithTextContentOnlyStartsWhenTheErrorTableIsOff() throws Exception {
+  void textOnlyDeclarationWithTextContentOnlyStartsWhenTheErrorTableIsOff() throws Exception {
     FixtureFile text = text("notes", "alpha", "beta");
     announce(text);
     TypedProperties props = imageProps(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, DummyEmbeddingClient.PROVIDER);
@@ -255,7 +260,7 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
    * (never the whole-call rejection of a provider that refuses the request).
    */
   @Test
-  public void imagesOfTwoFilesFailingComputeAlikeAreRowErrorsAndTheRoundCommits() throws Exception {
+  void imagesOfTwoFilesFailingComputeAlikeAreRowErrorsAndTheRoundCommits() throws Exception {
     byte[] first = ImageFixtures.image("png", 40, 30);
     byte[] second = ImageFixtures.image("png", 30, 40);
     FixtureFile cutA = object("images/cut-a.png", Arrays.copyOf(first, first.length / 2));
@@ -284,7 +289,7 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
 
   /** A bad compute image setting is refused at round start, before prep writes anything. */
   @Test
-  public void badComputeImageSettingIsRefusedBeforeAnyWrite() throws Exception {
+  void badComputeImageSettingIsRefusedBeforeAnyWrite() throws Exception {
     announce(small);
     TypedProperties props = imageProps(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, DummyMultimodalEmbeddingClient.PROVIDER);
     props.setProperty(EmbeddingTableConfig.COMPUTE_IMAGE_ENCODING.key(), "webp");

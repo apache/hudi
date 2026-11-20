@@ -52,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * are the codec matrix's (and their remuxes in {@code /video/truncation/}), at 90% and 50% of their bytes; every whole clip
  * decodes, including ones whose streams all start late and an AVI whose RIFF size was never patched.
  */
-public class TestTruncatedVideoContainers {
+class TestTruncatedVideoContainers {
 
   private static final String[] RESOURCES = {"/video/codec-matrix/", "/video/truncation/"};
 
@@ -83,7 +83,7 @@ public class TestTruncatedVideoContainers {
       "c12-av1-opus.webm, 50, the file is truncated",
       "c18-mpeg4-mp3.avi, 90, the file is truncated",
       "c18-mpeg4-mp3.avi, 50, the file is truncated"})
-  public void videoCutMidStreamIsAContentFailure(String clip, int percent, String reason) throws IOException {
+  void videoCutMidStreamIsAContentFailure(String clip, int percent, String reason) throws IOException {
     byte[] whole = clip(clip);
     Path cut = Files.write(dir.resolve(clip), Arrays.copyOf(whole, whole.length * percent / 100));
     String extension = clip.substring(clip.lastIndexOf('.') + 1);
@@ -99,7 +99,7 @@ public class TestTruncatedVideoContainers {
   @CsvSource({"c01-h264-aac.mp4", "c08-h264-mp3.mkv", "c06-hevc-opus.mkv", "c09-vp9-none.mkv", "c10-vp9-opus.webm",
       "c12-av1-opus.webm", "c13-h264-aac.mov", "c14-hevc-aac.mov", "c18-mpeg4-mp3.avi", "t02-h264-aac-video-delayed.mp4",
       "c01-offset-1500ms.mp4", "c08-offset-1500ms.mkv", "c01-faststart.mp4", "c13-faststart.mov", "c18-unpatched-riff.avi"})
-  public void wholeClipDecodesEveryFrame(String clip) throws IOException {
+  void wholeClipDecodesEveryFrame(String clip) throws IOException {
     Path file = Files.write(dir.resolve(clip), clip(clip));
     List<Long> frames = new ArrayList<>();
     extract(file, clip.substring(clip.lastIndexOf('.') + 1), frames);

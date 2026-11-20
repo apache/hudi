@@ -137,6 +137,7 @@ public class JdkNamedSpyWriterSpi extends ImageWriterSpi {
 
     @Override
     public void write(IIOMetadata streamMetadata, IIOImage image, ImageWriteParam param) {
+      // writes nothing: the spy only records whether it was disposed
     }
   }
 }

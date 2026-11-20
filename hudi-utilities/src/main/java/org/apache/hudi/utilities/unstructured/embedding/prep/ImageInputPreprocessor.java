@@ -52,7 +52,7 @@ import java.util.Map;
 import java.util.TreeSet;
 
 /**
- * Data prep of a standalone image file, {@value #NAME} ("image -> image (no resize)"): it validates the header WITHOUT decoding a
+ * Data prep of a standalone image file, {@value #PREPROCESSOR_NAME} ("image -> image (no resize)"): it validates the header WITHOUT decoding a
  * pixel and emits exactly ONE chunk, {@code modality=image}, no text, whose payload is the file's SOURCE bytes, unchanged
  * ({@link Chunk.Builder#sourcePayload}): the framework writes the source row's own blob value into the row's
  * {@code prepared_image} (its inline bytes, or its reference to the object), and compute resizes the image in memory before the
@@ -78,9 +78,9 @@ import java.util.TreeSet;
  */
 public class ImageInputPreprocessor implements FilePreprocessor {
 
-  public static final String NAME = "image-input-v1";
+  public static final String PREPROCESSOR_NAME = "image-input-v1";
   /** {@link EmbeddingTableSchema#AUX_INPUT_LOGIC} of a stored standalone image: its source bytes, no decode, no resize. */
-  public static final String INPUT_LOGIC = NAME;
+  public static final String INPUT_LOGIC = PREPROCESSOR_NAME;
   public static final String AUX_WIDTH = "width";
   public static final String AUX_HEIGHT = "height";
   public static final String AUX_FORMAT = "format";
@@ -99,7 +99,7 @@ public class ImageInputPreprocessor implements FilePreprocessor {
 
   @Override
   public String name() {
-    return NAME;
+    return PREPROCESSOR_NAME;
   }
 
   @Override
