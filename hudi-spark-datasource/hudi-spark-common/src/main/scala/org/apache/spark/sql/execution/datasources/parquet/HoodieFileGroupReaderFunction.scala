@@ -226,7 +226,8 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
       case _ =>
         readBaseFile(file, state, conf)
     }
-    CloseableIteratorListener.addListener(iter)
+    // Release each exhausted file reader before opening another file in the task's split.
+    CloseableIteratorListener.addListenerReleasedOnExhaustion(iter)
   }
 
   private def readBaseFile(file: PartitionedFile,
@@ -330,7 +331,7 @@ private[parquet] object HoodieFileGroupReaderFunction {
 
   private def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: ClosableIterator[InternalRow],
                                                           mappingFunction: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
-    CloseableIteratorListener.addListener(closeableFileGroupRecordIterator)
+    // Closed through this mapping iterator by the per-file releasing listener.
     new Iterator[InternalRow] with Closeable {
       override def hasNext: Boolean = closeableFileGroupRecordIterator.hasNext
 
