@@ -1327,6 +1327,55 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
+  /**
+   * Building the record index of an existing table bulk inserts the records of every file group in one commit. Each
+   * record must land in the file group it hashes to, or lookups miss it.
+   */
+  @Test
+  public void testRecordIndexBuiltForExistingTableUsesEveryFileGroup() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
+
+    HoodieWriteConfig writeConfigWithoutRecordIndex = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .build();
+    List<HoodieRecord> records;
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfigWithoutRecordIndex)) {
+      String instantTime = client.startCommit();
+      records = dataGen.generateInserts(instantTime, 120);
+      List<WriteStatus> writeStatuses = client.insert(records, instantTime);
+      client.commit(instantTime, writeStatuses);
+      assertNoWriteErrors(writeStatuses);
+    }
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+
+    HoodieWriteConfig writeConfigWithRecordIndex = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableGlobalRecordLevelIndex(true)
+            .withRecordIndexFileGroupCount(3, 3)
+            .build())
+        .build();
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfigWithRecordIndex)) {
+      // the next commit builds the record index from the records the table already has
+      String instantTime = client.startCommit();
+      List<WriteStatus> writeStatuses = client.insert(dataGen.generateInserts(instantTime, 1), instantTime);
+      client.commit(instantTime, writeStatuses);
+      assertNoWriteErrors(writeStatuses);
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+      HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client);
+      assertEquals(3, metadataReader.getNumFileGroupsForPartition(RECORD_INDEX));
+      List<String> recordKeys = records.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+      List<Pair<String, HoodieRecordGlobalLocation>> recordLocations =
+          metadataReader.readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys)).collectAsList();
+      assertEquals(new HashSet<>(recordKeys),
+          recordLocations.stream().map(Pair::getLeft).collect(Collectors.toSet()));
+    }
+  }
+
   @Test
   public void testMetadataReadRoundTrip() throws Exception {
     this.tableType = COPY_ON_WRITE;

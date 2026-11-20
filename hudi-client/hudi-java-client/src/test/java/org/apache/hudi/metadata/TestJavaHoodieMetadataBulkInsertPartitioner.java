@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.junit.jupiter.api.Test;
 
@@ -48,7 +49,7 @@ class TestJavaHoodieMetadataBulkInsertPartitioner {
     // partitioner's UTF-8 comparator must get right so HFile forward-only seeks stay valid.
     String bmpPrivateUse = new String(Character.toChars(0xE000));
     String supplementary = new String(Character.toChars(0x20000));
-    // All records share one file group so the partitioner's single-group assumption holds.
+    // All records share one file group, so the order is the record key order.
     String fileId = "files-0000";
 
     // Shuffled input mixing both prefixes plus ascii suffixes.
@@ -96,5 +97,39 @@ class TestJavaHoodieMetadataBulkInsertPartitioner {
     }
     assertTrue(lastBmpIndex < firstSupplementaryIndex,
         "All U+E000-prefixed keys should sort before U+20000-prefixed keys in UTF-8 order");
+  }
+
+  @Test
+  void repartitionRecordsGroupsRecordsByFileGroup() {
+    // Records hash to different file groups of a metadata partition; each file group's records must form one sorted
+    // run so the bulk insert writes them into their own file group.
+    List<Pair<String, String>> inputs = Arrays.asList(
+        Pair.of("record-index-0002-0", "a"),
+        Pair.of("record-index-0000-0", "c"),
+        Pair.of("record-index-0001-0", "b"),
+        Pair.of("record-index-0000-0", "a"),
+        Pair.of("record-index-0002-0", "b"),
+        Pair.of("record-index-0001-0", "a"));
+    List<HoodieRecord<EmptyHoodieRecordPayload>> records = new ArrayList<>();
+    for (Pair<String, String> input : inputs) {
+      HoodieRecord<EmptyHoodieRecordPayload> record =
+          new HoodieAvroRecord<>(new HoodieKey(input.getRight(), ""), new EmptyHoodieRecordPayload());
+      record.unseal();
+      record.setCurrentLocation(new HoodieRecordLocation("001", input.getLeft()));
+      record.seal();
+      records.add(record);
+    }
+
+    List<HoodieRecord<EmptyHoodieRecordPayload>> sorted =
+        new JavaHoodieMetadataBulkInsertPartitioner<EmptyHoodieRecordPayload>().repartitionRecords(records, 1);
+
+    List<String> actual = new ArrayList<>();
+    for (HoodieRecord<EmptyHoodieRecordPayload> record : sorted) {
+      actual.add(JavaHoodieMetadataBulkInsertPartitioner.getFileIdPrefix(record) + "/" + record.getRecordKey());
+    }
+    assertEquals(Arrays.asList(
+        "record-index-0000/a", "record-index-0000/c",
+        "record-index-0001/a", "record-index-0001/b",
+        "record-index-0002/a", "record-index-0002/b"), actual);
   }
 }
