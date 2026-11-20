@@ -139,6 +139,10 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
 
     List<HoodieInstant> completedInstants = getCompletedInstantForTs(instants, Arrays.asList("05", "08", "09"));
     assertEquals(completedInstants, timeline.getInstants());
+
+    HoodieArchivedTimeline factoryTimeline =
+        TimelineLayout.TIMELINE_LAYOUT_V1.getTimelineFactory().createArchivedTimeline(metaClient, "05", "09");
+    assertEquals(completedInstants, factoryTimeline.getInstants());
   }
 
   @Test
@@ -153,6 +157,12 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
 
     // All the completed instants should be returned
     assertEquals(instants.stream().filter(HoodieInstant::isCompleted).collect(Collectors.toList()), timeline.getInstants());
+
+    // The range spans instants 01 and 11, which are archived without ever completing; the factory must
+    // not surface them either, otherwise a failed write reads as a committed one.
+    HoodieArchivedTimeline factoryTimeline =
+        TimelineLayout.TIMELINE_LAYOUT_V1.getTimelineFactory().createArchivedTimeline(metaClient, "01", "11");
+    assertEquals(instants.stream().filter(HoodieInstant::isCompleted).collect(Collectors.toList()), factoryTimeline.getInstants());
   }
 
   @Test

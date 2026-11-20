@@ -112,6 +112,18 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   }
 
   /**
+   * Loads completed instants from startTs(inclusive) to endTs(inclusive).
+   */
+  public ArchivedTimelineV2(HoodieTableMetaClient metaClient, String startTs, String endTs) {
+    this.metaClient = metaClient;
+    setInstants(loadInstants(new HoodieArchivedTimeline.ClosedClosedTimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA));
+    this.cursorInstant = startTs;
+    // multiple casts will make this lambda serializable -
+    // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
+    this.instantReader = this;
+  }
+
+  /**
    * For serialization and de-serialization only.
    *
    * @deprecated

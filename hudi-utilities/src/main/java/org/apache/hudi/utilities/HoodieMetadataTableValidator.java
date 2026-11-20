@@ -1517,7 +1517,7 @@ public class HoodieMetadataTableValidator implements Serializable {
               + "metadata table. File system-based listing: %d & MDT-based listing: %d. %s",
           fileSliceListFromFS.size(),
           fileSliceListFromMetadataTable.size(),
-          computeDiffSummary(fileSliceListFromMetadataTable, fileSliceListFromFS, metaClient, cfg.logDetailMaxLength));
+          computeDiffSummarySafely(fileSliceListFromMetadataTable, fileSliceListFromFS, metaClient, cfg.logDetailMaxLength));
       mismatch = true;
     } else if (!fileSliceListFromMetadataTable.equals(fileSliceListFromFS)) {
       // In-memory cache for the set of committed files of commits of interest
@@ -1567,6 +1567,21 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
+  /**
+   * Computes the diff summary for a detected mismatch, degrading to a placeholder if the computation
+   * itself fails. The summary is only a diagnostic, so it must never be able to mask the mismatch it
+   * is describing by propagating out of the enclosing validation.
+   */
+  static String computeDiffSummarySafely(List<FileSlice> fileSliceListFromMetadataTable, List<FileSlice> fileSliceListFromFS,
+                                         HoodieTableMetaClient metaClient, int logDetailMaxLength) {
+    try {
+      return computeDiffSummary(fileSliceListFromMetadataTable, fileSliceListFromFS, metaClient, logDetailMaxLength);
+    } catch (Exception e) {
+      log.warn("Failed to compute the file slice diff summary; reporting the mismatch without it", e);
+      return "Diff summary unavailable: " + e;
+    }
+  }
+
   static String computeDiffSummary(List<FileSlice> fileSliceListFromMetadataTable, List<FileSlice> fileSliceListFromFS,
                                     HoodieTableMetaClient metaClient, int logDetailMaxLength) {
     Set<HoodieFileGroupId> fileGroupIdsFromFS = fileSliceListFromFS.stream()
@@ -1587,12 +1602,10 @@ public class HoodieMetadataTableValidator implements Serializable {
       if (!nonActiveInstantTimes.isEmpty()) {
         String maxInstant = nonActiveInstantTimes.stream().max(Comparator.naturalOrder()).orElse(null);
         String minInstant = nonActiveInstantTimes.stream().min(Comparator.naturalOrder()).orElse(null);
-        Set<String> archivedInstants = metaClient.getArchivedTimeline()
-            .findInstantsInRange(minInstant, maxInstant)
+        Set<String> archivedInstants = metaClient.getArchivedTimeline(minInstant, maxInstant)
             .getInstantsAsStream()
             .map(HoodieInstant::requestedTime)
             .collect(Collectors.toSet());
-        // truncate start instant since range is not
         Set<String> missingCommits = nonActiveInstantTimes.stream().filter(instant -> !archivedInstants.contains(instant)).collect(Collectors.toSet());
         if (!missingCommits.isEmpty()) {
           log.warn("File slices in file system belong to missing commits: {}", String.join(",", missingCommits));
