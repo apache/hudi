@@ -100,7 +100,8 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
     }
   }
 
-  override protected def admissionParameters: Map[String, String] = parameters
+  override protected val admissionParameters: Map[String, String] =
+    DataSourceOptionsHelper.collectHoodieAndSparkHoodieConfs(sqlContext, parameters)
 
   override protected def admissionInitialOffset: HoodieSourceOffset = initialOffsets
 

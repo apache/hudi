@@ -118,7 +118,8 @@ object DataSourceReadOptions {
     .withDocumentation("Maximum completed write commits per streaming micro-batch. Must be a positive integer. "
       + "Unset means unbounded. AvailableNow pins its end offset and drains the backlog in capped batches; "
       + "Trigger.Once reads all available data. Clean and rollback actions do not count. Commits sharing a completion "
-      + "time cannot be split. This is not a row/byte limit and does not split snapshot fallback or recovery reads.")
+      + "time cannot be split. This is not a row/byte limit and does not split snapshot fallback or recovery reads. "
+      + "The cap also accepts hoodie.* or spark.hoodie.* SQLConf captured when the source is created; explicit reader options win.")
 
   val START_COMMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")

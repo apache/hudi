@@ -233,7 +233,7 @@ class DefaultSource extends RelationProvider
                             schema: Option[StructType],
                             providerName: String,
                             parameters: Map[String, String]): (String, StructType) = {
-    HoodieSourceAdmissionControl.readLimit(parameters)
+    HoodieSourceAdmissionControl.readLimit(DataSourceOptionsHelper.collectHoodieAndSparkHoodieConfs(sqlContext, parameters))
     val path = parameters.get("path")
     if (path.isEmpty || path.get == null) {
       throw new HoodieException(s"'path'  must be specified.")
@@ -251,7 +251,7 @@ class DefaultSource extends RelationProvider
                             schema: Option[StructType],
                             providerName: String,
                             parameters: Map[String, String]): Source = {
-    HoodieSourceAdmissionControl.readLimit(parameters)
+    HoodieSourceAdmissionControl.readLimit(DataSourceOptionsHelper.collectHoodieAndSparkHoodieConfs(sqlContext, parameters))
     val offsetRangeLimit = parameters.getOrElse(START_OFFSET.key(), START_OFFSET.defaultValue()) match {
       case offset if offset.equalsIgnoreCase("earliest") =>
         HoodieEarliestOffsetRangeLimit

@@ -45,8 +45,31 @@ when the commit cap is unset.
 ## Recovery integration
 
 Admission counts archived and active completed writes. Snapshot fallback and
-recovery reads are not split into capped reads. #20516 is an independent change:
-whichever PR lands second must test recovery at a capped intermediate end,
-including cleaned files and an unavailable snapshot. Recovery is not made safe
-merely by selecting a smaller offset. The combined recovery branch has not been
-tested here.
+recovery reads are not split into capped reads. The branch includes merged
+#20516. COW/MOR regressions for both offset versions pin a capped intermediate
+end before the latest write, reject logical reset under `FAIL`, and verify that
+snapshot recovery excludes later data. After real cleaning deletes old files,
+the recorded snapshot must fail with a retention error instead of silently
+reading the latest snapshot. Explicit skip recovery remains empty, and a
+caught-up reader resumes normal increments under `FAIL`.
+
+## CLI/Connect acceptance
+
+`source_throttling_acceptance.py` writes three upstream commits before running
+the real CLI. A cap of one must produce three downstream commits with exact rows.
+An unchanged restart adds no commit; a fourth input commit produces one more.
+Both COW/MOR targets use metadata enabled. Run with the candidate bundle:
+
+```sh
+PYTHONOPTIMIZE=1 python hudi-integ-test/spark-pipelines/source_throttling_acceptance.py \
+  --bundle /path/to/candidate-hudi-spark4.1-bundle.jar --table-type cow
+# Repeat with --table-type mor.
+```
+
+For SDP, set `spark.hoodie.datasource.read.streaming.max.commits.per.trigger`
+in pipeline configuration or flow SQLConf. Both bare `hoodie.*` and
+`spark.hoodie.*` settings are captured when the source is constructed; explicit
+reader options take precedence. Restart the source to change its cap. This
+avoids relying on explicit reader options that Spark 4.1 drops on graph-internal
+reads. Regression tests cover both prefixes, capture outside the SQLConf scope,
+explicit-option precedence and invalid configured limits.

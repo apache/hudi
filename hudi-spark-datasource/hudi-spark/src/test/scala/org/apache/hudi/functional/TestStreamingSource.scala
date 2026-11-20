@@ -102,6 +102,87 @@ class TestStreamingSource extends StreamTest with SparkAdapterSupport {
     }
   }
 
+  for (tableType <- Seq(COPY_ON_WRITE, MERGE_ON_READ); readVersion <- Seq("6", "8")) {
+    test(s"capped recovery keeps the recorded end and rejects cleaned snapshots: $tableType v$readVersion") {
+      withTempDir { dir =>
+        val tablePath = s"${dir.getCanonicalPath}/capped_recovery"
+        val options = commonOptions ++ Map(
+          TBL_NAME.key -> "capped_recovery", TABLE_TYPE.key -> tableType.name(), PARTITIONPATH_FIELD.key -> "",
+          "hoodie.clean.commits.retained" -> "2", "hoodie.clean.automatic" -> "true", "hoodie.clean.async" -> "false",
+          HoodieCompactionConfig.INLINE_COMPACT.key -> (tableType == MERGE_ON_READ).toString,
+          HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1")
+        def write(id: String, sequence: Int, operation: String = "upsert"): Unit = {
+          Seq((id, s"value$sequence", "10", f"$sequence%03d")).toDF(columns: _*)
+            .write.format("hudi").options(options).option("hoodie.datasource.write.operation", operation)
+            .mode(SaveMode.Append).save(tablePath)
+        }
+        def source(strategy: String = "FAIL"): org.apache.spark.sql.execution.streaming.Source = {
+          new org.apache.hudi.DefaultSource().createSource(spark.sqlContext,
+            s"${dir.getCanonicalPath}/checkpoint", None, "hudi", Map("path" -> tablePath,
+              STREAMING_READ_TABLE_VERSION.key -> readVersion,
+              DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key -> "1",
+              DataSourceReadOptions.INCREMENTAL_READ_SKIP_COMPACT.key -> "true",
+              DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key -> strategy))
+        }
+        write("1", 1)
+        val reader = source()
+        val saved = reader.getOffset.get
+        write("2", 2, "insert_overwrite_table")
+        write("3", 3)
+        val admission = reader.asInstanceOf[org.apache.spark.sql.connector.read.streaming.SupportsAdmissionControl]
+        val end = HoodieSourceOffset.fromJson(admission.latestOffset(saved, admission.getDefaultReadLimit).json())
+        assert(end.offsetCommitTime < HoodieSourceOffset(reader.getOffset.get).offsetCommitTime)
+        assert(intercept[org.apache.hudi.exception.HoodieException] {
+          batchIds(reader.getBatch(Some(saved), end))
+        }.getMessage.contains("logical reset"))
+        assert(batchIds(source("READ_UPTO_LATEST_COMMIT").getBatch(Some(saved), end)) == Seq("2"))
+        assert(batchIds(source("READ_LATEST").getBatch(Some(saved), end)).isEmpty)
+
+        (4 to 8).foreach(sequence => write("2", sequence))
+        val metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())).setBasePath(tablePath).build()
+        val cleans = metaClient.getActiveTimeline.getCleanerTimeline.filterCompletedInstants()
+        assert(cleans.getInstantsAsStream.anyMatch(i =>
+          org.apache.hudi.common.util.CleanerUtils.getCleanerMetadata(metaClient, i).getTotalFilesDeleted > 0))
+        val plan = source("READ_UPTO_LATEST_COMMIT").getBatch(Some(saved), end)
+        assert(plan.isStreaming, "Spark must be able to discard a previously committed batch plan")
+        assert(intercept[org.apache.hudi.exception.HoodieException] {
+          batchIds(plan)
+        }.getMessage.contains("recorded batch end is outside cleaner retention"))
+        assert(batchIds(source("READ_LATEST").getBatch(Some(saved), end)).isEmpty)
+        val caughtUp = source().getOffset.get
+        write("2", 9)
+        assert(batchIds(source().getBatch(Some(caughtUp), source().getOffset.get)) == Seq("2"))
+      }
+    }
+  }
+
+  test("streaming commit caps capture flow SQLConf and explicit options win") {
+    withTempDir { dir =>
+      val tablePath = s"${dir.getCanonicalPath}/flow_caps"
+      (1 to 3).foreach(i => addData(tablePath, Seq((i.toString, "value", "10", "001"))))
+      val key = DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key
+      for (version <- Seq("6", "8"); prefix <- Seq("", "spark.")) {
+        for (explicit <- Seq(false, true)) {
+          var reader: org.apache.spark.sql.execution.streaming.Source = null
+          withSQLConf(prefix + key -> "1") {
+            reader = new org.apache.hudi.DefaultSource().createSource(spark.sqlContext,
+              s"${dir.getCanonicalPath}/checkpoint-$version-$prefix-$explicit", None, "hudi",
+              Map("path" -> tablePath, STREAMING_READ_TABLE_VERSION.key -> version) ++
+                (if (explicit) Map(key -> "2") else Map.empty[String, String]))
+          }
+          val admission = reader.asInstanceOf[org.apache.spark.sql.connector.read.streaming.SupportsAdmissionControl]
+          val end = HoodieSourceOffset.fromJson(admission.latestOffset(null, admission.getDefaultReadLimit).json())
+          assert(batchIds(reader.getBatch(None, end)) == (if (explicit) Seq("1", "2") else Seq("1")))
+        }
+        withSQLConf(prefix + key -> "0") {
+          intercept[IllegalArgumentException] { spark.readStream.format("hudi").load(tablePath) }
+          assert(spark.readStream.format("hudi").option(key, "2").load(tablePath).isStreaming)
+        }
+      }
+    }
+  }
+
   for (mode <- Seq("BLOCK", "USE_TRANSITION_TIME"); skipCompact <- Seq(false, true)) {
     test(s"cap one drains V1 MOR with out-of-order compaction completion in $mode (skipCompact=$skipCompact)") {
       withTempDir { dir =>
