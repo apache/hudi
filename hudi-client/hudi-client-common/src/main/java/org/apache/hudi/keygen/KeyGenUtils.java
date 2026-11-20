@@ -236,7 +236,7 @@ public class KeyGenUtils {
           processed = recordKey.length();
         } else {
           commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
-          while (commaPosition < keyValueSep1) {
+          while (commaPosition < keyValueSep1 && keyValueSep2 > 0) {
             // described above
             keyValueSep2 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, keyValueSep2 + 1);
             commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);

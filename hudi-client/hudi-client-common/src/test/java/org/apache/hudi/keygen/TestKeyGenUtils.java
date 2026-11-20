@@ -45,6 +45,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -181,6 +182,17 @@ public class TestKeyGenUtils {
 
     String[] s6 = KeyGenUtils.extractRecordKeys("id:1,id2:2,2");
     Assertions.assertArrayEquals(new String[]{"1", "2,2"}, s6);
+  }
+
+  @Test
+  public void testExtractRecordKeysWithColonsInSkippedLastValue() {
+    // the value of the last field, which is not extracted, holds ':' and used to keep the scan looping
+    List<String> fields = Collections.singletonList("id");
+    Assertions.assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+      Assertions.assertArrayEquals(new String[] {"1"}, KeyGenUtils.extractRecordKeysByFields("id:1,note:10:00", fields));
+      Assertions.assertArrayEquals(new String[] {"a"}, KeyGenUtils.extractRecordKeysByFields("id:a,b:c:d", fields));
+      Assertions.assertArrayEquals(new String[] {"a,b:c:d"}, KeyGenUtils.extractRecordKeysByFields("a,b:c:d", fields));
+    });
   }
 
   @Test
