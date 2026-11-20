@@ -20,6 +20,7 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.cli.HoodieCLI;
@@ -33,17 +34,21 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
-import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.file.DataFileStream;
+import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
@@ -51,12 +56,15 @@ import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -73,6 +81,9 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ExportCommand {
 
+  // number of archived instants whose metadata is held in memory at once
+  private static final int ARCHIVED_WINDOW_SIZE = 1000;
+
   @ShellMethod(key = "export instants", value = "Export Instants and their metadata from the Timeline")
   public String exportInstants(
       @ShellOption(value = {"--limit"}, help = "Limit Instants", defaultValue = "-1") final Integer limit,
@@ -82,8 +93,7 @@ public class ExportCommand {
       @ShellOption(value = {"--localFolder"}, help = "Local Folder to export to") String localFolder)
       throws Exception {
 
-    final StoragePath basePath = HoodieCLI.getTableMetaClient().getBasePath();
-    final StoragePath archivePath = HoodieCLI.getTableMetaClient().getArchivePath();
+    final HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     final Set<String> actionSet = new HashSet<String>(Arrays.asList(filter.split(",")));
     int numExports = limit == -1 ? Integer.MAX_VALUE : limit;
     int numCopied = 0;
@@ -93,59 +103,167 @@ public class ExportCommand {
     }
 
     // The non archived instants can be listed from the Timeline.
-    HoodieTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedInstants()
+    // reload it, so that an archival triggered earlier in the same CLI session is visible
+    HoodieTimeline timeline = metaClient.reloadActiveTimeline().filterCompletedInstants()
         .filter(i -> actionSet.contains(i.getAction()));
     List<HoodieInstant> nonArchivedInstants = timeline.getInstants();
-
-    // Archived instants are in the commit archive files
-    List<StoragePathInfo> pathInfoList =
-        HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
-    List<StoragePathInfo> archivedPathInfoList = pathInfoList.stream()
-        .sorted(Comparator.comparingLong(StoragePathInfo::getModificationTime))
-        .collect(Collectors.toList());
 
     if (descending) {
       Collections.reverse(nonArchivedInstants);
       numCopied = copyNonArchivedInstants(nonArchivedInstants, numExports, localFolder);
       if (numCopied < numExports) {
-        Collections.reverse(archivedPathInfoList);
-        numCopied += copyArchivedInstants(archivedPathInfoList, actionSet, numExports - numCopied, localFolder);
+        numCopied += copyArchivedInstants(metaClient, actionSet, true, remaining(numExports, numCopied), localFolder);
       }
     } else {
-      numCopied = copyArchivedInstants(archivedPathInfoList, actionSet, numExports, localFolder);
+      numCopied = copyArchivedInstants(metaClient, actionSet, false, numExports, localFolder);
       if (numCopied < numExports) {
-        numCopied += copyNonArchivedInstants(nonArchivedInstants, numExports - numCopied, localFolder);
+        numCopied += copyNonArchivedInstants(nonArchivedInstants, remaining(numExports, numCopied), localFolder);
       }
     }
 
     return "Exported " + numCopied + " Instants to " + localFolder;
   }
 
-  private int copyArchivedInstants(List<StoragePathInfo> pathInfoList,
+  private static int remaining(int numExports, int numCopied) {
+    // keep the "no limit" marker, so that the readers can tell an unbounded export
+    return numExports == Integer.MAX_VALUE ? numExports : numExports - numCopied;
+  }
+
+  private int copyArchivedInstants(HoodieTableMetaClient metaClient,
                                    Set<String> actionSet,
+                                   boolean descending,
                                    int limit,
                                    String localFolder) throws Exception {
+    if (!isLegacyArchive(metaClient)) {
+      return copyArchivedTimelineInstants(metaClient, actionSet, descending, limit, localFolder);
+    }
+    // Archived instants of a table written before table version 8 are in the commit archive files
+    List<StoragePathInfo> archivedPathInfoList = metaClient.getStorage()
+        .globEntries(new StoragePath(metaClient.getArchivePath(), ".commits_.archive*")).stream()
+        .sorted(Comparator.comparingLong(StoragePathInfo::getModificationTime))
+        .collect(Collectors.toList());
+    if (descending) {
+      Collections.reverse(archivedPathInfoList);
+    }
+    return copyLegacyArchivedInstants(metaClient, archivedPathInfoList, actionSet, descending, limit, localFolder);
+  }
+
+  /**
+   * Exports the completed archived instants of a table of version 8 or above, which keeps them in
+   * the LSM timeline under the timeline history folder, read through its archived timeline.
+   */
+  private int copyArchivedTimelineInstants(HoodieTableMetaClient metaClient,
+                                           Set<String> actionSet,
+                                           boolean descending,
+                                           int limit,
+                                           String localFolder) throws Exception {
+    // bypass the meta client cache, so that an archival triggered earlier in the same CLI session is visible
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(StringUtils.EMPTY_STRING, false);
+    List<HoodieInstant> instants = archivedTimeline.getInstantsAsStream()
+        .filter(HoodieInstant::isCompleted)
+        .filter(instant -> actionSet.contains(instant.getAction()))
+        .collect(Collectors.toList());
+    // the instants are in ascending order, keep the oldest ones, or the latest ones in descending order
+    if (instants.size() > limit) {
+      instants = descending ? instants.subList(instants.size() - limit, instants.size()) : instants.subList(0, limit);
+    }
+
     int copyCount = 0;
-    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-    HoodieStorage storage = metaClient.getStorage();
+    // load and write the payloads in windows, so that they are not all held in memory at once
+    for (int from = 0; from < instants.size(); from += ARCHIVED_WINDOW_SIZE) {
+      List<HoodieInstant> window = instants.subList(from, Math.min(from + ARCHIVED_WINDOW_SIZE, instants.size()));
+      String windowStart = window.get(0).requestedTime();
+      String windowEnd = window.get(window.size() - 1).requestedTime();
+      archivedTimeline.loadCompletedInstantDetailsInMemory(windowStart, windowEnd);
+      for (HoodieInstant instant : window) {
+        final String action = instant.getAction();
+        final String instantTime = instant.requestedTime();
+        GenericRecord metadata = readArchivedMetadata(archivedTimeline, instant);
+        if (metadata == null) {
+          log.error("Could not load metadata for action {} at instant time {}", action, instantTime);
+          continue;
+        }
+        final String outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action;
+        writeToFile(outPath, HoodieAvroUtils.avroToJson(metadata, true));
+        copyCount++;
+      }
+      archivedTimeline.clearInstantDetailsFromMemory(windowStart, windowEnd);
+    }
+    return copyCount;
+  }
+
+  private static GenericRecord readArchivedMetadata(HoodieArchivedTimeline archivedTimeline,
+                                                    HoodieInstant instant) throws IOException {
+    Option<byte[]> details = archivedTimeline.getInstantDetails(instant);
+    if (!details.isPresent() || details.get().length == 0) {
+      // instants can be archived with no metadata, e.g. from an empty completed meta file
+      return null;
+    }
+    switch (instant.getAction()) {
+      case HoodieTimeline.CLEAN_ACTION:
+        return archivedTimeline.readCleanMetadata(instant);
+      case HoodieTimeline.COMMIT_ACTION:
+      case HoodieTimeline.DELTA_COMMIT_ACTION:
+        return archivedTimeline.readCommitMetadataToAvro(instant);
+      case HoodieTimeline.REPLACE_COMMIT_ACTION:
+        return archivedTimeline.readReplaceCommitMetadataToAvro(instant);
+      case HoodieTimeline.ROLLBACK_ACTION:
+        return archivedTimeline.readRollbackMetadata(instant);
+      case HoodieTimeline.SAVEPOINT_ACTION:
+        return archivedTimeline.readSavepointMetadata(instant);
+      case HoodieTimeline.RESTORE_ACTION:
+        return archivedTimeline.readRestoreMetadata(instant);
+      default:
+        // every other archived payload is an Avro file that carries its own schema
+        try (DataFileStream<GenericRecord> reader =
+                 new DataFileStream<>(new ByteArrayInputStream(details.get()), new GenericDatumReader<>())) {
+          return reader.hasNext() ? reader.next() : null;
+        }
+    }
+  }
+
+  /**
+   * Returns whether the table keeps its archived instants in the legacy log format, the archive
+   * layout of the timeline layout version 1 that table versions before eight are written with.
+   */
+  private static boolean isLegacyArchive(HoodieTableMetaClient metaClient) {
+    return metaClient.getTimelineLayoutVersion().compareTo(TimelineLayoutVersion.LAYOUT_VERSION_2) < 0;
+  }
+
+  private int copyLegacyArchivedInstants(HoodieTableMetaClient metaClient,
+                                         List<StoragePathInfo> pathInfoList,
+                                         Set<String> actionSet,
+                                         boolean descending,
+                                         int limit,
+                                         String localFolder) throws Exception {
+    int copyCount = 0;
 
     for (StoragePathInfo pathInfo : pathInfoList) {
+      if (copyCount >= limit) {
+        break;
+      }
+      // The records of an archive file are in ascending order. With a limit in descending order only the
+      // last (limit - copyCount) records can be exported, so a bounded window of them is kept and written
+      // from the latest one. With no limit every record is exported and is written straight away.
+      final boolean buffered = descending && limit != Integer.MAX_VALUE;
+      final int windowSize = buffered ? limit - copyCount : 0;
+      Deque<Object[]> window = new ArrayDeque<>();
       // read the archived file
       try (Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(pathInfo.getPath()),
           HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
 
         // read the avro blocks
-        while (reader.hasNext() && copyCount++ < limit) {
+        while (reader.hasNext() && (buffered || copyCount < limit)) {
           HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
           try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
-            while (recordItr.hasNext()) {
+            while (recordItr.hasNext() && (buffered || copyCount < limit)) {
               IndexedRecord ir = recordItr.next().getData();
               // Archived instants are saved as arvo encoded HoodieArchivedMetaEntry records. We need to get the
               // metadata record from the entry and convert it to json.
               HoodieArchivedMetaEntry archiveEntryRecord = (HoodieArchivedMetaEntry) SpecificData.get()
                   .deepCopy(HoodieArchivedMetaEntry.SCHEMA$, ir);
               final String action = archiveEntryRecord.get("actionType").toString();
-              if (!actionSet.contains(action)) {
+              if (!actionSet.contains(action) || !isCompletedEntry(archiveEntryRecord)) {
                 continue;
               }
 
@@ -167,6 +285,9 @@ public class ExportCommand {
                 case HoodieTimeline.COMPACTION_ACTION:
                   metadata = archiveEntryRecord.getHoodieCompactionMetadata();
                   break;
+                case HoodieTimeline.RESTORE_ACTION:
+                  // the legacy archive entry has no field for the restore metadata
+                  break;
                 default:
                   throw new HoodieException("Unknown type of action " + action);
               }
@@ -176,15 +297,34 @@ public class ExportCommand {
                 log.error("Could not load metadata for action {} at instant time {}", action, instantTime);
                 continue;
               }
-              final String outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action;
-              writeToFile(outPath, HoodieAvroUtils.avroToJson(metadata, true));
+              byte[] json = HoodieAvroUtils.avroToJson(metadata, true);
+              if (buffered) {
+                window.addLast(new Object[] {instantTime + "." + action, json});
+                if (window.size() > windowSize) {
+                  window.removeFirst();
+                }
+              } else {
+                writeToFile(localFolder + StoragePath.SEPARATOR + instantTime + "." + action, json);
+                copyCount++;
+              }
             }
           }
         }
       }
+      while (!window.isEmpty() && copyCount < limit) {
+        Object[] entry = window.removeLast();
+        writeToFile(localFolder + StoragePath.SEPARATOR + entry[0], (byte[]) entry[1]);
+        copyCount++;
+      }
     }
 
     return copyCount;
+  }
+
+  private static boolean isCompletedEntry(HoodieArchivedMetaEntry archivedEntry) {
+    // entries written before the state was recorded are completed ones
+    Object actionState = archivedEntry.getActionState();
+    return actionState == null || HoodieInstant.State.COMPLETED.name().equals(actionState.toString());
   }
 
   private int copyNonArchivedInstants(List<HoodieInstant> instants, int limit, String localFolder) throws Exception {
@@ -198,6 +338,9 @@ public class ExportCommand {
     final InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
     final HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     for (HoodieInstant instant : instants) {
+      if (copyCount >= limit) {
+        break;
+      }
       String localPath = localFolder + StoragePath.SEPARATOR + instantFileNameGenerator.getFileName(instant);
 
       byte[] data = null;
@@ -221,6 +364,11 @@ public class ExportCommand {
         }
         case HoodieTimeline.SAVEPOINT_ACTION: {
           HoodieSavepointMetadata metadata = timeline.readSavepointMetadata(instant);
+          data = HoodieAvroUtils.avroToJson(metadata, true);
+          break;
+        }
+        case HoodieTimeline.RESTORE_ACTION: {
+          HoodieRestoreMetadata metadata = timeline.readRestoreMetadata(instant);
           data = HoodieAvroUtils.avroToJson(metadata, true);
           break;
         }
