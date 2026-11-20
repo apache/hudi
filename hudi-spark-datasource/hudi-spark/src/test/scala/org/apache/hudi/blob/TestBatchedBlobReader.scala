@@ -38,6 +38,7 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import java.net.URI
 import java.util.Collections
 
 /**
@@ -541,8 +542,8 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
     val firstPath = createTestFile(tempDir, "two-bucket-first.bin", 1000)
     val secondPath = createTestFile(tempDir, "two-bucket-second.bin", 1000)
     val inputDF = sparkSession.createDataFrame(Seq(
-      ("a", s"s3a://bucket-a$firstPath", 0L, 100L),
-      ("b", s"s3a://bucket-b$secondPath", 0L, 100L)
+      ("a", s"s3a://bucket-a${new URI(firstPath).getRawPath}", 0L, 100L),
+      ("b", s"s3a://bucket-b${new URI(secondPath).getRawPath}", 0L, 100L)
     )).toDF("bucket", "external_path", "offset", "length")
       .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("bucket", "data")
@@ -614,7 +615,8 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
     }
   }
 
-  private def onScheme(scheme: String, localPath: String): String = s"$scheme://test-bucket$localPath"
+  private def onScheme(scheme: String, localPath: String): String =
+    s"$scheme://test-bucket${new URI(localPath).getRawPath}"
 
   /**
    * The table's storage configuration with the local filesystem also exposed under two object-store
