@@ -22,12 +22,10 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public abstract class TableMetadataFactory {
-
-  protected static Logger LOG = LoggerFactory.getLogger(TableMetadataFactory.class);
 
   public HoodieTableMetadata create(HoodieEngineContext engineContext,
                                     HoodieStorage storage,
