@@ -95,6 +95,8 @@ import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.util.BloomFilterData;
+import org.apache.hudi.utilities.util.HoodieMetadataValidationUtils;
+import org.apache.hudi.utilities.util.ValidationMode;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -223,6 +225,8 @@ public class HoodieMetadataTableValidator implements Serializable {
   private final TypedProperties props;
 
   private Option<HoodieTableMetaClient> metaClientOpt = Option.empty();
+  // When the caller injected a freshly-built meta client, skip the redundant timeline reload.
+  private boolean skipTimelineReload = false;
 
   protected transient Option<AsyncMetadataTableValidateService> asyncMetadataTableValidateService;
 
@@ -250,6 +254,22 @@ public class HoodieMetadataTableValidator implements Serializable {
       log.warn("Data table is not found. Skip current validation for: {}", cfg.basePath);
     }
 
+    this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
+    this.taskLabels = generateValidationTaskLabels();
+  }
+
+  /**
+   * Variant that reuses a meta client whose active timeline the caller has just loaded, so a
+   * single-shot validation does not list the timeline again.
+   */
+  public HoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg, HoodieTableMetaClient metaClient) {
+    this.jsc = jsc;
+    this.cfg = cfg;
+    this.props = cfg.propsFilePath == null
+        ? UtilHelpers.buildProperties(cfg.configs)
+        : readConfigFromFileSystem(jsc, cfg);
+    this.metaClientOpt = Option.of(metaClient);
+    this.skipTimelineReload = true;
     this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
     this.taskLabels = generateValidationTaskLabels();
   }
@@ -310,6 +330,22 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   public static class Config implements Serializable {
+
+    /**
+     * Where a run's three reports go, relative to {@code --validation-output-root}.
+     *
+     * <p>Derived from {@link HoodieMetadataValidationUtils#TOOLING_DIR_PREFIX} rather than restated,
+     * so the default and the namespace the validator names in its warnings cannot drift apart:
+     * concatenating the two makes the coupling hold at compile time instead of relying on a test to
+     * notice. The prefix is a naming convention and nothing skips a listing on the strength of it —
+     * see that constant for what actually keeps these reports from being read as table data.
+     *
+     * <p>Hidden by convention, and outside {@code .hoodie/}, which belongs to the timeline and is
+     * read by every Hudi reader there is.
+     */
+    public static final String DEFAULT_VALIDATION_OUTPUT_DIR =
+        HoodieMetadataValidationUtils.TOOLING_DIR_PREFIX + "/table_validation_job";
+
     @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
 
@@ -320,7 +356,10 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--skip-data-files-for-cleaning"}, description = "Skip to compare the data files which are under deletion by cleaner", required = false)
     public boolean skipDataFilesForCleaning = false;
 
-    @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file slices for all partitions.", required = false)
+    @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file "
+        + "slices for all partitions. Read by the v1 validator only: with --use-validator-v2 this "
+        + "flag is ignored, and --validate-fs-mdt-diff and --validate-duplicate-base-files select "
+        + "what is checked.", required = false)
     public boolean validateLatestFileSlices = false;
 
     @Parameter(names = {"--validate-latest-base-files"}, description = "Validate latest base files for all partitions.", required = false)
@@ -362,6 +401,88 @@ public class HoodieMetadataTableValidator implements Serializable {
         description = "Number of error samples to show for record index validation",
         required = false)
     public int numRecordIndexErrorSamples = 100;
+
+    @Parameter(names = {"--use-validator-v2"}, description = "Use the v2 validator: the driver hosts the "
+        + "metadata-table file system view behind an embedded timeline server and executors fetch their "
+        + "partition's expected file slices remotely. Scoped strictly to latest file slice validation.")
+    public boolean useValidatorV2 = false;
+
+    @Parameter(names = {"--validation-mode"}, description = "v2 validator only. 'fail-fast' "
+        + "(default) fails at the first difference that fails validation and writes nothing. "
+        + "'exhaustive' adjudicates every difference in every partition, writes the findings under "
+        + "--validation-output-root/--validation-output-dir, and then fails the run the same way. "
+        + "A difference that fails validation fails the run in both modes; only the evidence "
+        + "differs. A run that reaches no verdict (the metadata table snapshot could not be pinned, "
+        + "archival overlapped the run, or a phase was recomputed) passes with a logged marker in "
+        + "fail-fast mode and fails in exhaustive mode. A difference the timeline cannot settle does "
+        + "not fail the run; exhaustive mode keeps it in the raw reports only. "
+        + "An empty dangling-files report does not mean the table has no orphan files: only "
+        + "duplicate base files and files that differ between storage and the metadata table's "
+        + "latest file slices are examined.")
+    public String validationMode = ValidationMode.FAIL_FAST.getFlagValue();
+
+    @Parameter(names = {"--validation-output-root"}, description = "Where exhaustive mode writes its "
+        + "findings: <root>/<dir>/<timestamp>/{files_mismatch,dangling_files,adjudicated}/. Defaults to "
+        + "the table's base path. Nothing is written when a run finds nothing.")
+    public String validationOutputRoot = "";
+
+    @Parameter(names = {"--validation-output-dir"}, description = "The directory, relative to "
+        + "--validation-output-root, that one run's three reports are written under. Defaults to '"
+        + DEFAULT_VALIDATION_OUTPUT_DIR + "'. Must be hidden — a leading dot, so a storage listing of "
+        + "the table never takes it for data — and must not live under '.hoodie/', which belongs to the "
+        + "timeline.")
+    public String validationOutputDir = DEFAULT_VALIDATION_OUTPUT_DIR;
+
+    @Parameter(names = {"--validation-run-id"}, description = "Names the directory one run's "
+        + "reports are written under, inside --validation-output-dir. Defaults to the run's UTC "
+        + "start time. Supply it when a caller must know the path before the run finishes, or to "
+        + "resume into a previous run's directory. A single path segment: no '/', no '..'.")
+    public String validationRunId = "";
+
+    @Parameter(names = {"--validate-duplicate-base-files"}, arity = 1, description = "v2 validator "
+        + "only. Fail a partition holding a file slice with two or more base files. Costs one extra "
+        + "storage listing per partition per run. A partition that cannot be listed fails the run "
+        + "with an I/O error rather than a validation failure; set false to skip this check, which "
+        + "also stops exhaustive mode writing a dangling-files report.")
+    public boolean validateDuplicateBaseFiles = true;
+
+    @Parameter(names = {"--validate-fs-mdt-diff"}, arity = 1, description = "v2 validator only. "
+        + "Compare the latest file slices the metadata table reports with those on storage, in both "
+        + "directions. This is the more expensive check: it pins a metadata table snapshot and hosts "
+        + "the metadata table file system view on the driver. Set false to validate duplicate base "
+        + "files alone; exhaustive mode then writes no fs_mdt_diff/ reports, which means the "
+        + "comparison did not run, not that it found nothing. At least one of "
+        + "--validate-fs-mdt-diff and --validate-duplicate-base-files must be true.")
+    public boolean validateFsMdtDiff = true;
+
+    @Parameter(names = {"--fs-view-storage-type"}, description = "Storage type for the driver-hosted "
+        + "file system view used by the v2 validator: SPILLABLE_DISK (on-heap up to the configured fraction "
+        + "of spark execution memory, then disk) or EMBEDDED_KV_STORE (RocksDB).")
+    public String fsViewStorageType = "SPILLABLE_DISK";
+
+    @Parameter(names = {"--fs-view-memory-fraction"}, description = "Fraction of the driver's "
+        + "Spark execution memory pool granted to the v2 validator's spillable view before it spills to disk.")
+    public double fsViewMemoryFraction = 0.5;
+
+    @Parameter(names = {"--partitions-per-task"}, description = "How many partitions the "
+        + "v2 validator packs into one Spark task. Each task builds one remote view and filters the "
+        + "timeline once, so batching amortises that over the partitions it validates.")
+    public int partitionsPerTask = 10;
+
+    @Parameter(names = {"--partition-threads"}, description = "Threads per task used to "
+        + "validate partitions concurrently. The per-partition work is a storage listing, so this "
+        + "parallelises I/O rather than CPU.")
+    public int partitionThreads = 10;
+
+    @Parameter(names = {"--max-files-per-round"}, description = "Cap on the number of "
+        + "files (as reported by the metadata table) validated concurrently within a task. Partitions "
+        + "are submitted in rounds that stay under this cap, bounding peak executor memory when "
+        + "partitions are large.")
+    public int maxFilesPerRound = 1000;
+
+    @Parameter(names = {"--fs-view-base-store-path"}, description = "Local directory on the driver "
+        + "for the v2 validator's spill / RocksDB files.")
+    public String fsViewBaseStorePath = "/tmp/hoodie_mdt_validator_v2_view";
 
     @Parameter(names = {"--view-storage-type-fs-listing"},
         description = "View storage type to use for File System based listing. "
@@ -519,7 +640,47 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
+  /**
+   * Where a v2 run stops to let a caller act on the table, or {@link Option#empty()} for none.
+   *
+   * <p>Only reachable through {@link #setV2PhaseObserver}, and only used on the v2 path. It lives
+   * here rather than being handed to a directly-constructed
+   * {@link HoodieMetadataTableValidatorV2} so that a test observing the phases still goes through
+   * the same entry point every other test uses: the props resolution and the meta-client injection
+   * below are part of what a run is, and a suite that bypassed them would be testing a different
+   * assembly of the validator from the one production runs.
+   */
+  private Option<HoodieMetadataTableValidatorV2.PhaseObserver> v2PhaseObserver = Option.empty();
+
+  /**
+   * Installs the observer a v2 run stops at each of its three phase seams.
+   *
+   * @param observer never null; see {@link HoodieMetadataTableValidatorV2.PhaseObserver}
+   */
+  @VisibleForTesting
+  public void setV2PhaseObserver(HoodieMetadataTableValidatorV2.PhaseObserver observer) {
+    ValidationUtils.checkArgument(observer != null, "the phase observer must not be null");
+    this.v2PhaseObserver = Option.of(observer);
+  }
+
   public boolean run() {
+    if (cfg.useValidatorV2) {
+      log.info("Delegating to HoodieMetadataTableValidatorV2 (two dimensions: the FS-MDT file "
+          + "slice comparison, switched with --validate-fs-mdt-diff, and duplicate base file "
+          + "detection, switched with --validate-duplicate-base-files; both on by default)");
+      // Hand over the resolved --props/--hoodie-conf overrides and the meta client whose active
+      // timeline is already loaded: constructing v2 with (jsc, cfg) alone made it rebuild both, so
+      // an injected meta client was ignored and the timeline was read twice. metaClientOpt may be
+      // empty (missing data table) and v2 treats that as a skip, exactly as the v1 path does.
+      HoodieMetadataTableValidatorV2 v2 =
+          new HoodieMetadataTableValidatorV2(jsc, cfg, props, metaClientOpt);
+      if (v2PhaseObserver.isPresent()) {
+        v2.setPhaseObserver(v2PhaseObserver.get());
+      }
+      boolean result = v2.run();
+      throwables.addAll(v2.getThrowables());
+      return result;
+    }
     if (!metaClientOpt.isPresent()) {
       log.warn("Data table is not available to read for now, skip current validation for: {}", cfg.basePath);
       return true;
@@ -580,7 +741,13 @@ public class HoodieMetadataTableValidator implements Serializable {
       return true;
     }
     HoodieTableMetaClient metaClient = this.metaClientOpt.get();
-    metaClient.reloadActiveTimeline();
+    if (skipTimelineReload) {
+      // Injected meta client was built with the timeline loaded moments ago; the flag is
+      // one-shot so continuous mode still reloads.
+      skipTimelineReload = false;
+    } else {
+      metaClient.reloadActiveTimeline();
+    }
     StoragePath basePath = metaClient.getBasePath();
     Set<String> baseFilesForCleaning = Collections.emptySet();
 
