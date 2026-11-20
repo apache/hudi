@@ -127,6 +127,20 @@ public class TestUnstructuredSchemaContract {
     assertEquals(partitionedEmbedding, names(contract(UnstructuredMode.EMBEDDING, withPartition)));
   }
 
+  /** On an existing table, a model added later puts its VECTOR after the table's columns, a customer's column included. */
+  @Test
+  void existingTableWithAModelAddedLater() {
+    StructType table = contract(UnstructuredMode.EMBEDDING, embedding("prep_and_compute", "m1"))
+        .add(DataTypes.createStructField("ingest_note", DataTypes.StringType, true))
+        .add(DataTypes.createStructField("_hoodie_commit_time", DataTypes.StringType, true));
+    StructType contract = UnstructuredSchemaContract.contract(UnstructuredMode.EMBEDDING, embedding("prep_and_compute", "m1", "m2"),
+        Option.of(table));
+    List<String> expected = new ArrayList<>(EmbeddingTableSchema.BASE_COLUMNS);
+    expected.addAll(Arrays.asList("emb_m1", "ingest_note", "emb_m2"));
+    assertEquals(expected, names(contract));
+    check(UnstructuredMode.EMBEDDING, contract, contract);
+  }
+
   /**
    * Every declared model's column is reserved, on a new table and on an existing one that does not have it yet: a declared model
    * that is not active today is the table's model column once it is activated, never a customer's VECTOR or BLOB.

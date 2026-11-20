@@ -18,10 +18,18 @@
 
 package org.apache.hudi.utilities.sources.blob;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
+import org.apache.hudi.utilities.sources.UnstructuredDataSource;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.JsonLinesErrorTableWriter;
 
 import org.apache.hadoop.conf.Configuration;
@@ -210,6 +218,31 @@ public final class BlobJobHarness {
     props.setProperty(S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.key(), BucketFolderFileSystem.SCHEME);
     props.setProperty(BlobTableConfig.INLINE_MAX_BYTES.key(), String.valueOf(inlineMaxBytes));
     return props;
+  }
+
+  /** HoodieStreamer configuration of the blob job: COW, {@link UnstructuredDataSource}, UPSERT, with commit-time ordering. */
+  public static HoodieStreamer.Config streamerConfig(String tableBasePath) {
+    return streamerConfig(tableBasePath, HoodieTableType.COPY_ON_WRITE);
+  }
+
+  /** The same blob job with the stock streamer table type selected by the caller. */
+  public static HoodieStreamer.Config streamerConfig(String tableBasePath, HoodieTableType tableType) {
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.targetBasePath = tableBasePath;
+    cfg.targetTableName = "blob_table";
+    cfg.tableType = tableType.name();
+    cfg.sourceClassName = UnstructuredDataSource.class.getName();
+    cfg.transformerClassNames = java.util.Collections.singletonList(BlobQuarantineTransformer.class.getName());
+    cfg.operation = WriteOperationType.UPSERT;
+    cfg.sourceOrderingFields = null;
+    cfg.recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
+    Triple<RecordMergeMode, String, String> mergeCfgs = HoodieTableConfig.inferMergingConfigsForWrites(
+        cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingFields,
+        HoodieTableVersion.current());
+    cfg.recordMergeMode = mergeCfgs.getLeft();
+    cfg.payloadClassName = mergeCfgs.getMiddle();
+    cfg.recordMergeStrategyId = mergeCfgs.getRight();
+    return cfg;
   }
 
   /** Deterministic bytes of the given size starting with the magic number of the file's type. */

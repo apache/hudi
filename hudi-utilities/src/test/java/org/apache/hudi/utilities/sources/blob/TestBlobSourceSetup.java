@@ -18,12 +18,16 @@
 
 package org.apache.hudi.utilities.sources.blob;
 
+import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.utilities.sources.UnstructuredDataSource;
 import org.apache.hudi.utilities.sources.unstructured.UnstructuredMode;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -80,6 +84,34 @@ public class TestBlobSourceSetup {
       props.setProperty(key, "false");
       BlobSourceSetup.validate(props, mode, UnstructuredDataSource.name(mode));
     }
+  }
+
+  /** The blob table is written, and its blob column checked, only as Avro records encoded with the table schema. */
+  @ParameterizedTest
+  @EnumSource(UnstructuredMode.class)
+  public void rowWriterIsRefused(UnstructuredMode job) {
+    TypedProperties props = job(job);
+    props.setProperty("hoodie.streamer.write.row.writer.enable", "true");
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> BlobSourceSetup.validate(props, job, UnstructuredDataSource.name(job)));
+    assertTrue(e.getMessage().startsWith("hoodie.streamer.write.row.writer.enable is not supported by " + UnstructuredDataSource.name(job)),
+        e.getMessage());
+  }
+
+  /** Spark records are not encoded with the table schema either. */
+  @Test
+  public void sparkRecordMergerIsRefused() {
+    TypedProperties props = job(UnstructuredMode.BLOB);
+    props.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), OverwriteWithLatestSparkRecordMerger.class.getName());
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> BlobSourceSetup.validate(props, UnstructuredMode.BLOB, UnstructuredDataSource.name(UnstructuredMode.BLOB)));
+    assertTrue(e.getMessage().startsWith("Spark records are not supported by UnstructuredDataSource (mode blob)"), e.getMessage());
+  }
+
+  @Test
+  public void avroRecordMergerAndDisabledRowWriterAreAccepted() {
+    TypedProperties props = job(UnstructuredMode.BLOB);
+    props.setProperty("hoodie.streamer.write.row.writer.enable", "false");
+    props.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), OverwriteWithLatestMerger.class.getName());
+    BlobSourceSetup.validate(props, UnstructuredMode.BLOB, UnstructuredDataSource.name(UnstructuredMode.BLOB));
   }
 
   /** Every refusal left at source construction names the source with the job's mode. */

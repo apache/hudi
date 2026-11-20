@@ -76,8 +76,7 @@ public final class UnstructuredSchemaContract {
    * <ul>
    *   <li>blob: {@link BlobTableSchema#schema()} with the path partition columns the source adds;</li>
    *   <li>embedding: the columns the round writes ({@link EmbeddingTableTransformer#roundSchema}): those of the configuration on a
-   *   new table, those of the existing table ({@code tableSchema}, without meta columns, its columns beyond the base ones nullable)
-   *   otherwise.</li>
+   *   new table, those of the existing table ({@code tableSchema}, without meta columns) with the active model's VECTOR otherwise.</li>
    * </ul>
    */
   public static StructType contract(UnstructuredMode mode, TypedProperties props, Option<StructType> tableSchema) {

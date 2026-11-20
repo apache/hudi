@@ -80,7 +80,8 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
  * </ul>
  * Small objects become inline blob rows; large objects carry pending references whose path stays null: the blob job's copy
  * transformer copies the bytes and fills it, and the embedding job's transformer reads the object from its
- * {@code source_file_path}.
+ * {@code source_file_path}. An object whose status cannot be read, a missing object included, or whose inline bytes cannot be
+ * read fails the round.
  *
  * <p>The job's requirements are its contract's ({@link UnstructuredSourceContract}): the settings it runs with, which the streamer
  * merges into a copy of the job's properties before anything reads them, the transformers and the schema check. The source is

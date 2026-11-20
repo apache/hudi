@@ -18,13 +18,24 @@
 
 package org.apache.hudi.utilities.unstructured.embedding;
 
+import org.apache.hudi.utilities.sources.blob.BlobFileNames;
+
 /** One source object of the embedding round tests: its path, as the S3 events source names it, and its bytes. */
 public final class FixtureFile {
   public final String sourcePath;
+  public final String extension;
   public final byte[] bytes;
+  /** The source row's key: the source path's sha ({@link BlobFileNames#sourcePathSha}). */
+  public final String sha;
 
   public FixtureFile(String sourcePath, byte[] bytes) {
     this.sourcePath = sourcePath;
+    this.extension = BlobFileNames.extension(BlobFileNames.fileName(sourcePath));
     this.bytes = bytes;
+    this.sha = BlobFileNames.sourcePathSha(sourcePath);
+  }
+
+  public String fileName() {
+    return BlobFileNames.fileName(sourcePath);
   }
 }
