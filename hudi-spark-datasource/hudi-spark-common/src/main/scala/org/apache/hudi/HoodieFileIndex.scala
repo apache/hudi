@@ -106,6 +106,41 @@ case class HoodieFileIndex(spark: SparkSession,
     startCompletionTime = options.get(DataSourceReadOptions.START_COMMIT.key),
     endCompletionTime = options.get(DataSourceReadOptions.END_COMMIT.key)) with FileIndex {
 
+  /**
+   * Equality deliberately excludes [[fileStatusCache]].
+   *
+   * It is a per-call handle: FileStatusCache.getOrCreate(session) returns a fresh
+   * SharedInMemoryCache view on every invocation, and the class has no equals, so it compares by
+   * identity. Being a case-class parameter it would otherwise land in the generated equals
+   * (@transient affects serialization, not equality), and two indexes over the same table would
+   * never compare equal. Spark's CacheManager matches by plan, so that left recacheByPlan unable
+   * to find an existing entry after a refresh: the old materialised dataset was stranded rather
+   * than replaced, and spark.catalog.isCached reported false.
+   *
+   * The cache an index happens to hold is a performance detail, not part of the table's identity.
+   */
+  override def equals(other: Any): Boolean = other match {
+    // Exact-class matching, not canEqual: HoodieIncrementalFileIndex and HoodieCDCFileIndex
+    // extend this class without being case classes, so they inherit canEqual's isInstanceOf
+    // check. Under that check a CDC or incremental index would compare equal to a plain
+    // snapshot index over the same table, and their distinguishing state (rangeType,
+    // mergeOnReadIncrementalRelation) is not compared here. HoodieTableMetaClient.equals
+    // takes the same approach for the same reason.
+    case that: HoodieFileIndex if that.getClass == this.getClass =>
+        spark == that.spark &&
+        metaClient == that.metaClient &&
+        schemaSpec == that.schemaSpec &&
+        options == that.options &&
+        includeLogFiles == that.includeLogFiles &&
+        shouldEmbedFileSlices == that.shouldEmbedFileSlices
+    case _ => false
+  }
+
+  override def hashCode(): Int =
+    Seq(getClass, spark, metaClient, schemaSpec, options, includeLogFiles, shouldEmbedFileSlices)
+      .map(x => if (x == null) 0 else x.hashCode())
+      .foldLeft(1)((acc, h) => 31 * acc + h)
+
   @transient protected var hasPushedDownPartitionPredicates: Boolean = false
 
   @transient private lazy val hoodieConfig =
