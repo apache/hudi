@@ -65,6 +65,8 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
   private final Map<String, HoodieRecord> deltaRecordMap;
 
+  // Schema registration during merging must stay local to this reader.
+  private final RecordContext<IndexedRecord> recordContext = new AvroRecordContext();
   private final HoodieRecordMerger merger = new HoodieAvroRecordMerger();
   private final Set<String> deltaRecordKeys;
   private final HoodieMergedLogRecordScanner mergedLogRecordScanner;
@@ -202,7 +204,6 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // so to be compatible with hive and presto, we should rewrite oldRecord before we call combineAndGetUpdateValue,
     // once presto on hudi have its own mor reader, we can remove the rewrite logical.
     GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
-    RecordContext<IndexedRecord> recordContext = AvroRecordContext.getFieldAccessorInstance();
     BufferedRecord record = BufferedRecords.fromEngineRecord(genericRecord, HoodieAvroSchemaCache.intern(genericRecord.getSchema()), recordContext, orderingFields, newRecord.getRecordKey(), false);
     BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieAvroSchemaCache.intern(getLogScannerReaderSchema().toAvroSchema()),
         recordContext, payloadProps, orderingFields, deleteContext);
