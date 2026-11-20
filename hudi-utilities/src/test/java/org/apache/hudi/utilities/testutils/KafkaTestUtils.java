@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.testutils;
 
 import org.apache.hudi.common.util.StringUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -31,8 +32,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -44,8 +43,8 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+@Slf4j
 public class KafkaTestUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaTestUtils.class);
   private static final DockerImageName KAFKA_IMAGE = DockerImageName.parse("confluentinc/cp-kafka:7.7.1");
   private final List<String> createdTopics = new ArrayList<>();
   private ConfluentKafkaContainer kafkaContainer;
@@ -110,7 +109,7 @@ public class KafkaTestUtils {
       adminClient.deleteTopics(createdTopics).all().get();
       createdTopics.clear();
     } catch (Exception e) {
-      LOG.warn("Failed to delete topics: {}", StringUtils.join(createdTopics, ","), e);
+      log.warn("Failed to delete topics: {}", StringUtils.join(createdTopics, ","), e);
     }
   }
 
