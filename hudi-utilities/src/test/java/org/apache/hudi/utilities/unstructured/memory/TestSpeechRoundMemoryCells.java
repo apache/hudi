@@ -394,6 +394,7 @@ public class TestSpeechRoundMemoryCells extends EmbeddingRoundTestBase {
     String model = EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL;
     TypedProperties props = props(table, EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, VIDEO_INLINE_MAX_BYTES,
         model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, DummyMultimodalEmbeddingClient.PROVIDER,
+        model + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX, "text,image",
         AudioConfigKeys.ENABLED.key(), "true",
         AudioConfigKeys.TRANSCRIBER_CLASS.key(), SegmentCountingTranscriber.class.getName(),
         EmbeddingTableConfig.CHUNK_MAX_TOKENS.key(), String.valueOf(CHUNK_MAX_TOKENS),

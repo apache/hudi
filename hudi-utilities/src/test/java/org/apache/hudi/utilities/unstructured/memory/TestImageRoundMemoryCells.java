@@ -325,6 +325,8 @@ public class TestImageRoundMemoryCells extends EmbeddingRoundTestBase {
     props.setProperty(EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key(), IMAGE_EXTENSIONS);
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX,
         ConcurrencyCountingMultimodalClient.class.getName());
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX,
+        "text,image");
     props.setProperty(EmbeddingTableConfig.COMPUTE_PARALLELISM.key(), String.valueOf(COMPUTE_PARALLELISM));
     props.setProperty(HoodieWriteConfig.TAGGED_RECORD_STORAGE_LEVEL_VALUE.key(), "DISK_ONLY");
     props.remove(EmbeddingTableConfig.BALANCE_MIN_PARTITIONS.key());

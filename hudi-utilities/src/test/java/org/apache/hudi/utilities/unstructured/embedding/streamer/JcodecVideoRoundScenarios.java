@@ -217,6 +217,8 @@ public class JcodecVideoRoundScenarios extends EmbeddingRoundTestBase {
     List<String> all = new ArrayList<>(Arrays.asList(overrides));
     all.add(model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX);
     all.add(DummyMultimodalEmbeddingClient.PROVIDER);
+    all.add(model + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX);
+    all.add("text,image");
     TypedProperties props = props(table(), mode, FRAME_INLINE_MAX_BYTES, all.toArray(new String[0]));
     // the provider decides the client: the base's scripted client class is removed
     props.remove(model + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX);

@@ -105,7 +105,8 @@ class TestVideoInputStoreRound extends EmbeddingRoundTestBase {
     }
     String model = EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL;
     TypedProperties props = props(table(), mode, BLOB_INLINE_MAX_BYTES, EmbeddingInputConfig.INLINE_MAX_BYTES.key(), inputInline,
-        model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, DummyMultimodalEmbeddingClient.PROVIDER);
+        model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, DummyMultimodalEmbeddingClient.PROVIDER,
+        model + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX, "text,image");
     // the provider decides the client: the base's scripted client class is removed
     props.remove(model + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX);
     return props;

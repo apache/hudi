@@ -57,6 +57,7 @@ public final class EmbeddingClientNames {
     Map<String, String> bedrock = new LinkedHashMap<>();
     bedrock.put("amazon.titan-embed-text-v2", PKG + "bedrock.BedrockTitanTextEmbeddingClient");
     bedrock.put("cohere.embed-v4", PKG + "bedrock.BedrockCohereEmbeddingClient");
+    bedrock.put("amazon.titan-embed-image-v1", PKG + "bedrock.BedrockTitanMultimodalEmbeddingClient");
     BEDROCK_CLIENTS = Collections.unmodifiableMap(bedrock);
   }
 

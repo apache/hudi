@@ -78,7 +78,8 @@ public class TestVideoPreprocessorsShareOneTable extends EmbeddingRoundTestBase 
   private TypedProperties computeProps() {
     String model = EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL;
     TypedProperties props = props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, VIDEO_INLINE_MAX_BYTES,
-        model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, DummyMultimodalEmbeddingClient.PROVIDER);
+        model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, DummyMultimodalEmbeddingClient.PROVIDER,
+        model + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX, "text,image");
     // the provider decides the client: the base's scripted client class is removed
     props.remove(model + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX);
     return props;

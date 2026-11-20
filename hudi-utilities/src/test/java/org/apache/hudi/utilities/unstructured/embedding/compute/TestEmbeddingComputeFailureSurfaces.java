@@ -222,7 +222,7 @@ class TestEmbeddingComputeFailureSurfaces {
     properties.setProperty(prefix + OpenAiClientConfig.ENDPOINT_SUFFIX, "http://127.0.0.1:1/v1");
     properties.setProperty(prefix + OpenAiClientConfig.CREDENTIAL_FILE_SUFFIX, credential.toString());
     EmbeddingModelSpec model = new EmbeddingModelSpec("m1", "emb_m1", 4, OpenAiCompatibleEmbeddingClient.class.getName(),
-        "openai", "text-embedding-3-small");
+        "openai", "text-embedding-3-small", Collections.singleton("text"));
     List<Row> input = Arrays.asList(
         RowFactory.create("first", 101L, 17L, "text", 0L, "", null, null, null),
         RowFactory.create("second", 101L, 17L, "text", 0L, "", null, null, null));

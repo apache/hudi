@@ -92,8 +92,9 @@ public class TestEmbeddingRoundErrorTable extends EmbeddingRoundTestBase {
   @Test
   public void withTheErrorTableOffAPermanentInputFailsTheRound() throws Exception {
     announce(text("permanent", "gamma " + ScriptedEmbeddingClient.PERMANENT));
+    // only text is prepared: content of a modality the text model does not declare is refused at start with the error table off
     TypedProperties props = props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
-        HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), "false");
+        HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), "false", EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key(), TEXT_EXTENSION);
 
     Exception failure = assertThrows(Exception.class, () -> round(props));
 

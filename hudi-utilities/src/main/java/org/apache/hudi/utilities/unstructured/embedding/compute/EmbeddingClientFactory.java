@@ -26,6 +26,7 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingModelSpec;
 import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockClientConfig;
 import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockCohereEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockModelFamily;
+import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockTitanMultimodalEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockTitanTextEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.jina.JinaClientConfig;
 import org.apache.hudi.utilities.unstructured.embedding.compute.jina.JinaEmbeddingClient;
@@ -49,6 +50,7 @@ public final class EmbeddingClientFactory {
   static {
     BEDROCK_CLIENTS.put(BedrockModelFamily.TITAN_EMBED_TEXT_V2, BedrockTitanTextEmbeddingClient.class.getName());
     BEDROCK_CLIENTS.put(BedrockModelFamily.COHERE_EMBED_V4, BedrockCohereEmbeddingClient.class.getName());
+    BEDROCK_CLIENTS.put(BedrockModelFamily.TITAN_EMBED_IMAGE_V1, BedrockTitanMultimodalEmbeddingClient.class.getName());
   }
 
   private EmbeddingClientFactory() {

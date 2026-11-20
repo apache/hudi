@@ -36,7 +36,7 @@ import java.util.Set;
  * ({@link #vectorForImage}), so a test can tell which image a vector was computed from. A failure to prepare the image is that
  * input's outcome ({@link ImageFailures}). It reads no configuration besides the model's.
  */
-public class DummyMultimodalEmbeddingClient implements MultimodalEmbeddingClient {
+public class DummyMultimodalEmbeddingClient implements EmbeddingClient {
 
   /** Provider id of this client ({@code hoodie.unstructured.embedding.model.<alias>.provider}); used only when named. */
   public static final String PROVIDER = "dummy-multimodal";

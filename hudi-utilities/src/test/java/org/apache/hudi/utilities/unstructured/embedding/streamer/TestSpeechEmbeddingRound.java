@@ -95,6 +95,8 @@ public class TestSpeechEmbeddingRound extends EmbeddingRoundTestBase {
     List<String> overrides = new ArrayList<>(Arrays.asList(audio));
     overrides.add(model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX);
     overrides.add(DummyMultimodalEmbeddingClient.PROVIDER);
+    overrides.add(model + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX);
+    overrides.add("text,image");
     TypedProperties props = props(table(), mode, VIDEO_INLINE_MAX_BYTES, overrides.toArray(new String[0]));
     // the provider decides the client: the base's scripted client class is removed
     props.remove(model + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX);

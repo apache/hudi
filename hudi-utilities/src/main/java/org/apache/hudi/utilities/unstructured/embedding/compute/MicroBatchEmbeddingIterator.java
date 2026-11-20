@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.NoSuchElementException;
 
 /**
@@ -60,14 +61,16 @@ import java.util.NoSuchElementException;
  * retried and fails the task. No retry state is stored in a row. At most one
  * batch is buffered.
  *
- * <p>Image rows (modality {@code image}) are handed only to a {@link MultimodalEmbeddingClient}, as
+ * <p>Rows are handed to the client only when the model declares their modality
+ * ({@link EmbeddingModelSpec#getModalities()}, {@code hoodie.unstructured.embedding.model.<alias>.modalities}); a row of another
+ * modality is never sent and gets a PERMANENT failure {@code EMBED-COMPUTE-<MODALITY>-NOT-SUPPORTED} naming the model and the
+ * provider, in its place in the batch. Image rows of a model that declares {@code image} are handed to the client as
  * {@link EmbeddingInput#storedImage} over their {@code prepared_image} and {@link EmbeddingInput#image()}: an
  * {@link ImagePreparer} under the compute image settings ({@link EmbeddingTableConfig#imagePreprocessing()}) over a seekable
  * stream of the stored input, run lazily per input when the client builds its request (never a batch of decoded images), which
  * decodes and resizes the image in memory within the raster budget. A failure of the open, a read or a seek of the stored
  * input, a premature EOF included, reaches the client as a storage failure ({@link SeekableBlobImageInputStream#openStoredInput});
- * the client turns every preparation failure into that input's outcome with {@link ImageFailures#result}. A client that embeds
- * text only is never called for image rows: each gets a PERMANENT failure naming the provider.
+ * the client turns every preparation failure into that input's outcome with {@link ImageFailures#result}.
  *
  * <p>Output rows keep every prepared column as read. A failing {@link EmbeddingClient#close()} is only logged (WARN {@code EMBED-COMPUTE-CLIENT-CLOSE-FAILED}).
  */
@@ -96,9 +99,7 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
   private final int preparedImageIndex;
   /** Opens image rows' stored inputs; null for an iterator built for text rows only. */
   private final BlobBytesSource storedInputs;
-  /** Whether {@link #client} embeds images ({@link MultimodalEmbeddingClient}). */
-  private final boolean multimodal;
-  /** Prepares the image inputs of a multimodal client; null for a client that embeds text only. */
+  /** Prepares image inputs of a model that declares image; null otherwise. */
   private final ImagePreparer imagePreparer;
   private final EmbeddingClient client;
   /** A permanent initialization refusal is delivered as a normal task outcome, after the factory closes the client. */
@@ -139,6 +140,11 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     this.textIndex = schema.fieldIndex(EmbeddingTableSchema.PREPARED_TEXT_CHUNK);
     this.preparedImageIndex = schema.fieldIndex(EmbeddingTableSchema.PREPARED_IMAGE);
     this.storedInputs = storedInputs;
+    if (model.getModalities().isEmpty()) {
+      throw new EmbeddingClientConfigException("Config " + EmbeddingTableConfig.MODEL_PREFIX + model.getName()
+          + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX + " is not set: declare the modalities model " + model.getName()
+          + " embeds (text, image or text,image)");
+    }
     // validated before the client starts, so a bad image setting leaves no client to close
     ImagePreprocessingSpec imageSpec = config.imagePreprocessing();
     EmbeddingClient created = null;
@@ -157,8 +163,7 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     }
     this.client = created;
     this.initializationRefusal = rejected;
-    this.multimodal = created instanceof MultimodalEmbeddingClient;
-    this.imagePreparer = multimodal ? new ImagePreparer(imageSpec) : null;
+    this.imagePreparer = model.declares(EmbeddingTableSchema.MODALITY_IMAGE) ? new ImagePreparer(imageSpec) : null;
     this.rows = rows;
     TaskContext taskContext = TaskContext.get();
     if (taskContext != null) {
@@ -187,7 +192,7 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
   }
 
   /**
-   * Reads one micro batch and calls the model once for its inputs; an image row a text-only client cannot embed is refused
+   * Reads one micro batch and calls the model once for its inputs; an image row the model does not declare is refused
    * without a call, in its place in the batch.
    */
   private Iterator<Row> embedNextBatch() {
@@ -221,13 +226,24 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     return processed.iterator();
   }
 
-  /** The PERMANENT result of an image row given to a client that embeds text only; null for a row the client is called for. */
+  /**
+   * The PERMANENT result of a row whose modality the model does not declare, {@code EMBED-COMPUTE-<MODALITY>-NOT-SUPPORTED};
+   * null for a row the client is called for.
+   */
   private EmbeddingResult refusal(Row row) {
-    if (multimodal || !EmbeddingTableSchema.MODALITY_IMAGE.equals(row.getString(modalityIndex))) {
+    String modality = row.getString(modalityIndex);
+    if (model.declares(modality)) {
       return null;
     }
-    return EmbeddingResult.permanent("EMBED-COMPUTE-IMAGE-NOT-SUPPORTED model=" + model.getName() + " provider="
-        + model.getProvider() + ": this provider's client embeds text only; an image row needs a multimodal client");
+    return EmbeddingResult.permanent(notSupported(model, modality));
+  }
+
+  /** The error of a row of {@code modality}, which {@code model} does not declare. */
+  static String notSupported(EmbeddingModelSpec model, String modality) {
+    return "EMBED-COMPUTE-" + String.valueOf(modality).toUpperCase(Locale.ROOT) + "-NOT-SUPPORTED model=" + model.getName()
+        + " provider=" + model.getProvider() + ": " + EmbeddingTableConfig.MODEL_PREFIX + model.getName()
+        + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX + "=" + String.join(",", model.getModalities()) + " does not declare "
+        + modality + ", so this row is not sent to the model";
   }
 
   /**
