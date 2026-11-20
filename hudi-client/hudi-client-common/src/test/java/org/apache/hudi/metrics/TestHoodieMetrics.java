@@ -409,11 +409,59 @@ public class TestHoodieMetrics {
   // -----------------------------------------------------------------------
 
   @Test
+  public void testPre12543MetricNamesRemainStable() {
+    assertPre12543MetricNames(hoodieMetrics, "");
+
+    // Metrics added after #12543 retain the action-first naming convention.
+    hoodieMetrics.updatePostCommitMetrics(true, 1L);
+    assertTrue(metrics.getRegistry().getCounters().containsKey("postCommit.success.counter"));
+  }
+
+  @Test
+  public void testPre12543MetricNamesRemainStableWithPrefix() {
+    when(writeConfig.getMetricReporterMetricsNamePrefix()).thenReturn("my_prefix");
+    HoodieMetrics prefixedMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
+
+    assertPre12543MetricNames(prefixedMetrics, "my_prefix.");
+  }
+
+  private void assertPre12543MetricNames(HoodieMetrics hoodieMetrics, String prefix) {
+    assertEquals(prefix + "timer.rollback", hoodieMetrics.rollbackTimerName);
+    assertEquals(prefix + "timer.clean", hoodieMetrics.cleanTimerName);
+    assertEquals(prefix + "timer.archive", hoodieMetrics.archiveTimerName);
+    assertEquals(prefix + "timer.commit", hoodieMetrics.commitTimerName);
+    assertEquals(prefix + "timer.deltacommit", hoodieMetrics.deltaCommitTimerName);
+    assertEquals(prefix + "timer.clustering", hoodieMetrics.clusterCommitTimerName);
+    assertEquals(prefix + "timer.finalize", hoodieMetrics.finalizeTimerName);
+    assertEquals(prefix + "timer.compaction", hoodieMetrics.compactionTimerName);
+    assertEquals(prefix + "timer.logcompaction", hoodieMetrics.logCompactionTimerName);
+    assertEquals(prefix + "timer.index", hoodieMetrics.indexTimerName);
+    assertEquals(prefix + "timer.source_read_and_index", hoodieMetrics.sourceReadAndIndexTimerName);
+
+    when(writeConfig.isLockingMetricsEnabled()).thenReturn(true);
+    hoodieMetrics.getConflictResolutionCtx().stop();
+    hoodieMetrics.emitConflictResolutionSuccessful();
+    hoodieMetrics.emitConflictResolutionFailed();
+    hoodieMetrics.emitCompactionRequested();
+    hoodieMetrics.emitCompactionCompleted();
+
+    assertTrue(hoodieMetrics.getMetrics().getRegistry().getTimers().containsKey(prefix + "timer.conflict_resolution"));
+    assertTrue(hoodieMetrics.getMetrics().getRegistry().getCounters()
+        .containsKey(prefix + "counter.conflict_resolution.success"));
+    assertTrue(hoodieMetrics.getMetrics().getRegistry().getCounters()
+        .containsKey(prefix + "counter.conflict_resolution.failure"));
+    assertTrue(hoodieMetrics.getMetrics().getRegistry().getCounters()
+        .containsKey(prefix + "counter.compaction.requested"));
+    assertTrue(hoodieMetrics.getMetrics().getRegistry().getCounters()
+        .containsKey(prefix + "counter.compaction.completed"));
+  }
+
+  @Test
   public void testConflictResolutionSuccessAndFailureCounters() {
     when(writeConfig.isLockingMetricsEnabled()).thenReturn(true);
 
-    String successName = hoodieMetrics.getMetricsName(HoodieMetrics.CONFLICT_RESOLUTION_STR, HoodieMetrics.SUCCESS_COUNTER);
-    String failureName = hoodieMetrics.getMetricsName(HoodieMetrics.CONFLICT_RESOLUTION_STR, HoodieMetrics.FAILURE_COUNTER);
+    String successName = "counter.conflict_resolution.success";
+    String failureName = "counter.conflict_resolution.failure";
 
     hoodieMetrics.emitConflictResolutionSuccessful();
     hoodieMetrics.emitConflictResolutionSuccessful();
@@ -439,12 +487,8 @@ public class TestHoodieMetrics {
 
   @Test
   public void testCompactionCounters() {
-    String requestedName = hoodieMetrics.getMetricsName(
-        HoodieTimeline.COMPACTION_ACTION,
-        HoodieTimeline.REQUESTED_COMPACTION_SUFFIX + HoodieMetrics.COUNTER_METRIC_EXTENSION);
-    String completedName = hoodieMetrics.getMetricsName(
-        HoodieTimeline.COMPACTION_ACTION,
-        HoodieTimeline.COMPLETED_COMPACTION_SUFFIX + HoodieMetrics.COUNTER_METRIC_EXTENSION);
+    String requestedName = "counter.compaction.requested";
+    String completedName = "counter.compaction.completed";
 
     hoodieMetrics.emitCompactionRequested();
     hoodieMetrics.emitCompactionRequested();
@@ -492,9 +536,9 @@ public class TestHoodieMetrics {
 
   @Test
   public void testPostCommitMetrics() {
-    String successName = hoodieMetrics.getMetricsName(HoodieMetrics.POST_COMMIT_STR, HoodieMetrics.SUCCESS_COUNTER);
-    String failureName = hoodieMetrics.getMetricsName(HoodieMetrics.POST_COMMIT_STR, HoodieMetrics.FAILURE_COUNTER);
-    String durationName = hoodieMetrics.getMetricsName(HoodieMetrics.POST_COMMIT_STR, HoodieMetrics.DURATION_STR);
+    String successName = "postCommit.success.counter";
+    String failureName = "postCommit.failure.counter";
+    String durationName = "postCommit.duration";
 
     hoodieMetrics.updatePostCommitMetrics(true, 100L);
     hoodieMetrics.updatePostCommitMetrics(true, 200L);
