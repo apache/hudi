@@ -313,10 +313,14 @@ public class SparkBootstrapCommitActionExecutor<T>
         })
         .collect(Collectors.toList());
 
+    // Use locals in the closure so it does not capture this executor, whose transaction manager may hold a
+    // non-serializable lock (e.g. the ZooKeeper lock provider's mutex)
+    HoodieWriteConfig writeConfig = config;
+    HoodieTable hoodieTable = table;
     context.setJobStatus(this.getClass().getSimpleName(), "Run metadata-only bootstrap operation: " + config.getTableName());
     return context.parallelize(
             bootstrapPaths, Math.min(bootstrapPaths.size(), config.getBootstrapParallelism()))
-        .map(partitionFsPair -> getMetadataHandler(config, table, partitionFsPair.getRight().getRight()).runMetadataBootstrap(partitionFsPair.getLeft(),
+        .map(partitionFsPair -> getMetadataHandler(writeConfig, hoodieTable, partitionFsPair.getRight().getRight()).runMetadataBootstrap(partitionFsPair.getLeft(),
             partitionFsPair.getRight().getLeft(), keyGenerator));
   }
 

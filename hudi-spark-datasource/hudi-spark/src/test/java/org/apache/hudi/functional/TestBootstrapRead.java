@@ -18,9 +18,14 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -131,6 +136,44 @@ public class TestBootstrapRead extends TestBootstrapReadBase {
     doUpdate(options, "001");
     compareTables();
     verifyMetaColOnlyRead(1);
+  }
+
+  /**
+   * Metadata-only bootstrap with optimistic concurrency control and a lock provider that holds non-serializable
+   * state (like the mutex of the ZooKeeper based lock provider). The Spark closure running the metadata bootstrap
+   * must not capture the bootstrap executor and thereby its transaction manager, else the job fails with
+   * "Task not serializable".
+   */
+  @Test
+  public void testMetadataBootstrapWithNonSerializableLockProvider() {
+    this.bootstrapType = "metadata";
+    this.dashPartitions = true;
+    this.tableType = COPY_ON_WRITE;
+    this.nPartitions = 0;
+    setupDirs();
+
+    Map<String, String> options = setBootstrapOptions();
+    options.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), "OPTIMISTIC_CONCURRENCY_CONTROL");
+    options.put(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), "LAZY");
+    options.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NonSerializableLockProvider.class.getName());
+    Dataset<Row> bootstrapDf = sparkSession.emptyDataFrame();
+    bootstrapDf.write().format("hudi")
+        .options(options)
+        .mode(SaveMode.Overwrite)
+        .save(bootstrapTargetPath);
+    compareTables();
+    verifyMetaColOnlyRead(0);
+  }
+
+  /**
+   * An in-process lock provider with an extra field that cannot be serialized.
+   */
+  public static class NonSerializableLockProvider extends InProcessLockProvider {
+    private final Object nonSerializableState = new Object();
+
+    public NonSerializableLockProvider(LockConfiguration lockConfiguration, StorageConfiguration<?> conf) {
+      super(lockConfiguration, conf);
+    }
   }
 
   private static Map<String, String> withLegacyMergeHandle(Map<String, String> options) {
