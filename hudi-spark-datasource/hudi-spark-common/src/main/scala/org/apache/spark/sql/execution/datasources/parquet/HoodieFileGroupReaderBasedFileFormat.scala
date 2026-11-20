@@ -116,6 +116,18 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
+  def getTablePath: String = tablePath
+
+  def getQueryTimestamp: String = queryTimestamp
+
+  def isMORTable: Boolean = isMOR
+
+  def isIncrementalQuery: Boolean = isIncremental
+
+  def isBootstrapTable: Boolean = isBootstrap
+
+  def isMultipleBaseFileFormats: Boolean = isMultipleBaseFileFormatsEnabled
+
   private val sanitizedTableName = HoodieSchemaUtils.getRecordQualifiedName(tableName)
 
   private def evaluateRequiredFiltersPerRow: Boolean = requiredFilters.nonEmpty && !requiredFiltersAppliedInPlan

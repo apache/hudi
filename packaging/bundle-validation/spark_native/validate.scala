@@ -83,4 +83,170 @@ val morRight = write("native_mor_2", "MERGE_ON_READ", Overwrite, rows(0, 300))
 write("native_mor_2", "MERGE_ON_READ", Append, rows(0, 150, 1000))
 probe("mor", morLeft, morRight)
 
+// Probes for the native Hudi scan (hudi-rs inside Comet). Only meaningful for a
+// bundle built with the Hudi-built Comet (-Dcomet.hudi.build), so gated on the
+// environment; the probes self-assert and exit non-zero on any failure or when
+// a probe was skipped by an exception spark-shell swallowed.
+if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
+  var failures = 0
+  var checksRun = 0
+  val expectedChecks = 25
+  def check(label: String, condition: Boolean, detail: => String): Unit = {
+    checksRun += 1
+    if (condition) {
+      println(s"::warning::native hudi scan check passed: $label")
+    } else {
+      println(s"::error::native hudi scan check failed: $label")
+      println(detail)
+      failures += 1
+    }
+  }
+  // The reader in this bundle's Comet build supports table versions 6/8/9, so
+  // the probes write their own version 8 tables, with updates in log files and
+  // a delete so the merge-on-read probe exercises real native log merging.
+  def writeV8(name: String, tableType: String, mode: org.apache.spark.sql.SaveMode,
+              df: org.apache.spark.sql.DataFrame, operation: String,
+              options: Map[String, String] = Map.empty): String = {
+    val path = "file:///tmp/hudi-bundles/tests/" + name
+    df.write.format("hudi").
+      option("hoodie.write.table.version", "8").
+      option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+      option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+      option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+      option(TABLE_TYPE_OPT_KEY, tableType).
+      option("hoodie.datasource.write.operation", operation).
+      option(TABLE_NAME, name).
+      options(options).
+      mode(mode).
+      save(path)
+    path
+  }
+  def updatedRows(from: Int, to: Int) = spark.range(from, to).selectExpr(
+    "concat('id-', cast(id as string)) as uuid",
+    "cast(id % 3 as string) as partitionpath",
+    "cast(id + 100000 as double) as fare",
+    "id + 100000 as ts")
+  val nativeCow = writeV8("native_scan_cow_v8", "COPY_ON_WRITE", Overwrite, rows(0, 300), "upsert")
+  writeV8("native_scan_cow_v8", "COPY_ON_WRITE", Append, updatedRows(0, 100), "upsert")
+  val nativeMor = writeV8("native_scan_mor_v8", "MERGE_ON_READ", Overwrite, rows(0, 300), "upsert")
+  writeV8("native_scan_mor_v8", "MERGE_ON_READ", Append, updatedRows(0, 150), "upsert")
+  writeV8("native_scan_mor_v8", "MERGE_ON_READ", Append, rows(280, 300), "delete")
+
+  def readSorted(path: String, native: Boolean): (Array[String], String) = {
+    spark.conf.set("spark.comet.scan.hudi.enabled", native.toString)
+    val df = spark.read.format("hudi").load(path)
+      .selectExpr("uuid", "partitionpath", "fare", "ts").orderBy("uuid")
+    val result = (df.collect().map(_.toString), df.queryExecution.executedPlan.toString)
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    result
+  }
+  for ((label, path, isMor) <- Seq(
+      ("cow", nativeCow, false),
+      ("mor", nativeMor, true))) {
+    val (jvmRows, _) = readSorted(path, native = false)
+    val (nativeRows, nativePlan) = readSorted(path, native = true)
+    check(s"$label rows match the JVM read (n=${jvmRows.length})",
+      jvmRows.sameElements(nativeRows),
+      s"jvm n=${jvmRows.length} native n=${nativeRows.length}\n" +
+        s"only-jvm=${jvmRows.diff(nativeRows).take(5).mkString(";")}\n" +
+        s"only-native=${nativeRows.diff(jvmRows).take(5).mkString(";")}")
+    check(s"$label row count reflects the writes",
+      jvmRows.length == (if (isMor) 280 else 300), s"n=${jvmRows.length}")
+    check(s"$label scan is native", nativePlan.contains("CometHudiNativeScan"), nativePlan)
+    if (isMor) {
+      check(s"$label read has no row-to-columnar bridge",
+        !nativePlan.contains("CometSparkRowToColumnar"), nativePlan)
+    }
+  }
+  def joined(native: Boolean): (Array[String], String) = {
+    spark.conf.set("spark.comet.scan.hudi.enabled", native.toString)
+    val left = spark.read.format("hudi").load(nativeCow).selectExpr("uuid", "fare as cow_fare")
+    val right = spark.read.format("hudi").load(nativeMor).selectExpr("uuid", "fare as mor_fare")
+    val df = left.join(right, "uuid").selectExpr("uuid", "cow_fare", "mor_fare").orderBy("uuid")
+    val result = (df.collect().map(_.toString), df.queryExecution.executedPlan.toString)
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    result
+  }
+  val (joinJvm, _) = joined(native = false)
+  val (joinNative, joinPlan) = joined(native = true)
+  check("join rows match the JVM read", joinJvm.sameElements(joinNative),
+    s"jvm n=${joinJvm.length} native n=${joinNative.length}")
+  check("join runs as a native sort-merge join", joinPlan.contains("CometSortMergeJoin"), joinPlan)
+  // The adaptive plan string repeats the tree in its Final and Initial
+  // sections, so count within the final plan only.
+  val joinFinalPlan = joinPlan.split("== Initial Plan ==").head
+  check("join reads both sides through the native scan",
+    "CometHudiNativeScan".r.findAllIn(joinFinalPlan).length >= 2, joinPlan)
+  check("join plan has no row-to-columnar bridge",
+    !joinPlan.contains("CometSparkRowToColumnar"), joinPlan)
+
+  // Shapes the provider must hand back to the JVM scan, and shapes it must
+  // read natively with the same rows as the JVM read.
+  def compare(label: String, expectNative: Boolean)(q: => org.apache.spark.sql.DataFrame): Unit = {
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    val jvmDf = q
+    val jvmRows = jvmDf.collect().map(_.toString).sorted
+    val jvmTasks = jvmDf.rdd.getNumPartitions
+    spark.conf.set("spark.comet.scan.hudi.enabled", "true")
+    val nativeDf = q
+    val nativeRows = nativeDf.collect().map(_.toString).sorted
+    val nativePlan = nativeDf.queryExecution.executedPlan.toString
+    val nativeTasks = nativeDf.rdd.getNumPartitions
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    check(s"$label rows match the JVM read (n=${jvmRows.length})", jvmRows.sameElements(nativeRows),
+      s"jvm n=${jvmRows.length} native n=${nativeRows.length}\n" +
+        s"only-jvm=${jvmRows.diff(nativeRows).take(5).mkString(";")}\n" +
+        s"only-native=${nativeRows.diff(jvmRows).take(5).mkString(";")}")
+    check(s"$label scan is ${if (expectNative) "native" else "left on the JVM"}",
+      nativePlan.contains("CometHudiNativeScan") == expectNative, nativePlan)
+    if (expectNative) {
+      check(s"$label packs file slices into as many tasks as the JVM scan", nativeTasks == jvmTasks,
+        s"jvm tasks=$jvmTasks native tasks=$nativeTasks")
+    }
+  }
+  spark.read.format("hudi").load(nativeCow).createOrReplaceTempView("native_cow")
+  // Spark applies a partition filter holding a subquery at execution time, after the listing.
+  compare("scalar subquery partition filter", expectNative = false)(
+    spark.sql("select uuid, fare from native_cow where partitionpath = (select max(partitionpath) from native_cow)"))
+  compare("skip_merge read", expectNative = false)(
+    spark.read.format("hudi").option("hoodie.datasource.merge.type", "skip_merge").load(nativeMor)
+      .selectExpr("uuid", "fare", "ts"))
+  // Null and empty partition values share the default partition path, which the
+  // JVM read gives back as null.
+  val nullPartitions = writeV8("native_scan_null_partition_v8", "COPY_ON_WRITE", Overwrite,
+    spark.range(0, 90).selectExpr(
+      "concat('id-', cast(id as string)) as uuid",
+      "case when id % 3 = 0 then null when id % 3 = 1 then '' else 'p' end as partitionpath",
+      "cast(id as double) as fare", "id as ts"), "upsert")
+  // A partitioned scan always carries its partition columns, whatever the
+  // query projects, so the table stays on the JVM scan.
+  compare("default partition", expectNative = false)(
+    spark.read.format("hudi").load(nullPartitions).selectExpr("uuid", "fare"))
+  // The JVM read appends partition values parsed back from the path; a
+  // timestamp's path form keeps milliseconds and follows the JVM time zone.
+  val timestampPartition = writeV8("native_scan_timestamp_partition_v8", "COPY_ON_WRITE", Overwrite,
+    rows(0, 60).withColumn("partitionpath",
+      org.apache.spark.sql.functions.expr("timestamp_micros((ts % 3) * 1000000 + 123456)")), "upsert")
+  compare("timestamp partition column", expectNative = false)(
+    spark.read.format("hudi").load(timestampPartition).selectExpr("uuid", "partitionpath", "fare"))
+  // A column added after the base files were written is null-filled from the table schema.
+  val evolved = writeV8("native_scan_mor_evolved_v8", "MERGE_ON_READ", Overwrite, rows(0, 300), "upsert")
+  writeV8("native_scan_mor_evolved_v8", "MERGE_ON_READ", Append,
+    updatedRows(0, 100).withColumn("extra", org.apache.spark.sql.functions.lit("new")), "upsert")
+  compare("added column over merge-on-read logs", expectNative = true)(
+    spark.read.format("hudi").load(evolved).selectExpr("uuid", "fare", "extra"))
+  // Small files share a task, as in the JVM scan.
+  val manyFiles = writeV8("native_scan_many_files_v8", "MERGE_ON_READ", Overwrite, rows(0, 30000), "upsert",
+    Map("hoodie.parquet.max.file.size" -> "65536", "hoodie.parquet.small.file.limit" -> "0",
+      "hoodie.parquet.block.size" -> "65536"))
+  writeV8("native_scan_many_files_v8", "MERGE_ON_READ", Append, updatedRows(0, 15000), "upsert")
+  compare("many small file slices", expectNative = true)(
+    spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts"))
+
+  if (failures > 0 || checksRun != expectedChecks) {
+    println(s"::error::native hudi scan probes: failures=$failures checksRun=$checksRun expected=$expectedChecks")
+    System.exit(1)
+  }
+}
+
 System.exit(0)

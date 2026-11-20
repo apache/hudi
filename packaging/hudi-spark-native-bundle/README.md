@@ -33,10 +33,10 @@ Comet publishes one artifact per Spark minor version, so the bundle exists only 
 | 4.0   | 2.13       | `hudi-spark4.0-native-bundle_2.13`    |
 | 4.1   | 2.13       | `hudi-spark4.1-native-bundle_2.13`    |
 
-`-Dspark3.3` and `-Dspark4.2` build fine and produce no bundle (Comet dropped 3.3 after 0.7.0 and
-supports 4.2 only experimentally, with no published artifact). Comet 1.1.0 deprecates Spark 3.4, so that bundle goes away once Comet drops it.
+`-Dspark3.3` and `-Dspark4.2` build fine and produce no bundle (Comet dropped 3.3 after 0.7.0, and
+the 4.2 artifact Comet publishes from 1.2.0 has no profile here yet). Comet deprecated Spark 3.4 in 1.0.0, so that bundle goes away once Comet drops it.
 
-Run the bundle on the Spark patch release Comet is built against (3.5.9, 4.0.4 and 4.1.3 for Comet 1.1.0) or a
+Run the bundle on the Spark patch release Comet is built against (3.5.9, 4.0.4 and 4.1.3 for Comet 1.2.0) or a
 close one: Spark 3.5.1 lacks `InMemoryTableScanLike`, which Comet's planner rule references, so Comet fails to
 initialize there and takes the session down with it.
 
