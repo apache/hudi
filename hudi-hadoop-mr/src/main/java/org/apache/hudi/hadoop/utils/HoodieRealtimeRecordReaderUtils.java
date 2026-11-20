@@ -34,6 +34,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -53,8 +54,6 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -73,9 +72,8 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
+@Slf4j
 public class HoodieRealtimeRecordReaderUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReaderUtils.class);
-
   /**
    * get the max compaction memory in bytes from JobConf.
    */
@@ -209,7 +207,7 @@ public class HoodieRealtimeRecordReaderUtils {
           if (record.getSchema().getField(field.name()) != null) {
             fieldValue = record.get(field.name());
           } else {
-            LOG.debug("Field: {} not found in Schema: {}", field.name(), schema);
+            log.debug("Field: {} not found in Schema: {}", field.name(), schema);
           }
           recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema(), supportTimestamp);
         }

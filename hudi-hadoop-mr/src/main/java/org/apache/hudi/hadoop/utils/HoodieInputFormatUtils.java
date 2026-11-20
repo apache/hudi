@@ -56,6 +56,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -72,8 +73,6 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -94,6 +93,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
+@Slf4j
 public class HoodieInputFormatUtils {
 
   // These positions have to be deterministic across all tables
@@ -101,8 +101,6 @@ public class HoodieInputFormatUtils {
   public static final int HOODIE_RECORD_KEY_COL_POS = 2;
   public static final int HOODIE_PARTITION_PATH_COL_POS = 3;
   public static final String HOODIE_READ_COLUMNS_PROP = "hoodie.read.columns.set";
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieInputFormatUtils.class);
 
   public static FileInputFormat getInputFormat(HoodieFileFormat baseFileFormat, boolean realtime, Configuration conf) {
     switch (baseFileFormat) {
@@ -263,7 +261,7 @@ public class HoodieInputFormatUtils {
           .findInstantsBefore(pendingCompactionInstant.get().requestedTime());
       int numCommitsFilteredByCompaction = commitsAndCompactionTimeline.getCommitsTimeline().countInstants()
           - instantsTimeline.getCommitsTimeline().countInstants();
-      LOG.info("Earliest pending compaction instant is: {} skipping {} commits",
+      log.info("Earliest pending compaction instant is: {} skipping {} commits",
           pendingCompactionInstant.get().requestedTime(), numCommitsFilteredByCompaction);
 
       return instantsTimeline;
@@ -375,7 +373,7 @@ public class HoodieInputFormatUtils {
     String lastIncrementalTs = HoodieHiveUtils.readStartCommitTime(job, tableName);
     // Total number of commits to return in this batch. Set this to -1 to get all the commits.
     Integer maxCommits = HoodieHiveUtils.readMaxCommits(job, tableName);
-    LOG.info("Last Incremental timestamp was set as {}", lastIncrementalTs);
+    log.info("Last Incremental timestamp was set as {}", lastIncrementalTs);
     return timeline.findInstantsAfter(lastIncrementalTs, maxCommits);
   }
 
@@ -415,7 +413,7 @@ public class HoodieInputFormatUtils {
     if (!baseDir.isPresent()) {
       throw new TableNotFoundException(partitionPath.toString());
     }
-    LOG.info("Reading hoodie metadata from path {}", baseDir.get());
+    log.info("Reading hoodie metadata from path {}", baseDir.get());
     return HoodieTableMetaClient.builder()
         .setConf(storage.getConf().newInstance()).setBasePath(baseDir.get().toString()).build();
   }
@@ -456,11 +454,11 @@ public class HoodieInputFormatUtils {
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();
     for (HoodieBaseFile filteredFile : filteredFiles) {
-      LOG.debug("Processing incremental hoodie file - {}", filteredFile.getPath());
+      log.debug("Processing incremental hoodie file - {}", filteredFile.getPath());
       filteredFile = refreshFileStatus(job.getConfiguration(), filteredFile);
       returns.add(getFileStatus(filteredFile));
     }
-    LOG.info("Total paths to process after hoodie incremental filter {}", filteredFiles.size());
+    log.info("Total paths to process after hoodie incremental filter {}", filteredFiles.size());
     return returns;
   }
 
@@ -503,7 +501,7 @@ public class HoodieInputFormatUtils {
     try {
       if (baseFile.getFileSize() == 0) {
         HoodieStorage storage = HoodieStorageUtils.getStorage(dataPath, HadoopFSUtils.getStorageConf(conf));
-        LOG.info("Refreshing file status {}", baseFile.getPath());
+        log.info("Refreshing file status {}", baseFile.getPath());
         return new HoodieBaseFile(storage.getPathInfo(dataPath),
             baseFile.getBootstrapBaseFile().orElse(null));
       }

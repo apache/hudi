@@ -28,6 +28,7 @@ import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -35,8 +36,6 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,9 +51,8 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFileg
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
+@Slf4j
 public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetRealtimeInputFormat.class);
 
   public HoodieParquetRealtimeInputFormat() {
     super(new HoodieMergeOnReadTableInputFormat());
@@ -80,7 +78,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(getStorageConf(jobConf)).setBasePath(realtimeSplit.getBasePath()).build();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     addProjectionToJobConf(realtimeSplit, jobConf, tableConfig);
-    LOG.info("Creating record reader with readCols :{}, Ids :{}", jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR), jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+    log.info("Creating record reader with readCols :{}, Ids :{}", jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR), jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
 
     // for log only split, set the parquet reader as empty.
     if (isLogFile(realtimeSplit.getPath())) {
@@ -99,7 +97,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
     // actual heavy lifting of reading the parquet files happen.
     if (HoodieRealtimeInputFormatUtils.canAddProjectionToJobConf(realtimeSplit, jobConf)) {
       synchronized (jobConf) {
-        LOG.info("Before adding Hoodie columns, Projections :{}, Ids :{}", jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR), jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+        log.info("Before adding Hoodie columns, Projections :{}, Ids :{}", jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR), jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
         if (HoodieRealtimeInputFormatUtils.canAddProjectionToJobConf(realtimeSplit, jobConf)) {
           // Hive (across all versions) fails for queries like select count(`_hoodie_commit_time`) from table;
           // In this case, the projection fields gets removed. Looking at HiveInputFormat implementation, in some cases

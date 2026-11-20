@@ -20,12 +20,11 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.RecordReader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.stream.Collectors;
@@ -34,9 +33,8 @@ import java.util.stream.IntStream;
 /**
  * Stitches 2 record reader returned rows and presents a concatenated view to clients.
  */
+@Slf4j
 public class BootstrapColumnStichingRecordReader implements RecordReader<NullWritable, ArrayWritable> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BootstrapColumnStichingRecordReader.class);
 
   private final RecordReader<NullWritable, ArrayWritable> leftColsRecordReader;
   private final RecordReader<NullWritable, ArrayWritable> rightColsRecordReader;
@@ -60,7 +58,7 @@ public class BootstrapColumnStichingRecordReader implements RecordReader<NullWri
           .toArray(new String[0]);
       values = new ArrayWritable(vals);
     }
-    LOG.info("Total ArrayWritable Length :{}", values.get().length);
+    log.info("Total ArrayWritable Length :{}", values.get().length);
   }
 
   @Override
