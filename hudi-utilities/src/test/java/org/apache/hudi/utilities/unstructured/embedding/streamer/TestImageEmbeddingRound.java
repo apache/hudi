@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.unstructured.embedding.streamer;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingRoundTestBase;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingStreamers;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingStreamers.Round;
@@ -78,7 +79,8 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
       return props(table(), mode, IMAGE_INLINE_MAX_BYTES);
     }
     String model = EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL;
-    TypedProperties props = props(table(), mode, IMAGE_INLINE_MAX_BYTES, model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, provider);
+    TypedProperties props = props(table(), mode, IMAGE_INLINE_MAX_BYTES, model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, provider,
+        model + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX, DummyMultimodalEmbeddingClient.PROVIDER.equals(provider) ? "text,image" : "text");
     // the provider decides the client: the base's scripted client class is removed
     props.remove(model + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX);
     return props;
@@ -154,7 +156,7 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void textOnlyProviderRefusesImageRowsAndEmbedsTextRows() throws Exception {
+  public void textOnlyDeclarationRefusesImageRowsAndEmbedsTextRows() throws Exception {
     FixtureFile text = text("notes", "alpha", "beta");
     announce(small, text);
     TypedProperties props = imageProps(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, DummyEmbeddingClient.PROVIDER);
@@ -175,7 +177,76 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
     Map<String, Object> error = round.getErrors().get(0);
     assertEquals(small.sha, error.get("source_path_sha"));
     assertTrue(String.valueOf(error.get("error")).contains("EMBED-COMPUTE-IMAGE-NOT-SUPPORTED"), error.toString());
-    assertTrue(String.valueOf(error.get("error")).contains("embeds text only"), error.toString());
+    assertTrue(String.valueOf(error.get("error")).contains(EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL
+        + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX + "=text does not declare image"), error.toString());
+  }
+
+  /** An image-only declaration meets text rows: they get no call, a NULL vector and an error record; the image is embedded. */
+  @Test
+  public void imageOnlyDeclarationRefusesTextRowsAndEmbedsImageRows() throws Exception {
+    FixtureFile text = text("notes", "alpha", "beta");
+    announce(small, text);
+    TypedProperties props = imageProps(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, DummyMultimodalEmbeddingClient.PROVIDER);
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX,
+        "image");
+
+    Round round = round(props);
+
+    assertEquals(1, round.getCompleted().size(), round.toString());
+    Map<String, Row> rows = rows(table());
+    assertEquals(EmbeddingStreamers.MODEL_DIMENSIONS, vector(rows.get(key(small, "image", 0))).length,
+        "the image row is embedded at the model's one length");
+    for (long chunk = 0; chunk < 2; chunk++) {
+      assertNull(vector(rows.get(key(text, "text", chunk))), "chunk " + chunk);
+    }
+    assertEquals(2, round.getErrors().size(), round.toString());
+    for (Map<String, Object> error : round.getErrors()) {
+      assertEquals(text.sha, error.get("source_path_sha"));
+      assertEquals("EMBED-COMPUTE-TEXT-NOT-SUPPORTED model=" + EmbeddingStreamers.MODEL + " provider="
+          + DummyMultimodalEmbeddingClient.PROVIDER + ": " + EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL
+          + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX + "=image does not declare text, so this row is not sent to the model",
+          String.valueOf(error.get("error")));
+    }
+  }
+
+  /**
+   * With the error table off, content of a modality the model does not declare is refused at start: nothing is prepared or
+   * written, rather than a round failing on every sync once a batch holds such a row.
+   */
+  @Test
+  public void textOnlyDeclarationWithImageContentIsRefusedAtStartWhenTheErrorTableIsOff() throws Exception {
+    FixtureFile text = text("notes", "alpha", "beta");
+    announce(small, text);
+    TypedProperties props = imageProps(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, DummyEmbeddingClient.PROVIDER);
+    props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), "false");
+
+    Exception failure = assertThrows(Exception.class, () -> round(props));
+
+    String causes = EmbeddingStreamers.causes(failure);
+    assertTrue(causes.contains("prepares image rows (from "), causes);
+    assertTrue(causes.contains(EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL
+        + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX + "=text does not declare, and the error table is off ("
+        + HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key() + ")"), causes);
+    assertTrue(EmbeddingStreamers.commits(table(), storage()).isEmpty(), "nothing committed");
+  }
+
+  /** The same job with only the text extension prepared starts and embeds its text rows. */
+  @Test
+  public void textOnlyDeclarationWithTextContentOnlyStartsWhenTheErrorTableIsOff() throws Exception {
+    FixtureFile text = text("notes", "alpha", "beta");
+    announce(text);
+    TypedProperties props = imageProps(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, DummyEmbeddingClient.PROVIDER);
+    props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), "false");
+    props.setProperty(EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key(), TEXT_EXTENSION);
+
+    Round round = round(props);
+
+    assertEquals(1, round.getCompleted().size(), round.toString());
+    Map<String, Row> rows = rows(table());
+    for (long chunk = 0; chunk < 2; chunk++) {
+      assertArrayEquals(DummyEmbeddingClient.vectorFor(text.sha, chunk, EmbeddingStreamers.MODEL_DIMENSIONS),
+          vector(rows.get(key(text, "text", chunk))));
+    }
   }
 
   /**

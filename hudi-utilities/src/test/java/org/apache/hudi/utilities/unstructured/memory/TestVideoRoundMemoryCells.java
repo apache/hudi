@@ -439,6 +439,7 @@ public class TestVideoRoundMemoryCells extends EmbeddingRoundTestBase {
     TypedProperties props = props(table, EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, ParquetInlineCap.MAX_BYTES,
         EmbeddingInputConfig.INLINE_MAX_BYTES.key(), String.valueOf(ParquetInlineCap.MAX_BYTES),
         model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, DummyMultimodalEmbeddingClient.PROVIDER,
+        model + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX, "text,image",
         HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key(), objects.eventsPath());
     // the provider decides the client: the base's scripted client class is removed
     props.remove(model + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX);

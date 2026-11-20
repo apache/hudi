@@ -177,6 +177,7 @@ public class TestProviderRejectionPolicy {
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m" + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX, RejectionClient.class.getName());
     props.setProperty(EmbeddingTableConfig.COMPUTE_RETRY_BACKOFF_MS.key(), "0");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m" + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, "dummy");
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m" + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX, "text");
     props.setProperty(POLICY, policy);
     EmbeddingModelSpec model = EmbeddingTableConfig.from(props).model("m");
     List<Row> out = new ArrayList<>();

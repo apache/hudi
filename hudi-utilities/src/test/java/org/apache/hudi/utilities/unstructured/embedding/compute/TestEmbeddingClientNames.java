@@ -22,6 +22,7 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingModelSpec;
 import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockCohereEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockModelFamily;
+import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockTitanMultimodalEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockTitanTextEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.jina.JinaEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.openai.OpenAiCompatibleEmbeddingClient;
@@ -60,9 +61,10 @@ public class TestEmbeddingClientNames {
     Map<BedrockModelFamily, String> clients = new HashMap<>();
     clients.put(BedrockModelFamily.TITAN_EMBED_TEXT_V2, BedrockTitanTextEmbeddingClient.class.getName());
     clients.put(BedrockModelFamily.COHERE_EMBED_V4, BedrockCohereEmbeddingClient.class.getName());
-    assertEquals(clients.keySet().stream().map(BedrockModelFamily::baseModelId).sorted().collect(Collectors.toList()),
-        EmbeddingClientNames.BEDROCK_CLIENTS.keySet().stream().sorted().collect(Collectors.toList()));
-    for (BedrockModelFamily family : clients.keySet()) {
+    clients.put(BedrockModelFamily.TITAN_EMBED_IMAGE_V1, BedrockTitanMultimodalEmbeddingClient.class.getName());
+    assertEquals(Arrays.stream(BedrockModelFamily.values()).map(BedrockModelFamily::baseModelId).collect(Collectors.toList()),
+        EmbeddingClientNames.BEDROCK_CLIENTS.keySet().stream().collect(Collectors.toList()));
+    for (BedrockModelFamily family : BedrockModelFamily.values()) {
       assertEquals(clients.get(family), EmbeddingClientNames.BEDROCK_CLIENTS.get(family.baseModelId()));
     }
   }

@@ -39,6 +39,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,9 +49,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The compute side of the media input contract in {@link MicroBatchEmbeddingIterator}: an image row reaches a
- * {@link MultimodalEmbeddingClient} as its stored input ({@code prepared_image}), and a client that embeds text only is never
- * called for one: the row gets a PERMANENT failure naming the provider, while its text batch-mates are embedded.
+ * The compute side of the media input contract in {@link MicroBatchEmbeddingIterator}, keyed on the model's declared modalities
+ * ({@code .modalities}): an image row of a model that declares {@code image} reaches the client as its stored input
+ * ({@code prepared_image}); a row of a modality the model does not declare never reaches the client and gets a PERMANENT
+ * {@code EMBED-COMPUTE-<MODALITY>-NOT-SUPPORTED} failure naming the model and the provider, while its batch-mates are embedded.
  */
 public class TestImageRowRouting {
 
@@ -97,7 +99,12 @@ public class TestImageRowRouting {
   }
 
   /** A multimodal client: an image input's vector is its stored input's length and first byte. */
-  public static class ImageClient extends TextOnlyClient implements MultimodalEmbeddingClient {
+  public static class ImageClient extends TextOnlyClient {
+    @Override
+    public Set<String> supportedModalities(String modelName) {
+      return TEXT_AND_IMAGE;
+    }
+
     @Override
     public List<EmbeddingResult> embed(List<EmbeddingInput> inputs) {
       List<EmbeddingResult> results = new ArrayList<>();
@@ -127,9 +134,12 @@ public class TestImageRowRouting {
     return new GenericRowWithSchema(new Object[] {sha, MODIFICATION_TIME, FILE_SIZE, 0L, EmbeddingTableSchema.MODALITY_IMAGE, null, prepared, null, null}, SCHEMA);
   }
 
-  private static List<Row> drain(Class<?> client, BlobBytesSource storedInputs, Row... rows) {
+  private static List<Row> drain(Class<?> client, String modalities, BlobBytesSource storedInputs, Row... rows) {
     SEEN.clear();
     TypedProperties props = new TypedProperties();
+    if (modalities != null) {
+      props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m" + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX, modalities);
+    }
     props.setProperty(EmbeddingTableConfig.MODELS.key(), "m");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m" + EmbeddingTableConfig.MODEL_DIMENSIONS_SUFFIX, "2");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m" + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX, client.getName());
@@ -151,8 +161,8 @@ public class TestImageRowRouting {
   }
 
   @Test
-  public void textOnlyClientIsNeverCalledForAnImageRowAndTheRowFailsForGood() {
-    List<Row> rows = drain(TextOnlyClient.class, storedInputs(), textRow("a"), imageRow("b", new byte[] {9}), textRow("c"));
+  public void textOnlyDeclarationNeverSendsAnImageRowAndTheRowFailsForGood() {
+    List<Row> rows = drain(TextOnlyClient.class, "text", storedInputs(), textRow("a"), imageRow("b", new byte[] {9}), textRow("c"));
 
     assertEquals(3, rows.size());
     assertEquals(Arrays.asList("a", "c"), Arrays.asList(SEEN.get(0).getSourcePathSha(), SEEN.get(1).getSourcePathSha()),
@@ -163,13 +173,13 @@ public class TestImageRowRouting {
     assertNull(rows.get(1).get(VECTOR), "the image row has no vector");
     String error = rows.get(1).getString(ERROR);
     assertTrue(error.startsWith("EMBED-COMPUTE-IMAGE-NOT-SUPPORTED model=m provider=dummy"), error);
-    assertTrue(error.contains("embeds text only"), error);
+    assertTrue(error.contains("hoodie.unstructured.embedding.model.m.modalities=text does not declare image"), error);
     assertNotNull(rows.get(2).get(VECTOR));
   }
 
   @Test
-  public void batchOfImageRowsOnlyNeverCallsATextOnlyClient() {
-    List<Row> rows = drain(TextOnlyClient.class, storedInputs(), imageRow("a", new byte[] {1}), imageRow("b", new byte[] {2}));
+  public void batchOfImageRowsOnlyIsNeverSentUnderATextOnlyDeclaration() {
+    List<Row> rows = drain(TextOnlyClient.class, "TEXT", storedInputs(), imageRow("a", new byte[] {1}), imageRow("b", new byte[] {2}));
 
     assertTrue(SEEN.isEmpty());
     rows.forEach(row -> assertTrue(row.getString(ERROR).startsWith("EMBED-COMPUTE-IMAGE-NOT-SUPPORTED"), row.getString(ERROR)));
@@ -177,7 +187,7 @@ public class TestImageRowRouting {
 
   @Test
   public void multimodalClientReadsTheStoredInput() {
-    List<Row> rows = drain(ImageClient.class, storedInputs(), imageRow("a", new byte[] {7, 8, 9}), textRow("b"));
+    List<Row> rows = drain(ImageClient.class, "text,image", storedInputs(), imageRow("a", new byte[] {7, 8, 9}), textRow("b"));
 
     assertEquals(2, SEEN.size());
     EmbeddingInput image = SEEN.get(0);
@@ -194,9 +204,41 @@ public class TestImageRowRouting {
   @Test
   public void imageRowWithoutAPreparedImageBreaksTheInvariant() {
     EmbeddingComputePlatformException failure = assertThrows(EmbeddingComputePlatformException.class,
-        () -> drain(ImageClient.class, storedInputs(), imageRow("a", null)));
+        () -> drain(ImageClient.class, "image,text", storedInputs(), imageRow("a", null)));
     assertTrue(failure.getMessage().startsWith("EMBED-COMPUTE-NO-STORED-IMAGE model=m "), failure.getMessage());
     assertTrue(failure.getMessage().contains("source_path_sha=a source_modification_time=" + MODIFICATION_TIME + " source_file_size="
         + FILE_SIZE + " modality=" + EmbeddingTableSchema.MODALITY_IMAGE + " chunk_id=0:"), "the full key names the row: " + failure.getMessage());
+  }
+
+  @Test
+  public void imageOnlyDeclarationNeverSendsATextRowAndTheRowFailsForGood() {
+    List<Row> rows = drain(ImageClient.class, "image", storedInputs(), textRow("a"), imageRow("b", new byte[] {4, 5}));
+
+    assertEquals(1, SEEN.size(), "only the image row reaches the client");
+    assertEquals("b", SEEN.get(0).getSourcePathSha());
+    assertNull(rows.get(0).get(VECTOR), "the text row has no vector");
+    assertEquals("EMBED-COMPUTE-TEXT-NOT-SUPPORTED model=m provider=dummy: hoodie.unstructured.embedding.model.m.modalities=image "
+        + "does not declare text, so this row is not sent to the model", rows.get(0).getString(ERROR));
+    assertArrayEquals(new float[] {2, 4}, (float[]) rows.get(1).get(VECTOR));
+    assertNull(rows.get(1).get(ERROR));
+  }
+
+  @Test
+  public void textAndImageDeclarationWritesBothIntoTheOneColumnAtOneLength() {
+    List<Row> rows = drain(ImageClient.class, "text,image", storedInputs(), textRow("a"), imageRow("b", new byte[] {6}));
+
+    assertEquals(2, SEEN.size());
+    assertArrayEquals(new float[] {1, 2}, (float[]) rows.get(0).get(VECTOR));
+    assertArrayEquals(new float[] {1, 6}, (float[]) rows.get(1).get(VECTOR));
+    rows.forEach(row -> assertNull(row.get(ERROR)));
+  }
+
+  @Test
+  public void modelWithoutADeclarationIsRefusedBeforeTheClientStarts() {
+    EmbeddingClientConfigException failure = assertThrows(EmbeddingClientConfigException.class,
+        () -> drain(TextOnlyClient.class, null, storedInputs(), textRow("a")));
+    assertEquals("Config hoodie.unstructured.embedding.model.m.modalities is not set: declare the modalities model m embeds "
+        + "(text, image or text,image)", failure.getMessage());
+    assertTrue(SEEN.isEmpty());
   }
 }

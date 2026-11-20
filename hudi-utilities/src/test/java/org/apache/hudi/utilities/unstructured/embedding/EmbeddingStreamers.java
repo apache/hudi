@@ -121,6 +121,8 @@ public final class EmbeddingStreamers {
           String.valueOf(MODEL_DIMENSIONS));
       props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + MODEL + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX,
           DummyEmbeddingClient.PROVIDER);
+      props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + MODEL + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX,
+          EmbeddingTableSchema.MODALITY_TEXT);
     }
     props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), "true");
     props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS.key(), JsonLinesErrorTableWriter.class.getName());

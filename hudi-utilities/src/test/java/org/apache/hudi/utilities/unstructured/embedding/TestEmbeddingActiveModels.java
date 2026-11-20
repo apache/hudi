@@ -56,6 +56,7 @@ class TestEmbeddingActiveModels {
     props.setProperty(EmbeddingTableConfig.ACTIVE_MODELS.key(), active);
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1" + EmbeddingTableConfig.MODEL_DIMENSIONS_SUFFIX, "3");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1" + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, "dummy");
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1.modalities", "text");
     return EmbeddingTableConfig.from(props);
   }
 }

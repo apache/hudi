@@ -58,7 +58,8 @@ public class TestDummyMultimodalEmbeddingClient {
     EmbeddingModelSpec spec = spec();
     assertEquals(DummyMultimodalEmbeddingClient.class.getName(), EmbeddingClientFactory.clientClassName(spec));
     assertTrue(EmbeddingClientNames.PROVIDERS.contains(DummyMultimodalEmbeddingClient.PROVIDER));
-    assertFalse(MultimodalEmbeddingClient.class.isAssignableFrom(DummyEmbeddingClient.class), "the dummy client stays text only");
+    assertEquals(EmbeddingClient.TEXT_ONLY, new DummyEmbeddingClient().supportedModalities("any"), "the dummy client stays text only");
+    assertEquals(EmbeddingClient.TEXT_AND_IMAGE, new DummyMultimodalEmbeddingClient().supportedModalities("any"));
   }
 
   @Test

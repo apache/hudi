@@ -25,7 +25,7 @@ import java.util.TreeSet;
 
 /**
  * One declared embedding model and the VECTOR column it fills, with the modalities it is declared to embed
- * ({@code hoodie.unstructured.embedding.model.<alias>.modalities}) for provider preflight validation.
+ * ({@code hoodie.unstructured.embedding.model.<alias>.modalities}): compute sends the model only rows of a declared modality.
  */
 public class EmbeddingModelSpec implements Serializable {
 
@@ -40,7 +40,7 @@ public class EmbeddingModelSpec implements Serializable {
   /** The declared modalities, sorted; empty when the model declares none. */
   private final Set<String> modalities;
 
-  /** A model without an explicit input-modality declaration ({@link #getModalities()}). */
+  /** A model that declares no modality: compute refuses it ({@link #getModalities()}). */
   public EmbeddingModelSpec(String name, String column, int dimension, String clientClass, String provider,
                             String modelName) {
     this(name, column, dimension, clientClass, provider, modelName, Collections.emptySet());
@@ -89,7 +89,7 @@ public class EmbeddingModelSpec implements Serializable {
 
   /**
    * The modalities the model is declared to embed, sorted ({@code hoodie.unstructured.embedding.model.<alias>.modalities});
-   * empty when it declares none. Provider configuration validates limits for explicitly declared inputs.
+   * empty when it declares none, which compute refuses. A row of another modality is never sent to the model.
    */
   public Set<String> getModalities() {
     return modalities;
