@@ -71,8 +71,11 @@ import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.api.common.functions.Partitioner;
+import org.apache.flink.api.common.operators.SlotSharingGroup;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.MemorySize;
+import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
@@ -721,11 +724,29 @@ public class Pipelines {
    * @return the compaction pipeline
    */
   public static DataStreamSink<CompactionCommitEvent> compact(Configuration conf, DataStream<RowData> dataStream) {
-    DataStreamSink<CompactionCommitEvent> compactionCommitEventDataStream = dataStream.transform("compact_plan_generate",
+    SingleOutputStreamOperator<CompactionPlanEvent> compactionPlanStream = dataStream.transform("compact_plan_generate",
             TypeInformation.of(CompactionPlanEvent.class),
             new CompactionPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
-        .setMaxParallelism(1)
+        .setMaxParallelism(1);
+    if (conf.getOptional(FlinkOptions.COMPACTION_PLAN_GENERATE_SLOT_SHARING_GROUP).isPresent()) {
+      String slotSharingGroup = conf.get(FlinkOptions.COMPACTION_PLAN_GENERATE_SLOT_SHARING_GROUP);
+      SlotSharingGroup.Builder slotSharingGroupBuilder = SlotSharingGroup.newBuilder(slotSharingGroup);
+      // Flink requires cpu cores and task heap memory to be configured together when specifying
+      // resources for a slot sharing group, reuse the TaskManager-level configuration for both.
+      Option<Double> cpuCores = Option.fromJavaOptional(conf.getOptional(TaskManagerOptions.CPU_CORES));
+      Option<MemorySize> taskHeapMemory = Option.fromJavaOptional(conf.getOptional(TaskManagerOptions.TASK_HEAP_MEMORY));
+      if (!taskHeapMemory.isPresent()) {
+        taskHeapMemory = deriveTaskHeapMemory(conf);
+      }
+      if (cpuCores.isPresent() && taskHeapMemory.isPresent()) {
+        slotSharingGroupBuilder.setCpuCores(cpuCores.get()).setTaskHeapMemory(taskHeapMemory.get());
+      }
+      // the slot sharing group must be registered with the environment before it can be referenced by name
+      dataStream.getExecutionEnvironment().registerSlotSharingGroup(slotSharingGroupBuilder.build());
+      compactionPlanStream = compactionPlanStream.slotSharingGroup(slotSharingGroup);
+    }
+    DataStreamSink<CompactionCommitEvent> compactionCommitEventDataStream = compactionPlanStream
         .partitionCustom(new IndexPartitioner(), CompactionPlanEvent::getIndex)
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
@@ -736,6 +757,59 @@ public class Pipelines {
         .setParallelism(1); // compaction commit should be singleton
     compactionCommitEventDataStream.getTransformation().setMaxParallelism(1);
     return compactionCommitEventDataStream;
+  }
+
+  /**
+   * Derives the task heap memory to use for a dedicated slot sharing group from the TaskManager's
+   * other memory configs, following the same total-flink-memory/total-process-memory breakdown
+   * Flink itself uses, in case {@link TaskManagerOptions#TASK_HEAP_MEMORY} is not set explicitly.
+   *
+   * @param conf The configuration
+   * @return the derived task heap memory, or empty if it can not be derived from the given configs
+   */
+  static Option<MemorySize> deriveTaskHeapMemory(Configuration conf) {
+    try {
+      MemorySize totalFlinkMemory;
+      if (conf.getOptional(TaskManagerOptions.TOTAL_FLINK_MEMORY).isPresent()) {
+        totalFlinkMemory = conf.get(TaskManagerOptions.TOTAL_FLINK_MEMORY);
+      } else if (conf.getOptional(TaskManagerOptions.TOTAL_PROCESS_MEMORY).isPresent()) {
+        MemorySize totalProcessMemory = conf.get(TaskManagerOptions.TOTAL_PROCESS_MEMORY);
+        MemorySize jvmMetaspace = conf.get(TaskManagerOptions.JVM_METASPACE);
+        MemorySize jvmOverhead = clampMemorySize(
+            totalProcessMemory.multiply(conf.get(TaskManagerOptions.JVM_OVERHEAD_FRACTION)),
+            conf.get(TaskManagerOptions.JVM_OVERHEAD_MIN),
+            conf.get(TaskManagerOptions.JVM_OVERHEAD_MAX));
+        totalFlinkMemory = totalProcessMemory.subtract(jvmMetaspace).subtract(jvmOverhead);
+      } else {
+        // no memory configs to derive from, let the caller fall back to a resource-less slot sharing group
+        return Option.empty();
+      }
+
+      MemorySize managedMemory = conf.getOptional(TaskManagerOptions.MANAGED_MEMORY_SIZE)
+          .orElseGet(() -> totalFlinkMemory.multiply(conf.get(TaskManagerOptions.MANAGED_MEMORY_FRACTION)));
+      MemorySize networkMemory = clampMemorySize(
+          totalFlinkMemory.multiply(conf.get(TaskManagerOptions.NETWORK_MEMORY_FRACTION)),
+          conf.get(TaskManagerOptions.NETWORK_MEMORY_MIN),
+          conf.get(TaskManagerOptions.NETWORK_MEMORY_MAX));
+      MemorySize taskHeapMemory = totalFlinkMemory
+          .subtract(conf.get(TaskManagerOptions.FRAMEWORK_HEAP_MEMORY))
+          .subtract(conf.get(TaskManagerOptions.FRAMEWORK_OFF_HEAP_MEMORY))
+          .subtract(conf.get(TaskManagerOptions.TASK_OFF_HEAP_MEMORY))
+          .subtract(managedMemory)
+          .subtract(networkMemory);
+      // Flink requires task heap memory to be configured with a positive value
+      return taskHeapMemory.getBytes() > 0 ? Option.of(taskHeapMemory) : Option.empty();
+    } catch (IllegalArgumentException | ArithmeticException e) {
+      // the other memory configs already consume the whole budget, fall back to a resource-less slot sharing group
+      return Option.empty();
+    }
+  }
+
+  static MemorySize clampMemorySize(MemorySize value, MemorySize min, MemorySize max) {
+    if (value.compareTo(min) < 0) {
+      return min;
+    }
+    return value.compareTo(max) > 0 ? max : value;
   }
 
   /**
