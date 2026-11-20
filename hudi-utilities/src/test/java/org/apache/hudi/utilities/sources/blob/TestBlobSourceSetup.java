@@ -45,6 +45,9 @@ public class TestBlobSourceSetup {
    */
   private static TypedProperties job(UnstructuredMode job) {
     TypedProperties props = new TypedProperties();
+    if (job == UnstructuredMode.EMBEDDING) {
+      props.setProperty("hoodie.unstructured.embedding.mode", "prep_only");
+    }
     return props;
   }
 
@@ -85,7 +88,11 @@ public class TestBlobSourceSetup {
       "BLOB|hoodie.streamer.write.row.writer.enable|true",
       "BLOB|hoodie.streamer.source.cloud.data.datafile.format|parquet",
       "BLOB|hoodie.blob.table.file.extensions|parquet",
-      "BLOB|hoodie.write.record.merge.custom.implementation.classes|org.apache.hudi.OverwriteWithLatestSparkRecordMerger"})
+      "BLOB|hoodie.write.record.merge.custom.implementation.classes|org.apache.hudi.OverwriteWithLatestSparkRecordMerger",
+      "EMBEDDING|hoodie.streamer.write.row.writer.enable|true",
+      "EMBEDDING|hoodie.streamer.source.cloud.data.datafile.format|parquet",
+      "EMBEDDING|hoodie.blob.table.file.extensions|parquet",
+      "EMBEDDING|hoodie.write.record.merge.custom.implementation.classes|org.apache.hudi.OverwriteWithLatestSparkRecordMerger"})
   public void refusalNamesTheJobsSourceClass(UnstructuredMode job, String key, String value) {
     TypedProperties props = job(job);
     props.setProperty(key, value);

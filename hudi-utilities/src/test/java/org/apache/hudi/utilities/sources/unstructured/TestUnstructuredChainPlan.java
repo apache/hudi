@@ -31,8 +31,13 @@ import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.streamer.EmbeddingTableTransformer;
 
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.scheduler.SparkListener;
+import org.apache.spark.scheduler.SparkListenerJobStart;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -45,7 +50,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,6 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestUnstructuredChainPlan extends UtilitiesTestBase {
 
   private static final String QUARANTINE = BlobQuarantineTransformer.class.getName();
+  private static final String EMBEDDING = EmbeddingTableTransformer.class.getName();
   private static final String GUARD = UnstructuredSchemaGuard.class.getName();
   private static final String SQL = SqlQueryBasedTransformer.class.getName();
   private static final String DROP = DropColumnTransformer.class.getName();
@@ -83,6 +91,13 @@ public class TestUnstructuredChainPlan extends UtilitiesTestBase {
     return props;
   }
 
+  private TypedProperties embedding(String sql) {
+    TypedProperties props = blob(sql);
+    props.setProperty(UnstructuredSourceConfig.MODE.key(), "embedding");
+    props.setProperty(EmbeddingTableConfig.MODE.key(), EmbeddingTableConfig.MODE_PREP_ONLY);
+    return props;
+  }
+
   private static void plan(UnstructuredMode mode, TypedProperties props, Option<HoodieSchema> target, String... chain) {
     UnstructuredSchemaContract.checkChainPlan(mode, mode.requiredTransformer(), UnstructuredSchemaGuard.class, Arrays.asList(chain),
         jsc, sparkSession, props, target, Option.empty());
@@ -102,6 +117,7 @@ public class TestUnstructuredChainPlan extends UtilitiesTestBase {
     String add = "SELECT *, CAST('note' AS STRING) AS ingest_note FROM <SRC>";
     plan(UnstructuredMode.BLOB, blob(add), Option.empty(), QUARANTINE, SQL, GUARD);
     plan(UnstructuredMode.BLOB, withErrorTable(blob(add)), Option.empty(), QUARANTINE, SQL, GUARD);
+    plan(UnstructuredMode.EMBEDDING, embedding(add), Option.empty(), EMBEDDING, SQL, GUARD);
     plan(UnstructuredMode.BLOB, blob(null), Option.empty(), QUARANTINE, GUARD);
     // a filter after the required transformer keeps every column
     plan(UnstructuredMode.BLOB, blob("SELECT * FROM <SRC> WHERE source_file_extension = 'pdf'"), Option.empty(), QUARANTINE, SQL, GUARD);
@@ -204,6 +220,44 @@ public class TestUnstructuredChainPlan extends UtilitiesTestBase {
     // without the reader, the column added again resolves last-wins at the end of the chain and the plan passes
     plan(UnstructuredMode.BLOB, props, Option.empty(), "BlobQuarantineTransformer:" + QUARANTINE, "a:" + SQL, "b:" + SQL,
         "UnstructuredSchemaGuard:" + GUARD);
+  }
+
+  /** A customer column the table already has, added again by the chain, must still be in the user's target schema. */
+  @Test
+  void columnTheTableHasMustStillBeInTheTargetSchema() {
+    TypedProperties props = embedding("SELECT *, CAST('note' AS STRING) AS ingest_note FROM <SRC>");
+    StructType contract = UnstructuredSchemaContract.contract(UnstructuredMode.EMBEDDING, props, Option.empty());
+    StructType table = contract.add(DataTypes.createStructField("ingest_note", DataTypes.StringType, true));
+    HoodieSchema without = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(contract, "t", "ns");
+    HoodieSchemaException refused = assertThrows(HoodieSchemaException.class,
+        () -> UnstructuredSchemaContract.checkChainPlan(UnstructuredMode.EMBEDDING, EmbeddingTableTransformer.class,
+            UnstructuredSchemaGuard.class, Arrays.asList(EMBEDDING, SQL, GUARD), jsc, sparkSession, props, Option.of(without),
+            Option.of(table)));
+    assertTrue(refused.getMessage().contains("the round writes the column ingest_note as string (added by the transformer chain or kept from the table), which the target schema does not have"),
+        refused.getMessage());
+  }
+
+  @Test
+  void embeddingTransformedSchemaRunsNoSparkJob() throws Exception {
+    AtomicInteger jobs = new AtomicInteger();
+    SparkListener counter = new SparkListener() {
+      @Override
+      public void onJobStart(SparkListenerJobStart jobStart) {
+        jobs.incrementAndGet();
+      }
+    };
+    sparkSession.sparkContext().addSparkListener(counter);
+    try {
+      StructType blobRows = UnstructuredSchemaContract.contract(UnstructuredMode.BLOB, blob(null), Option.empty());
+      StructType planned = new EmbeddingTableTransformer().transformedSchema(jsc, sparkSession, blobRows, withErrorTable(embedding(null)));
+      sparkSession.sparkContext().listenerBus().waitUntilEmpty();
+      assertEquals(0, jobs.get(), "planning ran a Spark job");
+      StructType expected = EmbeddingTableSchema.build(EmbeddingTableConfig.from(embedding(null)))
+          .add(DataTypes.createStructField("_corrupt_record", DataTypes.StringType, true));
+      assertEquals(expected, planned);
+    } finally {
+      sparkSession.sparkContext().removeSparkListener(counter);
+    }
   }
 
   /** Drops the column {@value #COLUMN} names, in its plan and its output. */

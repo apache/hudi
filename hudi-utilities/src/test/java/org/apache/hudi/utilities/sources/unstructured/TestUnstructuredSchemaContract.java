@@ -25,6 +25,8 @@ import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
@@ -45,6 +47,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The unstructured tables' contract columns, and a user target schema checked against them. */
 public class TestUnstructuredSchemaContract {
+
+  private static TypedProperties embedding(String mode, String... models) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(EmbeddingTableConfig.MODE.key(), mode);
+    if (models.length > 0) {
+      props.setProperty(EmbeddingTableConfig.MODELS.key(), String.join(",", models));
+      props.setProperty(EmbeddingTableConfig.ACTIVE_MODELS.key(), models[models.length - 1]);
+      for (String model : models) {
+        props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + model + EmbeddingTableConfig.MODEL_DIMENSIONS_SUFFIX, "4");
+        props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + model + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, "dummy");
+      }
+    }
+    return props;
+  }
 
   private static StructType contract(UnstructuredMode mode, TypedProperties props) {
     return UnstructuredSchemaContract.contract(mode, props, Option.empty());
@@ -76,6 +92,12 @@ public class TestUnstructuredSchemaContract {
         .toArray(StructField[]::new));
   }
 
+  /** A nullable BLOB column named {@code name}. */
+  private static StructField blob(String name) {
+    StructField blob = BlobTableSchema.schema().apply(BlobTableSchema.BLOB);
+    return blob.copy(name, blob.dataType(), true, blob.metadata());
+  }
+
   private static StructField vector(String name, int dimension) {
     Metadata metadata = new MetadataBuilder().putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(" + dimension + ")").build();
     return new StructField(name, DataTypes.createArrayType(DataTypes.FloatType, false), true, metadata);
@@ -89,12 +111,46 @@ public class TestUnstructuredSchemaContract {
     StructType blob = contract(UnstructuredMode.BLOB, partitioned);
     assertEquals(Arrays.asList("source_path_sha", "source_modification_time", "source_file_path", "source_file_name",
         "source_file_extension", "source_file_size", "content_type", "blob", "country"), names(blob), "a fixed name is not repeated");
+
+    List<String> base = new ArrayList<>(EmbeddingTableSchema.BASE_COLUMNS);
+    assertEquals(base, names(contract(UnstructuredMode.EMBEDDING, embedding("prep_only"))));
+    List<String> one = new ArrayList<>(base);
+    one.add("emb_m1");
+    assertEquals(one, names(contract(UnstructuredMode.EMBEDDING, embedding("prep_and_compute", "m1"))));
+    List<String> two = new ArrayList<>(one);
+    two.add("emb_m2");
+    assertEquals(two, names(contract(UnstructuredMode.EMBEDDING, embedding("prep_and_compute", "m1", "m2"))));
+    TypedProperties withPartition = embedding("prep_only");
+    withPartition.setProperty(CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key(), "country");
+    List<String> partitionedEmbedding = new ArrayList<>(base);
+    partitionedEmbedding.add("country");
+    assertEquals(partitionedEmbedding, names(contract(UnstructuredMode.EMBEDDING, withPartition)));
+  }
+
+  /**
+   * Every declared model's column is reserved, on a new table and on an existing one that does not have it yet: a declared model
+   * that is not active today is the table's model column once it is activated, never a customer's VECTOR or BLOB.
+   */
+  @Test
+  void declaredModelColumnIsReservedOnAnExistingTableThatLacksIt() {
+    TypedProperties declared = embedding("prep_and_compute", "m2", "m1");
+    StructType table = contract(UnstructuredMode.EMBEDDING, embedding("prep_and_compute", "m1"));
+    StructType contract = UnstructuredSchemaContract.contract(UnstructuredMode.EMBEDDING, declared, Option.of(table));
+    StructType newTable = contract(UnstructuredMode.EMBEDDING, declared);
+    HoodieSchemaException refused = assertThrows(HoodieSchemaException.class, () -> UnstructuredSchemaContract.checkOutput(
+        UnstructuredMode.EMBEDDING, contract, newTable, contract.add(vector("emb_m2", 8)), "the rows", false));
+    assertTrue(refused.getMessage().contains("the column emb_m2 has a reserved name"), refused.getMessage());
+    assertThrows(HoodieSchemaException.class, () -> UnstructuredSchemaContract.checkOutput(UnstructuredMode.EMBEDDING, contract, newTable,
+        contract.add(blob("EMB_M2")), "the rows", false));
+    // a customer VECTOR or BLOB of another name is the customer's
+    UnstructuredSchemaContract.checkOutput(UnstructuredMode.EMBEDDING, contract, newTable, contract.add(vector("user_vector", 8))
+        .add(blob("user_blob")), "the rows", false);
   }
 
   @Test
   void compatibleSchemaWithExtrasPassesInAnyOrder() {
     for (UnstructuredMode mode : UnstructuredMode.values()) {
-      StructType contract = contract(mode, new TypedProperties());
+      StructType contract = contract(mode, mode == UnstructuredMode.BLOB ? new TypedProperties() : embedding("prep_and_compute", "m1"));
       check(mode, contract, contract);
       List<StructField> reversed = new ArrayList<>(Arrays.asList(contract.fields()));
       Collections.reverse(reversed);
@@ -124,6 +180,16 @@ public class TestUnstructuredSchemaContract {
     assertTrue(refusal(b, blob, replace(blob, DataTypes.createStructField("content_type", DataTypes.StringType, false)))
         .contains("column content_type must be string nullable, found: string non-null"));
 
+    StructType compute = contract(UnstructuredMode.EMBEDDING, embedding("prep_and_compute", "m1"));
+    UnstructuredMode e = UnstructuredMode.EMBEDDING;
+    assertTrue(refusal(e, compute, replace(compute, vector("emb_m1", 8))).contains("column emb_m1 must be array<float> (VECTOR(4))"),
+        "a VECTOR of another size");
+    // only the declared models' columns are model columns: any other VECTOR is a column of the user's
+    StructType prepOnly = contract(e, embedding("prep_only"));
+    check(e, prepOnly, prepOnly.add(vector("emb_m1", 4)));
+    check(e, compute, compute.add(vector("user_vector", 4)));
+    assertTrue(refusal(e, compute, compute.add(vector("EMB_M1", 4))).contains("the column EMB_M1 has a reserved name"),
+        "a declared model's column, ignoring case");
     assertTrue(refusal(b, blob, blob.add(DataTypes.createStructField("note", DataTypes.StringType, false)))
         .contains("the extra column note is non-null"));
     for (String reserved : new String[] {"BLOB", "Source_Path_Sha", "_hoodie_x", "_corrupt_record"}) {

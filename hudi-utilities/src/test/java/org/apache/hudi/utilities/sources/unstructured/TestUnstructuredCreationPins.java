@@ -52,7 +52,7 @@ class TestUnstructuredCreationPins {
 
   @Test
   void matchingBasePinsRemainAccepted() {
-    for (String mode : new String[] {"blob"}) {
+    for (String mode : new String[] {"blob", "embedding"}) {
       UnstructuredTableProperties required = new UnstructuredSourceContract(mode(mode)).requiredTableProperties();
       assertDoesNotThrow(() -> required.checkTable("file:/table", table(required.tableProperties())));
     }

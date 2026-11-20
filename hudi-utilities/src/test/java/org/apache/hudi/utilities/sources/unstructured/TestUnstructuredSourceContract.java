@@ -26,16 +26,21 @@ import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
 import org.apache.hudi.utilities.sources.SourceContract;
 import org.apache.hudi.utilities.sources.SourceContracts;
 import org.apache.hudi.utilities.sources.UnstructuredDataSource;
 import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
 import org.apache.hudi.utilities.sources.blob.BlobTableConfig;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.streamer.EmbeddingTableTransformer;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -51,11 +56,15 @@ class TestUnstructuredSourceContract {
   private static final String RECORD_KEY = KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key();
   private static final String KEY_GENERATOR = HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key();
   private static final String BLOB_KEY = "source_path_sha,source_modification_time,source_file_size";
+  private static final String EMBEDDING_KEY = BLOB_KEY + ",modality,chunk_id";
 
   private static TypedProperties mode(String mode) {
     TypedProperties props = new TypedProperties();
     props.setProperty(UnstructuredSourceConfig.MODE.key(), mode);
     props.setProperty(UnstructuredSourceConfig.CLOUD.key(), "s3");
+    if ("embedding".equals(mode)) {
+      props.setProperty(EmbeddingTableConfig.MODE.key(), EmbeddingTableConfig.MODE_PREP_ONLY);
+    }
     return props;
   }
 
@@ -86,9 +95,11 @@ class TestUnstructuredSourceContract {
   /** The streamer finds the contract on the source class from its name, before the source is built. */
   @Test
   void resolvedFromTheSourceClass() {
-    SourceContract resolved = SourceContracts.of(UnstructuredDataSource.class.getName(), mode("blob"));
-    assertTrue(resolved instanceof UnstructuredSourceContract, resolved.getClass().getName());
-    assertEquals(UnstructuredMode.BLOB, ((UnstructuredSourceContract) resolved).mode());
+    for (UnstructuredMode mode : new UnstructuredMode[] {UnstructuredMode.BLOB, UnstructuredMode.EMBEDDING}) {
+      SourceContract resolved = SourceContracts.of(UnstructuredDataSource.class.getName(), mode(mode.configValue()));
+      assertTrue(resolved instanceof UnstructuredSourceContract, resolved.getClass().getName());
+      assertEquals(mode, ((UnstructuredSourceContract) resolved).mode());
+    }
   }
 
   @Test
@@ -141,20 +152,33 @@ class TestUnstructuredSourceContract {
     assertEquals(Arrays.asList(BlobQuarantineTransformer.class.getName(), UnstructuredSchemaGuard.class.getName()),
         blob.transformerChain(null));
     assertEquals(UnstructuredMode.BLOB, blob.mode());
+    assertThrows(HoodieTransformPlanException.class,
+        () -> blob.transformerChain(Collections.singletonList(EmbeddingTableTransformer.class.getName())));
+
+    UnstructuredSourceContract embedding = contract("embedding");
+    assertEquals(Arrays.asList(EmbeddingTableTransformer.class.getName(), UnstructuredSchemaGuard.class.getName()),
+        embedding.transformerChain(null));
+    assertEquals(UnstructuredMode.EMBEDDING, embedding.mode());
+    assertThrows(HoodieTransformPlanException.class,
+        () -> embedding.transformerChain(Collections.singletonList(BlobQuarantineTransformer.class.getName())));
   }
 
   /** A job that sets every required setting itself, to the same value, keeps its properties: the merge changes none of them. */
   @Test
   void jobThatSetsEveryRequiredKeyToTheSameValueStarts() {
-    TypedProperties props = mode("blob");
-    props.setProperty(RECORD_KEY, BLOB_KEY);
-    props.setProperty(KEY_GENERATOR, ComplexKeyGenerator.class.getName());
-    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "source_file_extension");
-    props.setProperty(CODEC, "uncompressed");
-    props.setProperty(BLOOM, "false");
-    props.putAll(new UnstructuredSourceContract(props).tableProperties());
-    TypedProperties merged = new UnstructuredSourceContract(props).prepareJob(props);
-    assertEquals(asMap(props), asMap(merged), "mode blob");
+    for (String mode : new String[] {"blob", "embedding"}) {
+      TypedProperties props = mode(mode);
+      props.setProperty(RECORD_KEY, "blob".equals(mode) ? BLOB_KEY : EMBEDDING_KEY);
+      props.setProperty(KEY_GENERATOR, ComplexKeyGenerator.class.getName());
+      props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "source_file_extension");
+      if ("blob".equals(mode)) {
+        props.setProperty(CODEC, "uncompressed");
+        props.setProperty(BLOOM, "false");
+      }
+      props.putAll(new UnstructuredSourceContract(props).tableProperties());
+      TypedProperties merged = new UnstructuredSourceContract(props).prepareJob(props);
+      assertEquals(asMap(props), asMap(merged), "mode " + mode);
+    }
   }
 
   /**
@@ -163,6 +187,13 @@ class TestUnstructuredSourceContract {
    */
   @Test
   void jobChecksRunWithTheMerge() {
+    TypedProperties embeddingModeOnBlob = mode("blob");
+    embeddingModeOnBlob.setProperty(EmbeddingTableConfig.MODE.key(), EmbeddingTableConfig.MODE_PREP_ONLY);
+    Exception refused = assertThrows(RuntimeException.class,
+        () -> new UnstructuredSourceContract(embeddingModeOnBlob).prepareJob(embeddingModeOnBlob));
+    assertTrue(refused.getMessage().contains("UnstructuredDataSource (mode blob) refuses hoodie.unstructured.embedding.mode=prep_only"),
+        refused.getMessage());
+
     TypedProperties gcsWithS3Prefix = mode("blob");
     gcsWithS3Prefix.setProperty(UnstructuredSourceConfig.CLOUD.key(), "gcs");
     gcsWithS3Prefix.setProperty("hoodie.streamer.source.s3incr.fs.prefix", "s3a");
@@ -215,5 +246,36 @@ class TestUnstructuredSourceContract {
     assertEquals("uncompressed", prepared.getString(CODEC));
     assertEquals("false", prepared.getString(BLOOM));
     assertEquals("kept", prepared.getString("user.setting"));
+  }
+
+  @Test
+  void goldenSettingsEmbedding() {
+    Map<String, String> embedding = new TreeMap<>();
+    embedding.put(RECORD_KEY, EMBEDDING_KEY);
+    embedding.put("hoodie.table.blob.layout.version", "1");
+    embedding.put("hoodie.table.unstructured.kind", "embedding");
+    embedding.put("hoodie.table.unstructured.schema.version", "1");
+    embedding.put("hoodie.table.unstructured.key.encoding.version", "1");
+    embedding.put("hoodie.table.embedding.column.info.layout.version", "1");
+    UnstructuredSourceContract contract = contract("embedding");
+    assertEquals(embedding, settingsOfAnEmptyJob(contract), "the embedding job adds no codec or bloom filter defaults");
+    assertKeyGenerators(contract);
+    assertEquals(BLOB_KEY, String.join(",", BlobTableSchema.KEY_COLUMNS));
+    assertEquals(EMBEDDING_KEY, String.join(",", EmbeddingTableSchema.KEY_COLUMNS));
+  }
+
+  @Test
+  void embeddingRefusalsNameUnstructuredDataSourceAndMode() {
+    TypedProperties blobKey = new TypedProperties();
+    blobKey.setProperty(RECORD_KEY, BLOB_KEY);
+    assertEquals("UnstructuredDataSource (mode embedding) requires " + RECORD_KEY + "=" + EMBEDDING_KEY
+        + " (these fields, in this order), configured: " + BLOB_KEY, refusal(contract("embedding"), blobKey));
+
+    HoodieTableConfig blobTable = new HoodieTableConfig();
+    blobTable.setValue(HoodieTableConfig.RECORDKEY_FIELDS, BLOB_KEY);
+    IllegalArgumentException table = assertThrows(IllegalArgumentException.class,
+        () -> contract("embedding").checkTable("file:/tables/blob", blobTable));
+    assertEquals("UnstructuredDataSource (mode embedding) requires the table's " + HoodieTableConfig.RECORDKEY_FIELDS.key() + "="
+        + EMBEDDING_KEY + ": the table at file:/tables/blob stores " + BLOB_KEY + "; write this job to a new table", table.getMessage());
   }
 }

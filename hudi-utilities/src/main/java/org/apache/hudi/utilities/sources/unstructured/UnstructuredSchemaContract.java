@@ -30,6 +30,8 @@ import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.ChainedTransformer.TransformerInfo;
 import org.apache.hudi.utilities.transform.Transformer;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.streamer.EmbeddingTableTransformer;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -56,8 +58,9 @@ import java.util.Set;
  * <ul>
  *   <li>Every contract column is present, with the same data type ignoring nullability and the same Hudi logical type
  *   ({@code BLOB}, {@code VECTOR(n)}); a non-null contract column may be nullable, a nullable one may not be non-null.</li>
- *   <li>Any other column is an extra: nullable, of any type (a Hudi {@code BLOB} or {@code VECTOR} included), and not named like
- *   a contract column, ignoring case, a Hudi meta column or {@code _corrupt_record}.</li>
+ *   <li>Any other column is an extra: nullable, of any type (a Hudi {@code BLOB} or {@code VECTOR} included; only the declared
+ *   models' columns are model columns), and not named like a contract column, a declared model's column among them, ignoring
+ *   case, a Hudi meta column or {@code _corrupt_record}.</li>
  * </ul>
  */
 public final class UnstructuredSchemaContract {
@@ -69,7 +72,13 @@ public final class UnstructuredSchemaContract {
   }
 
   /**
-   * The columns {@code mode} writes: for blob, {@link BlobTableSchema#schema()} with the path partition columns the source adds.
+   * The columns {@code mode} writes:
+   * <ul>
+   *   <li>blob: {@link BlobTableSchema#schema()} with the path partition columns the source adds;</li>
+   *   <li>embedding: the columns the round writes ({@link EmbeddingTableTransformer#roundSchema}): those of the configuration on a
+   *   new table, those of the existing table ({@code tableSchema}, without meta columns, its columns beyond the base ones nullable)
+   *   otherwise.</li>
+   * </ul>
    */
   public static StructType contract(UnstructuredMode mode, TypedProperties props, Option<StructType> tableSchema) {
     switch (mode) {
@@ -81,6 +90,8 @@ public final class UnstructuredSchemaContract {
           }
         }
         return blob;
+      case EMBEDDING:
+        return EmbeddingTableTransformer.roundSchema(EmbeddingTableConfig.from(props), tableSchema);
       default:
         throw new UnsupportedOperationException("Unknown unstructured mode " + mode);
     }
@@ -103,8 +114,9 @@ public final class UnstructuredSchemaContract {
   /**
    * Checks {@code schema}, the schema of a chain's output or of a round's rows, against {@code contract}: the contract columns with
    * their types, and extra columns of any type (a Hudi BLOB or VECTOR included) with no reserved name. The names of
-   * {@code newTable}, the contract of a new table of the job's configuration, are reserved too. Nullability is not compared,
-   * since Spark plans and rows carry it loosely; the writer schema's is checked on the target schema. With {@code corruptRecord}, the {@value #CORRUPT_RECORD}
+   * {@code newTable}, the contract of a new table of the job's configuration, are reserved too: on an existing table it holds
+   * every declared model's column, also one the table does not have yet. Nullability is not compared, since Spark plans and rows
+   * carry it loosely; the writer schema's is checked on the target schema. With {@code corruptRecord}, the {@value #CORRUPT_RECORD}
    * column the error table needs must be there too.
    *
    * @throws HoodieSchemaException naming the column and the source's mode; {@code what} names the schema
@@ -179,7 +191,7 @@ public final class UnstructuredSchemaContract {
           + ": --transformer-class places " + chain.subList(0, requiredIndex) + " before it. Move them after it");
     }
     boolean errorTable = ConfigUtils.getBooleanWithAltKeys(props, HoodieErrorTableConfig.ERROR_TABLE_ENABLED);
-    // the source's rows are the blob rows; the error-table chain gives every transformer the error column
+    // the source's rows are the blob rows of either mode; the error-table chain gives every transformer the error column
     StructType schema = contract(UnstructuredMode.BLOB, props, Option.empty());
     if (errorTable) {
       schema = schema.add(DataTypes.createStructField(CORRUPT_RECORD, DataTypes.StringType, true));
@@ -291,7 +303,7 @@ public final class UnstructuredSchemaContract {
         || lower.startsWith("_hoodie_") || lower.equals(CORRUPT_RECORD);
     if (reserved) {
       throw new HoodieSchemaException(source + " refuses " + what + ": the column " + name + " has a reserved name (a column of the "
-          + "table's contract, ignoring case, a Hudi meta column or " + CORRUPT_RECORD + ")");
+          + "table's contract, a declared model's column among them, ignoring case, a Hudi meta column or " + CORRUPT_RECORD + ")");
     }
     if (target && !extra.nullable()) {
       throw new HoodieSchemaException(source + " refuses " + what + ": the extra column " + name + " is non-null; an extra column "

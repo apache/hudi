@@ -22,6 +22,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.streamer.EmbeddingTableTransformer;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -48,21 +50,23 @@ public class TestUnstructuredModeAndCloud {
   }
 
   @Test
-  void modeFromBlob() {
-    assertEquals(UnstructuredMode.BLOB, UnstructuredMode.from(props(UnstructuredSourceConfig.MODE.key(), " blob ")));
+  void modeFromBlobAndEmbedding() {
+    assertEquals(UnstructuredMode.BLOB, UnstructuredMode.from(props(UnstructuredSourceConfig.MODE.key(), "blob")));
+    assertEquals(UnstructuredMode.EMBEDDING, UnstructuredMode.from(props(UnstructuredSourceConfig.MODE.key(), " embedding ")));
     assertEquals("blob", UnstructuredMode.BLOB.configValue());
+    assertEquals("embedding", UnstructuredMode.EMBEDDING.configValue());
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"", " ", "BLOB", "blobs", "embedding"})
+  @ValueSource(strings = {"", " ", "BLOB", "blobs", "embedding_prep"})
   void modeUnsetOrUnknownRefusedNamingKeyAndValues(String value) {
     IllegalArgumentException unknown = assertThrows(IllegalArgumentException.class,
         () -> UnstructuredMode.from(props(UnstructuredSourceConfig.MODE.key(), value)));
     assertTrue(unknown.getMessage().contains("hoodie.unstructured.source.mode"), unknown.getMessage());
-    assertTrue(unknown.getMessage().contains("one of: blob;"), unknown.getMessage());
+    assertTrue(unknown.getMessage().contains("blob, embedding"), unknown.getMessage());
     assertTrue(unknown.getMessage().contains("UnstructuredDataSource"), unknown.getMessage());
     IllegalArgumentException unset = assertThrows(IllegalArgumentException.class, () -> UnstructuredMode.from(new TypedProperties()));
-    assertTrue(unset.getMessage().contains("hoodie.unstructured.source.mode, one of: blob; configured: none"), unset.getMessage());
+    assertTrue(unset.getMessage().contains("hoodie.unstructured.source.mode, one of: blob, embedding; configured: none"), unset.getMessage());
   }
 
   @Test
@@ -92,10 +96,32 @@ public class TestUnstructuredModeAndCloud {
   }
 
   @Test
+  void blobRefusesEmbeddingMode() {
+    TypedProperties props = props("hoodie.unstructured.embedding.mode", "prep_only");
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> UnstructuredMode.BLOB.validate(props, SOURCE));
+    assertTrue(refused.getMessage().contains(SOURCE + " refuses hoodie.unstructured.embedding.mode=prep_only"), refused.getMessage());
+    assertDoesNotThrow(() -> UnstructuredMode.BLOB.validate(new TypedProperties(), SOURCE));
+  }
+
+  @Test
+  void embeddingRequiresEmbeddingMode() {
+    String source = "UnstructuredDataSource (mode embedding)";
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> UnstructuredMode.EMBEDDING.validate(new TypedProperties(), source));
+    assertTrue(refused.getMessage().contains(source + " requires hoodie.unstructured.embedding.mode"), refused.getMessage());
+    assertDoesNotThrow(() -> UnstructuredMode.EMBEDDING.validate(props("hoodie.unstructured.embedding.mode", "prep_only"), source));
+    assertThrows(IllegalArgumentException.class, () -> UnstructuredMode.EMBEDDING.validate(props("hoodie.unstructured.embedding.mode", "prep_and_compute"), source));
+  }
+
+  @Test
   void perModeBindings() {
     assertEquals(BlobTableSchema.KEY_COLUMNS, UnstructuredMode.BLOB.keyColumns());
     assertEquals(BlobQuarantineTransformer.class, UnstructuredMode.BLOB.requiredTransformer());
-    assertEquals(Collections.emptySet(), UnstructuredMode.BLOB.excludedTransformers());
+    assertEquals(Collections.singleton(EmbeddingTableTransformer.class), UnstructuredMode.BLOB.excludedTransformers());
+
+    assertEquals(EmbeddingTableSchema.KEY_COLUMNS, UnstructuredMode.EMBEDDING.keyColumns());
+    assertEquals(EmbeddingTableTransformer.class, UnstructuredMode.EMBEDDING.requiredTransformer());
+    assertEquals(Collections.singleton(BlobQuarantineTransformer.class), UnstructuredMode.EMBEDDING.excludedTransformers());
   }
 
   @Test

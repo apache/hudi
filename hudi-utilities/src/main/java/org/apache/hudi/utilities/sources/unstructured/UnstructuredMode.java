@@ -19,9 +19,13 @@
 package org.apache.hudi.utilities.sources.unstructured;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.transform.Transformer;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.streamer.EmbeddingTableTransformer;
 
 import java.util.Collections;
 import java.util.List;
@@ -51,16 +55,21 @@ import java.util.Set;
 public enum UnstructuredMode {
 
   /** Writes the blob table, through {@link BlobQuarantineTransformer}. */
-  BLOB("blob", BlobTableSchema.KEY_COLUMNS, BlobQuarantineTransformer.class);
+  BLOB("blob", BlobTableSchema.KEY_COLUMNS, BlobQuarantineTransformer.class, EmbeddingTableTransformer.class),
+  /** Writes the embedding table, through {@link EmbeddingTableTransformer}. */
+  EMBEDDING("embedding", EmbeddingTableSchema.KEY_COLUMNS, EmbeddingTableTransformer.class, BlobQuarantineTransformer.class);
 
   private final String configValue;
   private final List<String> keyColumns;
   private final Class<? extends Transformer> requiredTransformer;
+  private final Class<? extends Transformer> excludedTransformer;
 
-  UnstructuredMode(String configValue, List<String> keyColumns, Class<? extends Transformer> requiredTransformer) {
+  UnstructuredMode(String configValue, List<String> keyColumns, Class<? extends Transformer> requiredTransformer,
+                   Class<? extends Transformer> excludedTransformer) {
     this.configValue = configValue;
     this.keyColumns = keyColumns;
     this.requiredTransformer = requiredTransformer;
+    this.excludedTransformer = excludedTransformer;
   }
 
   /**
@@ -87,9 +96,9 @@ public enum UnstructuredMode {
     return requiredTransformer;
   }
 
-  /** The transformers this job refuses in its chain: none, while it is the only job. */
+  /** The other job's transformer, which this job refuses in its chain. */
   public Set<Class<? extends Transformer>> excludedTransformers() {
-    return Collections.emptySet();
+    return Collections.singleton(excludedTransformer);
   }
 
   /**
@@ -98,8 +107,21 @@ public enum UnstructuredMode {
    * @throws IllegalArgumentException when a setting has a value this job cannot run with
    */
   public void validate(TypedProperties props, String sourceName) {
+    Object embeddingMode = props.get(EmbeddingTableConfig.MODE.key());
+    boolean embeddingModeSet = embeddingMode != null && !StringUtils.isNullOrEmpty(embeddingMode.toString().trim());
     switch (this) {
       case BLOB:
+        if (embeddingModeSet) {
+          throw new IllegalArgumentException(sourceName + " refuses " + EmbeddingTableConfig.MODE.key() + "=" + embeddingMode
+              + ": it belongs to " + UnstructuredSourceConfig.MODE.key() + "=" + EMBEDDING.configValue + "; remove it");
+        }
+        break;
+      case EMBEDDING:
+        if (!embeddingModeSet) {
+          throw new IllegalArgumentException(sourceName + " requires " + EmbeddingTableConfig.MODE.key() + ", one of: "
+              + EmbeddingTableConfig.MODE_PREP_ONLY + ", " + EmbeddingTableConfig.MODE_PREP_AND_COMPUTE + "; configured: none");
+        }
+        EmbeddingTableTransformer.checkJob(EmbeddingTableConfig.from(props));
         break;
       default:
         throw new UnsupportedOperationException("Unknown unstructured mode " + this);
