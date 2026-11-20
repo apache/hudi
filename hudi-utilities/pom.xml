@@ -111,6 +111,98 @@
       <artifactId>tika-core</artifactId>
       <version>${tika.version}</version>
     </dependency>
+    <!-- PDFBox: in-JVM PDF text extraction of the PDF chunker (Apache-2.0). Declared directly, at the version tika pins,
+         so the PDF chunker does not depend on tika. -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>${pdfbox.version}</version>
+    </dependency>
+    <!-- jtokkit: pure-Java port of OpenAI's tiktoken BPE tokenizers (MIT, no dependencies, vocabularies bundled),
+         used to size chunks and validate inputs for OpenAI embedding models. -->
+    <dependency>
+      <groupId>com.knuddels</groupId>
+      <artifactId>jtokkit</artifactId>
+      <version>${jtokkit.version}</version>
+    </dependency>
+    <!-- JCodec: pure-Java H.264/MP4 decoding for video keyframe sampling. BSD license,
+         no native binaries, so decode failures stay catchable per file. -->
+    <dependency>
+      <groupId>org.jcodec</groupId>
+      <artifactId>jcodec</artifactId>
+      <version>${jcodec.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jcodec</groupId>
+      <artifactId>jcodec-javase</artifactId>
+      <version>${jcodec.version}</version>
+    </dependency>
+    <!-- JavaCV 1.5.11 + FFmpeg 7.1 (LGPL build): the video frame source (embedding/video/FfmpegKeyframeVideoFrameSource).
+         PROVIDED: Hudi compiles and tests against FFmpeg but ships it in no jar, and it is not passed on transitively; a job that
+         prepares video with FFmpeg adds javacv, javacpp and ffmpeg plus the javacpp and ffmpeg jars of its platform classifier at
+         launch. The native jars (linux-arm64, linux-x86_64) are test scope here. The root enforcer bans org.bytedeco at compile
+         and runtime scope. JavaCV's other presets (OpenCV, cameras, OCR) are excluded. -->
+    <dependency>
+      <groupId>org.bytedeco</groupId>
+      <artifactId>javacv</artifactId>
+      <version>${javacv.version}</version>
+      <exclusions>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>opencv</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>openblas</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>flycapture</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>libdc1394</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>libfreenect</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>libfreenect2</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>librealsense</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>librealsense2</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>videoinput</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>artoolkitplus</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>leptonica</artifactId></exclusion>
+        <exclusion><groupId>org.bytedeco</groupId><artifactId>tesseract</artifactId></exclusion>
+        <exclusion><groupId>org.openjfx</groupId><artifactId>*</artifactId></exclusion>
+      </exclusions>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.bytedeco</groupId>
+      <artifactId>javacpp</artifactId>
+      <version>${javacv.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.bytedeco</groupId>
+      <artifactId>ffmpeg</artifactId>
+      <version>${javacv.ffmpeg.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.bytedeco</groupId>
+      <artifactId>javacpp</artifactId>
+      <version>${javacv.version}</version>
+      <classifier>linux-arm64</classifier>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.bytedeco</groupId>
+      <artifactId>javacpp</artifactId>
+      <version>${javacv.version}</version>
+      <classifier>linux-x86_64</classifier>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.bytedeco</groupId>
+      <artifactId>ffmpeg</artifactId>
+      <version>${javacv.ffmpeg.version}</version>
+      <classifier>linux-arm64</classifier>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.bytedeco</groupId>
+      <artifactId>ffmpeg</artifactId>
+      <version>${javacv.ffmpeg.version}</version>
+      <classifier>linux-x86_64</classifier>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.apache.tika</groupId>
       <artifactId>tika-parsers-standard-package</artifactId>
