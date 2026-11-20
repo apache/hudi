@@ -18,9 +18,11 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.prep;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.sources.blob.BlobTableConfig;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
@@ -49,10 +51,12 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import scala.collection.JavaConverters;
@@ -64,14 +68,20 @@ import scala.collection.JavaConverters;
  * <ul>
  *   <li>it numbers a file's chunks per MODALITY (the record key includes the source version, modality and chunk):
  *       each modality's chunks are numbered through the default {@link SequentialChunkIdScheme} by their ordinal in that
- *       modality (dense, 0-based, in emit order). It trusts each preprocessor's chunks to keep the {@link Chunk} contract,
- *       which the shipped preprocessors' tests hold them to;</li>
+ *       modality (dense, 0-based, in emit order). It trusts each preprocessor's chunks to keep the {@link Chunk} contract
+ *       (modality and payload), which the shipped preprocessors' tests hold them to;</li>
+ *   <li>it stores a chunk's payload in {@code prepared_image}: a source payload as the source row's own blob value, unchanged (inline
+ *       bytes, or the reference to the object), a derived one inline up to the source's inline threshold; a derived one above
+ *       the threshold or not of its declared size fails that chunk;</li>
+ *   <li>a chunk whose payload cannot be stored fails that chunk only: chunk 0 fails its file-modality, whose later chunks are
+ *       then skipped, with one side output naming no chunk; a later chunk is one side output naming its chunk_id, and the file
+ *       goes on. A chunk that fails alone is not counted as a failed file;</li>
  *   <li>it isolates any other non-fatal failure to its file (WARN {@code EMBED-PREP-FAILED}, keep the chunks already
  *       emitted, hand one {@link PrepSideOutput} of stage {@code prep} to the side-output sink, never a row, continue with the
  *       next file). Such failures include a failure of the preprocessor itself and a failing {@code close()} after the file's
  *       last chunk; the side output names
  *       the chunk_id the file's next chunk of its marker modality would have had, when that modality already has chunks;</li>
- *   <li>a file whose preprocessor finishes without error and without any chunk is WARN-logged ({@code EMBED-PREP-NO-TEXT}) and handed to the sink as stage
+ *   <li>a file whose preprocessor finishes without error and without any chunk, with nothing of it failed alone, is WARN-logged ({@code EMBED-PREP-NO-TEXT}) and handed to the sink as stage
  *       {@code empty}, error {@code no_text}; it emits no row. A side output's modality is its preprocessor's
  *       {@link SourceKind#markerModality()};</li>
  *   <li>a file whose extension no preprocessor is mapped to is WARN-logged and handed to the sink as stage {@code empty}, error
@@ -108,12 +118,16 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   private final int modelColumnCount;
   private final List<String> userPartitionColumns;
   private final ChunkIdScheme chunkIds;
+  /** The largest derived payload stored inline in {@code prepared_image}: the source's own inline threshold. */
+  private final long payloadInlineMaxBytes;
   /** Where failed and empty files go: never into the rows this iterator returns. */
   private final Consumer<PrepSideOutput> sideOutputs;
   /** The side outputs of an iterator built without a sink (tests); null otherwise. */
   private final List<PrepSideOutput> collectedSideOutputs;
   /** Side outputs handed to {@link #sideOutputs} so far: {@link #advanceToRowOrSideOutput()} stops at the next one. */
   private long sideOutputCount;
+  /** The current file's modalities not to prepare (their chunk 0 failed). */
+  private final Set<String> skippedModalities = new HashSet<>();
 
   /** Protects ownership transfers; storage and preprocessor calls never hold this lock. */
   private final Object lifecycle = new Object();
@@ -125,11 +139,15 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   private FilePreprocessor currentPreprocessor;
   private FileMeta currentFile;
   private Row currentSourceRow;
+  /** The current source row's blob value: what a source payload stores in {@code prepared_image}. */
+  private Row currentBlob;
   /** The current source row's file name and source path (its version tag travels in {@link #currentFile}). */
   private String currentFileName;
   private String currentSourcePath;
   /** Chunks the current file emitted, all modalities. */
   private long fileChunks;
+  /** Chunks of the current file that failed alone (each already one side output). */
+  private long fileChunkFailures;
   /** Per modality, the chunks the current file emitted: the ordinal of its next chunk of that modality. */
   private final Map<String, Long> nextOrdinals = new HashMap<>();
   private Row pending;
@@ -160,6 +178,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     this.modelColumnCount = config.models().size() * EmbeddingTableSchema.COLUMNS_PER_MODEL;
     this.userPartitionColumns = EmbeddingTableSchema.userPartitionColumns(config.getProps());
     this.chunkIds = new SequentialChunkIdScheme();
+    this.payloadInlineMaxBytes = BlobTableConfig.inlineMaxBytes(config.getProps());
     TaskContext taskContext = TaskContext.get();
     if (taskContext != null) {
       taskContext.addTaskCompletionListener((TaskCompletionListener) context -> close());
@@ -238,15 +257,27 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     String modality = currentPreprocessor.sourceKind().markerModality();
     Chunk chunk = null;
     long chunkId = 0L;
+    Row preparedImage = null;
     try {
       if (currentChunks.hasNext()) {
         chunk = currentChunks.next();
+        if (skippedModalities.contains(chunk.getModality())) {
+          // this file-modality's chunk 0 failed
+          return;
+        }
+        // the id first: a chunk whose payload cannot be stored fails alone, under its own id
         chunkId = chunkIdOf(chunk);
+        try {
+          preparedImage = preparedImage(chunk);
+        } catch (PreprocessingException e) {
+          failChunk(chunk, chunkId, e);
+          return;
+        }
       } else {
         // a close() failure after the last chunk fails this file like any other per-file failure
         closeCurrentFile();
         counters.getFilesOk().add(1);
-        if (fileChunks == 0) {
+        if (fileChunks == 0 && fileChunkFailures == 0 && skippedModalities.isEmpty()) {
           // finished without error and without any chunk: no row, a WARN and an empty side output
           LOG.warn("EMBED-PREP-NO-TEXT source_path_sha={} source_path={} preprocessor={}", currentFile.getSourcePathSha(), currentSourcePath,
               preprocessorName);
@@ -267,7 +298,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
       throw closedOn(e);
     }
     if (chunk != null) {
-      pending = chunkRow(chunk, chunkId);
+      pending = chunkRow(chunk, chunkId, preparedImage);
       fileChunks++;
       counters.getChunks().add(1);
     }
@@ -309,6 +340,24 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
       e.addSuppressed(closeFailure);
     }
     return e;
+  }
+
+  /**
+   * A failure of one chunk alone (a payload that cannot be stored). Chunk 0 fails its file-modality:
+   * one side output naming no chunk, and the modality's later chunks are skipped; a later chunk is one side output naming
+   * its chunk_id. The file goes on.
+   */
+  private void failChunk(Chunk chunk, long chunkId, Exception cause) {
+    String modality = chunk.getModality();
+    fileChunkFailures++;
+    LOG.warn("EMBED-PREP-CHUNK-FAILED source_path_sha={} source_path={} modality={} chunk_id={}", currentFile.getSourcePathSha(), currentSourcePath,
+        modality, chunkId, cause);
+    if (chunkId == 0L) {
+      skippedModalities.add(modality);
+    }
+    String error = ErrorText.truncate(describe(cause), EmbeddingTableSchema.MAX_ERROR_CHARS);
+    sideOutputs.accept(new PrepSideOutput(currentFile.getSourcePathSha(),
+        currentFile.getSourceModificationTime(), currentFile.getFileSize(), currentSourcePath, modality, chunkId == 0L ? null : chunkId, PrepSideOutput.STAGE_PREP, error));
   }
 
   /**
@@ -367,8 +416,9 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   /**
    * The quarantined error: a {@link PreprocessingException}'s message as thrown, without a class prefix. For the PDF
    * chunker's failures and the quarantine marker that message is the contract's {@code "CODE: detail"};
-   * other preprocessors' messages are kept as they are, uncoded. Any other failure is kept as its class and message plus its root
-   * cause, so the quarantine entry alone tells an operator what went wrong.
+   * the iterator's own refusals (a payload it cannot store) and other preprocessors' messages are kept as
+   * they are, uncoded. Any other failure is kept as its class and message plus its root cause, so the quarantine entry alone
+   * tells an operator what went wrong.
    */
   private static String describe(Throwable failure) {
     if (failure instanceof PreprocessingException) {
@@ -383,8 +433,49 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
         : described + " (root cause " + root.getClass().getSimpleName() + ": " + root.getMessage() + ")";
   }
 
+  /**
+   * The {@code prepared_image} value of {@code chunk}: null without a payload; the source row's own blob value, unchanged, for a
+   * source payload (inline bytes, or the reference to the object); the payload's bytes inline for a derived one.
+   *
+   * @throws PreprocessingException a content failure of this chunk: a derived payload above the inline threshold, or one whose
+   *     bytes cannot be read or differ in size from the declared one
+   */
+  private Row preparedImage(Chunk chunk) {
+    if (chunk.getPayload() == null) {
+      return null;
+    }
+    if (chunk.isPayloadSource()) {
+      return currentBlob;
+    }
+    long size = chunk.getPayloadSizeBytes();
+    if (size > payloadInlineMaxBytes) {
+      throw new PreprocessingException("Payload of chunk " + fileChunks + " is " + size + " bytes, above the inline threshold "
+          + BlobTableConfig.INLINE_MAX_BYTES.key() + "=" + payloadInlineMaxBytes + ": a derived input is stored inline only");
+    }
+    byte[] bytes = new byte[(int) size];
+    try (InputStream in = chunk.getPayload().open()) {
+      int read = 0;
+      while (read < bytes.length) {
+        int n = in.read(bytes, read, bytes.length - read);
+        if (n < 0) {
+          throw new PreprocessingException("Payload of chunk " + fileChunks + " ended after " + read + " of its declared " + size
+              + " bytes");
+        }
+        read += n;
+      }
+      if (in.read() >= 0) {
+        throw new PreprocessingException("Payload of chunk " + fileChunks + " is longer than its declared " + size + " bytes");
+      }
+    } catch (IOException e) {
+      // a storage failure under the reader fails the round, as on every other per-file path
+      PrepFailures.rethrowRoundFailure(e);
+      throw new PreprocessingException("Payload of chunk " + fileChunks + " could not be read: " + e.getMessage(), e);
+    }
+    return RowFactory.create(HoodieSchema.Blob.INLINE, bytes, null);
+  }
+
   /** The row of {@code chunk}, in {@link EmbeddingTableSchema#build} column order. */
-  private Row chunkRow(Chunk chunk, long chunkId) {
+  private Row chunkRow(Chunk chunk, long chunkId, Row preparedImage) {
     // every model's VECTOR column stays NULL here
     Object[] values = new Object[EmbeddingTableSchema.BASE_COLUMN_COUNT + modelColumnCount
         + userPartitionColumns.size()];
@@ -406,6 +497,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
       values[EmbeddingTableSchema.BASE_COLUMN_COUNT + modelColumnCount + i] =
           currentSourceRow.schema().getFieldIndex(column).isDefined() ? currentSourceRow.getAs(column) : null;
     }
+    values[11] = preparedImage;
     return RowFactory.create(values);
   }
 
@@ -473,7 +565,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     }
   }
 
-  /** The bytes of one source row, as a stream. */
+  /** The bytes of one source row, as a stream or for random access. */
   private static final class BlobRowBytes implements SeekableBlobBytesSupplier {
     private final BlobBytesSource source;
     private final Row blob;
@@ -656,8 +748,11 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   private void openFileOwned(Row blobRow) {
     currentSourceRow = blobRow;
     fileChunks = 0;
+    fileChunkFailures = 0;
     nextOrdinals.clear();
+    skippedModalities.clear();
     currentFileName = null;
+    currentBlob = null;
     currentSourcePath = blobRow.getAs(BlobColumns.SOURCE_FILE_PATH);
     currentFile = readFileMeta(blobRow);
     currentFileName = blobRow.getAs(BlobColumns.SOURCE_FILE_NAME);
@@ -682,6 +777,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     }
     try {
       Row blob = blobRow.getAs(BlobColumns.BLOB);
+      currentBlob = blob;
       BlobRowBytes openedBytes = new BlobRowBytes(bytesSource, blob, currentFile, null);
       ClosableIterator<Chunk> opened = null;
       try (Release<RuntimeException> sourceCheck = openedBytes::checkFailure) {

@@ -46,6 +46,7 @@ import org.apache.hudi.utilities.sources.unstructured.UnstructuredSourceConfig;
 import org.apache.hudi.utilities.sources.unstructured.UnstructuredSourceContract;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingParquetConfigInjector;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 
 import org.apache.spark.sql.Dataset;
@@ -518,6 +519,7 @@ public class TestUnstructuredDataSource extends UtilitiesTestBase {
     assertTrue(round(source(props), Option.empty(), Long.MAX_VALUE).rows.isEmpty());
   }
 
+  private static final String INJECTOR = HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS.key();
   private static final String CODEC = HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME.key();
   private static final String BLOOM = HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED.key();
   private static final String RECORD_KEY = KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key();
@@ -530,6 +532,7 @@ public class TestUnstructuredDataSource extends UtilitiesTestBase {
     TypedProperties props = props();
     props.setProperty(UnstructuredSourceConfig.MODE.key(), "embedding");
     props.setProperty(EmbeddingTableConfig.MODE.key(), EmbeddingTableConfig.MODE_PREP_ONLY);
+    props.setProperty(INJECTOR, EmbeddingParquetConfigInjector.class.getName());
     props.setProperty(RECORD_KEY, EMBEDDING_KEY);
     return props;
   }

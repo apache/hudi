@@ -19,6 +19,9 @@
 package org.apache.hudi.utilities.unstructured.embedding.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingRoundTestBase;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingStreamers;
@@ -31,12 +34,15 @@ import org.apache.hudi.utilities.unstructured.embedding.prep.pdf.PdfFixtures;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -54,6 +60,61 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
   private TypedProperties prepOnly() {
     return props(table(), EmbeddingTableConfig.MODE_PREP_ONLY,
         EmbeddingTableConfig.CHUNK_MAX_TOKENS.key(), "16", EmbeddingTableConfig.CHUNK_OVERLAP_TOKENS.key(), "0");
+  }
+
+  @Test
+  public void oneCommitHoldsEveryPreparedRowWithoutAModelColumnAndTheStockCheckpoint() throws Exception {
+    FixtureFile a = text("a", "alpha", "beta", "gamma");
+    FixtureFile b = text("b", "delta");
+    FixtureFile pdf = object("c.pdf", PdfFixtures.text(
+        "Alpha beta gamma delta epsilon zeta. Eta theta iota kappa lambda mu. Nu xi omicron pi rho sigma.",
+        "Tau upsilon phi chi psi omega. Alpha beta gamma delta epsilon zeta. Eta theta iota kappa lambda mu."));
+    announce(a, b, pdf);
+
+    Round round = round(prepOnly());
+
+    HoodieInstant commit = round.getCommit().get();
+    assertTrue(round.getErrors().isEmpty(), round.toString());
+    Map<String, Row> rows = rows(table());
+    List<Row> pdfRows = rows.values().stream().filter(row -> pdf.sha.equals(row.getAs(EmbeddingTableSchema.SOURCE_PATH_SHA)))
+        .sorted((x, y) -> Long.compare(x.getAs(EmbeddingTableSchema.CHUNK_ID), y.getAs(EmbeddingTableSchema.CHUNK_ID)))
+        .collect(Collectors.toList());
+    assertTrue(pdfRows.size() >= 2, "a 36-word PDF at 16 tokens per chunk is more than one chunk: " + pdfRows);
+    assertEquals(4 + pdfRows.size(), rows.size(), rows.keySet().toString());
+    assertEquals(rows.size(), round.getRowsWritten());
+    for (FixtureFile file : Arrays.asList(a, b, pdf)) {
+      long chunks = rows.values().stream().filter(row -> file.sha.equals(row.getAs(EmbeddingTableSchema.SOURCE_PATH_SHA))).count();
+      for (long chunk = 0; chunk < chunks; chunk++) {
+        Row row = rows.get(key(file, EmbeddingTableSchema.MODALITY_TEXT, chunk));
+        assertEquals(file.sha, row.getAs(EmbeddingTableSchema.SOURCE_PATH_SHA));
+        assertEquals(versionOf(file).modificationTime, row.<Long>getAs(EmbeddingTableSchema.SOURCE_MODIFICATION_TIME));
+        assertEquals(versionOf(file).size, row.<Long>getAs(EmbeddingTableSchema.SOURCE_FILE_SIZE));
+        assertEquals("text", row.getAs(EmbeddingTableSchema.MODALITY));
+        assertEquals(chunk, row.<Long>getAs(EmbeddingTableSchema.CHUNK_ID));
+        assertEquals(file.sourcePath, row.getAs(EmbeddingTableSchema.SOURCE_FILE_PATH));
+        assertEquals(file.fileName(), row.getAs(EmbeddingTableSchema.SOURCE_FILE_NAME));
+        assertEquals(file.extension, row.getAs(EmbeddingTableSchema.SOURCE_FILE_EXTENSION));
+      }
+    }
+    assertEquals("beta", rows.get(key(a, EmbeddingTableSchema.MODALITY_TEXT, 1)).getAs(EmbeddingTableSchema.PREPARED_TEXT_CHUNK));
+    String pdfText = pdfRows.stream().map(row -> row.<String>getAs(EmbeddingTableSchema.PREPARED_TEXT_CHUNK)).collect(Collectors.joining(" "));
+    for (String word : Arrays.asList("Alpha", "sigma", "Tau", "omega")) {
+      assertTrue(pdfText.contains(word), word + " in " + pdfText);
+    }
+
+    // no model column (no VECTOR column at all), no preprocessor column
+    StructType schema = EmbeddingTableSchema.writerReadSchema(table(), storage()).get();
+    assertFalse(Arrays.asList(schema.fieldNames()).contains(EmbeddingStreamers.MODEL_COLUMN), Arrays.toString(schema.fieldNames()));
+    assertFalse(Arrays.stream(schema.fields()).anyMatch(field -> field.metadata().contains(HoodieSchema.TYPE_METADATA_FIELD)
+        && field.metadata().getString(HoodieSchema.TYPE_METADATA_FIELD).startsWith("VECTOR(")), schema.treeString());
+    // the prepared_image BLOB column is there in prep_only too
+    assertTrue(Arrays.asList(schema.fieldNames()).contains(EmbeddingTableSchema.PREPARED_IMAGE), schema.treeString());
+    assertFalse(Arrays.asList(schema.fieldNames()).contains("preprocessor"), Arrays.toString(schema.fieldNames()));
+
+    // the stock S3 events checkpoint under the V1 key, and no other checkpoint key
+    assertEquals(latestEventsCheckpoint(), EmbeddingStreamers.checkpoint(table(), storage(), commit));
+    assertEquals(Collections.singletonList(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1),
+        EmbeddingStreamers.checkpointKeys(table(), storage(), commit));
   }
 
   @Test

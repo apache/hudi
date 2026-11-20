@@ -56,6 +56,7 @@ public class TestEmbeddingComputeFailureSurfaces {
       .add(EmbeddingTableSchema.MODALITY, DataTypes.StringType, false)
       .add(EmbeddingTableSchema.CHUNK_ID, DataTypes.LongType, false)
       .add(EmbeddingTableSchema.PREPARED_TEXT_CHUNK, DataTypes.StringType, true)
+      .add(EmbeddingTableSchema.preparedImageField())
       .add("emb_m1", DataTypes.createArrayType(DataTypes.FloatType, false), true)
       .add(ComputeRound.errorWorkingField());
 
@@ -119,8 +120,8 @@ public class TestEmbeddingComputeFailureSurfaces {
   }
 
   private static Iterator<Row> rows() {
-    return Arrays.asList(RowFactory.create("s", 101L, 17L, "text", 0L, "alpha", null, null),
-        RowFactory.create("s", 101L, 17L, "text", 1L, "beta", null, null)).iterator();
+    return Arrays.asList(RowFactory.create("s", 101L, 17L, "text", 0L, "alpha", null, null, null),
+        RowFactory.create("s", 101L, 17L, "text", 1L, "beta", null, null, null)).iterator();
   }
 
   private static List<Row> drain(RuntimeException failure) {
@@ -140,9 +141,9 @@ public class TestEmbeddingComputeFailureSurfaces {
     FailingClient.CLOSES.set(0);
     FailingClient.failure = null;
     FailingClient.failInit = false;
-    Iterator<Row> source = Arrays.asList(RowFactory.create("s", 101L, 17L, "text", 0L, "alpha", null, null),
-        RowFactory.create("s", 101L, 17L, "text", 1L, "beta", null, null),
-        RowFactory.create("s", 101L, 17L, "text", 2L, "gamma", null, null)).iterator();
+    Iterator<Row> source = Arrays.asList(RowFactory.create("s", 101L, 17L, "text", 0L, "alpha", null, null, null),
+        RowFactory.create("s", 101L, 17L, "text", 1L, "beta", null, null, null),
+        RowFactory.create("s", 101L, 17L, "text", 2L, "gamma", null, null, null)).iterator();
     AtomicInteger consumed = new AtomicInteger();
     Iterator<Row> counted = new Iterator<Row>() {
       @Override
@@ -219,8 +220,8 @@ public class TestEmbeddingComputeFailureSurfaces {
   public void permanentResultKeepsTheRowWithItsPreparedColumnsAndTheError() {
     List<Row> out = drain(null);
     assertEquals(Arrays.asList(
-        RowFactory.create("s", 101L, 17L, "text", 0L, "alpha", null, "bad input 0"),
-        RowFactory.create("s", 101L, 17L, "text", 1L, "beta", null, "PERMANENT result without a message")), out,
+        RowFactory.create("s", 101L, 17L, "text", 0L, "alpha", null, null, "bad input 0"),
+        RowFactory.create("s", 101L, 17L, "text", 1L, "beta", null, null, "PERMANENT result without a message")), out,
         "prepared columns survive and every PERMANENT result carries its error in the working column");
   }
 }

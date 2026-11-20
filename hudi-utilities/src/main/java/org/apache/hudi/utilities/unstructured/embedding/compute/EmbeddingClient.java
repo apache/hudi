@@ -57,7 +57,7 @@ public interface EmbeddingClient extends AutoCloseable {
 
   /** The modalities of a client that embeds text and images. */
   Set<String> TEXT_AND_IMAGE = Collections.unmodifiableSet(new TreeSet<>(Arrays.asList(
-      EmbeddingTableSchema.MODALITY_TEXT, "image")));
+      EmbeddingTableSchema.MODALITY_TEXT, EmbeddingTableSchema.MODALITY_IMAGE)));
 
   /** Prepares the client for {@code spec}; called once, before any {@link #embed}. */
   void init(EmbeddingModelSpec spec, TypedProperties props);

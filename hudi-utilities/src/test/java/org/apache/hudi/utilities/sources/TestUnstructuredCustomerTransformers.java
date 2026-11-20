@@ -31,7 +31,6 @@ import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.sources.TestUnstructuredDataSourceTargetSchema.UserTargetSchemaProvider;
 import org.apache.hudi.utilities.sources.blob.BlobJobHarness;
 import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
-import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.sources.blob.BucketFolderFileSystem;
 import org.apache.hudi.utilities.sources.blob.S3EventsTableFixture;
 import org.apache.hudi.utilities.sources.unstructured.UnstructuredMode;
@@ -42,6 +41,7 @@ import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingStreamers;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.prep.pdf.PdfFixtures;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -343,7 +343,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
 
     Dataset<Row> stored = sparkSession.read().format("hudi").load(table);
     assertEquals("VECTOR(4)", stored.schema().apply(FillVectorAndBlobTransformer.VECTOR).metadata().getString(HoodieSchema.TYPE_METADATA_FIELD));
-    assertEquals(BlobTableSchema.schema().apply(BlobTableSchema.BLOB).metadata().getString(HoodieSchema.TYPE_METADATA_FIELD),
+    assertEquals(EmbeddingTableSchema.preparedImageField().metadata().getString(HoodieSchema.TYPE_METADATA_FIELD),
         stored.schema().apply(FillVectorAndBlobTransformer.BLOB).metadata().getString(HoodieSchema.TYPE_METADATA_FIELD));
     List<Row> rows = stored.select("source_file_name", FillVectorAndBlobTransformer.VECTOR, FillVectorAndBlobTransformer.BLOB + ".type",
         FillVectorAndBlobTransformer.BLOB + ".data").collectAsList();
@@ -364,7 +364,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
     @Override
     public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rows, TypedProperties props) {
       Metadata vector = new MetadataBuilder().putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(4)").build();
-      StructField blobField = BlobTableSchema.schema().apply(BlobTableSchema.BLOB);
+      StructField blobField = EmbeddingTableSchema.preparedImageField();
       StructType blobType = (StructType) blobField.dataType();
       Column blob = functions.struct(functions.lit("INLINE").as(blobType.fields()[0].name()),
           functions.lit(BYTES).as(blobType.fields()[1].name()),

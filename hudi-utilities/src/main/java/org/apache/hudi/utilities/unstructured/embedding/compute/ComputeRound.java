@@ -26,6 +26,7 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingModelSpec;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.balance.HashSpread;
+import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSource;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
@@ -98,15 +99,17 @@ public final class ComputeRound {
   }
 
   /**
-   * Embeds {@code rows} (in {@code tableSchema}) with {@code model}: the rows in {@code tableSchema} plus
+   * Embeds {@code rows} (in {@code tableSchema}) with {@code model}, reading image rows' {@code prepared_image} through
+   * {@code storedInputs}: the rows in {@code tableSchema} plus
    * {@link #ERROR_WORKING_COLUMN}, persisted at {@code level} and counted, so every model call has run when it returns.
    */
   public static Dataset<Row> embed(SparkSession spark, JavaRDD<Row> rows, StructType tableSchema, EmbeddingModelSpec model,
-                                   TypedProperties props, ComputeCounters counters, StorageLevel level) {
+                                   TypedProperties props, BlobBytesSource storedInputs, ComputeCounters counters,
+                                   StorageLevel level) {
     StructType schema = tableSchema.add(errorWorkingField(tableSchema));
     int batchSize = EmbeddingTableConfig.from(props).computeBatchSize();
     JavaRDD<Row> embedded = rows.mapPartitions(iterator -> new MicroBatchEmbeddingIterator(withErrorSlot(iterator), model, props,
-        schema, batchSize, counters));
+        schema, batchSize, counters, storedInputs));
     Dataset<Row> persisted = spark.createDataFrame(embedded, schema).persist(level);
     try {
       // the action that runs every model call before the write

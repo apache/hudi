@@ -92,12 +92,6 @@ public class TestUnstructuredSchemaContract {
         .toArray(StructField[]::new));
   }
 
-  /** A nullable BLOB column named {@code name}. */
-  private static StructField blob(String name) {
-    StructField blob = BlobTableSchema.schema().apply(BlobTableSchema.BLOB);
-    return blob.copy(name, blob.dataType(), true, blob.metadata());
-  }
-
   private static StructField vector(String name, int dimension) {
     Metadata metadata = new MetadataBuilder().putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(" + dimension + ")").build();
     return new StructField(name, DataTypes.createArrayType(DataTypes.FloatType, false), true, metadata);
@@ -155,10 +149,12 @@ public class TestUnstructuredSchemaContract {
         UnstructuredMode.EMBEDDING, contract, newTable, contract.add(vector("emb_m2", 8)), "the rows", false));
     assertTrue(refused.getMessage().contains("the column emb_m2 has a reserved name"), refused.getMessage());
     assertThrows(HoodieSchemaException.class, () -> UnstructuredSchemaContract.checkOutput(UnstructuredMode.EMBEDDING, contract, newTable,
-        contract.add(blob("EMB_M2")), "the rows", false));
+        contract.add(EmbeddingTableSchema.preparedImageField().copy("EMB_M2", EmbeddingTableSchema.preparedImageField().dataType(),
+            true, EmbeddingTableSchema.preparedImageField().metadata())), "the rows", false));
     // a customer VECTOR or BLOB of another name is the customer's
     UnstructuredSchemaContract.checkOutput(UnstructuredMode.EMBEDDING, contract, newTable, contract.add(vector("user_vector", 8))
-        .add(blob("user_blob")), "the rows", false);
+        .add(EmbeddingTableSchema.preparedImageField().copy("user_blob", EmbeddingTableSchema.preparedImageField().dataType(), true,
+            EmbeddingTableSchema.preparedImageField().metadata())), "the rows", false);
   }
 
   @Test

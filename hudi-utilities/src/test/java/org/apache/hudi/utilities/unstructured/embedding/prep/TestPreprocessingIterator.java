@@ -201,6 +201,38 @@ public class TestPreprocessingIterator {
   }
 
   @Test
+  public void rowsCarryTheFiveKeyColumnsAndTheSourceColumns() {
+    List<Row> rows = drain(iterator(props("m1", "m2"), blobRow("sha-a", "txt", "alpha beta|gamma")));
+
+    assertEquals(2, rows.size());
+    Row first = rows.get(0);
+    assertEquals(14, first.length());
+    assertEquals("sha-a", first.get(0));
+    assertEquals(1234L, first.get(1));
+    assertEquals(16L, first.get(2));
+    assertEquals("text", first.get(3));
+    assertEquals(0L, first.get(4));
+    assertEquals("s3a://bucket/dir/a.txt", first.get(5));
+    assertEquals("a.txt", first.get(6));
+    assertEquals("txt", first.get(7));
+    assertEquals("alpha beta", first.get(8));
+    assertEquals(2, first.get(9));
+    assertEquals("0", ((scala.collection.Map<String, String>) first.get(10)).apply("part"));
+    assertNull(first.get(11), "a text row has no prepared_image");
+    assertNull(first.get(12), "model columns stay NULL until compute");
+    assertNull(first.get(13));
+
+    Row second = rows.get(1);
+    assertEquals("sha-a", second.get(0));
+    assertEquals(1234L, second.get(1));
+    assertEquals(16L, second.get(2));
+    assertEquals("text", second.get(3));
+    assertEquals(1L, second.get(4));
+    assertEquals("gamma", second.get(8));
+    assertEquals(1, second.get(9));
+  }
+
+  @Test
   public void userPartitionColumnsAreCopiedFromTheSourceRow() {
     TypedProperties props = props("m1");
     props.setProperty(CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key(), "team,missing");

@@ -80,15 +80,15 @@ import java.util.stream.Collectors;
  *   each inline object again) until preprocessing has run, and counts its rows in one action;</li>
  *   <li>balances the rows over tasks ({@link RowBalancer}; the source builds one row per object path, so each row is its own
  *   source version) and preprocesses them ({@link PreprocessingIterator}: the default
- *   chunk-id scheme);</li>
+ *   chunk-id scheme, a failed chunk 0 fails its file-modality and a failed later chunk only itself);</li>
  *   <li>persists the output at {@code hoodie.write.tagged.record.storage.level} and counts it, so preprocessing runs inside
  *   the round, where a failure rolls the instant back.</li>
  * </ol>
- * A failed or empty file is a row whose {@value #CORRUPT_RECORD} column holds a JSON description
+ * A failed file, chunk or empty file is a row whose {@value #CORRUPT_RECORD} column holds a JSON description
  * ({@code source_path_sha, source_modification_time, source_file_size, source_file_path, modality, chunk_id, stage, error,
  * instant}); the streamer routes it
  * to the job's error table as a {@code CUSTOM_TRANSFORMER_FAILURE}. With the error table off
- * ({@code hoodie.errortable.enable=false}) a failed file fails the round, and empty files are only logged.
+ * ({@code hoodie.errortable.enable=false}) a failed file or chunk fails the round, and empty files are only logged.
  */
 final class PrepRound {
 
@@ -264,7 +264,7 @@ final class PrepRound {
   }
 
   /**
-   * The error row of a failed or empty file: {@value #CORRUPT_RECORD} holds its JSON; every other column NULL, or a
+   * The error row of a failed or empty file or chunk: {@value #CORRUPT_RECORD} holds its JSON; every other column NULL, or a
    * placeholder of its type where the column is not nullable (the streamer drops the row before the write).
    */
   static Row errorRow(PrepSideOutput sideOutput, String instant, StructType outputSchema) {
@@ -315,7 +315,7 @@ final class PrepRound {
   }
 
   /**
-   * With the error table off nothing records a failed file, so the round fails; an empty file is only logged.
+   * With the error table off nothing records a failed file or chunk, so the round fails; an empty file is only logged.
    *
    * @throws EmbeddingPrepFailedException naming the first failures
    */
