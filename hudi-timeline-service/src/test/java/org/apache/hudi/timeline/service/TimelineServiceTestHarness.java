@@ -50,6 +50,8 @@ public class TimelineServiceTestHarness extends TimelineService {
   private static final String PROXY_ALL_URLS = "/*";
   @Setter
   private int numberOfSimulatedConnectionFailures;
+  @Setter
+  private int numberOfSimulatedLostResponses;
   private Option<Server> server;
   private int serverPort;
 
@@ -66,13 +68,14 @@ public class TimelineServiceTestHarness extends TimelineService {
 
   @Override
   public int startService() throws IOException {
-    if (numberOfSimulatedConnectionFailures > 0) {
+    if (numberOfSimulatedConnectionFailures > 0 || numberOfSimulatedLostResponses > 0) {
       try {
         int timelineServicePort = super.startService();
         server = Option.of(new Server(serverPort));
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         context.setContextPath("/");
-        context.addServlet(new ServletHolder(new FailureInducingHttpServlet(timelineServicePort, numberOfSimulatedConnectionFailures)), PROXY_ALL_URLS);
+        context.addServlet(new ServletHolder(new FailureInducingHttpServlet(
+            timelineServicePort, numberOfSimulatedConnectionFailures, numberOfSimulatedLostResponses)), PROXY_ALL_URLS);
         server.get().setHandler(context);
         server.get().start();
         serverPort = server.get().getURI().getPort();
@@ -113,9 +116,19 @@ public class TimelineServiceTestHarness extends TimelineService {
   public static class Builder {
 
     private int numberOfSimulatedConnectionFailures = 0;
+    private int numberOfSimulatedLostResponses = 0;
 
     public Builder withNumberOfSimulatedConnectionFailures(int numberOfSimulatedConnectionFailures) {
       this.numberOfSimulatedConnectionFailures = numberOfSimulatedConnectionFailures;
+      return this;
+    }
+
+    /**
+     * Forwards the first requests to the timeline server and then fails them, as if the response
+     * were lost after the timeline server applied the request.
+     */
+    public Builder withNumberOfSimulatedLostResponses(int numberOfSimulatedLostResponses) {
+      this.numberOfSimulatedLostResponses = numberOfSimulatedLostResponses;
       return this;
     }
 
@@ -124,6 +137,7 @@ public class TimelineServiceTestHarness extends TimelineService {
                                             FileSystemViewManager globalFileSystemViewManager) throws IOException {
       TimelineServiceTestHarness timelineServiceTestHarness = new TimelineServiceTestHarness(hadoopConf, timelineServerConf, globalFileSystemViewManager);
       timelineServiceTestHarness.setNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);
+      timelineServiceTestHarness.setNumberOfSimulatedLostResponses(numberOfSimulatedLostResponses);
       return timelineServiceTestHarness;
     }
   }
@@ -132,13 +146,23 @@ public class TimelineServiceTestHarness extends TimelineService {
 
     private final int timelineServerPort;
     private final int maxSimulatedConnectionFailures;
+    private final int maxSimulatedLostResponses;
     private int currentNumConnectionSimulatedFailures;
+    private int currentNumSimulatedLostResponses;
 
     public FailureInducingHttpServlet(int timelineServerPort,
-                                      int maxSimulatedConnectionFailures) {
+                                      int maxSimulatedConnectionFailures,
+                                      int maxSimulatedLostResponses) {
       this.timelineServerPort = timelineServerPort;
       this.maxSimulatedConnectionFailures = maxSimulatedConnectionFailures;
+      this.maxSimulatedLostResponses = maxSimulatedLostResponses;
       currentNumConnectionSimulatedFailures = 0;
+      currentNumSimulatedLostResponses = 0;
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+      doGet(req, resp);
     }
 
     @Override
@@ -177,6 +201,10 @@ public class TimelineServiceTestHarness extends TimelineService {
       }
 
       HttpResponse httpResponse = response.returnResponse();
+      // Emulate a response lost after the timeline server handled the request.
+      if (++currentNumSimulatedLostResponses <= maxSimulatedLostResponses) {
+        throw new NoHttpResponseException("Simulated lost response");
+      }
       resp.setContentType(httpResponse.getEntity().getContentType().getValue());
       resp.setStatus(httpResponse.getStatusLine().getStatusCode());
       resp.getWriter().println(EntityUtils.toString(httpResponse.getEntity()));

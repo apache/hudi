@@ -23,11 +23,13 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.MarkerUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -43,11 +45,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -130,11 +134,38 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     assertTrue(writeMarkersWithRetries.doesMarkerDirExist());
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testMarkerCreationRetrySucceedsAfterLostResponse(boolean withEarlyConflictDetection) throws Exception {
+    restartServerAndClient(0, 1, SPILLABLE_DISK);
+    TimelineServerBasedWriteMarkers writeMarkersWithRetries = initWriteMarkers(
+        metaClient.getBasePath().toString(),
+        markerFolderPath.toString(),
+        timelineService.getServerPort(),
+        true);
+
+    // The timeline server creates the marker, but the response is lost, so the client retries
+    Option<StoragePath> markerPath = withEarlyConflictDetection
+        ? writeMarkersWithRetries.createWithEarlyConflictDetection(
+            "2020/06/01", "file1.parquet", IOType.MERGE, false, null, "file1", null)
+        : writeMarkersWithRetries.create("2020/06/01", "file1.parquet", IOType.MERGE);
+
+    assertTrue(markerPath.isPresent());
+    assertEquals(Collections.singleton("2020/06/01/file1.parquet.marker.MERGE"),
+        writeMarkersWithRetries.allMarkerFilePaths());
+  }
+
   private void restartServerAndClient(int numberOfSimulatedConnectionFailures) {
     restartServerAndClient(numberOfSimulatedConnectionFailures, SPILLABLE_DISK);
   }
 
   private void restartServerAndClient(int numberOfSimulatedConnectionFailures,
+                                      FileSystemViewStorageType storageType) {
+    restartServerAndClient(numberOfSimulatedConnectionFailures, 0, storageType);
+  }
+
+  private void restartServerAndClient(int numberOfSimulatedConnectionFailures,
+                                      int numberOfSimulatedLostResponses,
                                       FileSystemViewStorageType storageType) {
     if (timelineService != null) {
       timelineService.close();
@@ -145,7 +176,8 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
           FileSystemViewStorageConfig.newBuilder().withStorageType(storageType).build();
       HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
       TimelineServiceTestHarness.Builder builder = TimelineServiceTestHarness.newBuilder();
-      builder.withNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);
+      builder.withNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures)
+          .withNumberOfSimulatedLostResponses(numberOfSimulatedLostResponses);
       timelineService = builder.build(
           (Configuration) storage.getConf().unwrap(),
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),

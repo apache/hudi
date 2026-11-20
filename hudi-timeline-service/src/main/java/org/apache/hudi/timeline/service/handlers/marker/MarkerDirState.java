@@ -80,6 +80,14 @@ public class MarkerDirState implements Serializable {
   private final List<Boolean> threadUseStatus;
   // A list of pending futures from async marker creation requests
   private final List<MarkerCreationFuture> markerCreationFutures = new ArrayList<>();
+  // ID of the request that created each marker in this timeline server instance, so that a retry
+  // of that request, sent when its response is lost, succeeds instead of being refused as a
+  // duplicate. Markers read from the file system have no entry, so a retry for them is refused.
+  // Guarded by markerCreationProcessingLock.
+  private final Map<String, String> markerCreationRequestIds = new HashMap<>();
+  // Markers added by batches that have not finished persisting them yet.
+  // Guarded by markerCreationProcessingLock.
+  private final Set<String> markersBeingPersisted = new HashSet<>();
   private final int parallelism;
   private final Object markerCreationProcessingLock = new Object();
   // Early conflict detection strategy if enabled
@@ -191,6 +199,10 @@ public class MarkerDirState implements Serializable {
 
   /**
    * Processes pending marker creation requests.
+   * <p>
+   * A request for an existing marker fails, unless it is a retry of the request that created the
+   * marker. A retry succeeds once the marker is persisted. If another batch is still persisting the
+   * marker, the retry is put back in the queue and answered by a later batch.
    *
    * @param pendingMarkerCreationFutures futures of pending marker creation requests
    * @param fileIndex file index to use to write markers
@@ -206,6 +218,8 @@ public class MarkerDirState implements Serializable {
         System.currentTimeMillis(), markerDirPath, pendingMarkerCreationFutures.size(), fileIndex);
     boolean shouldFlushMarkers = false;
     int fileMarkersLengthBeforeBatch = 0;
+    Set<String> markersAddedByBatch = new HashSet<>();
+    List<MarkerCreationFuture> deferredFutures = new ArrayList<>();
 
     try {
       synchronized (markerCreationProcessingLock) {
@@ -213,6 +227,14 @@ public class MarkerDirState implements Serializable {
         fileMarkersLengthBeforeBatch = fileMarkers == null ? 0 : fileMarkers.length();
         for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
           String markerName = future.getMarkerName();
+          if (isRetryOfRequestThatCreatedMarker(future)) {
+            if (markersBeingPersisted.contains(markerName)) {
+              deferredFutures.add(future);
+            } else {
+              future.setIsSuccessful(true);
+            }
+            continue;
+          }
           boolean exists = allMarkers.contains(markerName);
           if (!exists) {
             if (conflictDetectionStrategy.isPresent()) {
@@ -227,17 +249,18 @@ public class MarkerDirState implements Serializable {
                 log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
                 // When early conflict detection fails to execute, we still allow the marker creation
                 // to continue
-                addMarkerToMap(fileIndex, markerName);
+                addMarkerToMap(fileIndex, future, markersAddedByBatch);
                 future.setIsSuccessful(true);
                 shouldFlushMarkers = true;
                 continue;
               }
             }
-            addMarkerToMap(fileIndex, markerName);
+            addMarkerToMap(fileIndex, future, markersAddedByBatch);
             shouldFlushMarkers = true;
           }
           future.setIsSuccessful(!exists);
         }
+        markersBeingPersisted.addAll(markersAddedByBatch);
 
         if (!isMarkerTypeWritten) {
           // Create marker directory and write marker type to MARKERS.type
@@ -248,21 +271,30 @@ public class MarkerDirState implements Serializable {
       if (shouldFlushMarkers) {
         flushMarkersToFile(fileIndex);
       }
+      synchronized (markerCreationProcessingLock) {
+        markersBeingPersisted.removeAll(markersAddedByBatch);
+      }
     } catch (Exception e) {
       log.error("Failed to persist markers to file index {} in {}", fileIndex, markerDirPath, e);
       // The markers added by this batch are not durably persisted, so they are removed from
       // the in-memory state and all pending requests fail, so that no write operation
       // proceeds without a durable marker and a retried request can recreate the marker
-      removeMarkersOfPendingFutures(pendingMarkerCreationFutures, fileIndex, fileMarkersLengthBeforeBatch);
+      removeMarkersAddedByBatch(markersAddedByBatch, fileIndex, fileMarkersLengthBeforeBatch);
       for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
-        future.completeExceptionally(e);
+        if (!deferredFutures.contains(future)) {
+          future.completeExceptionally(e);
+        }
       }
       return;
     } finally {
       markFileAsAvailable(fileIndex);
+      deferredFutures.forEach(this::addMarkerCreationFuture);
     }
 
     for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
+      if (deferredFutures.contains(future)) {
+        continue;
+      }
       try {
         future.complete(jsonifyResult(
             future.getContext(), future.isSuccessful(), metricsRegistry));
@@ -280,6 +312,7 @@ public class MarkerDirState implements Serializable {
   public boolean deleteAllMarkers() {
     boolean result = FSUtils.deleteDir(hoodieEngineContext, storage, markerDirPath, parallelism);
     allMarkers.clear();
+    markerCreationRequestIds.clear();
     fileMarkersMap.clear();
     return result;
   }
@@ -311,34 +344,50 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
+   * @return {@code true} if the request is a retry of the request that created the marker in this
+   * timeline server. The client sends a retry with the same request ID when it does not receive
+   * the response.
+   */
+  private boolean isRetryOfRequestThatCreatedMarker(MarkerCreationFuture future) {
+    String requestId = future.getRequestId();
+    return requestId != null && requestId.equals(markerCreationRequestIds.get(future.getMarkerName()));
+  }
+
+  /**
    * Adds a new marker to the in-memory map.
    *
-   * @param fileIndex  Marker file index number.
-   * @param markerName Marker name.
+   * @param fileIndex           Marker file index number.
+   * @param future              Future of the request creating the marker.
+   * @param markersAddedByBatch Markers added by the current batch, which the marker is added to.
    */
-  private void addMarkerToMap(int fileIndex, String markerName) {
+  private void addMarkerToMap(int fileIndex, MarkerCreationFuture future, Set<String> markersAddedByBatch) {
+    String markerName = future.getMarkerName();
     allMarkers.add(markerName);
+    if (future.getRequestId() != null) {
+      markerCreationRequestIds.put(markerName, future.getRequestId());
+    }
+    markersAddedByBatch.add(markerName);
     StringBuilder stringBuilder = fileMarkersMap.computeIfAbsent(fileIndex, k -> new StringBuilder(16384));
     stringBuilder.append(markerName);
     stringBuilder.append('\n');
   }
 
   /**
-   * Removes the markers added by the pending marker creation requests from the in-memory state,
+   * Removes the markers added by a batch of marker creation requests from the in-memory state,
    * used when the markers cannot be persisted, so that a retried request can recreate the markers.
+   * Markers that the batch only acknowledged for retried requests were persisted by an earlier
+   * batch and stay.
    *
-   * @param pendingMarkerCreationFutures futures of pending marker creation requests
+   * @param markersAddedByBatch          markers added by the batch
    * @param fileIndex                    file index used by the batch of requests
    * @param fileMarkersLengthBeforeBatch length of the buffered markers of the file index before the batch
    */
-  private void removeMarkersOfPendingFutures(
-      List<MarkerCreationFuture> pendingMarkerCreationFutures, int fileIndex, int fileMarkersLengthBeforeBatch) {
+  private void removeMarkersAddedByBatch(
+      Set<String> markersAddedByBatch, int fileIndex, int fileMarkersLengthBeforeBatch) {
     synchronized (markerCreationProcessingLock) {
-      for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
-        if (future.isSuccessful()) {
-          allMarkers.remove(future.getMarkerName());
-        }
-      }
+      allMarkers.removeAll(markersAddedByBatch);
+      markerCreationRequestIds.keySet().removeAll(markersAddedByBatch);
+      markersBeingPersisted.removeAll(markersAddedByBatch);
       StringBuilder fileMarkers = fileMarkersMap.get(fileIndex);
       if (fileMarkers != null) {
         fileMarkers.setLength(fileMarkersLengthBeforeBatch);
