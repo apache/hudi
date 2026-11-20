@@ -114,7 +114,10 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     this(rows, model, props, schema, batchSize, counters, null);
   }
 
-  /** Creates the task's embedding iterator; {@code storedInputs} opens image rows' {@code prepared_image}. */
+  /**
+   * Creates the task's embedding iterator; {@code storedInputs} opens image rows' {@code prepared_image}.
+   * The final schema field is the private error slot appended by {@link ComputeRound#embed}.
+   */
   MicroBatchEmbeddingIterator(Iterator<Row> rows, EmbeddingModelSpec model, TypedProperties props,
                               StructType schema, int batchSize, ComputeCounters counters, BlobBytesSource storedInputs) {
     this.model = model;
@@ -125,6 +128,8 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     this.counters = counters;
     this.outputWidth = schema.fields().length;
     this.vectorIndex = schema.fieldIndex(model.getColumn());
+    // ComputeRound appends the private outcome slot after every table column. Its name may be suffixed to keep
+    // customer columns distinct under Spark's case-insensitive resolution.
     this.errorIndex = outputWidth - 1;
     this.sourcePathShaIndex = schema.fieldIndex(EmbeddingTableSchema.SOURCE_PATH_SHA);
     this.sourceModificationTimeIndex = schema.fieldIndex(EmbeddingTableSchema.SOURCE_MODIFICATION_TIME);

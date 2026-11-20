@@ -24,14 +24,14 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * The client class of a model, resolved from a table of provider ids and class NAMES, so table configuration
- * can name a model's client without linking any provider package (or its SDK). {@link EmbeddingClientFactory}
- * resolves through it; a test pins every name and id here to the provider's own class and constant.
+ * Resolves configured embedding clients by provider id or explicit client class.
  */
 public final class EmbeddingClientNames {
 
@@ -40,11 +40,25 @@ public final class EmbeddingClientNames {
   /** The ids of the OpenAI-compatible providers ({@code openai.OpenAiProvider}), in declaration order. */
   static final List<String> OPENAI_PROVIDERS = Collections.unmodifiableList(Arrays.asList("openai", "azure-openai", "hf-tei"));
   static final String OPENAI_COMPATIBLE_CLIENT = PKG + "openai.OpenAiCompatibleEmbeddingClient";
-
+  static final String VERTEX_PROVIDER = "vertex-multimodal";
+  static final String VERTEX_CLIENT = PKG + "vertex.VertexMultimodalEmbeddingClient";
+  static final String BEDROCK_PROVIDER = "bedrock";
+  /** The client class of each Bedrock model family, by the family's base model id ({@code bedrock.BedrockModelFamily}). */
+  static final Map<String, String> BEDROCK_CLIENTS;
+  static final String JINA_PROVIDER = "jina";
+  static final String JINA_CLIENT = PKG + "jina.JinaEmbeddingClient";
   /** The provider ids with a built-in client, as {@code hoodie.unstructured.embedding.model.<alias>.provider} names them. */
-  public static final List<String> PROVIDERS = Collections.unmodifiableList(
-      Stream.concat(Stream.of(DummyEmbeddingClient.PROVIDER, DummyMultimodalEmbeddingClient.PROVIDER), OPENAI_PROVIDERS.stream())
-          .collect(Collectors.toList()));
+  public static final List<String> PROVIDERS = Collections.unmodifiableList(Stream.of(
+      Stream.of(DummyEmbeddingClient.PROVIDER, DummyMultimodalEmbeddingClient.PROVIDER), OPENAI_PROVIDERS.stream(),
+      Stream.of(VERTEX_PROVIDER, BEDROCK_PROVIDER, JINA_PROVIDER))
+      .flatMap(s -> s).collect(Collectors.toList()));
+
+  static {
+    Map<String, String> bedrock = new LinkedHashMap<>();
+    bedrock.put("amazon.titan-embed-text-v2", PKG + "bedrock.BedrockTitanTextEmbeddingClient");
+    bedrock.put("cohere.embed-v4", PKG + "bedrock.BedrockCohereEmbeddingClient");
+    BEDROCK_CLIENTS = Collections.unmodifiableMap(bedrock);
+  }
 
   private EmbeddingClientNames() {
   }
@@ -82,9 +96,46 @@ public final class EmbeddingClientNames {
     if (OPENAI_PROVIDERS.contains(spec.getProvider())) {
       return OPENAI_COMPATIBLE_CLIENT;
     }
+    if (VERTEX_PROVIDER.equals(spec.getProvider())) {
+      return VERTEX_CLIENT;
+    }
+    if (BEDROCK_PROVIDER.equals(spec.getProvider())) {
+      String family = bedrockFamily(spec.getModelName());
+      if (family == null) {
+        throw new UnsupportedOperationException("Bedrock model id " + spec.getModelName() + " of model " + spec.getName()
+            + " names no supported model family (" + String.join(", ", BEDROCK_CLIENTS.keySet()) + "); for an application "
+            + "inference profile or provisioned-throughput ARN set " + EmbeddingTableConfig.MODEL_PREFIX + spec.getName()
+            + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX + " to the family's client: "
+            + String.join(", ", BEDROCK_CLIENTS.values().stream().sorted().collect(Collectors.toList())));
+      }
+      return BEDROCK_CLIENTS.get(family);
+    }
+    if (JINA_PROVIDER.equals(spec.getProvider())) {
+      return JINA_CLIENT;
+    }
     throw new UnsupportedOperationException("provider " + spec.getProvider() + " of model " + spec.getName()
         + " has no built-in embedding client; providers: " + String.join(", ", PROVIDERS) + ", or set " + EmbeddingTableConfig.MODEL_PREFIX + spec.getName()
         + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX + " to an " + EmbeddingClient.class.getName() + " implementation");
   }
 
+  /**
+   * The base model id of the Bedrock family {@code modelId} names, or null: the id after the last {@code /} (an ARN) and
+   * before the {@code :} version, equal to a family's base id or ending in {@code .<base id>} (a cross-region profile), the
+   * rule of {@code bedrock.BedrockModelFamily#fromModelId}.
+   */
+  static String bedrockFamily(String modelId) {
+    if (modelId == null) {
+      return null;
+    }
+    String id = modelId.trim();
+    id = id.substring(id.lastIndexOf('/') + 1);
+    int version = id.indexOf(':');
+    String base = version < 0 ? id : id.substring(0, version);
+    for (String family : BEDROCK_CLIENTS.keySet()) {
+      if (base.equals(family) || base.endsWith("." + family)) {
+        return family;
+      }
+    }
+    return null;
+  }
 }

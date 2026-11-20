@@ -46,6 +46,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
@@ -149,6 +151,18 @@ public class EmbeddingTableConfig implements Serializable {
       .noDefaultValue("<alias>")
       .sinceVersion(SINCE_1_3_0)
       .withDocumentation("Provider-side name of the model. Replace <alias> with the declared model alias.");
+
+  /** Optional declared provider inputs, a comma-separated subset of text and image, used for provider limit checks. */
+  public static final String MODEL_MODALITIES_SUFFIX = ".modalities";
+
+  /** Metadata for the hoodie.unstructured.embedding.model.{@code <alias>}.modalities family. */
+  public static final ConfigProperty<String> MODEL_MODALITIES_PROPERTY = ConfigProperty
+      .key("hoodie.unstructured.embedding.model.<alias>.modalities")
+      .noDefaultValue(REQUIRED)
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Declared model input modalities for provider configuration checks: text, image, or text,image; "
+          + "comma-separated in any letter case and order. Provider limits are checked for the declared input types. "
+          + "Replace <alias> with the declared model alias.");
 
   /** Per-chunk token limit, must be positive. */
   public static final ConfigProperty<Integer> CHUNK_MAX_TOKENS = ConfigProperty
@@ -1177,7 +1191,9 @@ public class EmbeddingTableConfig implements Serializable {
           positive(keyPrefix + MODEL_DIMENSIONS_SUFFIX, dimensions(keyPrefix + MODEL_DIMENSIONS_SUFFIX, dimension)),
           clientClass == null ? null : clientClass.trim(),
           provider.trim(),
-          ConfigUtils.getStringWithAltKeys(props, ConfigProperty.key(keyPrefix + MODEL_NAME_SUFFIX).noDefaultValue(), name).trim());
+          ConfigUtils.getStringWithAltKeys(props, ConfigProperty.key(keyPrefix + MODEL_NAME_SUFFIX).noDefaultValue(), name).trim(),
+          modalities(keyPrefix + MODEL_MODALITIES_SUFFIX,
+              ConfigUtils.getStringWithAltKeys(props, ConfigProperty.key(keyPrefix + MODEL_MODALITIES_SUFFIX).noDefaultValue(), null)));
       specs.add(spec);
     }
     checkDistinctColumns(specs, props);
@@ -1304,6 +1320,38 @@ public class EmbeddingTableConfig implements Serializable {
     } catch (NumberFormatException e) {
       throw new IllegalArgumentException("Config " + property.key() + " must be an integer, got '" + raw + "'", e);
     }
+  }
+
+  /**
+   * The modalities a {@link #MODEL_MODALITIES_SUFFIX} value declares: trimmed, lower case, sorted; empty when unset or blank
+   * (no input types declared).
+   *
+   * @throws IllegalArgumentException naming the key when the value lists no modality, or one other than {@code text} and
+   *     {@code image}
+   */
+  static Set<String> modalities(String key, String raw) {
+    if (raw == null || raw.trim().isEmpty()) {
+      return Collections.emptySet();
+    }
+    Set<String> declared = new TreeSet<>();
+    for (String entry : raw.split(",")) {
+      String modality = entry.trim().toLowerCase(Locale.ROOT);
+      if (modality.isEmpty()) {
+        continue;
+      }
+      if (!EmbeddingTableSchema.MODALITY_TEXT.equals(modality) && !EmbeddingTableSchema.MODALITY_IMAGE.equals(modality)) {
+        throw new IllegalArgumentException("Config " + key + "=" + raw + " names modality '" + entry.trim() + "'; the "
+            + "modalities are " + EmbeddingTableSchema.MODALITY_TEXT + " and " + EmbeddingTableSchema.MODALITY_IMAGE
+            + ", e.g. " + key + "=" + EmbeddingTableSchema.MODALITY_TEXT + "," + EmbeddingTableSchema.MODALITY_IMAGE);
+      }
+      declared.add(modality);
+    }
+    if (declared.isEmpty()) {
+      throw new IllegalArgumentException("Config " + key + "=" + raw + " lists no modality; set it to "
+          + EmbeddingTableSchema.MODALITY_TEXT + ", " + EmbeddingTableSchema.MODALITY_IMAGE + " or "
+          + EmbeddingTableSchema.MODALITY_TEXT + "," + EmbeddingTableSchema.MODALITY_IMAGE);
+    }
+    return Collections.unmodifiableSet(declared);
   }
 
   private static int dimensions(String key, String raw) {
