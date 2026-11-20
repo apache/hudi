@@ -58,7 +58,7 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
 
   private SerializableIndexedRecord(IndexedRecord record) {
     this.record = record;
-    this.recordBytes = null; // Initialize recordBytes to null, will be set when encodeRecord is called
+    this.recordBytes = null; // set only by fromAvroBytes and by deserialization; encodeRecord never sets it
     this.schema = null;
   }
 
@@ -90,11 +90,21 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
     return schema != null ? schema : record.getSchema();
   }
 
+  /**
+   * The record's Avro bytes: the bytes it was read from while it is still encoded, otherwise the decoded record encoded now.
+   * The encoding is not kept on a decoded record: a decoded record holding its bytes too would hold its payload twice, and a
+   * buffer of decoded records being serialized (a Spark shuffle spill writing out its map) would double while it is written,
+   * beyond the size Spark accounted for it. Keeping no copy also means a record changed after a serialization serializes the
+   * change.
+   */
   byte[] encodeRecord() {
-    if (recordBytes == null) {
-      recordBytes = HoodieAvroUtils.avroToBytes(record);
-    }
-    return recordBytes;
+    return record != null ? HoodieAvroUtils.avroToBytes(record) : recordBytes;
+  }
+
+  /** True when this instance holds the encoded bytes of its record. */
+  @VisibleForTesting
+  boolean holdsEncodedBytes() {
+    return recordBytes != null;
   }
 
   void decodeRecord(Schema schema) {
@@ -140,7 +150,7 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
       throws ClassNotFoundException, IOException {
     int length = ois.readInt();
     this.recordBytes = new byte[length];
-    ois.read(recordBytes, 0, length);
+    ois.readFully(recordBytes);
   }
 
   @Override

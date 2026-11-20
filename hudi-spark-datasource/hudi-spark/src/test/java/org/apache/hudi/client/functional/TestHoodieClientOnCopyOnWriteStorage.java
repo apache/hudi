@@ -32,6 +32,7 @@ import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecuti
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.client.transaction.ConcurrentOperation;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy;
@@ -1902,10 +1903,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Verifies that clustering fails with {@link HoodieWriteConflictException} when
    * {@code hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution} is enabled
-   * and an ingestion .requested instant with an active heartbeat exists.
+   * and an ingestion .requested instant with an active heartbeat exists, or an ingestion instant that its writer moved to
+   * INFLIGHT marked as pending its workload profile: clustering cannot commit over the file groups such an instant is about to
+   * write.
    */
-  @Test
-  public void testClusteringFailsOnPendingIngestionRequestedInstant() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testClusteringFailsOnPendingIngestionRequestedInstant(boolean markedInflight) throws Exception {
     Properties properties = createOccProperties();
     HoodieCleanConfig cleanConfig = createCleanConfig(HoodieFailedWritesCleaningPolicy.LAZY, false);
     int numRecords = 200;
@@ -1915,9 +1919,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         buildOccWriteConfig(properties, cleanConfig, new PreferWriterConflictResolutionStrategy()));
     seedTableWithFirstCommit(client, numRecords);
 
-    // Simulate an ingestion writer that has created a .requested commit with an active heartbeat
+    // Simulate an ingestion writer that has created a .requested commit with an active heartbeat; with markedInflight, it has
+    // also moved it to inflight marked as pending its workload profile, so the instant names no file group yet
     String ingestionRequestedTime = WriteClientTestUtils.createNewInstantTime();
     HoodieTestTable.of(metaClient).addRequestedCommit(ingestionRequestedTime);
+    if (markedInflight) {
+      metaClient.getActiveTimeline().transitionRequestedToInflight(
+          metaClient.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, ingestionRequestedTime),
+          Option.of(ConcurrentOperation.pendingWorkloadProfileMetadata(WriteOperationType.INSERT)));
+    }
     HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
         metaClient.getStorage(), metaClient.getBasePath().toString(),
         (long) (1000 * 60), 5);
@@ -1943,6 +1953,46 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       assertTrue(exception.getCause() instanceof HoodieWriteConflictException);
     } finally {
       heartbeatClient.stop(ingestionRequestedTime);
+      heartbeatClient.close();
+    }
+  }
+
+  /**
+   * An ingestion instant INFLIGHT with an empty inflight file that its writer did not mark (bulk insert, the row writer and Flink
+   * keep it empty for the whole write) does not block clustering with
+   * {@code hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution} on, heartbeat active or not, as before.
+   */
+  @Test
+  public void testClusteringIsNotBlockedByAnUnmarkedEmptyInflightIngestion() throws Exception {
+    Properties properties = createOccProperties();
+    HoodieCleanConfig cleanConfig = createCleanConfig(HoodieFailedWritesCleaningPolicy.LAZY, false);
+    int numRecords = 200;
+    SparkRDDWriteClient client = getHoodieWriteClient(
+        buildOccWriteConfig(properties, cleanConfig, new PreferWriterConflictResolutionStrategy()));
+    seedTableWithFirstCommit(client, numRecords);
+
+    String ingestionInflightTime = WriteClientTestUtils.createNewInstantTime();
+    HoodieTestTable.of(metaClient).addInflightCommit(ingestionInflightTime);
+    HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), (long) (1000 * 60), 5);
+    heartbeatClient.start(ingestionInflightTime);
+    try {
+      HoodieWriteConfig clusteringWriteConfig = getConfigBuilder()
+          .withCleanConfig(cleanConfig)
+          .withClusteringConfig(createClusteringBuilder(true, 1).build())
+          .withPreCommitValidatorConfig(createPreCommitValidatorConfig(numRecords))
+          .withLockConfig(createLockConfig(new PreferWriterConflictResolutionStrategy()))
+          .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+          .withClusteringBlockForPendingIngestion(true)
+          .withProperties(properties)
+          .build();
+      SparkRDDWriteClient<?> clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
+      String clusteringCommitTime = clusteringWriteClient.scheduleClustering(Option.empty()).get();
+      clusteringWriteClient.cluster(clusteringCommitTime, true);
+      assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(clusteringCommitTime),
+          "clustering commits over an unmarked empty inflight");
+    } finally {
+      heartbeatClient.stop(ingestionInflightTime);
       heartbeatClient.close();
     }
   }
