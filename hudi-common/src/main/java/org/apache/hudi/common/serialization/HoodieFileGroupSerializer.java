@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.serialization;
 
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -28,6 +29,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -35,14 +37,23 @@ import java.util.stream.Collectors;
  * Serializes {@link HoodieFileGroup} but keeps the timeline in memory since file groups
  * for a single view will share the same {@link HoodieTimeline} instance.
  * Deserialization will create a new instance so recreating timeline objects can lead to unnecessary bloat.
+ * With a timeline supplier, no timeline is kept: every file group read back is bound to the timeline the supplier
+ * returns at that moment, the current timeline of the view holding the groups.
  * IMPORTANT: This serializer can only be used in cases where the data is kept on the local machine and cannot be used
  * when serializing between spark driver and executor.
  */
 public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFileGroup>> {
   private final Map<HoodieFileGroupId, HoodieTimeline> fileGroupIdHoodieTimelineMap;
+  private final SerializableSupplier<HoodieTimeline> currentTimeline;
 
   public HoodieFileGroupSerializer() {
     this.fileGroupIdHoodieTimelineMap = new ConcurrentHashMap<>();
+    this.currentTimeline = null;
+  }
+
+  public HoodieFileGroupSerializer(SerializableSupplier<HoodieTimeline> currentTimeline) {
+    this.fileGroupIdHoodieTimelineMap = null;
+    this.currentTimeline = Objects.requireNonNull(currentTimeline, "currentTimeline");
   }
 
   @Override
@@ -52,7 +63,9 @@ public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFi
         throw new IllegalStateException("Timeline is null for FileGroup: '" + fileGroup.getFileGroupId().toString() + "'. All filegroup states: ["
             + input.stream().map(fg -> fg.getFileGroupId().toString() + ":" + ((fg.getTimeline() == null) ? "NULL" : "OK")).collect(Collectors.joining(",")) + "]");
       }
-      fileGroupIdHoodieTimelineMap.put(fileGroup.getFileGroupId(), fileGroup.getTimeline());
+      if (fileGroupIdHoodieTimelineMap != null) {
+        fileGroupIdHoodieTimelineMap.put(fileGroup.getFileGroupId(), fileGroup.getTimeline());
+      }
       return new HoodieFileGroupLite(fileGroup.getAllRawFileSlices().collect(Collectors.toList()));
     }).collect(Collectors.toList());
     return SerializationUtils.serialize(fileGroupLites);
@@ -61,6 +74,18 @@ public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFi
   @Override
   public List<HoodieFileGroup> deserialize(byte[] bytes) {
     List<HoodieFileGroupLite> fileGroupLites = SerializationUtils.deserialize(bytes);
+    if (currentTimeline != null) {
+      HoodieTimeline timeline = currentTimeline.get();
+      if (timeline == null) {
+        throw new IllegalStateException("No timeline to bind the file groups read back to, the file system view holding them is closed. FileGroupId that we are deserializing: ["
+            + fileGroupLites.stream().map(fg -> fg.getFileGroupId().toString()).collect(Collectors.joining(",")) + "]");
+      }
+      return fileGroupLites.stream().map(fileGroupLite -> {
+        HoodieFileGroup fileGroup = new HoodieFileGroup(fileGroupLite.getFileGroupId(), timeline);
+        fileGroupLite.fileSlices.forEach(fileGroup::addFileSlice);
+        return fileGroup;
+      }).collect(Collectors.toList());
+    }
     return fileGroupLites.stream().map(fileGroupLite -> {
       HoodieTimeline timeline = fileGroupIdHoodieTimelineMap.get(fileGroupLite.getFileGroupId());
       if (timeline == null) {
