@@ -652,6 +652,26 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testNullOrderingValueFailsTheWrite(): Unit = {
+    val nullableSchema = StructType(schema.map(_.copy(nullable = true)))
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_null_ordering_$enabled").toString
+      val df = spark.createDataFrame(Seq(Row("u1", "p1", null, "a1")).asJava, nullableSchema)
+      val failure = Assertions.assertThrows(classOf[Exception], () =>
+        df.write.format("hudi")
+          .options(writeOptions("upsert", Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)))
+          .mode(SaveMode.Append).save(path))
+      var cause: Throwable = failure
+      while (cause.getCause != null) {
+        cause = cause.getCause
+      }
+      Assertions.assertTrue(cause.isInstanceOf[IllegalArgumentException], s"unexpected failure: $cause")
+      Assertions.assertTrue(cause.getMessage.contains("Ordering field 'ts' has null value for record key 'u1'"),
+        cause.getMessage)
+    }
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)

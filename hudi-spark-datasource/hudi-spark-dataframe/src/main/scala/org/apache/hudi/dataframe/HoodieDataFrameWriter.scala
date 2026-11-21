@@ -38,7 +38,7 @@ import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.{HoodieClusteringUpdateException, HoodieDuplicateKeyException}
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
 import org.apache.hudi.keygen.KeyGenUtils
-import org.apache.hudi.metadata.{HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.{HoodieIndexVersion, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.HoodieWriteMetadata
 import org.apache.hudi.util.CommonClientUtils
@@ -107,19 +107,41 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       // A merger the user set decides the record type.
       Map.empty
     } else {
-      val tableConfig = spec.metaClient.getTableConfig
       val writeConfig = DataSourceUtils.createHoodieConfig(spec.writerSchema.map(_.toString).orNull,
         spec.metaClient.getBasePath.toString, params(HoodieWriteConfig.TBL_NAME.key), params.asJava)
-      val avroLogBlocks = tableConfig.getTableType == HoodieTableType.MERGE_ON_READ &&
-        CommonClientUtils.getLogBlockType(writeConfig, tableConfig) != HoodieLogBlockType.PARQUET_DATA_BLOCK
-      if (isCustomMerge(writeConfig, tableConfig) || payloadDecides(writeConfig) || avroLogBlocks) {
-        // Payload-based merging and Avro log blocks take Avro records, built at the handles.
-        Map.empty
-      } else {
+      if (canWriteSparkRecords(spec, writeConfig)) {
         // The engine-native record merger keeps the merge on InternalRow.
         Map(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY -> "org.apache.hudi.DefaultSparkRecordMerger")
+      } else {
+        // The handles take Avro records, built in the write task.
+        Map.empty
       }
     }
+  }
+
+  /**
+   * Whether engine-native records write the table the way Avro records do. They do not where the
+   * merging goes through a payload class or a custom merger, where log blocks are Avro, where the
+   * column stats index predates the version that covers every type for them, and where rows
+   * cannot be rewritten to the writer schema as rows.
+   */
+  private def canWriteSparkRecords(spec: DataFrameWriteSpec, writeConfig: HoodieWriteConfig): Boolean = {
+    val tableConfig = spec.metaClient.getTableConfig
+    val avroLogBlocks = tableConfig.getTableType == HoodieTableType.MERGE_ON_READ &&
+      CommonClientUtils.getLogBlockType(writeConfig, tableConfig) != HoodieLogBlockType.PARQUET_DATA_BLOCK
+    val columnStatsByRecordType = HoodieTableMetadataUtil.existingIndexVersionOrDefault(
+      MetadataPartitionType.COLUMN_STATS.getPartitionPath, spec.metaClient).lowerThan(HoodieIndexVersion.V2)
+    !isCustomMerge(writeConfig, tableConfig) && !payloadDecides(writeConfig) && !avroLogBlocks &&
+      !columnStatsByRecordType && rowsConformToWriterSchema(spec)
+  }
+
+  /** Whether the input rows can be rewritten to the writer schema without leaving InternalRow. */
+  private def rowsConformToWriterSchema(spec: DataFrameWriteSpec): Boolean = spec.writerSchema.forall { schema =>
+    val metaColumns = HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.asScala.toSet
+    val source = StructType(spec.inputSchema.fields.filterNot(field => metaColumns.contains(field.name)))
+    val target = HoodieInternalRowUtils.getCachedSchema(
+      org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(schema))
+    DataFrameWriteTask.canConform(source, target)
   }
 
   override def write(spec: DataFrameWriteSpec,
@@ -323,7 +345,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
           DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
           DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean,
         mergeProps = mergeProps(writeConfig, tableConfig),
-        recordBasedInserts = payloadDecides(writeConfig)))
+        // The row-based create handle needs rows in the writer schema.
+        recordBasedInserts = payloadDecides(writeConfig) || !rowsConformToWriterSchema(spec)))
     }
   }
 
@@ -444,7 +467,25 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       }
       val ordering = orderingFields.map(f => col(f).desc) :+ col(INPUT_ORDER_COL).desc
       val window = Window.partitionBy(dedupKeys: _*).orderBy(ordering: _*)
-      withMeta.withColumn(DEDUP_RANK_COL, row_number().over(window))
+      // A record that is combined on its ordering value has to have one.
+      val requireOrderingValue = udf((field: String, recordKey: String) => {
+        if (field != null) {
+          throw new IllegalArgumentException(
+            s"Ordering field '$field' has null value for record key '$recordKey'. "
+              + "Please ensure all records have non-null values for the ordering field, "
+              + "or use a payload class that doesn't require ordering (e.g., OverwriteWithLatestAvroPayload).")
+        }
+        true
+      })
+      val nullOrderingField = orderingFields.foldRight(lit(null).cast(StringType)) { (field, otherwise) =>
+        when(col(field).isNull, lit(field)).otherwise(otherwise)
+      }
+      val checked = if (orderingFields.isEmpty) {
+        withMeta
+      } else {
+        withMeta.filter(requireOrderingValue(nullOrderingField, col(HoodieRecord.RECORD_KEY_METADATA_FIELD)))
+      }
+      checked.withColumn(DEDUP_RANK_COL, row_number().over(window))
         .filter(col(DEDUP_RANK_COL) === 1)
         .drop(DEDUP_RANK_COL, INPUT_ORDER_COL)
     }

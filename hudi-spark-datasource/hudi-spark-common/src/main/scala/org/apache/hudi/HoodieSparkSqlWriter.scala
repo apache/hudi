@@ -459,7 +459,7 @@ class HoodieSparkSqlWriterInternal {
             // Create a HoodieWriteClient & issue the delete.
             val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
             val schemaEvolutionOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt)
-            val dataFrameWriteSpec = DataFrameWriteSpec(operation, schemaEvolutionOpts, tableMetaClient, None,
+            val dataFrameWriteSpec = DataFrameWriteSpec(operation, schemaEvolutionOpts, tableMetaClient, df.schema, None,
               preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation,
               streamingWritesParamsOpt.isDefined)
             val dataFrameWritePath = HoodieDataFrameWritePath.select(dataFrameWriteSpec)
@@ -580,7 +580,7 @@ class HoodieSparkSqlWriterInternal {
             // Create a HoodieWriteClient & issue the write.
             val schemaEvolutionOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema))
             val rowWriterBulkInsert = hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT
-            val dataFrameWriteSpec = DataFrameWriteSpec(operation, schemaEvolutionOpts, tableMetaClient, Some(writerSchema),
+            val dataFrameWriteSpec = DataFrameWriteSpec(operation, schemaEvolutionOpts, tableMetaClient, df.schema, Some(writerSchema),
               preppedSparkSqlWrites || preppedWriteOperation,
               preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto, streamingWritesParamsOpt.isDefined)
             val dataFrameWritePath = if (rowWriterBulkInsert) None else HoodieDataFrameWritePath.select(dataFrameWriteSpec)

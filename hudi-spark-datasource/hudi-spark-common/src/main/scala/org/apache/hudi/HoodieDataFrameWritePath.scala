@@ -23,12 +23,14 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 
 import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 /**
  * A datasource write resolved by the writer's control plane: the operation, the merged write
  * options, the table, and the deduced writer schema.
  *
+ * @param inputSchema schema of the input rows.
  * @param writerSchema schema the rows are written with; empty for deletes, which write no rows.
  * @param keysFromMetaColumns whether the input rows carry their record key and partition path
  *                            in the Hudi meta columns, as prepped writes do.
@@ -39,6 +41,7 @@ import org.slf4j.LoggerFactory
 case class DataFrameWriteSpec(operation: WriteOperationType,
                               parameters: Map[String, String],
                               metaClient: HoodieTableMetaClient,
+                              inputSchema: StructType,
                               writerSchema: Option[HoodieSchema],
                               keysFromMetaColumns: Boolean,
                               locationFromMetaColumns: Boolean,

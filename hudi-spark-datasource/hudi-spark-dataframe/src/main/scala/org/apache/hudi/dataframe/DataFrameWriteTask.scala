@@ -415,6 +415,11 @@ object DataFrameWriteTask {
     }
   }
 
+  /** Whether rows of `source` can be rewritten by field name into rows of `target`. */
+  def canConform(source: StructType, target: StructType): Boolean =
+    sameIgnoringNullability(source, target) ||
+      scala.util.Try(HoodieInternalRowUtils.getCachedUnsafeRowWriter(source, target)).isSuccess
+
   private def sameIgnoringNullability(left: DataType, right: DataType): Boolean = (left, right) match {
     case (l: StructType, r: StructType) =>
       l.length == r.length && l.fields.zip(r.fields).forall { case (lf, rf) =>
