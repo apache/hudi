@@ -19,26 +19,86 @@
 
 package org.apache.spark;
 
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.serializer.KryoSerializer;
+import org.apache.spark.serializer.SerializerInstance;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
+import scala.reflect.ClassTag;
+import scala.reflect.ClassTag$;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Tests {@link HoodieSparkKryoRegistrar}
  */
 public class TestHoodieSparkKryoRegistrar {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testPayloadKeepsCompactFormAcrossIndependentKryoInstances(boolean deleted) throws IOException {
+    Schema writerSchema = SchemaBuilder.record("payload").fields()
+        .requiredString("id").requiredLong("ts").requiredString("value").endRecord();
+    Schema projection = SchemaBuilder.record("payload").fields().requiredString("value").endRecord();
+    GenericRecord record = deleted ? null : new GenericRecordBuilder(writerSchema)
+        .set("id", "key").set("ts", 42L).set("value", "updated").build();
+    OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(record, 42L);
+    if (!deleted) {
+      assertEquals("updated", payload.getInsertValue(projection).get().get(0).toString());
+    }
+    Kryo writer = newKryo();
+    ClassTag<OverwriteWithLatestAvroPayload> tag = ClassTag$.MODULE$.apply(OverwriteWithLatestAvroPayload.class);
+    SerializerInstance sparkWithoutRegistrar = new KryoSerializer(new SparkConf(false)).newInstance();
+    for (int round = 0; round < 3; round++) {
+      try (Output header = new Output(256, -1)) {
+        payload.write(writer, header);
+        try (Input input = new Input(header.toBytes())) {
+          assertEquals(payload.getRecordBytes().length, input.readInt());
+        }
+      }
+      byte[] bytes;
+      try (Output output = new Output(256, -1)) {
+        writer.writeClassAndObject(output, payload);
+        bytes = output.toBytes();
+      }
+      try (Input input = new Input(bytes)) {
+        payload = (OverwriteWithLatestAvroPayload) newKryo().readClassAndObject(input);
+      }
+      ByteBuffer shuffled = sparkWithoutRegistrar.serialize(payload, tag);
+      payload = new KryoSerializer(new SparkConf(false)).newInstance().deserialize(shuffled, tag);
+      assertEquals(42L, payload.getOrderingVal());
+      if (deleted) {
+        assertFalse(payload.getInsertValue(writerSchema).isPresent());
+      } else {
+        IndexedRecord restored = payload.getInsertValue(writerSchema).get();
+        assertEquals("key", restored.get(0).toString());
+        assertEquals(42L, restored.get(1));
+        assertEquals("updated", restored.get(2).toString());
+      }
+    }
+  }
+
   @Test
   public void testSerdeHoodieHadoopConfiguration() {
     Kryo kryo = newKryo();
