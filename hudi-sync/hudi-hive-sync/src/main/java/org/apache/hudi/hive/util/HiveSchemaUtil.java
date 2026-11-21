@@ -23,6 +23,7 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
+import org.apache.hudi.sync.common.util.UnionSchemaUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
@@ -228,9 +229,9 @@ public class HiveSchemaUtil {
         return BOOLEAN_TYPE_NAME;
       case STRING:
       case ENUM:
+      case UUID:
         return STRING_TYPE_NAME;
       case BYTES:
-      case UUID:
       case FIXED:
       case VECTOR:
         return BINARY_TYPE_NAME;
@@ -259,6 +260,10 @@ public class HiveSchemaUtil {
       case BLOB:
       case VARIANT:
         return createHiveStruct(nonNullType.getFields(), supportTimestamp, doFormat);
+      case UNION:
+        // The parquet writer stores a union of multiple non-null types as a group of optional "member<N>" fields,
+        // so it is synced as a struct of those members.
+        return createHiveStruct(UnionSchemaUtils.getUnionMemberFields(nonNullType), supportTimestamp, doFormat);
       default:
         throw new UnsupportedOperationException("Cannot convert type " + nonNullType.getType());
     }
