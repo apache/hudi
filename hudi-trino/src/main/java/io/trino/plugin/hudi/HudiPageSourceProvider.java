@@ -37,6 +37,7 @@ import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HiveColumnProjectionInfo;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
+import io.trino.plugin.hudi.io.InlineTrinoInputFile;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
 import io.trino.plugin.hudi.util.PrefilledColumnValues;
 import io.trino.spi.TrinoException;
@@ -64,6 +65,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.io.MessageColumnIO;
 import org.apache.parquet.schema.MessageType;
@@ -114,6 +116,7 @@ import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
 import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaAndMergeRequiredColumns;
 import static io.trino.plugin.hudi.HudiUtil.resolveMergeModeAndStrategyId;
 import static io.trino.plugin.hudi.HudiUtil.usesNonProjectionCompatibleMerger;
+import static io.trino.plugin.hudi.storage.HudiTrinoInlineStorage.getFilePathFromInlinePath;
 import static io.trino.plugin.hudi.util.ParquetStatisticsDomains.dropIncomparableDomains;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.String.format;
@@ -256,23 +259,30 @@ public class HudiPageSourceProvider
 
         ConnectorPageSource dataPageSource =
                 createBaseFilePageSource(session, readColumnHandles, hudiSplit, fileSystem, sessionOptions, start, length, dynamicFilter, false);
-        // Build native (RFC-103) delta-log parquet page sources on demand, projected on the file-group
-        // reader's requiredSchema with predicate pushdown OFF so every log record is read and merged.
+        // Build delta-log parquet page sources on demand, projected on the file-group reader's requiredSchema
+        // with predicate pushdown OFF so every log record is read and merged.
         HudiTrinoReaderContext.LogFileParquetPageSourceFactory logPageSourceFactory =
-                (logPath, logStart, logLength, projection) -> createPageSource(
-                        session,
-                        projection,
-                        hudiSplit,
-                        fileSystem.newInputFile(Location.of(logPath)),
-                        logPath,
-                        logStart,
-                        logLength,
-                        OptionalLong.empty(),
-                        dataSourceStats,
-                        sessionOptions,
-                        timeZone,
-                        DynamicFilter.EMPTY,
-                        false);
+                (logPath, logStart, logLength, projection) -> {
+                    TrinoInputFile logFile = newLogInputFile(fileSystem, logPath);
+                    // A parquet data block's size is exact, so a small block is read in a single request
+                    OptionalLong estimatedFileSize = logFile instanceof InlineTrinoInputFile inlineFile
+                            ? OptionalLong.of(inlineFile.length())
+                            : OptionalLong.empty();
+                    return createPageSource(
+                            session,
+                            projection,
+                            hudiSplit,
+                            logFile,
+                            logPath,
+                            logStart,
+                            logLength,
+                            estimatedFileSize,
+                            dataSourceStats,
+                            sessionOptions,
+                            timeZone,
+                            DynamicFilter.EMPTY,
+                            false);
+                };
         HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(
                 metaClient.getStorageConf(),
                 metaClient.getTableConfig(),
@@ -365,6 +375,21 @@ public class HudiPageSourceProvider
             props.setProperty(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY, String.join(",", recordMergerImpls));
         }
         return props;
+    }
+
+    /**
+     * Opens a parquet log read: a native (RFC-103) delta-log file, or a parquet data block of a classic log file.
+     * Hudi addresses such a block with an {@code inlinefs://} path that encodes the log file and the block's byte
+     * range; the block is a complete parquet file, read in place through a view of that range.
+     */
+    static TrinoInputFile newLogInputFile(TrinoFileSystem fileSystem, String logPath)
+    {
+        StoragePath path = new StoragePath(logPath);
+        if (!InLineFSUtils.SCHEME.equals(path.toUri().getScheme())) {
+            return fileSystem.newInputFile(Location.of(logPath));
+        }
+        TrinoInputFile logFile = fileSystem.newInputFile(Location.of(getFilePathFromInlinePath(path).toString()));
+        return new InlineTrinoInputFile(logFile, InLineFSUtils.startOffset(path), InLineFSUtils.length(path));
     }
 
     static ConnectorPageSource createPageSource(
