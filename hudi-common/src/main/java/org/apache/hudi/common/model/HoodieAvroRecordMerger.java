@@ -31,6 +31,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 
 /**
@@ -50,6 +52,22 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
 
   @Override
   public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    return merge(older, newer, recordContext, props, false);
+  }
+
+  /**
+   * Returns the merged record, or null when the payload returned the ignore sentinel.
+   */
+  @Nullable
+  public <T> BufferedRecord<T> mergeForWrite(
+      BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    return merge(older, newer, recordContext, props, true);
+  }
+
+  @Nullable
+  private <T> BufferedRecord<T> merge(
+      BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props,
+      boolean skipOnSentinel) throws IOException {
     // special case for handling commit time ordering deletes
     if (HoodieRecordMerger.isCommitTimeOrderingDelete(older, newer)) {
       return newer;
@@ -67,8 +85,10 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
       Option<IndexedRecord> updatedValue = payload.combineAndGetUpdateValue(previousAvroData, newerSchema != null ? newerSchema.toAvroSchema() : null, props);
       if (updatedValue.isPresent()) {
         IndexedRecord updatedRecord = updatedValue.get();
-        // If there is no change in the record or the merge results in SENTINEL record (returned by expression payload when condition is not matched), then return the older record
-        if (updatedRecord == previousAvroData || updatedRecord == HoodieRecord.SENTINEL) {
+        if (updatedRecord == HoodieRecord.SENTINEL) {
+          return skipOnSentinel ? null : older;
+        }
+        if (updatedRecord == previousAvroData) {
           return older;
         }
         if (updatedRecord == newerAvroRecord) {

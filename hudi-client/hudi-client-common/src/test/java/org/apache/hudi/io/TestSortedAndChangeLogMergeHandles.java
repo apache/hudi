@@ -19,21 +19,26 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -51,9 +56,14 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
@@ -76,6 +86,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -191,6 +202,80 @@ public class TestSortedAndChangeLogMergeHandles {
 
       assertFalse(handle.writeUpdate(record("u"), oldRecord, combinedRecord));
       assertEquals(Collections.emptyList(), handle.writtenKeys);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testWriteProcessesOldBufferModifiedByCustomMerger(boolean delete) throws Exception {
+    HoodieAvroRecordMerger merger = new HoodieAvroRecordMerger() {
+      @Override
+      public <T> BufferedRecord<T> merge(
+          BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) {
+        if (delete) {
+          older.setHoodieOperation(HoodieOperation.DELETE);
+        } else {
+          older.replaceRecord(newer.getRecord());
+        }
+        return older;
+      }
+    };
+    HoodieWriteConfig config = spy(config());
+    doReturn(merger).when(config).getRecordMerger();
+    assertCustomMergeWritesResult(config, delete);
+  }
+
+  @Test
+  public void testWriteProcessesOldRecordModifiedByCustomPayload() throws Exception {
+    HoodieWriteConfig config = spy(config());
+    doReturn(new HoodieAvroRecordMerger()).when(config).getRecordMerger();
+    config.getPayloadConfig().getProps().setProperty(HoodieAvroRecordMerger.PAYLOAD_CLASS_PROP, MutatingPayload.class.getName());
+    assertCustomMergeWritesResult(config, false);
+  }
+
+  public static class MutatingPayload extends OverwriteWithLatestAvroPayload {
+    public MutatingPayload(GenericRecord record, Comparable orderingValue) {
+      super(record, orderingValue);
+    }
+
+    @Override
+    public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties props) {
+      currentValue.put(0, "updated");
+      return Option.of(currentValue);
+    }
+  }
+
+  private void assertCustomMergeWritesResult(HoodieWriteConfig config, boolean delete) throws Exception {
+    TestContext context = new TestContext(config);
+    HoodieKey key = new HoodieKey("u", "partition");
+    AvroRecordContext recordContext = new AvroRecordContext();
+    recordContext.setPartitionPath(key.getPartitionPath());
+    HoodieReaderContext<IndexedRecord> readerContext = mock(HoodieReaderContext.class);
+    when(readerContext.getRecordContext()).thenReturn(recordContext);
+    GenericRecord oldData = new GenericData.Record(HoodieSchema.parse(SCHEMA).toAvroSchema());
+    oldData.put("id", "old");
+    GenericRecord newData = new GenericData.Record(oldData.getSchema());
+    newData.put("id", "updated");
+    HoodieRecord<IndexedRecord> oldRecord = new HoodieAvroIndexedRecord(key, oldData);
+    HoodieRecord<IndexedRecord> newRecord = new HoodieAvroIndexedRecord(key, newData);
+
+    try (MockedStatic<WriteMarkersFactory> markers = mockStatic(WriteMarkersFactory.class);
+         MockedStatic<HoodieFileWriterFactory> writers = mockStatic(HoodieFileWriterFactory.class)) {
+      context.stubWriters(markers, writers);
+      TestableWriteMergeHandle handle = spy(new TestableWriteMergeHandle(
+          config, context.table, Collections.singletonMap(key.getRecordKey(), newRecord)));
+      handle.setReaderContext(readerContext);
+      handle.write(oldRecord);
+
+      assertEquals(delete ? 1 : 0, handle.recordsDeleted);
+      assertEquals(delete ? 0 : 1, handle.updatedRecordsWritten);
+      if (delete) {
+        assertTrue(handle.writtenKeys.isEmpty());
+      } else {
+        ArgumentCaptor<HoodieRecord> written = ArgumentCaptor.forClass(HoodieRecord.class);
+        verify(handle).writeToFile(eq(key), written.capture(), any(HoodieSchema.class), any(Properties.class), anyBoolean());
+        assertEquals("updated", ((IndexedRecord) written.getValue().getData()).get(0).toString());
+      }
     }
   }
 

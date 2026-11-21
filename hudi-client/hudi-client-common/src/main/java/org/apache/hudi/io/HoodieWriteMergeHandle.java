@@ -21,7 +21,9 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -70,6 +72,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * Handle to merge incoming records to those in storage row-by-row.
@@ -387,28 +391,25 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, readerContext.getRecordContext(), props, orderingFields, false);
+        RecordContext<T> recordContext = readerContext.getRecordContext();
+        BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, recordContext, props, orderingFields, false);
         BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema,
-            readerContext.getRecordContext(), props, orderingFields, deleteContext);
-        // A record that a global index already merged while tagging it is final: the MERGE clauses are not evaluated on it again
-        BufferedRecord<T> mergeResult = usesExpressionPayload && HoodieRecordUtils.isMergedRecordOfExpressionPayloadWrite(newRecord)
-            ? newBufferedRecord
-            : recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
-        HoodieSchema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
-        // The merge result is final: build it without the payload, which would decode it with the payload's own
-        // schema and re-apply payload logic (e.g. the NOT MATCHED clause of ExpressionPayload) to the merged row.
-        HoodieRecord combinedRecord = readerContext.getRecordContext().constructFinalHoodieRecord(mergeResult);
-        if (combinedRecord.shouldIgnore(combineRecordSchema, props)) {
-          // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
-          copyOldRecord = true;
-        } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {
-          /*
-           * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully
-           * write the combined new value
-           *
-           * We no longer need to copy the old record over.
-           */
-          copyOldRecord = false;
+            recordContext, props, orderingFields, deleteContext);
+        BufferedRecord<T> mergeResult;
+        // A record already merged by a global index is final. Do not evaluate the MERGE clauses again.
+        if (usesExpressionPayload && HoodieRecordUtils.isMergedRecordOfExpressionPayloadWrite(newRecord)) {
+          mergeResult = newBufferedRecord;
+        } else if (recordMerger.getClass() == HoodieAvroRecordMerger.class) {
+          mergeResult = ((HoodieAvroRecordMerger) recordMerger).mergeForWrite(oldBufferedRecord, newBufferedRecord, recordContext, props);
+        } else {
+          mergeResult = requireNonNull(recordMerger.merge(oldBufferedRecord, newBufferedRecord, recordContext, props));
+        }
+        if (mergeResult != null) {
+          HoodieSchema combineRecordSchema = recordContext.getSchemaFromBufferRecord(mergeResult);
+          // Finalize the result without decoding it with the incoming payload's schema or reapplying its logic.
+          HoodieRecord<T> combinedRecord = recordContext.constructFinalHoodieRecord(mergeResult);
+          copyOldRecord = combinedRecord.shouldIgnore(combineRecordSchema, props)
+              || !writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema);
         }
         writtenRecordKeys.add(key);
       } catch (Exception e) {
