@@ -72,9 +72,9 @@ env:
   SCALA_TEST_DML_FILTER: -DwildcardSuites=org.apache.spark.sql.hudi.dml
   SCALA_TEST_DML1_FILTER: -DwildcardSuites=org.apache.spark.sql.hudi.dml.others
   SCALA_TEST_DML2_FILTER: -DwildcardSuites=org.apache.spark.sql.hudi.dml.insert,org.apache.spark.sql.hudi.dml.schema
-  SCALA_TEST_OTHERS_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hive,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.blob,org.apache.spark.sql.hudi.catalog,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.ddl,org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.feature
+  SCALA_TEST_OTHERS_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hive,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.blob,org.apache.spark.sql.hudi.catalog,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.ddl,org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.feature,org.apache.spark.sql.hudi.streaming
   SCALA_TEST_OTHERS1_FILTER: -DwildcardSuites=org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.ddl
-  SCALA_TEST_OTHERS2_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hive,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.blob,org.apache.spark.sql.hudi.catalog,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.feature
+  SCALA_TEST_OTHERS2_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hive,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.blob,org.apache.spark.sql.hudi.catalog,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.feature,org.apache.spark.sql.hudi.streaming
   FLINK_IT_FILTER1: -Dit.test=ITTestHoodieDataSource
   # An include is required next to the exclusion: a bare exclusion replaces failsafe's IT*
   # include pattern with every test class, which ran hudi-flink's unit tests a second time here.

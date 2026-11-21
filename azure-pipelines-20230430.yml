@@ -81,6 +81,7 @@ parameters:
       - 'org.apache.spark.sql.hudi.ddl'
       - 'org.apache.spark.sql.hudi.dml.schema'
       - 'org.apache.spark.sql.hudi.procedure'
+      - 'org.apache.spark.sql.hudi.streaming'
   - name: jacocoModules
     type: object
     default:
