@@ -23,18 +23,18 @@ import org.apache.hudi.common.avro.{AvroRecordContext, HoodieAvroUtils}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.engine.{ReaderContextFactory, TaskContextSupplier}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieEmptyRecord, HoodieFileGroupId, HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieSparkRecord, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieEmptyRecord, HoodieFileGroupId, HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieRecordMerger, HoodieSparkRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.read.DeleteContext
-import org.apache.hudi.common.util.HoodieRecordUtils
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCache}
+import org.apache.hudi.common.table.read.{BufferedRecordMergerFactory, DeleteContext}
+import org.apache.hudi.common.util.{HoodieRecordUtils, Option => HOption, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieClusteringUpdateException
 import org.apache.hudi.execution.SparkLazyInsertIterable
 import org.apache.hudi.io.{AppendHandleFactory, CreateHandleFactory, HoodieMergeHandleFactory, HoodieWriteMergeHandle, MergeContext, MergeUtils}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.table.HoodieTable
-import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper
+import org.apache.hudi.table.action.commit.{BaseWriteHelper, BulkInsertDataInternalWriterHelper}
 
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
@@ -74,6 +74,11 @@ case class AvroRecordSpec(sourceSchema: String,
  * {@link HoodieMergeHandleFactory} ({@code FileGroupReaderBasedMergeHandle} by default), or into
  * the append handle on merge-on-read tables. Records are engine-native rows unless
  * {@code avroRecords} is set.
+ *
+ * <p>With {@code combineRecords}, rows arrive sorted by record key within a bucket and the
+ * records of a key are reduced to one with the table's record merger before they reach a handle,
+ * which is how the write combines records whose merging a window over the ordering fields
+ * cannot express (payload classes, custom mergers).
  */
 class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          table: HoodieTable[InternalRow, _, _, _],
@@ -87,12 +92,15 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          rowOpOrdinal: Int,
                          mergeOnRead: Boolean,
                          pendingClusteringFileGroups: Set[HoodieFileGroupId],
-                         avroRecords: Option[AvroRecordSpec]) extends Serializable {
+                         avroRecords: Option[AvroRecordSpec],
+                         combineRecords: Boolean) extends Serializable {
 
   import DataFrameWriteTask.RecordFactory
 
   private val recordType: HoodieRecordType =
     if (avroRecords.isDefined) HoodieRecordType.AVRO else HoodieRecordType.SPARK
+
+  @transient private var recordReducer: Option[(HoodieRecord[InternalRow], HoodieRecord[InternalRow]) => HoodieRecord[InternalRow]] = None
 
   def execute(iter: Iterator[InternalRow]): Iterator[WriteStatus] = {
     if (!iter.hasNext) {
@@ -108,6 +116,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     val writeProjection = DataFrameWriteTask.conformingProjection(routedSchema, 0, metaFieldCount + dataFieldCount, writeSchema)
     val recordFactory = avroRecords.map(avroRecordFactory).getOrElse(sparkRecordFactory)
     val recordBasedInserts = avroRecords.exists(_.recordBasedInserts)
+    recordReducer = if (combineRecords) Some(createRecordReducer()) else None
 
     val taskContextSupplier = table.getTaskContextSupplier
     val statuses = new ListBuffer[WriteStatus]()
@@ -189,17 +198,73 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     }
   }
 
-  /** The records of one contiguous bucket run, read off the shared row iterator. */
+  /** The records of one contiguous bucket run, combined per key when the write combines records. */
   private def bucketRecordIterator(buffered: BufferedIterator[InternalRow],
                                    bucket: String,
                                    recordFactory: RecordFactory,
                                    location: Option[HoodieRecordLocation]): java.util.Iterator[HoodieRecord[InternalRow]] = {
-    new java.util.Iterator[HoodieRecord[InternalRow]] {
+    val records = bucketRowRecords(buffered, bucket, recordFactory)
+    val combined = recordReducer match {
+      case None => records
+      case Some(combine) =>
+        // Rows are sorted by record key within the bucket, so the records of a key are adjacent.
+        new Iterator[HoodieRecord[InternalRow]] {
+          private val source = records.buffered
+          override def hasNext: Boolean = source.hasNext
+          override def next(): HoodieRecord[InternalRow] = {
+            var record = source.next()
+            while (source.hasNext && source.head.getKey == record.getKey) {
+              record = combine(record, source.next())
+            }
+            record
+          }
+        }
+    }
+    combined.map { record =>
+      // Append handles book records with a current location as updates in the delta stats.
+      location.foreach(record.setCurrentLocation)
+      record
+    }.asJava
+  }
+
+  /**
+   * The function that reduces two records of a key to one, set up the way the write client sets
+   * up record deduplication.
+   */
+  private def createRecordReducer(): (HoodieRecord[InternalRow], HoodieRecord[InternalRow]) => HoodieRecord[InternalRow] = {
+    val readerContext = readerContextFactory.getContext
+    readerContext.initRecordMergerForIngestion(writeConfig.getProps)
+    val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, table.getMetaClient)
+      .toArray(Array.empty[String])
+    val recordSchema = HoodieSchemaCache.intern(HoodieSchema.parse(
+      if (StringUtils.nonEmpty(writeConfig.getPartialUpdateSchema)) writeConfig.getPartialUpdateSchema else writeConfig.getWriteSchema))
+    val mergeProps = readerContext.getMergeProps(writeConfig.getProps)
+    val merger = BufferedRecordMergerFactory.create(
+      readerContext,
+      readerContext.getMergeMode,
+      false,
+      readerContext.getRecordMerger.map[HoodieRecordMerger](m => HoodieRecordUtils.mergerToPreCombineMode(m)),
+      HOption.ofNullable(writeConfig.getPayloadClass),
+      recordSchema,
+      mergeProps,
+      table.getMetaClient.getTableConfig.getPartialUpdateMode)
+    val schema = HoodieSchema.parse(writeConfig.getSchema)
+    val recordContext = readerContext.getRecordContext
+    val deleteContext = DeleteContext.fromRecordSchema(mergeProps, schema)
+    (previous, next) => BaseWriteHelper.reduceRecords(
+      mergeProps, merger, orderingFieldNames, previous, next, schema, recordContext, deleteContext)
+  }
+
+  /** The records of one contiguous bucket run, read off the shared row iterator. */
+  private def bucketRowRecords(rows: BufferedIterator[InternalRow],
+                               bucket: String,
+                               recordFactory: RecordFactory): Iterator[HoodieRecord[InternalRow]] = {
+    new Iterator[HoodieRecord[InternalRow]] {
       override def hasNext: Boolean =
-        buffered.hasNext && buffered.head.getString(bucketOrdinal) == bucket
+        rows.hasNext && rows.head.getString(bucketOrdinal) == bucket
 
       override def next(): HoodieRecord[InternalRow] = {
-        val row = buffered.next()
+        val row = rows.next()
         val key = new HoodieKey(
           row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
           row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD))
@@ -210,8 +275,6 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
         } else {
           recordFactory(row, key, isDelete)
         }
-        // Append handles book records with a current location as updates in the delta stats.
-        location.foreach(record.setCurrentLocation)
         record.asInstanceOf[HoodieRecord[InternalRow]]
       }
     }

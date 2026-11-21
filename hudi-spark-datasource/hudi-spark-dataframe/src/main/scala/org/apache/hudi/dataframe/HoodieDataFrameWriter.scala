@@ -32,7 +32,7 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, HoodieDataUtils, Option => HOption, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, HoodieDataUtils, HoodieRecordUtils, Option => HOption, StringUtils}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.{HoodieClusteringUpdateException, HoodieDuplicateKeyException}
@@ -49,7 +49,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Column, DataFrame, Dataset, HoodieInternalRowUtils, Row}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.expressions.Window
-import org.apache.spark.sql.functions.{coalesce, col, concat, hash, lit, row_number, struct, udf, when}
+import org.apache.spark.sql.functions.{coalesce, col, concat, hash, lit, monotonically_increasing_id, row_number, struct, udf, when}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
@@ -86,10 +86,11 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       (() => tableConfig.getBaseFileFormat != HoodieFileFormat.PARQUET || tableConfig.isMultipleBaseFileFormatsEnabled,
         s"base file format ${tableConfig.getBaseFileFormat}"),
       (() => tableConfig.getBootstrapBasePath.isPresent, "bootstrapped tables"),
-      (() => isCustomMerge(writeConfig, tableConfig) && shouldCombine(spec, writeConfig, tableConfig),
-        "custom merge modes and payloads that combine records before the write"),
-      (() => isCustomMerge(writeConfig, tableConfig) && SparkHoodieIndexFactory.isGlobalIndex(writeConfig),
-        "custom merge modes and payloads with a global index"),
+      (() => combinesInTask(spec, writeConfig, tableConfig) && SparkHoodieIndexFactory.isGlobalIndex(writeConfig),
+        "custom merging that combines records under a global index"),
+      (() => combinesInTask(spec, writeConfig, tableConfig)
+        && params.getOrElse(PROFILER, PROFILER_METADATA) == PROFILER_SHUFFLE_STATS,
+        "custom merging that combines records with the shuffle-stats profiler"),
       (() => writeConfig.allowOperationMetadataField, "the operation meta field"),
       (() => writeConfig.isRollbackPendingClustering
         || writeConfig.getClusteringUpdatesStrategyClass != classOf[SparkRejectUpdateStrategy[_]].getName,
@@ -111,7 +112,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         spec.metaClient.getBasePath.toString, params(HoodieWriteConfig.TBL_NAME.key), params.asJava)
       val avroLogBlocks = tableConfig.getTableType == HoodieTableType.MERGE_ON_READ &&
         CommonClientUtils.getLogBlockType(writeConfig, tableConfig) != HoodieLogBlockType.PARQUET_DATA_BLOCK
-      if (isCustomMerge(writeConfig, tableConfig) || avroLogBlocks) {
+      if (isCustomMerge(writeConfig, tableConfig) || payloadDecides(writeConfig) || avroLogBlocks) {
         // Payload-based merging and Avro log blocks take Avro records, built at the handles.
         Map.empty
       } else {
@@ -195,7 +196,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       writeConfig, sparkTable, readerContextFactory, instantTime, operation, withBucket.schema,
       prepared.dataSchema.length, HoodieInternalRowUtils.getCachedSchema(writerSchema), bucketOrdinal,
       withBucket.schema.fieldIndex(ROW_OP_COL), mergeOnRead, pendingClusteringFileGroups,
-      avroRecordSpec(spec, prepared.dataSchema, writerSchema, writeConfig, tableConfig))
+      avroRecordSpec(spec, prepared.dataSchema, writerSchema, writeConfig, tableConfig),
+      combinesInTask(spec, writeConfig, tableConfig))
 
     val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
     val (statusRdd, extraMetadata) = if (profilerMode == PROFILER_SHUFFLE_STATS) {
@@ -230,9 +232,15 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     } else {
       val numWriteTasks = params.get(WRITE_TASKS).map(_.toInt)
         .getOrElse(spark.sparkContext.defaultParallelism)
+      // Combining in the write task needs the records of a key next to each other.
+      val sortColumns = if (combinesInTask(spec, writeConfig, tableConfig)) {
+        Seq(col(ROUTING_BUCKET_COL), col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+      } else {
+        Seq(col(ROUTING_BUCKET_COL))
+      }
       val routed = withBucket
         .repartition(numWriteTasks, col(ROUTING_BUCKET_COL))
-        .sortWithinPartitions(col(ROUTING_BUCKET_COL))
+        .sortWithinPartitions(sortColumns: _*)
       (HoodieSparkUtils.injectSQLConf(
         routed.queryExecution.toRdd.mapPartitions(iter => task.execute(iter)), SQLConf.get),
         Map.empty[String, String])
@@ -317,7 +325,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
           DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
           DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean,
         mergeProps = mergeProps(writeConfig, tableConfig),
-        recordBasedInserts = isCustomMerge(writeConfig, tableConfig)))
+        recordBasedInserts = payloadDecides(writeConfig)))
     }
   }
 
@@ -334,6 +342,22 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
 
   private def isCustomMerge(writeConfig: HoodieWriteConfig, tableConfig: HoodieTableConfig): Boolean =
     writeConfig.getRecordMergeMode == RecordMergeMode.CUSTOM || tableConfig.getRecordMergeMode == RecordMergeMode.CUSTOM
+
+  /** Whether the write's payload class has behavior of its own, beyond what the merge mode expresses. */
+  private def payloadDecides(writeConfig: HoodieWriteConfig): Boolean = {
+    val payloadClass = writeConfig.getPayloadClass
+    StringUtils.nonEmpty(payloadClass) && !HoodieRecordUtils.isPayloadClassDeprecated(payloadClass)
+  }
+
+  /**
+   * Whether the records of a key are combined in the write task with the table's record merger,
+   * as custom mergers and payload classes need; otherwise combining is a window over the
+   * ordering fields.
+   */
+  private def combinesInTask(spec: DataFrameWriteSpec,
+                             writeConfig: HoodieWriteConfig,
+                             tableConfig: HoodieTableConfig): Boolean =
+    shouldCombine(spec, writeConfig, tableConfig) && (isCustomMerge(writeConfig, tableConfig) || payloadDecides(writeConfig))
 
   private def mergeProps(writeConfig: HoodieWriteConfig, tableConfig: HoodieTableConfig): TypedProperties =
     ConfigUtils.getMergeProps(writeConfig.getProps, tableConfig)
@@ -356,8 +380,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
    * The prepare stage as projections: the record key and partition path from the table's key
    * generator (or from the meta columns of prepped rows), the remaining meta columns as
    * placeholders, the data columns, and for rows that carry their location the file group they
-   * are in. Then the upfront precombine as a window dedup keyed by the ordering fields (or an
-   * arbitrary winner under commit-time ordering and for deletes).
+   * are in. Then the upfront precombine as a window dedup on the ordering fields and the input
+   * order.
    */
   private def prepareInput(input: DataFrame,
                            spec: DataFrameWriteSpec,
@@ -392,7 +416,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     } else {
       Seq.empty
     }
-    val keyed = input.select((keys.as(KEYS_COL) +: (dataColumns ++ location)): _*)
+    val combineByWindow = shouldCombine(spec, writeConfig, tableConfig) && !combinesInTask(spec, writeConfig, tableConfig)
+    val inputOrder = if (combineByWindow) Seq(monotonically_increasing_id().as(INPUT_ORDER_COL)) else Seq.empty
+    val keyed = input.select((keys.as(KEYS_COL) +: (dataColumns ++ location ++ inputOrder)): _*)
     val withMeta = keyed.select(
       (Seq(
         lit(null).cast(StringType).as(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
@@ -401,9 +427,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         col(KEYS_COL).getField(HoodieKeyGeneratorExpression.PARTITION_PATH_FIELD)
           .as(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         lit(null).cast(StringType).as(HoodieRecord.FILENAME_METADATA_FIELD))
-        ++ dataColumns ++ location.map(_ => col(TAGGED_FILE_ID_COL))): _*)
+        ++ dataColumns ++ location.map(_ => col(TAGGED_FILE_ID_COL)) ++ inputOrder.map(_ => col(INPUT_ORDER_COL))): _*)
 
-    val rows = if (!shouldCombine(spec, writeConfig, tableConfig)) {
+    val rows = if (!combineByWindow) {
       withMeta
     } else {
       val dedupKeys = if (SparkHoodieIndexFactory.isGlobalIndex(writeConfig)) {
@@ -411,17 +437,18 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       } else {
         Seq(col(HoodieRecord.RECORD_KEY_METADATA_FIELD), col(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
       }
-      val orderingFields = tableConfig.getOrderingFields.asScala.toSeq
-      val ordering = if (orderingFields.nonEmpty && !isDelete) {
-        orderingFields.map(f => col(f).desc)
+      // The greatest ordering value wins under event-time ordering. Under commit-time ordering,
+      // for deletes, and among equal ordering values, the row that comes later in the input wins.
+      val orderingFields = if (writeConfig.getRecordMergeMode == RecordMergeMode.EVENT_TIME_ORDERING && !isDelete) {
+        tableConfig.getOrderingFields.asScala.toSeq
       } else {
-        // No in-batch order is defined: keep an arbitrary single row per key.
-        Seq(lit(1).asc)
+        Seq.empty
       }
+      val ordering = orderingFields.map(f => col(f).desc) :+ col(INPUT_ORDER_COL).desc
       val window = Window.partitionBy(dedupKeys: _*).orderBy(ordering: _*)
       withMeta.withColumn(DEDUP_RANK_COL, row_number().over(window))
         .filter(col(DEDUP_RANK_COL) === 1)
-        .drop(DEDUP_RANK_COL)
+        .drop(DEDUP_RANK_COL, INPUT_ORDER_COL)
     }
     PreparedRows(rows, StructType(dataFields))
   }
@@ -698,6 +725,7 @@ object HoodieDataFrameWriter {
 
   private val KEYS_COL = "_hoodie_keys"
   private val DEDUP_RANK_COL = "_hoodie_dedup_rank"
+  private val INPUT_ORDER_COL = "_hoodie_input_order"
   private val TAGGED_FILE_ID_COL = "_hoodie_tagged_file_id"
   private val LOCATED_PARTITION_COL = "_hoodie_located_partition"
   private val ROUTING_BUCKET_COL = "_hoodie_routing_bucket"

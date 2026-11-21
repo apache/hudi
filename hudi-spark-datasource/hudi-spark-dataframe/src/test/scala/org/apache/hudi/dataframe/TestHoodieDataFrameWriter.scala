@@ -363,19 +363,21 @@ class TestHoodieDataFrameWriter {
 
   @Test
   def testUpsertWithoutPrecombineUsesCommitTimeOrdering(): Unit = {
-    val path = tempDir.resolve("test_table_no_precombine").toString
-    val opts = writeOptions("insert") - "hoodie.datasource.write.precombine.field"
-    makeDf(Seq(("n1", "p1", 1L, "before"))).write.format("hudi")
-      .options(opts).mode(SaveMode.Append).save(path)
-    makeDf(Seq(("n1", "p1", 1L, "after"), ("n2", "p1", 1L, "dup-a"), ("n2", "p1", 2L, "dup-b")))
-      .write.format("hudi")
-      .options(opts + (DataSourceWriteOptions.OPERATION.key -> "upsert")).mode(SaveMode.Append).save(path)
-
-    val result = readAsMap(path)
-    Assertions.assertEquals(2, result.size)
-    Assertions.assertEquals("after", result("n1")._2)
-    Assertions.assertTrue(Set("dup-a", "dup-b").contains(result("n2")._2))
-    Assertions.assertEquals(2, completedCommits(path))
+    val snapshots = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_no_precombine_$enabled").toString
+      val opts = writeOptions("insert") - "hoodie.datasource.write.precombine.field" +
+        (DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      makeDf(Seq(("n1", "p1", 9L, "before"))).write.format("hudi")
+        .options(opts).mode(SaveMode.Append).save(path)
+      makeDf(Seq(("n1", "p1", 5L, "mid"), ("n2", "p1", 5L, "dup-a"), ("n2", "p1", 1L, "dup-b"), ("n1", "p1", 1L, "after")))
+        .write.format("hudi")
+        .options(opts + (DataSourceWriteOptions.OPERATION.key -> "upsert")).mode(SaveMode.Append).save(path)
+      Assertions.assertEquals(2, completedCommits(path))
+      readAsMap(path).map { case (key, (_, value, _)) => key -> value }
+    }
+    // With no ordering field, the row that comes last in the batch wins.
+    Assertions.assertEquals(Map("n1" -> "after", "n2" -> "dup-b"), snapshots.head)
+    Assertions.assertEquals(snapshots(1), snapshots.head)
   }
 
   @Test
@@ -593,6 +595,34 @@ class TestHoodieDataFrameWriter {
       }
       Assertions.assertNotNull(cause, s"expected a duplicate key failure, got $failure")
       Assertions.assertEquals(1L, spark.read.format("hudi").load(path).count())
+    }
+  }
+
+  @Test
+  def testUpsertCombinesOnStringOrderingField(): Unit = {
+    // Two rows of a new key and two of an existing key in one batch: the row with the greater
+    // ordering value wins, and it pads the small file group of the first commit.
+    val rows = writeOnBothPaths("test_table_string_ordering",
+      Map("hoodie.datasource.write.precombine.field" -> "value"),
+      Seq(
+        "insert" -> Seq(("s1", "p1", 1L, "a1")),
+        "upsert" -> Seq(("s1", "p1", 1L, "a1_1"), ("s2", "p1", 1L, "a2"), ("s2", "p1", 1L, "a2_2"), ("s1", "p1", 1L, "a0"))))
+    Assertions.assertEquals(Seq(("s1", "p1", 1L, "a1_1"), ("s2", "p1", 1L, "a2_2")), rows)
+  }
+
+  @Test
+  def testPayloadClassCombinesRecordsOfAKey(): Unit = {
+    // The payload class merges on its own terms, so the rows of a key are combined with the
+    // table's record merger, for an existing key and for a new one.
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val rows = writeOnBothPaths(s"test_table_payload_combine_$tableType",
+        Map("hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.PartialUpdateAvroPayload",
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.compact.inline" -> "false"),
+        Seq(
+          "insert" -> Seq(("q1", "p1", 5L, "a1")),
+          "upsert" -> Seq(("q1", "p1", 9L, "newer"), ("q1", "p1", 7L, "older"), ("q2", "p1", 3L, "x"), ("q2", "p1", 4L, "y"))))
+      Assertions.assertEquals(Seq(("q1", "p1", 9L, "newer"), ("q2", "p1", 4L, "y")), rows)
     }
   }
 
