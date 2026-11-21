@@ -19,16 +19,18 @@ package org.apache.hudi.dataframe
 
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.common.engine.ReaderContextFactory
-import org.apache.hudi.common.model.{HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieSparkRecord, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieFileGroupId, HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieSparkRecord, WriteOperationType}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieClusteringUpdateException
 import org.apache.hudi.io.{AppendHandleFactory, HoodieMergeHandleFactory, HoodieWriteMergeHandle, MergeContext, MergeUtils}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper
 
+import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{BoundReference, UnsafeProjection}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.catalyst.expressions.{BoundReference, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -48,10 +50,12 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          instantTime: String,
                          operation: WriteOperationType,
                          routedSchema: StructType,
-                         writeSchemaLength: Int,
+                         dataFieldCount: Int,
+                         writerSchema: StructType,
                          bucketOrdinal: Int,
                          rowOpOrdinal: Int,
-                         mergeOnRead: Boolean) extends Serializable {
+                         mergeOnRead: Boolean,
+                         pendingClusteringFileGroups: Set[HoodieFileGroupId]) extends Serializable {
 
   def execute(iter: Iterator[InternalRow]): Iterator[WriteStatus] = {
     if (!iter.hasNext) {
@@ -62,15 +66,11 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
   }
 
   private def executeNonEmpty(iter: Iterator[InternalRow]): Iterator[WriteStatus] = {
-    val writeSchema = StructType(routedSchema.fields.take(writeSchemaLength))
-    val dataSchema = StructType(routedSchema.fields.slice(
-      HoodieRecord.HOODIE_META_COLUMNS.size(), writeSchemaLength))
-    val writeProjection = UnsafeProjection.create(
-      (0 until writeSchemaLength).map(i =>
-        BoundReference(i, routedSchema.fields(i).dataType, nullable = true)))
-    val dataProjection = UnsafeProjection.create(
-      (HoodieRecord.HOODIE_META_COLUMNS.size() until writeSchemaLength).map(i =>
-        BoundReference(i, routedSchema.fields(i).dataType, nullable = true)))
+    val metaFieldCount = HoodieRecord.HOODIE_META_COLUMNS.size()
+    val writeSchema = StructType(routedSchema.fields.take(metaFieldCount) ++ writerSchema.fields)
+    val writeProjection = DataFrameWriteTask.conformingProjection(routedSchema, 0, metaFieldCount + dataFieldCount, writeSchema)
+    val dataProjection = DataFrameWriteTask.conformingProjection(routedSchema, metaFieldCount, dataFieldCount, writerSchema)
+    val dataSchema = writerSchema
 
     val taskContextSupplier = table.getTaskContextSupplier
     val statuses = new ListBuffer[WriteStatus]()
@@ -111,7 +111,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
    */
   private def bucketRecordIterator(buffered: BufferedIterator[InternalRow],
                                    bucket: String,
-                                   dataProjection: UnsafeProjection,
+                                   dataProjection: InternalRow => UnsafeRow,
                                    dataSchema: StructType,
                                    location: Option[HoodieRecordLocation]): java.util.Iterator[HoodieRecord[InternalRow]] = {
     new java.util.Iterator[HoodieRecord[InternalRow]] {
@@ -143,11 +143,12 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
 
   private def mergeBucket(buffered: BufferedIterator[InternalRow],
                           bucket: String,
-                          dataProjection: UnsafeProjection,
+                          dataProjection: InternalRow => UnsafeRow,
                           dataSchema: StructType,
                           taskContextSupplier: org.apache.hudi.common.engine.TaskContextSupplier): Seq[WriteStatus] = {
     val fileId = bucket.substring(2)
     val partitionPath = buffered.head.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
+    rejectUpdateToPendingClustering(partitionPath, fileId)
     val recordItr = bucketRecordIterator(buffered, bucket, dataProjection, dataSchema, None)
 
     val mergeHandle = HoodieMergeHandleFactory.create(
@@ -167,11 +168,12 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
   /** MOR update run: append the bucket's records as a new log file of its file group. */
   private def appendBucket(buffered: BufferedIterator[InternalRow],
                            bucket: String,
-                           dataProjection: UnsafeProjection,
+                           dataProjection: InternalRow => UnsafeRow,
                            dataSchema: StructType,
                            taskContextSupplier: org.apache.hudi.common.engine.TaskContextSupplier): Seq[WriteStatus] = {
     val fileId = bucket.substring(2)
     val partitionPath = buffered.head.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
+    rejectUpdateToPendingClustering(partitionPath, fileId)
     val recordItr = bucketRecordIterator(buffered, bucket, dataProjection, dataSchema,
       Some(new HoodieRecordLocation(instantTime, fileId)))
     val appendHandle = new AppendHandleFactory[InternalRow, AnyRef, AnyRef, AnyRef]().create(
@@ -180,5 +182,45 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
       partitionPath, fileId, recordItr, taskContextSupplier)
     appendHandle.doAppend()
     appendHandle.close().asScala.toSeq
+  }
+
+  /** Updates to a file group that a pending clustering is rewriting are rejected. */
+  private def rejectUpdateToPendingClustering(partitionPath: String, fileId: String): Unit = {
+    val fileGroup = new HoodieFileGroupId(partitionPath, fileId)
+    if (pendingClusteringFileGroups.contains(fileGroup)) {
+      throw new HoodieClusteringUpdateException(
+        s"Not allowed to update the clustering file group $fileGroup. "
+          + "For pending clustering operations, we are not going to support update for now.")
+    }
+  }
+}
+
+object DataFrameWriteTask {
+
+  /**
+   * Projects `count` columns of `source` starting at `offset` into rows of `target`. Columns that
+   * already line up with the target are copied by position; otherwise the row is rewritten by
+   * field name, which reorders columns, fills missing ones with nulls and widens types.
+   */
+  def conformingProjection(source: StructType, offset: Int, count: Int, target: StructType): InternalRow => UnsafeRow = {
+    val slice = StructType(source.fields.slice(offset, offset + count))
+    val byPosition = UnsafeProjection.create(
+      (offset until offset + count).map(i => BoundReference(i, source.fields(i).dataType, nullable = true)))
+    if (sameIgnoringNullability(slice, target)) {
+      row => byPosition(row)
+    } else {
+      row => HoodieInternalRowUtils.getCachedUnsafeRowWriter(slice, target)(byPosition(row))
+    }
+  }
+
+  private def sameIgnoringNullability(left: DataType, right: DataType): Boolean = (left, right) match {
+    case (l: StructType, r: StructType) =>
+      l.length == r.length && l.fields.zip(r.fields).forall { case (lf, rf) =>
+        lf.name == rf.name && sameIgnoringNullability(lf.dataType, rf.dataType)
+      }
+    case (l: ArrayType, r: ArrayType) => sameIgnoringNullability(l.elementType, r.elementType)
+    case (l: MapType, r: MapType) =>
+      sameIgnoringNullability(l.keyType, r.keyType) && sameIgnoringNullability(l.valueType, r.valueType)
+    case _ => left == right
   }
 }

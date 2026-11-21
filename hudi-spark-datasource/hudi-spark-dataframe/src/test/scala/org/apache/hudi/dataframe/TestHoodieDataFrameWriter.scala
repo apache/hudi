@@ -17,6 +17,7 @@
 
 package org.apache.hudi.dataframe
 
+import org.apache.hudi.{DataSourceWriteOptions, HoodieDataFrameWritePath}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
@@ -49,13 +50,11 @@ class TestHoodieDataFrameWriter {
 
   @BeforeAll
   def setUp(): Unit = {
-    // A stale hudi-spark-common on the classpath (e.g. reinstalled from another branch) lacks
-    // the datasource gate, and every write below would silently exercise the legacy path
-    // instead of the DataFrame write path under test.
-    Assertions.assertTrue(
-      classOf[org.apache.hudi.DefaultSource].getDeclaredMethods.exists(_.getName.contains("runDataFrameWritePath")),
-      "DefaultSource on the test classpath lacks the DataFrame write path gate; "
-        + "rebuild hudi-spark-common from this branch")
+    // A stale hudi-spark-common on the classpath (e.g. reinstalled from another branch) cannot
+    // reach this module, and every write below would silently exercise the RDD write path.
+    Assertions.assertTrue(HoodieDataFrameWritePath.isAvailable,
+      "hudi-spark-common on the test classpath does not resolve the DataFrame write path; "
+        + "rebuild it from this branch")
     spark = SparkSession.builder()
       .master("local[2]")
       .appName("hoodie-dataframe-write-path-test")
@@ -75,12 +74,12 @@ class TestHoodieDataFrameWriter {
   private def writeOptions(operation: String,
                            extraOpts: Map[String, String] = Map.empty): Map[String, String] = Map(
     "hoodie.table.name" -> "test_dataframe_table",
-    HoodieDataFrameWriter.DATAFRAME_WRITE_PATH_ENABLE -> "true",
-    HoodieDataFrameWriter.RECORD_KEY_FIELD -> "key",
-    HoodieDataFrameWriter.PARTITION_PATH_FIELD -> "partition",
+    DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> "true",
+    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "key",
+    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     "hoodie.datasource.write.precombine.field" -> "ts",
     "hoodie.embed.timeline.server" -> "false",
-    HoodieDataFrameWriter.OPERATION_KEY -> operation) ++ extraOpts
+    DataSourceWriteOptions.OPERATION.key -> operation) ++ extraOpts
 
   private def makeDf(rows: Seq[(String, String, Long, String)]) = {
     spark.createDataFrame(
@@ -91,10 +90,15 @@ class TestHoodieDataFrameWriter {
                         operation: String,
                         path: String,
                         extraOpts: Map[String, String] = Map.empty): Unit = {
+    val options = writeOptions(operation, extraOpts)
+    val expectedWrites = HoodieDataFrameWriter.writeCount.get() +
+      (if (options(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key).toBoolean) 1 else 0)
     makeDf(rows).write.format("hudi")
-      .options(writeOptions(operation, extraOpts))
+      .options(options)
       .mode(SaveMode.Append)
       .save(path)
+    Assertions.assertEquals(expectedWrites, HoodieDataFrameWriter.writeCount.get(),
+      "the write did not take the expected write path")
   }
 
   private def readAsMap(path: String): Map[String, (Long, String, String)] = {
@@ -185,7 +189,7 @@ class TestHoodieDataFrameWriter {
   def testInsertPaddingKeepsDuplicateKeysLikeLegacyPath(): Unit = {
     val snapshots = Seq("true", "false").map { enabled =>
       val path = tempDir.resolve(s"test_table_insert_dups_$enabled").toString
-      val opts = Map(HoodieDataFrameWriter.DATAFRAME_WRITE_PATH_ENABLE -> enabled)
+      val opts = Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
       writeHudi(Seq(("d1", "p1", 1L, "x1"), ("d2", "p1", 1L, "x2")), "insert", path, opts)
       writeHudi(Seq(("d1", "p1", 2L, "y1"), ("d3", "p1", 2L, "y3")), "insert", path, opts)
       spark.read.format("hudi").load(path).select("key", "ts", "value").collect()
@@ -299,12 +303,12 @@ class TestHoodieDataFrameWriter {
   def testComplexKeysWithHiveStylePartitioning(): Unit = {
     val path = tempDir.resolve("test_table_complex").toString
     val opts = writeOptions("insert", Map(
-      HoodieDataFrameWriter.RECORD_KEY_FIELD -> "key,partition",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "key,partition",
       "hoodie.datasource.write.hive_style_partitioning" -> "true"))
     makeDf(Seq(("c1", "p1", 1L, "z1"), ("c2", "p2", 1L, "z2"))).write.format("hudi")
       .options(opts).mode(SaveMode.Append).save(path)
     makeDf(Seq(("c1", "p1", 5L, "z1-updated"))).write.format("hudi")
-      .options(opts + (HoodieDataFrameWriter.OPERATION_KEY -> "upsert")).mode(SaveMode.Append).save(path)
+      .options(opts + (DataSourceWriteOptions.OPERATION.key -> "upsert")).mode(SaveMode.Append).save(path)
 
     val rows = spark.read.format("hudi").load(path)
       .select("_hoodie_record_key", "_hoodie_partition_path", "value").collect()
@@ -316,23 +320,27 @@ class TestHoodieDataFrameWriter {
 
   @Test
   def testTimestampKeyGeneratorPartitioning(): Unit = {
-    val path = tempDir.resolve("test_table_timestamp").toString
-    val opts = writeOptions("insert", Map(
-      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
-      HoodieDataFrameWriter.PARTITION_PATH_FIELD -> "ts",
-      "hoodie.keygen.timebased.timestamp.type" -> "UNIX_TIMESTAMP",
-      "hoodie.keygen.timebased.output.dateformat" -> "yyyyMMdd"))
-    makeDf(Seq(("t1", "unused", 0L, "a"), ("t2", "unused", 86400L, "b"))).write.format("hudi")
-      .options(opts).mode(SaveMode.Append).save(path)
-    makeDf(Seq(("t1", "unused", 3600L, "a-updated"))).write.format("hudi")
-      .options(opts + (HoodieDataFrameWriter.OPERATION_KEY -> "upsert")).mode(SaveMode.Append).save(path)
-
-    val rows = spark.read.format("hudi").load(path)
-      .select("key", "_hoodie_partition_path", "value").collect()
-      .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    val snapshots = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_timestamp_$enabled").toString
+      val opts = writeOptions("insert", Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "ts",
+        "hoodie.keygen.timebased.timestamp.type" -> "UNIX_TIMESTAMP",
+        "hoodie.keygen.timebased.output.dateformat" -> "yyyyMMdd",
+        "hoodie.keygen.timebased.timezone" -> "UTC"))
+      makeDf(Seq(("t1", "unused", 0L, "a"), ("t2", "unused", 86400L, "b"))).write.format("hudi")
+        .options(opts).mode(SaveMode.Append).save(path)
+      makeDf(Seq(("t1", "unused", 3600L, "a-updated"))).write.format("hudi")
+        .options(opts + (DataSourceWriteOptions.OPERATION.key -> "upsert")).mode(SaveMode.Append).save(path)
+      spark.read.format("hudi").load(path)
+        .select("key", "_hoodie_partition_path", "value").collect()
+        .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    }
     Assertions.assertEquals(Set(
       ("t1", "19700101", "a-updated"),
-      ("t2", "19700102", "b")), rows)
+      ("t2", "19700102", "b")), snapshots.head)
+    Assertions.assertEquals(snapshots(1), snapshots.head)
   }
 
   @Test
@@ -343,7 +351,7 @@ class TestHoodieDataFrameWriter {
       .options(opts).mode(SaveMode.Append).save(path)
     makeDf(Seq(("n1", "p1", 1L, "after"), ("n2", "p1", 1L, "dup-a"), ("n2", "p1", 2L, "dup-b")))
       .write.format("hudi")
-      .options(opts + (HoodieDataFrameWriter.OPERATION_KEY -> "upsert")).mode(SaveMode.Append).save(path)
+      .options(opts + (DataSourceWriteOptions.OPERATION.key -> "upsert")).mode(SaveMode.Append).save(path)
 
     val result = readAsMap(path)
     Assertions.assertEquals(2, result.size)
@@ -359,8 +367,8 @@ class TestHoodieDataFrameWriter {
 
     // Only the path, the flag, and the operation: everything else comes from the table config.
     makeDf(Seq(("b1", "p1", 9L, "one-updated"))).write.format("hudi")
-      .option(HoodieDataFrameWriter.DATAFRAME_WRITE_PATH_ENABLE, "true")
-      .option(HoodieDataFrameWriter.OPERATION_KEY, "upsert")
+      .option(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key, "true")
+      .option(DataSourceWriteOptions.OPERATION.key, "upsert")
       .option("hoodie.embed.timeline.server", "false")
       .mode(SaveMode.Append)
       .save(path)
@@ -435,7 +443,8 @@ class TestHoodieDataFrameWriter {
   @Test
   def testMergeOnReadInsertAndUpserts(): Unit = {
     val path = tempDir.resolve("test_table_mor").toString
-    val mor = Map("hoodie.datasource.write.table.type" -> "MERGE_ON_READ")
+    val mor = Map("hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+      "hoodie.logfile.data.block.format" -> "parquet")
 
     writeHudi(Seq(("m1", "p1", 1L, "one"), ("m2", "p1", 1L, "two"), ("m3", "p2", 1L, "three")),
       "insert", path, mor)
@@ -464,7 +473,8 @@ class TestHoodieDataFrameWriter {
   @Test
   def testMergeOnReadInsertsPadSmallBaseFiles(): Unit = {
     val path = tempDir.resolve("test_table_mor_padding").toString
-    val mor = Map("hoodie.datasource.write.table.type" -> "MERGE_ON_READ")
+    val mor = Map("hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+      "hoodie.logfile.data.block.format" -> "parquet")
 
     writeHudi(Seq(("mp1", "p1", 1L, "a"), ("mp2", "p1", 1L, "b")), "insert", path, mor)
     writeHudi(Seq(("mp3", "p1", 1L, "c"), ("mp4", "p1", 1L, "d")), "insert", path, mor)
