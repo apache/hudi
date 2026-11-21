@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.client.model.HoodieRowDataCreation;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -39,6 +40,7 @@ import org.apache.flink.table.data.RowData;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -60,6 +62,12 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
   private final boolean withOperation;
   private final Function<Long, String> seqIdGenerator;
   private long recordCountForNextSizeCheck = MIN_RECORDS_FOR_SIZE_CHECK;
+
+  @Override
+  public boolean setColumnStatsCollector(Consumer<HoodieRecord> collector) {
+    setRecordWrittenCallback(row -> collector.accept(new HoodieFlinkRecord(row)));
+    return true;
+  }
 
   public HoodieRowDataLanceWriter(
       StoragePath file,

@@ -66,6 +66,7 @@ public class HoodieCreateHandle<T, I, K, O> extends BaseCreateHandle<T, I, K, O>
     createPartitionMetadataAndMarkerFile();
     try {
       this.fileWriter = initializeFileWriter();
+      initColumnStatsCollector(fileWriter, path, recordMerger.getRecordType());
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }

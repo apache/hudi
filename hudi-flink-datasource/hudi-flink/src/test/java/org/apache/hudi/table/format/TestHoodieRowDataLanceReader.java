@@ -28,12 +28,16 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.LanceUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.storage.row.HoodieRowDataLanceWriter;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.RowDataQueryContexts;
@@ -61,12 +65,15 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.lance.file.LanceFileReader;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -101,6 +108,30 @@ class TestHoodieRowDataLanceReader {
 
   @TempDir
   Path tempDir;
+
+  @ParameterizedTest
+  @EnumSource(HoodieIndexVersion.class)
+  void testReadColumnStatsWithoutSpark(HoodieIndexVersion indexVersion) throws Exception {
+    assertThrows(ClassNotFoundException.class,
+        () -> Class.forName("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory"));
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(
+        RowType.of(new LogicalType[] {new IntType()}, new String[] {"id"}));
+    StoragePath path = new StoragePath(tempDir.resolve("stats.lance").toUri());
+    try (HoodieRowDataLanceWriter writer = new HoodieRowDataLanceWriter(path, schema, "001",
+        mock(TaskContextSupplier.class), Option.empty(), 128 * 1024 * 1024L,
+        64 * 1024 * 1024L, 16 * 1024 * 1024L, true, MetaFieldsMode.NONE, false)) {
+      writer.writeRow("key0", GenericRowData.of(9));
+      writer.writeRow("key1", GenericRowData.of(-2));
+      writer.writeRow("key2", GenericRowData.of((Object) null));
+    }
+    List<HoodieColumnRangeMetadata<Comparable>> stats = new LanceUtils().readColumnStatsFromMetadata(
+        HoodieTestUtils.getStorage(path), path, Arrays.asList("id", "missing"), indexVersion);
+    assertEquals(1, stats.size());
+    assertEquals(-2, stats.get(0).getMinValue());
+    assertEquals(9, stats.get(0).getMaxValue());
+    assertEquals(1, stats.get(0).getNullCount());
+    assertEquals(3, stats.get(0).getValueCount());
+  }
 
   @Test
   void testRestoresMixedCaseVectorFieldName() throws Exception {
