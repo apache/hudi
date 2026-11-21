@@ -88,8 +88,8 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
 
@@ -771,7 +771,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         Assertions.assertTrue(cachedAllInputFileSlices.getCurrentInMemoryMapSize() < 2 * spillableMemoryBytes,
             "In-memory map size is greater than expected " + cachedAllInputFileSlices.getCurrentInMemoryMapSize());
       } else {
-        HashMap<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> cachedAllInputFileSlices = getHashMap(hoodieTableFileIndex);
+        Map<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> cachedAllInputFileSlices =
+            getInMemoryMap(hoodieTableFileIndex);
         Assertions.assertEquals(fileSlicesCachedInMemory, cachedAllInputFileSlices.size());
         Assertions.assertTrue(ObjectSizeCalculator.getObjectSize(cachedAllInputFileSlices) > spillableMemoryBytes);
       }
@@ -929,13 +930,15 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
-  private static HashMap<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> getHashMap(BaseHoodieTableFileIndex hoodieTableFileIndex) {
+  // NOTE: Deliberately typed as Map and not as a concrete implementation: when the spillable map is not in use the
+  //       field holds the map view of a Caffeine cache, which is a ConcurrentMap and not a HashMap.
+  private static Map<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> getInMemoryMap(BaseHoodieTableFileIndex hoodieTableFileIndex) {
     // cachedAllInputFileSlices is a private field, using reflection to assert the size.
     try {
       Field cachedAllInputFileSlicesField = null;
       cachedAllInputFileSlicesField = BaseHoodieTableFileIndex.class.getDeclaredField("cachedAllInputFileSlices");
       cachedAllInputFileSlicesField.setAccessible(true);
-      return (HashMap<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>>) cachedAllInputFileSlicesField.get(hoodieTableFileIndex);
+      return (Map<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>>) cachedAllInputFileSlicesField.get(hoodieTableFileIndex);
     } catch (NoSuchFieldException | IllegalAccessException e) {
       throw new HoodieException("field not found in BaseHoodieTableFileIndex", e);
     }
