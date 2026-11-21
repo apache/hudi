@@ -22,6 +22,7 @@ import io.trino.plugin.hudi.file.HudiBaseFile;
 import io.trino.plugin.hudi.file.HudiLogFile;
 import io.trino.spi.HostAddress;
 import io.trino.spi.TrinoException;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -32,6 +33,7 @@ import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_FILESYSTEM_ERROR;
+import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
@@ -110,7 +112,9 @@ public class HudiSplitFactory
         checkArgument(fileSlice.getBaseFile().isPresent(),
                 "Hudi base file must exist if there are no log files in the file slice");
 
-        HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
+        HoodieBaseFile hoodieBaseFile = fileSlice.getBaseFile().get();
+        // Metadata-only bootstrap files contain a skeleton; data lives in the external base file.
+        BaseFile baseFile = hoodieBaseFile.getBootstrapBaseFile().orElse(hoodieBaseFile);
         long fileSize = baseFile.getFileSize();
         // Object-storage reads have no host affinity.
         List<HostAddress> addresses = ImmutableList.of();
@@ -171,6 +175,9 @@ public class HudiSplitFactory
     {
         // NOTE: Some file slices may not have base files
         Option<HoodieBaseFile> baseFileOption = fileSlice.getBaseFile();
+        if (baseFileOption.isPresent() && baseFileOption.get().getBootstrapBaseFile().isPresent()) {
+            throw new TrinoException(NOT_SUPPORTED, "Merging Hudi log files with a metadata-only bootstrap base file is not supported");
+        }
         List<HostAddress> addresses = ImmutableList.of();
 
         HudiSplit split = new HudiSplit(
