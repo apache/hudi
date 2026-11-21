@@ -71,6 +71,7 @@ public class SerDeHelper {
   private static final String ELEMENT_OPTIONAL = "element_optional";
   private static final String VALUE_OPTIONAL = "value_optional";
 
+  private static final Pattern VECTOR = Pattern.compile("vector\\[(\\d+),\\s*(\\w+),\\s*(\\w+)\\]", Pattern.CASE_INSENSITIVE);
   private static final Pattern FIXED = Pattern.compile("fixed\\[(\\d+)\\]");
   private static final Pattern DECIMAL = Pattern.compile("decimal\\((\\d+),\\s+(\\d+)\\)");
   private static final Pattern DECIMAL_BYTES = Pattern.compile("decimal_bytes\\((\\d+),\\s*(\\d+)\\)");
@@ -191,7 +192,13 @@ public class SerDeHelper {
 
   private static Type parseTypeFromJson(JsonNode jsonNode) {
     if (jsonNode.isTextual()) {
-      String type = jsonNode.asText().toLowerCase(Locale.ROOT);
+      String typeName = jsonNode.asText();
+      // VectorType retains the original case of its element type and storage backing.
+      Matcher vector = VECTOR.matcher(typeName);
+      if (vector.matches()) {
+        return Types.VectorType.get(Integer.parseInt(vector.group(1)), vector.group(2), vector.group(3));
+      }
+      String type = typeName.toLowerCase(Locale.ROOT);
       // deal with fixed and decimal
       Matcher decimalFixed = DECIMAL_FIXED.matcher(type);
       if (decimalFixed.matches()) {

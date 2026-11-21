@@ -746,6 +746,29 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
   }
 
   @Test
+  public void testAlterVectorTableOptions() throws Exception {
+    Schema vectorSchema = Schema.newBuilder()
+        .column("uuid", DataTypes.INT().notNull())
+        .column("embedding", DataTypes.ARRAY(DataTypes.FLOAT()))
+        .primaryKey("uuid")
+        .build();
+    Map<String, String> options = new HashMap<>();
+    options.put(CONNECTOR.key(), "hudi");
+    options.put("precombine.field", "uuid");
+    options.put(FlinkOptions.VECTOR_COLUMNS.key(), "embedding:3");
+    CatalogTable table = CatalogUtils.createCatalogTable(vectorSchema, Collections.emptyList(), options, "vector table");
+    hoodieCatalog.createTable(tablePath, table, false);
+
+    Map<String, String> updatedOptions = new HashMap<>(table.getOptions());
+    updatedOptions.put("k", "v");
+    hoodieCatalog.alterTable(tablePath, table.copy(updatedOptions), false);
+
+    Map<String, String> persistedOptions = hoodieCatalog.getTable(tablePath).getOptions();
+    assertEquals("v", persistedOptions.get("k"));
+    assertEquals("embedding:3", persistedOptions.get(FlinkOptions.VECTOR_COLUMNS.key()));
+  }
+
+  @Test
   public void testRenameTable() throws Exception {
     Map<String, String> originOptions = new HashMap<>();
     originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");

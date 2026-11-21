@@ -22,6 +22,7 @@ import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.Type;
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
@@ -32,9 +33,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.VectorColumnParser;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -45,6 +48,8 @@ import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogView;
 import org.apache.flink.table.catalog.ObjectPath;
+import org.apache.flink.table.catalog.ResolvedCatalogTable;
+import org.apache.flink.table.catalog.TableChange;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.PartitionSpecInvalidException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
@@ -62,6 +67,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -217,7 +223,7 @@ public class HoodieCatalogUtil {
       AbstractCatalog catalog,
       ObjectPath tablePath,
       CatalogBaseTable newTable,
-      List tableChanges,
+      List<TableChange> tableChanges,
       boolean ignoreIfNotExists,
       org.apache.hadoop.conf.Configuration hadoopConf,
       BiFunction<ObjectPath, CatalogBaseTable, String> inferTablePathFunc,
@@ -227,6 +233,19 @@ public class HoodieCatalogUtil {
 
     if (!isUpdatePermissible(catalog, tablePath, newTable, ignoreIfNotExists)) {
       return;
+    }
+    newTable = updateVectorColumns(newTable, tableChanges);
+    // Reject invalid VECTOR descriptors before the schema change becomes visible in the timeline.
+    String vectorColumns = newTable.getOptions().get(FlinkOptions.VECTOR_COLUMNS.key());
+    if (!StringUtils.isNullOrEmpty(vectorColumns)) {
+      // Direct HMS catalog callers can supply an unresolved CatalogTable with concrete data types.
+      LogicalType rowType = newTable instanceof ResolvedCatalogTable
+          ? ((ResolvedCatalogTable) newTable).getResolvedSchema().toPhysicalRowDataType().getLogicalType()
+          : DataTypeUtils.toRowType(newTable.getUnresolvedSchema());
+      HoodieSchemaConverter.convertToSchema(
+          rowType,
+          HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName()),
+          vectorColumns);
     }
     if (!tableChanges.isEmpty()) {
       CatalogBaseTable oldTable = catalog.getTable(tablePath);
@@ -241,6 +260,53 @@ public class HoodieCatalogUtil {
       }
     }
     postAlterTableFunc.accept(tablePath, newTable);
+  }
+
+  /**
+   * Keeps name-based VECTOR descriptors in sync with column renames and drops. Flink supplies the
+   * updated column schema but retains the old table options, so the descriptors must be rewritten
+   * before validating and committing the schema change.
+   *
+   * <p>Preserves descriptor order and dimensions, and removes the option when no VECTOR columns
+   * remain. Returns the original table when no descriptor changes, or a copy with updated options.
+   */
+  private static CatalogBaseTable updateVectorColumns(CatalogBaseTable table, List<TableChange> tableChanges) {
+    String key = FlinkOptions.VECTOR_COLUMNS.key();
+    String descriptors = table.getOptions().get(key);
+    if (descriptors == null || tableChanges.isEmpty()) {
+      return table;
+    }
+    List<String> updated = new ArrayList<>();
+    boolean changed = false;
+    for (Map.Entry<String, Integer> vector : VectorColumnParser.parse(descriptors).entrySet()) {
+      String name = vector.getKey();
+      // Track successive renames so a later rename or drop applies to the current column name.
+      for (TableChange change : tableChanges) {
+        if (change instanceof TableChange.ModifyColumnName) {
+          TableChange.ModifyColumnName rename = (TableChange.ModifyColumnName) change;
+          if (name.equals(rename.getOldColumnName())) {
+            name = rename.getNewColumnName();
+          }
+        } else if (change instanceof TableChange.DropColumn && name.equals(((TableChange.DropColumn) change).getColumnName())) {
+          name = null;
+          break;
+        }
+      }
+      changed |= !vector.getKey().equals(name);
+      if (name != null) {
+        updated.add(name + ":" + vector.getValue());
+      }
+    }
+    if (!changed) {
+      return table;
+    }
+    Map<String, String> options = new HashMap<>(table.getOptions());
+    if (updated.isEmpty()) {
+      options.remove(key);
+    } else {
+      options.put(key, String.join(",", updated));
+    }
+    return ((CatalogTable) table).copy(options);
   }
 
   protected static HoodieFlinkWriteClient<?> createWriteClient(
