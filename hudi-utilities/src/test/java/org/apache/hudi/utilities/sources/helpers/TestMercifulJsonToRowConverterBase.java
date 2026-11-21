@@ -48,7 +48,6 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -452,11 +451,19 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     if (isJava8ApiEnabled()) {
       rec = RowFactory.create(Instant.ofEpochMilli(milliSecOfDay), DateTimeUtils.microsToInstant(microSecOfDay));
     } else {
-      rec = RowFactory.create(Timestamp.from(Instant.ofEpochMilli(milliSecOfDay)), Timestamp.from(DateTimeUtils.microsToInstant(microSecOfDay)));
+      // Spark reads a java.sql.Timestamp in the hybrid Julian / Gregorian calendar, so the value is its own conversion
+      rec = RowFactory.create(org.apache.spark.sql.catalyst.util.DateTimeUtils.toJavaTimestamp(milliSecOfDay * 1000),
+          org.apache.spark.sql.catalyst.util.DateTimeUtils.toJavaTimestamp(microSecOfDay));
     }
 
     Row actualRow = getConverter().convertToRow(json, schema);
     validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
+    // The values reach Spark as the microseconds the JSON holds, also before 1582-10-15 (for ex, in year 0, where
+    // Timestamp.from would be 2 days off)
+    Row read = spark.createDataFrame(Collections.singletonList(actualRow), HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema))
+        .selectExpr("unix_micros(timestampMillisField)", "unix_micros(timestampMicrosField)").head();
+    assertEquals(milliSecOfDay * 1000, read.getLong(0));
+    assertEquals(microSecOfDay, read.getLong(1));
     assertEquals(rec, actualRow);
   }
 

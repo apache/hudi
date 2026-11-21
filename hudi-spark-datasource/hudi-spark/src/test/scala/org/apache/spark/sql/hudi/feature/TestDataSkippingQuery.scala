@@ -700,4 +700,62 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Data skipping keeps files whose timestamp stats are before the Gregorian calendar") {
+    Seq(false, true).foreach { partitionStats =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.metadata.index.partition.stats.enable" -> partitionStats.toString,
+          "hoodie.metadata.index.column.stats.column.list" -> "ts",
+          "hoodie.enable.data.skipping" -> "false",
+          "hoodie.fileIndex.dataSkippingFailureMode" -> "strict",
+          "spark.sql.session.timeZone" -> "UTC",
+          // Spark 3 refuses to write or read datetimes before 1582-10-15 unless told which calendar they are in;
+          // CORRECTED keeps them in the proleptic Gregorian calendar
+          "spark.sql.parquet.datetimeRebaseModeInWrite" -> "CORRECTED",
+          "spark.sql.parquet.datetimeRebaseModeInRead" -> "CORRECTED",
+          "spark.sql.avro.datetimeRebaseModeInWrite" -> "CORRECTED",
+          "spark.sql.avro.datetimeRebaseModeInRead" -> "CORRECTED"
+        ) {
+          spark.sql(
+            s"""
+               |create table $tableName (id int, ts timestamp, ord long, dt string) using hudi
+               | tblproperties (primaryKey = 'id', orderingFields = 'ord', type = 'cow')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}'
+               |""".stripMargin)
+          // One file per partition. Read as a java.sql.Timestamp, which is in the hybrid Julian / Gregorian
+          // calendar, 0001-01-01 00:00 UTC would be 2 days later and 1500-03-05 00:00 UTC 9 days earlier
+          spark.sql(s"insert into $tableName values (1, timestamp'0001-01-01 00:00:00', 1, 'par1'), " +
+            "(2, timestamp'0001-01-05 00:00:00', 1, 'par1')")
+          spark.sql(s"insert into $tableName values (3, timestamp'1500-03-01 00:00:00', 1, 'par2'), " +
+            "(4, timestamp'1500-03-05 00:00:00', 1, 'par2')")
+          spark.sql(s"insert into $tableName values (5, timestamp'2024-01-01 00:00:00', 1, 'par3'), " +
+            "(6, timestamp'2024-01-05 00:00:00', 1, 'par3')")
+          assert(spark.sql(s"select input_file_name() from $tableName").collect().map(_.getString(0)).toSet.size == 3)
+          val queries = Seq(
+            "ts = timestamp'0001-01-01 00:00:00'" -> Seq(1),
+            "ts <= timestamp'0001-01-02 00:00:00'" -> Seq(1),
+            "ts = timestamp'1500-03-05 00:00:00'" -> Seq(4),
+            "ts > timestamp'1500-03-02 00:00:00' and ts < timestamp'2000-01-01 00:00:00'" -> Seq(4),
+            "ts in (timestamp'0001-01-01 00:00:00', timestamp'2024-01-05 00:00:00')" -> Seq(1, 6),
+            "ts = timestamp'2024-01-05 00:00:00'" -> Seq(6))
+          def checkQueries(): Unit = queries.foreach { case (filter, ids) =>
+            withClue(s"$filter: ") {
+              checkAnswer(s"select id from $tableName where $filter")(ids.map(Seq(_)): _*)
+            }
+          }
+          checkQueries()
+          withSQLConf("hoodie.enable.data.skipping" -> "true") {
+            spark.sql(s"alter table $tableName set tblproperties ('hoodie.enable.data.skipping' = 'true')")
+            spark.catalog.refreshTable(tableName)
+            checkQueries()
+          }
+        }
+      }
+    }
+  }
 }
