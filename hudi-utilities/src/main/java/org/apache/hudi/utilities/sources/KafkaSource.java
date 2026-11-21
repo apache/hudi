@@ -52,6 +52,7 @@ import java.util.Map;
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
+import static org.apache.hudi.utilities.config.SensitiveConfigUtils.maskSensitiveValues;
 
 @Slf4j
 public abstract class KafkaSource<T> extends Source<T> {
@@ -159,7 +160,11 @@ public abstract class KafkaSource<T> extends Source<T> {
       OffsetRange[] offsetRanges) {
     Map<String, Object> kafkaParams =
         filterKafkaParameters(offsetGen.getKafkaParams(), ConfigUtils.getStringWithAltKeys(props, KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, true));
-    log.debug("Original kafka params {}\n After filtering kafka params {}", offsetGen.getKafkaParams(), kafkaParams);
+    if (log.isDebugEnabled()) {
+      // Kafka params carry credentials (sasl.jaas.config, basic.auth.user.info), so mask before logging.
+      log.debug("Original kafka params {}\n After filtering kafka params {}",
+          maskSensitiveValues(offsetGen.getKafkaParams(), props), maskSensitiveValues(kafkaParams, props));
+    }
     return KafkaUtils.createRDD(sparkContext, kafkaParams, offsetRanges, LocationStrategies.PreferConsistent());
   }
 
