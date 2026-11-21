@@ -67,6 +67,7 @@ import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIEL
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.utilities.config.SensitiveConfigUtils.maskSensitiveValues;
 
 /**
  * Performs bootstrap from a non-hudi source.
@@ -146,7 +147,7 @@ public class BootstrapExecutor implements Serializable {
       builder = builder.withSchema(schemaProvider.getTargetHoodieSchema().toString());
     }
     this.bootstrapConfig = builder.build();
-    log.info("Created bootstrap executor with configs: {}", bootstrapConfig.getProps());
+    log.info("Created bootstrap executor with configs: {}", maskSensitiveValues(bootstrapConfig.getProps(), props));
   }
 
   /**

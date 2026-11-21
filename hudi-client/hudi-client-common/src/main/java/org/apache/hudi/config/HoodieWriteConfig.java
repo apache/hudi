@@ -917,12 +917,13 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SENSITIVE_CONFIG_KEYS_FILTER = ConfigProperty
       .key("hoodie.sensitive.config.keys")
-      .defaultValue("ssl,tls,sasl,auth,credentials")
+      .defaultValue("ssl,tls,sasl,auth,credentials,password,secret,token")
       .markAdvanced()
       .sinceVersion("0.14.0")
-      .withDocumentation("Comma separated list of filters for sensitive config keys. Hudi Streamer "
-          + "will not print any configuration which contains the configured filter. For example with "
-          + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
+      .withDocumentation("Comma separated list of filters for sensitive config keys. Hudi Streamer, "
+          + "the bootstrap executor and the Kafka source mask the logged value of any configuration "
+          + "whose key contains a configured filter. For example with a configured filter `ssl`, "
+          + "value for config `ssl.trustore.location` would be masked.");
 
   public static final ConfigProperty<Boolean> ROLLBACK_INSTANT_BACKUP_ENABLED = ConfigProperty
       .key("hoodie.rollback.instant.backup.enabled")
