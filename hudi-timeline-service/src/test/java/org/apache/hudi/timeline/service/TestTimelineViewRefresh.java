@@ -103,6 +103,9 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     manager = mock(FileSystemViewManager.class);
     view = mock(SyncableFileSystemView.class);
     when(manager.getFileSystemView(basePath)).thenAnswer(invocation -> view);
+    FileSystemViewManager.ViewLease lease = mock(FileSystemViewManager.ViewLease.class);
+    when(lease.getView()).thenAnswer(invocation -> view);
+    when(manager.leaseFileSystemView(basePath)).thenReturn(lease);
     when(view.getLatestBaseFiles(anyString())).thenAnswer(invocation -> Stream.empty());
     server = new TimelineService(metaClient.getStorageConf(), TimelineService.Config.builder().serverPort(0).build(), manager);
     server.startService();
