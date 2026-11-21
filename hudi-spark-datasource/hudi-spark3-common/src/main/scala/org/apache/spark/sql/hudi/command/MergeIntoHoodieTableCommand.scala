@@ -54,7 +54,7 @@ import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignment
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
-import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
+import org.apache.spark.sql.types.{BooleanType, ByteType, IntegerType, ShortType, StructField, StructType}
 
 import java.util.Base64
 
@@ -799,7 +799,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       of its output attributes
     val joinedExpectedOutputAttributes = joinedExpectedOutput(props)
 
-    bindReference(expr, joinedExpectedOutputAttributes, allowFailures = false)
+    // NOTE: The rows these expressions are evaluated against are deserialized from Avro, where
+    //       tinyint and smallint columns are stored as int. Read such columns as int and cast
+    //       them back, otherwise the generated code calls getByte/getShort on an int slot.
+    bindReference(expr, joinedExpectedOutputAttributes, allowFailures = false).transform {
+      case ref: BoundReference if ref.dataType == ByteType || ref.dataType == ShortType =>
+        castIfNeeded(ref.copy(dataType = IntegerType), ref.dataType)
+    }
   }
 
   /**
