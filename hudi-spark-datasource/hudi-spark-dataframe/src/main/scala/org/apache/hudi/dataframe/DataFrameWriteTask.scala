@@ -75,6 +75,12 @@ case class AvroRecordSpec(sourceSchema: String,
  * the append handle on merge-on-read tables. Records are engine-native rows unless
  * {@code avroRecords} is set.
  *
+ * <p>A bucket in {@code paddingBudgets} is a small file group that takes inserts: its run holds
+ * the tagged updates of the file group first and untagged inserts after them, the merge takes
+ * the inserts up to the record budget, and the rest of the run opens new file groups. New file
+ * groups roll over every {@code recordsPerNewFile} records, besides the size-based rollover of
+ * the handles.
+ *
  * <p>With {@code combineRecords}, rows arrive sorted by record key within a bucket and the
  * records of a key are reduced to one with the table's record merger before they reach a handle,
  * which is how the write combines records whose merging a window over the ordering fields
@@ -90,7 +96,10 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          writerSchema: StructType,
                          bucketOrdinal: Int,
                          rowOpOrdinal: Int,
+                         taggedOrdinal: Int,
                          mergeOnRead: Boolean,
+                         paddingBudgets: Map[String, Long],
+                         recordsPerNewFile: Long,
                          pendingClusteringFileGroups: Set[HoodieFileGroupId],
                          avroRecords: Option[AvroRecordSpec],
                          combineRecords: Boolean) extends Serializable {
@@ -121,21 +130,37 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     val taskContextSupplier = table.getTaskContextSupplier
     val statuses = new ListBuffer[WriteStatus]()
     val buffered = iter.buffered
+    // Padding buckets whose merge ran: what is left of their run are inserts for new file groups.
+    val mergedPaddingBuckets = scala.collection.mutable.Set[String]()
     var insertHelper: BulkInsertDataInternalWriterHelper = null
+    var insertPartition: String = null
+    var insertedInFile = 0L
+
+    def closeInsertHelper(): Unit = {
+      if (insertHelper != null) {
+        statuses ++= insertHelper.getWriteStatuses.asScala
+        insertHelper = null
+      }
+    }
 
     while (buffered.hasNext) {
-      val bucket = buffered.head.getString(bucketOrdinal)
-      if (bucket.startsWith(HoodieDataFrameWriter.MERGE_BUCKET_PREFIX)) {
+      val head = buffered.head
+      val bucket = head.getString(bucketOrdinal)
+      val merges = !bucket.startsWith(HoodieDataFrameWriter.INSERT_BUCKET_PREFIX) && !mergedPaddingBuckets.contains(bucket)
+      if (merges && (bucket.startsWith(HoodieDataFrameWriter.MERGE_BUCKET_PREFIX) || !mergeOnRead)) {
         statuses ++= mergeBucket(buffered, bucket, recordFactory, taskContextSupplier)
-      } else if (bucket.startsWith(HoodieDataFrameWriter.UPDATE_BUCKET_PREFIX)) {
-        if (mergeOnRead) {
-          statuses ++= appendBucket(buffered, bucket, recordFactory, taskContextSupplier)
-        } else {
-          statuses ++= mergeBucket(buffered, bucket, recordFactory, taskContextSupplier)
+        if (paddingBudgets.contains(bucket)) {
+          mergedPaddingBuckets += bucket
         }
+      } else if (merges) {
+        statuses ++= appendBucket(buffered, bucket, recordFactory, taskContextSupplier)
       } else if (recordBasedInserts) {
         statuses ++= insertBucket(buffered, bucket, recordFactory, taskContextSupplier)
       } else {
+        val partitionPath = head.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
+        if (insertedInFile >= recordsPerNewFile || (insertHelper != null && partitionPath != insertPartition)) {
+          closeInsertHelper()
+        }
         if (insertHelper == null) {
           val partitionId = taskContextSupplier.getPartitionIdSupplier.get
           val taskId = taskContextSupplier.getStageIdSupplier.get.toLong
@@ -143,13 +168,14 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
           insertHelper = new BulkInsertDataInternalWriterHelper(
             table, writeConfig, instantTime, partitionId, taskId, taskEpochId, writeSchema,
             writeConfig.populateMetaFields(), true)
+          insertPartition = partitionPath
+          insertedInFile = 0L
         }
         insertHelper.write(writeProjection(buffered.next()))
+        insertedInFile += 1
       }
     }
-    if (insertHelper != null) {
-      statuses ++= insertHelper.getWriteStatuses.asScala
-    }
+    closeInsertHelper()
     statuses.iterator
   }
 
@@ -202,8 +228,9 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
   private def bucketRecordIterator(buffered: BufferedIterator[InternalRow],
                                    bucket: String,
                                    recordFactory: RecordFactory,
-                                   location: Option[HoodieRecordLocation]): java.util.Iterator[HoodieRecord[InternalRow]] = {
-    val records = bucketRowRecords(buffered, bucket, recordFactory)
+                                   location: Option[HoodieRecordLocation],
+                                   insertLimit: Long = Long.MaxValue): java.util.Iterator[HoodieRecord[InternalRow]] = {
+    val records = bucketRowRecords(buffered, bucket, recordFactory, insertLimit)
     val combined = recordReducer match {
       case None => records
       case Some(combine) =>
@@ -255,16 +282,26 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
       mergeProps, merger, orderingFieldNames, previous, next, schema, recordContext, deleteContext)
   }
 
-  /** The records of one contiguous bucket run, read off the shared row iterator. */
+  /**
+   * The records of one contiguous bucket run, read off the shared row iterator. The run ends
+   * early once it has yielded {@code insertLimit} untagged rows and the next row is untagged.
+   */
   private def bucketRowRecords(rows: BufferedIterator[InternalRow],
                                bucket: String,
-                               recordFactory: RecordFactory): Iterator[HoodieRecord[InternalRow]] = {
+                               recordFactory: RecordFactory,
+                               insertLimit: Long): Iterator[HoodieRecord[InternalRow]] = {
     new Iterator[HoodieRecord[InternalRow]] {
+      private var inserts = 0L
+
       override def hasNext: Boolean =
-        rows.hasNext && rows.head.getString(bucketOrdinal) == bucket
+        rows.hasNext && rows.head.getString(bucketOrdinal) == bucket &&
+          (inserts < insertLimit || !rows.head.isNullAt(taggedOrdinal))
 
       override def next(): HoodieRecord[InternalRow] = {
         val row = rows.next()
+        if (row.isNullAt(taggedOrdinal)) {
+          inserts += 1
+        }
         val key = new HoodieKey(
           row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
           row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD))
@@ -291,7 +328,8 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     val fileId = bucket.substring(2)
     val partitionPath = buffered.head.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
     rejectUpdateToPendingClustering(partitionPath, fileId)
-    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, None)
+    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, None,
+      paddingBudgets.getOrElse(bucket, Long.MaxValue))
 
     val mergeHandle = HoodieMergeHandleFactory.create(
       operation, writeConfig, instantTime,
@@ -325,17 +363,24 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     appendHandle.close().asScala.toSeq
   }
 
-  /** Insert run through the record-based create handle, which rolls files over on size. */
+  /**
+   * Insert run through the record-based create handle, one new file group per
+   * {@code recordsPerNewFile} records; the handle also rolls files over on size.
+   */
   private def insertBucket(buffered: BufferedIterator[InternalRow],
                            bucket: String,
                            recordFactory: RecordFactory,
                            taskContextSupplier: TaskContextSupplier): Seq[WriteStatus] = {
-    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, None)
-    val writeStatuses: java.util.Iterator[java.util.List[WriteStatus]] =
-      new SparkLazyInsertIterable[InternalRow](recordItr, true, writeConfig, instantTime, table,
-        FSUtils.createNewFileIdPfx(), taskContextSupplier,
-        new CreateHandleFactory[InternalRow, AnyRef, AnyRef, AnyRef]())
-    writeStatuses.asScala.flatMap(_.asScala).toList
+    val statuses = new ListBuffer[WriteStatus]()
+    while (buffered.hasNext && buffered.head.getString(bucketOrdinal) == bucket) {
+      val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, None, recordsPerNewFile)
+      val writeStatuses: java.util.Iterator[java.util.List[WriteStatus]] =
+        new SparkLazyInsertIterable[InternalRow](recordItr, true, writeConfig, instantTime, table,
+          FSUtils.createNewFileIdPfx(), taskContextSupplier,
+          new CreateHandleFactory[InternalRow, AnyRef, AnyRef, AnyRef]())
+      statuses ++= writeStatuses.asScala.flatMap(_.asScala)
+    }
+    statuses.toList
   }
 
   /** Updates to a file group that a pending clustering is rewriting are rejected. */

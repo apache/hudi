@@ -627,6 +627,31 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testInsertsAreSizedIntoFilesLikeTheLegacyPath(): Unit = {
+    // 100 KB files at the default 1 KB record size estimate: 100 records per new file.
+    val fileCounts = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_insert_sizing_$enabled").toString
+      val opts = Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        "hoodie.parquet.max.file.size" -> (100 * 1024).toString,
+        "hoodie.parquet.small.file.limit" -> (50 * 1024).toString)
+      def fileIds(): Set[String] = spark.read.format("hudi").load(path).select("_hoodie_file_name").distinct().collect()
+        .map(r => org.apache.hudi.common.fs.FSUtils.getFileId(r.getString(0))).toSet
+
+      writeHudi((1 to 1000).map(i => (s"z$i", "p1", 1L, s"v$i")), "insert", path, opts)
+      val afterFirst = fileIds()
+      writeHudi((1001 to 1010).map(i => (s"z$i", "p2", 1L, s"v$i")), "insert", path, opts)
+      val afterSecond = fileIds()
+      writeHudi((1011 to 1012).map(i => (s"z$i", "p2", 1L, s"v$i")), "insert", path, opts)
+      val afterThird = fileIds()
+      Assertions.assertEquals(1012L, spark.read.format("hudi").load(path).count())
+      Seq(afterFirst.size, afterSecond.size, afterThird.size)
+    }
+    Assertions.assertEquals(10, fileCounts.head.head)
+    Assertions.assertEquals(fileCounts(1), fileCounts.head)
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)

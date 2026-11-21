@@ -30,19 +30,26 @@ import org.apache.spark.internal.Logging
 import scala.collection.JavaConverters._
 
 /**
- * Routing plan for insert records: per partition path, the routing-bucket slots that pad
- * existing small file groups (update buckets targeting those file groups) followed by
- * new-file buckets. Insert rows hash across the slots of their partition.
+ * A small file group that takes inserts: the routing bucket of its merge and how many records it
+ * still has room for.
  */
-case class InsertRoutingPlan(smallFileSlotsByPartition: Map[String, Array[String]],
-                             newFileBuckets: Int) extends Serializable
+case class PaddingSlot(bucket: String, fileId: String, recordBudget: Long)
 
 /**
- * Plans insert routing from table metadata only, with no pass over the incoming data:
- * average record size comes from commit metadata (the same estimate the RDD-path
- * UpsertPartitioner uses) and small file groups come from the file-system view. Small
- * files with remaining capacity become padding slots so inserts fill them up through the
- * merge path instead of opening new file groups.
+ * Routing plan for insert records. A partition with a small file group sends its inserts to that
+ * file group's bucket, where the write task merges them in up to the record budget and opens new
+ * file groups for the rest; other partitions hash their inserts across new-file buckets. New
+ * file groups take {@code recordsPerNewFile} records each.
+ */
+case class InsertRoutingPlan(paddingByPartition: Map[String, PaddingSlot],
+                             newFileBuckets: Int,
+                             recordsPerNewFile: Long) extends Serializable
+
+/**
+ * Plans insert routing from table metadata only, with no pass over the incoming data: the
+ * average record size comes from commit metadata, small file groups come from the file-system
+ * view, and both feed the same arithmetic the RDD write path sizes inserts with. Counting the
+ * incoming records is left to the write task, which enforces the budgets as it consumes rows.
  */
 object MetadataSizingProfiler extends Logging {
 
@@ -50,51 +57,63 @@ object MetadataSizingProfiler extends Logging {
            writeConfig: HoodieWriteConfig,
            newFileBuckets: Int,
            mergeOnRead: Boolean,
-           paddingBucketPrefix: String): InsertRoutingPlan = {
+           paddingBucketPrefix: String,
+           padSmallFiles: Boolean): InsertRoutingPlan = {
     val smallFileLimit = writeConfig.getParquetSmallFileLimit
     val maxFileSize = writeConfig.getParquetMaxFileSize
+    val avgRecordSize = averageRecordSize(table, writeConfig)
+    val recordsPerNewFile: Long = if (writeConfig.shouldAutoTuneInsertSplits) {
+      math.ceil((1.0 * maxFileSize) / avgRecordSize).toLong
+    } else {
+      writeConfig.getCopyOnWriteInsertSplitSize.toLong
+    }
     val completedCommits = table.getMetaClient.getActiveTimeline
       .getCommitsTimeline.filterCompletedInstants()
-    if (smallFileLimit <= 0 || completedCommits.countInstants() == 0) {
-      InsertRoutingPlan(Map.empty, newFileBuckets)
+    if (!padSmallFiles || smallFileLimit <= 0 || completedCommits.countInstants() == 0) {
+      InsertRoutingPlan(Map.empty, newFileBuckets, recordsPerNewFile)
     } else {
-      val avgRecordSize = averageRecordSize(table, writeConfig)
       val fsView = table.getHoodieView
       fsView.loadAllPartitions()
-      val candidates: Iterator[(String, String)] = if (mergeOnRead) {
+      // (partition, file id, size) of the small file groups, in the order they are considered.
+      val candidates: Iterator[(String, String, Long)] = if (mergeOnRead) {
         // Slice-based sizing, and never pad a slice that has log files: the write-path merge
         // handle reads only the base file, so padding a logged slice would drop its log records.
-        // Pending-compaction slices are excluded so the rewrite cannot race the compactor.
+        // Pending-compaction slices are excluded so the rewrite cannot race the compactor. The
+        // smallest slices of a partition come first.
         val latestCompleted = completedCommits.lastInstant().get().requestedTime()
         table.getTableMetadata.getAllPartitionPaths.asScala.iterator.flatMap { partition =>
           fsView.getLatestFileSlicesBeforeOrOn(partition, latestCompleted, false).iterator().asScala
             .filter(slice => slice.getLogFiles.count() == 0
               && slice.getBaseFile.isPresent
               && slice.getBaseFile.get().getFileSize > 0
-              && slice.getTotalFileSizeAsParquetFormat(writeConfig) < smallFileLimit
-              && (maxFileSize - slice.getTotalFileSizeAsParquetFormat(writeConfig)) / avgRecordSize > 0)
-            .map(slice => (partition, paddingBucketPrefix + slice.getFileId))
+              && slice.getBaseFile.get().getFileSize < smallFileLimit)
+            .toSeq.sortBy(_.getBaseFile.get().getFileSize)
+            .map(slice => (partition, slice.getFileId, slice.getTotalFileSizeAsParquetFormat(writeConfig)))
         }
       } else {
         val basePath = new StoragePath(writeConfig.getBasePath)
         fsView.getLatestBaseFiles.iterator().asScala
-          .filter(baseFile => baseFile.getFileSize > 0
-            && baseFile.getFileSize < smallFileLimit
-            && (maxFileSize - baseFile.getFileSize) / avgRecordSize > 0)
+          .filter(baseFile => baseFile.getFileSize > 0 && baseFile.getFileSize < smallFileLimit)
           .map(baseFile => (
             FSUtils.getRelativePartitionPath(basePath, baseFile.getStoragePath.getParent),
-            paddingBucketPrefix + baseFile.getFileId))
+            baseFile.getFileId, baseFile.getFileSize))
       }
       // A file group that a pending clustering is rewriting takes no new records.
       val pendingClustering = fsView.getFileGroupsInPendingClustering.iterator().asScala
-        .map(_.getKey).map(fileGroup => (fileGroup.getPartitionPath, paddingBucketPrefix + fileGroup.getFileId)).toSet
-      val smallFileSlots = candidates.filterNot(pendingClustering.contains).toSeq
-        .groupBy(_._1)
-        .map { case (partition, slots) => (partition, slots.map(_._2).toArray) }
-      log.info(s"Insert routing plan: ${smallFileSlots.values.map(_.length).sum} small-file "
-        + s"padding slots across ${smallFileSlots.size} partitions, $newFileBuckets new-file "
-        + s"buckets per partition, avg record size $avgRecordSize")
-      InsertRoutingPlan(smallFileSlots, newFileBuckets)
+        .map(_.getKey).map(fileGroup => (fileGroup.getPartitionPath, fileGroup.getFileId)).toSet
+      val padding = candidates
+        .filterNot { case (partition, fileId, _) => pendingClustering.contains((partition, fileId)) }
+        .map { case (partition, fileId, size) =>
+          partition -> PaddingSlot(paddingBucketPrefix + fileId, fileId, (maxFileSize - size) / avgRecordSize)
+        }
+        .filter(_._2.recordBudget > 0)
+        .toSeq
+        // The first small file group of a partition with room takes the inserts.
+        .groupBy(_._1).map { case (partition, slots) => partition -> slots.head._2 }
+      log.info(s"Insert routing plan: ${padding.size} partitions pad a small file group, "
+        + s"$newFileBuckets new-file buckets per partition, $recordsPerNewFile records per new file, "
+        + s"avg record size $avgRecordSize")
+      InsertRoutingPlan(padding, newFileBuckets, recordsPerNewFile)
     }
   }
 

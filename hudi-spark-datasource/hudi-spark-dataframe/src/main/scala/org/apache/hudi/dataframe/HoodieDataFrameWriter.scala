@@ -49,7 +49,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Column, DataFrame, Dataset, HoodieInternalRowUtils, Row}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.expressions.Window
-import org.apache.spark.sql.functions.{coalesce, col, concat, hash, lit, monotonically_increasing_id, row_number, struct, udf, when}
+import org.apache.spark.sql.functions.{coalesce, col, hash, lit, monotonically_increasing_id, row_number, struct, udf, when}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
@@ -167,16 +167,12 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     // the rows already carry their file group.
     val tagged = tagRecords(spark, prepared.rows, spec, writeConfig, table)
 
-    // Stage 4: routing on a bucket column; updates pin to their file group, inserts hash
-    // across small-file padding slots and new-file buckets planned from table metadata. An
-    // overwrite replaces the file groups it would pad, so it only opens new ones.
+    // Stage 4: routing on a bucket column; updates pin to their file group, inserts go to the
+    // small file group their partition pads or hash across new-file buckets, as planned from
+    // table metadata. An overwrite replaces the file groups it would pad, so it only opens new ones.
     val newFileBuckets = params.get(INSERT_BUCKETS_PER_PARTITION).map(_.toInt).getOrElse(1)
-    val insertPlan = if (overwrite) {
-      InsertRoutingPlan(Map.empty, newFileBuckets)
-    } else {
-      MetadataSizingProfiler.plan(table, writeConfig, newFileBuckets, mergeOnRead,
-        if (mergeOnRead) MERGE_BUCKET_PREFIX else UPDATE_BUCKET_PREFIX)
-    }
+    val insertPlan = MetadataSizingProfiler.plan(table, writeConfig, newFileBuckets, mergeOnRead,
+      if (mergeOnRead) MERGE_BUCKET_PREFIX else UPDATE_BUCKET_PREFIX, padSmallFiles = !overwrite)
     val withBucket = withRoutingBucket(tagged, insertPlan)
     val bucketOrdinal = withBucket.schema.fieldIndex(ROUTING_BUCKET_COL)
 
@@ -188,6 +184,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     // Stage 5: per-bucket write tasks driving the write handles. The reader context factory is
     // created on the driver (the table's engine context is not usable on executors) and shipped
     // with the task.
+    val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
     val sparkTable = table.asInstanceOf[HoodieTable[InternalRow, _, _, _]]
     val readerContextFactory = sparkTable.getReaderContextFactoryForWrite
     val pendingClusteringFileGroups: Set[HoodieFileGroupId] =
@@ -195,11 +192,13 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     val task = new DataFrameWriteTask(
       writeConfig, sparkTable, readerContextFactory, instantTime, operation, withBucket.schema,
       prepared.dataSchema.length, HoodieInternalRowUtils.getCachedSchema(writerSchema), bucketOrdinal,
-      withBucket.schema.fieldIndex(ROW_OP_COL), mergeOnRead, pendingClusteringFileGroups,
+      withBucket.schema.fieldIndex(ROW_OP_COL), withBucket.schema.fieldIndex(TAGGED_FILE_ID_COL), mergeOnRead,
+      // The shuffle-stats profiler orders rows by bucket alone, so it pads without a budget.
+      if (profilerMode == PROFILER_SHUFFLE_STATS) Map.empty else insertPlan.paddingByPartition.values.map(slot => slot.bucket -> slot.recordBudget).toMap,
+      insertPlan.recordsPerNewFile, pendingClusteringFileGroups,
       avroRecordSpec(spec, prepared.dataSchema, writerSchema, writeConfig, tableConfig),
       combinesInTask(spec, writeConfig, tableConfig))
 
-    val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
     val (statusRdd, extraMetadata) = if (profilerMode == PROFILER_SHUFFLE_STATS) {
       // The routing shuffle doubles as the profiling pass and lives inside a physical-plan
       // node over the catalyst plan (the Delta optimized-writer shape): only its map stage
@@ -232,12 +231,11 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     } else {
       val numWriteTasks = params.get(WRITE_TASKS).map(_.toInt)
         .getOrElse(spark.sparkContext.defaultParallelism)
-      // Combining in the write task needs the records of a key next to each other.
-      val sortColumns = if (combinesInTask(spec, writeConfig, tableConfig)) {
-        Seq(col(ROUTING_BUCKET_COL), col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
-      } else {
-        Seq(col(ROUTING_BUCKET_COL))
-      }
+      // Within a bucket, tagged updates come before the inserts that pad the file group, so the
+      // write task can stop taking inserts once the file group is full. Combining in the write
+      // task also needs the records of a key next to each other.
+      val sortColumns = Seq(col(ROUTING_BUCKET_COL), col(TAGGED_FILE_ID_COL).isNull) ++
+        (if (combinesInTask(spec, writeConfig, tableConfig)) Seq(col(HoodieRecord.RECORD_KEY_METADATA_FIELD)) else Seq.empty)
       val routed = withBucket
         .repartition(numWriteTasks, col(ROUTING_BUCKET_COL))
         .sortWithinPartitions(sortColumns: _*)
@@ -654,35 +652,30 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
   }
 
   /**
-   * Adds the routing-bucket column. Tagged updates pin to their file group; inserts hash across
-   * their partition's slots, where the leading slots pad existing small file groups (routed as
-   * update buckets, so they merge) and the remaining slots open new file groups. The profiler
-   * mode decides how buckets then map to write tasks.
+   * Adds the routing-bucket column. Tagged updates pin to their file group. Inserts of a
+   * partition that pads a small file group go to that file group's bucket, which merges, and
+   * tagged updates of the same file group join them there; other inserts hash across the
+   * partition's new-file buckets. The profiler mode decides how buckets then map to write tasks.
    */
   private def withRoutingBucket(tagged: Dataset[Row],
                                 insertPlan: InsertRoutingPlan): Dataset[Row] = {
-    val smallFileSlots = insertPlan.smallFileSlotsByPartition
+    val padding = insertPlan.paddingByPartition
     val newFileBuckets = insertPlan.newFileBuckets
-    val insertBucket = udf { (partitionPath: String, keyHash: Int) =>
-      val padding = smallFileSlots.getOrElse(partitionPath, Array.empty[String])
-      // Padding-first: without a count pass there is no record budget per small file, so all of
-      // a partition's inserts fill its small file groups before any new one opens. A very large
-      // batch can overshoot the target file size; the measured-bytes budget of the shuffle-stats
-      // profiler is the eventual fix.
-      val totalSlots = if (padding.nonEmpty) padding.length else newFileBuckets
-      val slot = ((keyHash % totalSlots) + totalSlots) % totalSlots
-      if (padding.nonEmpty) {
-        padding(slot)
+    val routingBucket = udf { (partitionPath: String, taggedFileId: String, keyHash: Int) =>
+      val slot = padding.get(partitionPath)
+      if (taggedFileId != null) {
+        if (slot.exists(_.fileId == taggedFileId)) slot.get.bucket else UPDATE_BUCKET_PREFIX + taggedFileId
+      } else if (slot.isDefined) {
+        slot.get.bucket
       } else {
-        INSERT_BUCKET_PREFIX + partitionPath + ":" + "%010d".format(slot)
+        val newFileBucket = ((keyHash % newFileBuckets) + newFileBuckets) % newFileBuckets
+        INSERT_BUCKET_PREFIX + partitionPath + ":" + "%010d".format(newFileBucket)
       }
     }
-    val bucketCol = when(col(TAGGED_FILE_ID_COL).isNotNull,
-        concat(lit(UPDATE_BUCKET_PREFIX), col(TAGGED_FILE_ID_COL)))
-      .otherwise(insertBucket(
-        col(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
-        hash(col(HoodieRecord.RECORD_KEY_METADATA_FIELD))))
-    tagged.withColumn(ROUTING_BUCKET_COL, bucketCol)
+    tagged.withColumn(ROUTING_BUCKET_COL, routingBucket(
+      col(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+      col(TAGGED_FILE_ID_COL),
+      hash(col(HoodieRecord.RECORD_KEY_METADATA_FIELD))))
   }
 
   /**
