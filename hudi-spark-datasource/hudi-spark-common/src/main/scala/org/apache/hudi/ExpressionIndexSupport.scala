@@ -41,7 +41,7 @@ import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, InSet, Literal}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoExpressionIndexFilterExpr
@@ -383,13 +383,11 @@ class ExpressionIndexSupport(spark: SparkSession,
   /**
    * Each expression index some query conjunct reads, with those conjuncts. A conjunct reads an index when it compiles
    * to a filter on the index's stats, that is when its term is the index's `f(col)` ([[IndexedExpression.matches]]) or
-   * a rule derives a range from it. Any other conjunct cannot prune, and reading the index for it would return every
-   * file and end the lookup before the indexes after this one.
-   *
-   * Only `=` and `IN` conjuncts read an expression index for now, as before; ranges follow with #20537.
+   * a rule derives a range from it: comparisons, IN, AND / OR / NOT, as for column stats. Any other conjunct cannot
+   * prune, and reading the index for it would return every file and end the lookup before the indexes after this one.
    */
   private def findIndexUses(queryFilters: Seq[Expression]): Seq[IndexUse] = {
-    val conjuncts = queryFilters.flatMap(SparkBaseIndexSupport.splitConjuncts).filter(isEqualityOrIn)
+    val conjuncts = queryFilters.flatMap(SparkBaseIndexSupport.splitConjuncts).filterNot(hasInSet)
     metaClient.getIndexMetadata.get().getIndexDefinitions.values().asScala.toSeq
       .filter(definition => MetadataPartitionType.fromPartitionPath(definition.getIndexName).equals(MetadataPartitionType.EXPRESSION_INDEX))
       .flatMap { definition =>
@@ -400,20 +398,24 @@ class ExpressionIndexSupport(spark: SparkSession,
       }
   }
 
-  // NOTE: Not `InSet`: its values are internal ones, for ex a DATE is an INT, which do not compare with the stats
-  private def isEqualityOrIn(conjunct: Expression): Boolean = Leaf.parse(conjunct).exists(_.op match {
+  // NOTE: Not `InSet`, wherever it sits in the conjunct: its values are internal ones, for ex a DATE is an INT, which
+  //       do not compare with the stats (#20568)
+  private def hasInSet(conjunct: Expression): Boolean = conjunct.find(_.isInstanceOf[InSet]).isDefined
+
+  /** A bloom filter answers only membership: `=` and `IN`. */
+  private def isEqualityOrIn(op: Op): Boolean = op match {
     case Op.Eq | Op.In => true
     case _ => false
-  })
+  }
 
   /**
    * Bloom filter keys: the values of `f(col) = v` and `f(col) IN (...)`, as strings like the writer added them. A file
-   * passes if it may hold any key, which is conservative across conjuncts. A conjunct with a value that is not a
-   * non-null literal gives no keys, and is skipped. So does a term whose values the writer and the literal print
-   * differently, for ex a DATE is `2023-01-02` to the writer and `19359` here (#20567).
+   * passes if it may hold any key, which is conservative across conjuncts. Any other conjunct, such as a range, or
+   * one with a value that is not a non-null literal, gives no keys and is skipped. So does a term whose values the
+   * writer and the literal print differently, for ex a DATE is `2023-01-02` to the writer and `19359` here (#20567).
    */
   private def bloomFilterKeys(use: IndexUse): List[String] =
-    use.conjuncts.flatMap(Leaf.parse).filter(leaf => use.indexed.matches(leaf.term) && hasWriterKeys(leaf.term.dataType)).flatMap { leaf =>
+    use.conjuncts.flatMap(Leaf.parse).filter(leaf => isEqualityOrIn(leaf.op) && use.indexed.matches(leaf.term) && hasWriterKeys(leaf.term.dataType)).flatMap { leaf =>
       val values: Seq[Any] = leaf.values.map {
         case Literal(value, _) => value
         case _ => null
