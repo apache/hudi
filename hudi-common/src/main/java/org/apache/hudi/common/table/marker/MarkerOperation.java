@@ -30,6 +30,8 @@ public class MarkerOperation implements Serializable {
   public static final String MARKER_DIR_PATH_PARAM = "markerdirpath";
   public static final String MARKER_NAME_PARAM = "markername";
   public static final String MARKER_BASEPATH_PARAM = "basepath";
+  // ID of a marker creation request, kept the same when the client retries the request
+  public static final String MARKER_REQUEST_ID_PARAM = "requestid";
 
   // GET requests
   public static final String ALL_MARKERS_URL = String.format("%s/%s", BASE_URL, "all");

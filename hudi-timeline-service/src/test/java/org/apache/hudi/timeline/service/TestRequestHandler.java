@@ -45,11 +45,13 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.HOODIE_STORAGE_C
 import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_MARKER_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_REQUEST_ID_PARAM;
 import static org.apache.hudi.common.table.timeline.TimelineServiceClientBase.RequestMethod.POST;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.BASEPATH_PARAM;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LAST_INSTANT_TS;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.REFRESH_TABLE_URL;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.TIMELINE_HASH;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestRequestHandler extends HoodieCommonTestHarness {
@@ -137,6 +139,32 @@ class TestRequestHandler extends HoodieCommonTestHarness {
         .getDecodedContent(new TypeReference<Boolean>() {});
 
     assertTrue(content);
+  }
+
+  @Test
+  void testCreateMarkerAPIRetryWithSameRequestId() throws IOException {
+    String markerDir = metaClient.getMarkerFolderPath("102");
+    assertTrue(createMarker(markerDir, "marker-file-1", "request-1"));
+    // A retry of a request that created the marker succeeds
+    assertTrue(createMarker(markerDir, "marker-file-1", "request-1"));
+    // Any other request for the marker fails as before
+    assertFalse(createMarker(markerDir, "marker-file-1", "request-2"));
+    assertFalse(createMarker(markerDir, "marker-file-1", null));
+  }
+
+  private boolean createMarker(String markerDir, String markerName, String requestId) throws IOException {
+    Map<String, String> queryParameters = new HashMap<>();
+    queryParameters.put(BASEPATH_PARAM, basePath);
+    queryParameters.put(MARKER_DIR_PATH_PARAM, markerDir);
+    queryParameters.put(MARKER_NAME_PARAM, markerName);
+    if (requestId != null) {
+      queryParameters.put(MARKER_REQUEST_ID_PARAM, requestId);
+    }
+    return timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL)
+                .addQueryParams(queryParameters)
+                .build())
+        .getDecodedContent(new TypeReference<Boolean>() {});
   }
 
   private String getPathWithReplacedSchema(String path, String schemaToUse) {
