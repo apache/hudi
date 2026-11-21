@@ -35,10 +35,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, HoodieDataUtils, Option => HOption, StringUtils}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.exception.HoodieClusteringUpdateException
+import org.apache.hudi.exception.{HoodieClusteringUpdateException, HoodieDuplicateKeyException}
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
-import org.apache.hudi.keygen.{KeyGenUtils, SparkKeyGeneratorInterface}
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.metadata.{HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.HoodieWriteMetadata
@@ -76,11 +75,6 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     def enabled(key: String): Boolean = params.getOrElse(key, "false").toBoolean
     val checks: Seq[(() => Boolean, String)] = Seq(
       (() => !SUPPORTED_OPERATIONS.contains(spec.operation), s"operation ${spec.operation.value}"),
-      (() => enabled(DataSourceWriteOptions.INSERT_DROP_DUPS.key)
-        || params.getOrElse(DataSourceWriteOptions.INSERT_DUP_POLICY.key, DataSourceWriteOptions.NONE_INSERT_DUP_POLICY)
-        != DataSourceWriteOptions.NONE_INSERT_DUP_POLICY, "insert duplicate policies"),
-      (() => !HoodieSparkKeyGeneratorFactory.createKeyGenerator(keyGeneratorProps(writeConfig, spec.metaClient))
-        .isInstanceOf[SparkKeyGeneratorInterface], "key generators without row support"),
       (() => StringUtils.nonEmpty(writeConfig.getIndexClass), "custom index classes"),
       (() => !SUPPORTED_INDEX_TYPES.contains(writeConfig.getIndexType), s"index type ${writeConfig.getIndexType}"),
       (() => tableConfig.getMetaFieldsMode != MetaFieldsMode.ALL || writeConfig.getMetaFieldsMode != MetaFieldsMode.ALL,
@@ -327,6 +321,17 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     }
   }
 
+  /** What an insert does with keys the table already has: nothing, drop them, or fail. */
+  private def insertDuplicatePolicy(spec: DataFrameWriteSpec): String = {
+    val params = spec.parameters
+    if (params.getOrElse(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false").toBoolean) {
+      DataSourceWriteOptions.DROP_INSERT_DUP_POLICY
+    } else {
+      params.getOrElse(DataSourceWriteOptions.INSERT_DUP_POLICY.key, DataSourceWriteOptions.NONE_INSERT_DUP_POLICY)
+        .toLowerCase(java.util.Locale.ROOT)
+    }
+  }
+
   private def isCustomMerge(writeConfig: HoodieWriteConfig, tableConfig: HoodieTableConfig): Boolean =
     writeConfig.getRecordMergeMode == RecordMergeMode.CUSTOM || tableConfig.getRecordMergeMode == RecordMergeMode.CUSTOM
 
@@ -447,22 +452,42 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       lit(false)
     }
 
+    def located: Dataset[Row] = if (recordIndexReady) {
+      log.info("Tagging incoming records via the record-level index")
+      tagViaRecordIndex(spark, prepared, table)
+    } else {
+      // A configured-but-uninitialized record index keeps global semantics through the
+      // base-file join, mirroring the legacy fallback to the global simple index.
+      tagViaSimpleJoin(spark, prepared, table, globalIndex)
+    }
+    val duplicatePolicy = insertDuplicatePolicy(spec)
+
     if (spec.locationFromMetaColumns) {
       resolveTagged(prepared, globalIndex = false, updatePartitionPath = false, deleteMarker)
+    } else if (operation == WriteOperationType.INSERT && duplicatePolicy != DataSourceWriteOptions.NONE_INSERT_DUP_POLICY) {
+      // Keys the table already has are dropped from the insert, or fail it.
+      val isNew: Column = if (duplicatePolicy == DataSourceWriteOptions.FAIL_INSERT_DUP_POLICY) {
+        val failOnDuplicate = udf((recordKey: String) => {
+          if (recordKey != null) {
+            throw new HoodieDuplicateKeyException(recordKey)
+          }
+          true
+        })
+        failOnDuplicate(when(col(TAGGED_FILE_ID_COL).isNotNull, col(HoodieRecord.RECORD_KEY_METADATA_FIELD)))
+      } else {
+        col(TAGGED_FILE_ID_COL).isNull
+      }
+      val kept = located.filter(!deleteMarker).filter(isNew)
+      (if (globalIndex) kept.drop(LOCATED_PARTITION_COL) else kept)
+        .withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))
+        .withColumn(ROW_OP_COL, lit(ROW_OP_UPSERT))
     } else if (operation != WriteOperationType.UPSERT && operation != WriteOperationType.DELETE) {
       // Inserts never tag, and a delete-marker row has nothing to delete.
       prepared.filter(!deleteMarker)
         .withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))
         .withColumn(ROW_OP_COL, lit(ROW_OP_UPSERT))
     } else {
-      val joined = if (recordIndexReady) {
-        log.info("Tagging incoming records via the record-level index")
-        tagViaRecordIndex(spark, prepared, table)
-      } else {
-        // A configured-but-uninitialized record index keeps global semantics through the
-        // base-file join, mirroring the legacy fallback to the global simple index.
-        tagViaSimpleJoin(spark, prepared, table, globalIndex)
-      }
+      val joined = located
       // A delete goes to wherever the key is; only an upsert can move a key to a new partition.
       val updatePartitionPath = globalIndex && operation == WriteOperationType.UPSERT && (if (recordIndexConfigured) {
         writeConfig.getRecordIndexUpdatePartitionPath

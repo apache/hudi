@@ -17,7 +17,7 @@
 
 package org.apache.hudi.dataframe
 
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.{AvroConversionUtils, HoodieSchemaConversionUtils, SparkAdapterSupport}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.keygen.{KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -27,6 +27,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow, Nondeterministic}
 import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
 import org.apache.spark.sql.types.{DataType, StringType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 
 /**
  * Evaluates the table's key generator on the input row and yields
@@ -48,7 +49,7 @@ case class HoodieKeyGeneratorExpression(children: Seq[Expression],
                                         autoGenerateRecordKeys: Boolean)
   extends Expression with Nondeterministic with CodegenFallback {
 
-  @transient private var keyGenerator: SparkKeyGeneratorInterface = _
+  @transient private var generateKeys: InternalRow => InternalRow = _
 
   override def nullable: Boolean = false
 
@@ -60,7 +61,21 @@ case class HoodieKeyGeneratorExpression(children: Seq[Expression],
       props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(partitionIndex))
       props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
     }
-    keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props).asInstanceOf[SparkKeyGeneratorInterface]
+    generateKeys = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props) match {
+      case rowKeyGenerator: SparkKeyGeneratorInterface =>
+        row => InternalRow(
+          rowKeyGenerator.getRecordKey(row, inputSchema),
+          rowKeyGenerator.getPartitionPath(row, inputSchema))
+      case avroKeyGenerator =>
+        // A key generator that only reads Avro records gets the row converted for it.
+        val avroSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+          inputSchema, HoodieKeyGeneratorExpression.AVRO_RECORD_NAME, HoodieKeyGeneratorExpression.AVRO_RECORD_NAMESPACE)
+        val toAvro = AvroConversionUtils.createInternalRowToAvroConverter(inputSchema, avroSchema, nullable = false)
+        row => {
+          val key = avroKeyGenerator.getKey(toAvro(row))
+          InternalRow(UTF8String.fromString(key.getRecordKey), UTF8String.fromString(key.getPartitionPath))
+        }
+    }
   }
 
   override protected def evalInternal(input: InternalRow): Any = {
@@ -70,11 +85,7 @@ case class HoodieKeyGeneratorExpression(children: Seq[Expression],
       values(i) = children(i).eval(input)
       i += 1
     }
-    val row = new GenericInternalRow(values)
-    // The key generator reuses its buffers across calls, so each value is copied out.
-    InternalRow(
-      keyGenerator.getRecordKey(row, inputSchema).clone(),
-      keyGenerator.getPartitionPath(row, inputSchema).clone())
+    generateKeys(new GenericInternalRow(values))
   }
 
   override protected def withNewChildrenInternal(newChildren: IndexedSeq[Expression]): Expression =
@@ -82,6 +93,9 @@ case class HoodieKeyGeneratorExpression(children: Seq[Expression],
 }
 
 object HoodieKeyGeneratorExpression extends SparkAdapterSupport {
+
+  private val AVRO_RECORD_NAME = "hoodie_source"
+  private val AVRO_RECORD_NAMESPACE = "hoodie.source"
 
   val RECORD_KEY_FIELD = "record_key"
   val PARTITION_PATH_FIELD = "partition_path"

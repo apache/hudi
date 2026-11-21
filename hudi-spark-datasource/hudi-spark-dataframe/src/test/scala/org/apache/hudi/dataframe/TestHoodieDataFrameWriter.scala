@@ -567,6 +567,36 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testInsertDropsKeysTheTableAlreadyHas(): Unit = {
+    val rows = writeOnBothPaths("test_table_insert_drop_dups",
+      Map(DataSourceWriteOptions.INSERT_DUP_POLICY.key -> DataSourceWriteOptions.DROP_INSERT_DUP_POLICY),
+      Seq(
+        "insert" -> Seq(("n1", "p1", 1L, "a1"), ("n2", "p1", 1L, "a2")),
+        "insert" -> Seq(("n1", "p1", 2L, "dropped"), ("n3", "p1", 2L, "b3"))))
+    Assertions.assertEquals(Seq(("n1", "p1", 1L, "a1"), ("n2", "p1", 1L, "a2"), ("n3", "p1", 2L, "b3")), rows)
+  }
+
+  @Test
+  def testInsertFailsOnKeysTheTableAlreadyHas(): Unit = {
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_insert_fail_dups_$enabled").toString
+      val opts = Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        DataSourceWriteOptions.INSERT_DUP_POLICY.key -> DataSourceWriteOptions.FAIL_INSERT_DUP_POLICY)
+      writeHudi(Seq(("f1", "p1", 1L, "a1")), "insert", path, opts)
+      val failure = Assertions.assertThrows(classOf[Exception], () =>
+        makeDf(Seq(("f1", "p1", 2L, "dup"), ("f2", "p1", 2L, "b2"))).write.format("hudi")
+          .options(writeOptions("insert", opts)).mode(SaveMode.Append).save(path))
+      var cause: Throwable = failure
+      while (cause != null && !cause.isInstanceOf[org.apache.hudi.exception.HoodieDuplicateKeyException]) {
+        cause = cause.getCause
+      }
+      Assertions.assertNotNull(cause, s"expected a duplicate key failure, got $failure")
+      Assertions.assertEquals(1L, spark.read.format("hudi").load(path).count())
+    }
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)
