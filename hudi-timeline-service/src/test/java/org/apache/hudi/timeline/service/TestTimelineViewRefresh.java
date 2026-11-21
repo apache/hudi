@@ -36,6 +36,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -74,6 +75,7 @@ import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LATEST_PARTITION_DATA_FILES_URL;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.PARTITION_PARAM;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.TIMELINE_HASH;
+import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.TIMELINE_HASH_NUM_INSTANTS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -429,11 +431,91 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     verify(view).sync();
   }
 
+  @Test
+  void testArchivedInstantsOutsideHashedInstantsDoNotSync() throws IOException {
+    HoodieInstant archived = instant(COMPLETED, COMMIT_ACTION, "001");
+    HoodieInstant second = instant(COMPLETED, COMMIT_ACTION, "002");
+    HoodieInstant boundary = instant(COMPLETED, COMMIT_ACTION, "003");
+    HoodieTimeline clientTimeline = timeline(archived, second, boundary);
+    // archival removed the client's oldest instant
+    when(view.getTimeline()).thenReturn(timeline(second, boundary));
+    request(clientTimeline, "003", "partition", 2);
+    // archival removed the client's oldest instant and a clean completed
+    when(view.getTimeline()).thenReturn(timeline(second, boundary, instant(COMPLETED, CLEAN_ACTION, "004")));
+    request(clientTimeline, "003", "partition", 2);
+    verify(view, never()).sync();
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, 3})
+  void testArchivedInstantsWithinHashedInstantsSyncOnEveryRequest(int hashNumInstants) {
+    HoodieInstant second = instant(COMPLETED, COMMIT_ACTION, "002");
+    HoodieInstant boundary = instant(COMPLETED, COMMIT_ACTION, "003");
+    HoodieTimeline clientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"), second, boundary);
+    // a sync reads the same archived timeline again, so the server never matches the client
+    when(view.getTimeline()).thenReturn(timeline(second, boundary, instant(COMPLETED, CLEAN_ACTION, "004")));
+    for (int i = 0; i < 3; i++) {
+      assertThrows(IOException.class, () -> request(clientTimeline, "003", "partition", hashNumInstants));
+    }
+    verify(view, times(3)).sync();
+  }
+
+  @Test
+  void testNewerInstantsWithinHashedInstantsStillSync() {
+    HoodieInstant second = instant(COMPLETED, COMMIT_ACTION, "002");
+    HoodieInstant boundary = instant(COMPLETED, COMMIT_ACTION, "003");
+    HoodieTimeline clientTimeline = timeline(instant(COMPLETED, COMMIT_ACTION, "001"), second, boundary);
+    when(view.getTimeline()).thenReturn(timeline(second, boundary, instant(COMPLETED, COMMIT_ACTION, "004")));
+    assertThrows(IOException.class, () -> request(clientTimeline, "003", "partition", 2));
+    verify(view).sync();
+  }
+
+  @Test
+  void testInstantsBeforeHashedInstantsAreNotCompared() throws IOException {
+    HoodieInstant second = instant(COMPLETED, COMMIT_ACTION, "002");
+    HoodieInstant boundary = instant(COMPLETED, COMMIT_ACTION, "003");
+    HoodieTimeline clientTimeline = timeline(second, boundary);
+    // An older instant that completed after the client loaded its timeline is outside the hashed instants.
+    when(view.getTimeline()).thenReturn(timeline(instant(COMPLETED, REPLACE_COMMIT_ACTION, "001"), second, boundary));
+    request(clientTimeline, "003", "partition", 2);
+    verify(view, never()).sync();
+    assertThrows(IOException.class, () -> request(clientTimeline, "003", "partition"));
+    verify(view).sync();
+  }
+
+  @Test
+  void testRemoteViewHashesConfiguredNumberOfLatestInstants() throws Exception {
+    FileCreateUtils.createCommit(metaClient, "001");
+    FileCreateUtils.createCommit(metaClient, "002");
+    FileCreateUtils.createCommit(metaClient, "003");
+    metaClient.reloadActiveTimeline();
+    FileSystemViewStorageConfig.Builder viewConfig = FileSystemViewStorageConfig.newBuilder()
+        .withRemoteServerHost("localhost").withRemoteServerPort(server.getServerPort());
+    // archival removed the client's oldest instant and a clean completed
+    when(view.getTimeline()).thenReturn(timeline(instant(COMPLETED, COMMIT_ACTION, "002"),
+        instant(COMPLETED, COMMIT_ACTION, "003"), instant(COMPLETED, CLEAN_ACTION, "004")));
+
+    RemoteHoodieTableFileSystemView remoteView = new RemoteHoodieTableFileSystemView(metaClient, viewConfig.withRemoteTimelineHashNumInstants(2).build());
+    assertEquals(0, remoteView.getLatestBaseFiles("partition").count());
+    verify(view, never()).sync();
+
+    RemoteHoodieTableFileSystemView allInstantsView = new RemoteHoodieTableFileSystemView(metaClient, viewConfig.withRemoteTimelineHashNumInstants(0).build());
+    assertThrows(HoodieRemoteException.class, () -> allInstantsView.getLatestBaseFiles("partition"));
+    verify(view).sync();
+  }
+
   private List<String> request(HoodieTimeline timeline, String boundary, String partition) throws IOException {
+    return request(timeline, boundary, partition, 0);
+  }
+
+  private List<String> request(HoodieTimeline timeline, String boundary, String partition, int hashNumInstants) throws IOException {
     Map<String, String> params = new HashMap<>();
     params.put(BASEPATH_PARAM, basePath);
     params.put(PARTITION_PARAM, partition);
-    params.put(TIMELINE_HASH, timeline.getTimelineHash());
+    params.put(TIMELINE_HASH, timeline.getTimelineHash(hashNumInstants));
+    if (hashNumInstants > 0) {
+      params.put(TIMELINE_HASH_NUM_INSTANTS, String.valueOf(hashNumInstants));
+    }
     if (boundary != null) {
       params.put(LAST_INSTANT_TS, boundary);
     }

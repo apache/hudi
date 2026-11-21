@@ -176,6 +176,19 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
           + "Set to 'UTF-8' if partition paths or file paths contain non-ASCII characters (e.g. Unicode). "
           + "Default is ISO-8859-1 for backwards compatibility.");
 
+  public static final ConfigProperty<Integer> REMOTE_TIMELINE_HASH_NUM_INSTANTS = ConfigProperty
+      .key("hoodie.filesystem.view.remote.timeline.hash.num.instants")
+      .defaultValue(0)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Number of latest instants the remote file system view hashes to check that it sees the same "
+          + "timeline as the timeline server. 0 hashes all instants. Archival removes the oldest instants, so with 0 a client "
+          + "that loaded the timeline before an archival never matches a timeline server that loaded it after, and the "
+          + "server refreshes its view on every request. Setting a positive value keeps archived instants out of the "
+          + "comparison. It must not exceed the number of instants archival retains (hoodie.keep.min.commits), and "
+          + "an instant requested before the hashed instants that completes after the client loaded its timeline "
+          + "is not detected.");
+
   public static final ConfigProperty<String> REMOTE_BACKUP_VIEW_ENABLE = ConfigProperty
       .key("hoodie.filesystem.remote.backup.view.enable")
       .defaultValue("true") // Need to be disabled only for tests.
@@ -279,6 +292,10 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public String getRemoteResponseCharset() {
     return getStringOrDefault(REMOTE_RESPONSE_CHARSET);
+  }
+
+  public int getRemoteTimelineHashNumInstants() {
+    return getIntOrDefault(REMOTE_TIMELINE_HASH_NUM_INSTANTS);
   }
 
   public boolean shouldEnableBackupForRemoteFileSystemView() {
@@ -390,6 +407,11 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
     public Builder withRemoteResponseCharset(String charset) {
       fileSystemViewStorageConfig.setValue(REMOTE_RESPONSE_CHARSET, charset);
+      return this;
+    }
+
+    public Builder withRemoteTimelineHashNumInstants(int numInstants) {
+      fileSystemViewStorageConfig.setValue(REMOTE_TIMELINE_HASH_NUM_INSTANTS, String.valueOf(numInstants));
       return this;
     }
 

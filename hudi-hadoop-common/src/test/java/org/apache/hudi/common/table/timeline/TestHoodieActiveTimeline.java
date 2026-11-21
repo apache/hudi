@@ -43,6 +43,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
@@ -67,6 +68,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -472,6 +474,28 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertTrue(timeline.containsOrBeforeTimelineStarts("0"));
     assertFalse(timeline.containsOrBeforeTimelineStarts(String.valueOf(System.currentTimeMillis() + 1000)));
     assertFalse(timeline.getTimelineHash().isEmpty());
+  }
+
+  @Test
+  public void testTimelineHashOfLatestInstants() {
+    HoodieInstant first = INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant second = INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "2");
+    HoodieInstant third = INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "3");
+    timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient, true);
+    timeline.setInstants(Arrays.asList(first, second, third));
+    HoodieActiveTimeline withoutFirst = TIMELINE_FACTORY.createActiveTimeline(metaClient, true);
+    withoutFirst.setInstants(Arrays.asList(second, third));
+
+    // the latest instants hash the same whether or not older instants are still on the timeline
+    assertEquals(withoutFirst.getTimelineHash(), timeline.getTimelineHash(2));
+    assertEquals(withoutFirst.getTimelineHash(2), timeline.getTimelineHash(2));
+    assertNotEquals(timeline.getTimelineHash(), timeline.getTimelineHash(2));
+    assertNotEquals(timeline.getTimelineHash(1), timeline.getTimelineHash(2));
+    // all instants are hashed when the count is not positive or covers the timeline
+    assertEquals(timeline.getTimelineHash(), timeline.getTimelineHash(0));
+    assertEquals(timeline.getTimelineHash(), timeline.getTimelineHash(-1));
+    assertEquals(timeline.getTimelineHash(), timeline.getTimelineHash(3));
+    assertEquals(timeline.getTimelineHash(), timeline.getTimelineHash(4));
   }
 
   @Test

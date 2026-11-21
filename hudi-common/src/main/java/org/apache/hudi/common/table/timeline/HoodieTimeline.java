@@ -579,6 +579,15 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   String getTimelineHash();
 
   /**
+   * Get hash of the latest instants of the timeline.
+   *
+   * @param numLatestInstants number of latest instants to hash. A value that is not positive,
+   *                          or not less than the number of instants, hashes all instants.
+   * @return {@link String} hash of the latest instants.
+   */
+  String getTimelineHash(int numLatestInstants);
+
+  /**
    * @return nth completed instant going back from the last completed instant
    */
   Option<HoodieInstant> nthFromLastInstant(int n);
