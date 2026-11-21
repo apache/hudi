@@ -17,10 +17,12 @@
 
 package org.apache.hudi.dataframe
 
-import org.apache.hudi.{DataFrameWriteResult, DataFrameWriteSpec, DataSourceUtils, DataSourceWriteOptions, HoodieDataFrameWritePath, HoodieSchemaConversionUtils, HoodieSparkUtils}
+import org.apache.hudi.{DataFrameWriteResult, DataFrameWriteSpec, DataSourceUtils, DataSourceWriteOptions, HoodieDataFrameWritePath, HoodieSchemaConversionUtils, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient, WriteStatus}
 import org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieReaderConfig, RecordMergeMode, TypedProperties}
+import org.apache.hudi.client.utils.SparkValidatorUtils
+import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
+import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.fs.FSUtils
@@ -39,6 +41,7 @@ import org.apache.hudi.keygen.{KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.metadata.{HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.table.HoodieTable
+import org.apache.hudi.table.action.HoodieWriteMetadata
 import org.apache.hudi.util.CommonClientUtils
 
 import org.apache.spark.Partitioner
@@ -62,7 +65,7 @@ import scala.collection.JavaConverters._
  * write as per-bucket tasks driving the row-based write handles. Table setup, the commit and
  * everything after it stay with the caller.
  */
-class HoodieDataFrameWriter extends HoodieDataFrameWritePath with Logging {
+class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSupport with Logging {
 
   import HoodieDataFrameWriter._
 
@@ -73,7 +76,6 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with Logging {
     def enabled(key: String): Boolean = params.getOrElse(key, "false").toBoolean
     val checks: Seq[(() => Boolean, String)] = Seq(
       (() => !SUPPORTED_OPERATIONS.contains(spec.operation), s"operation ${spec.operation.value}"),
-      (() => spec.streaming, "streaming writes"),
       (() => enabled(DataSourceWriteOptions.INSERT_DROP_DUPS.key)
         || params.getOrElse(DataSourceWriteOptions.INSERT_DUP_POLICY.key, DataSourceWriteOptions.NONE_INSERT_DUP_POLICY)
         != DataSourceWriteOptions.NONE_INSERT_DUP_POLICY, "insert duplicate policies"),
@@ -94,10 +96,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with Logging {
         "custom merge modes and payloads that combine records before the write"),
       (() => isCustomMerge(writeConfig, tableConfig) && SparkHoodieIndexFactory.isGlobalIndex(writeConfig),
         "custom merge modes and payloads with a global index"),
-      (() => enabled(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key)
-        || enabled(DataSourceWriteOptions.RECONCILE_SCHEMA.key), "schema evolution and reconciliation"),
       (() => writeConfig.allowOperationMetadataField, "the operation meta field"),
-      (() => StringUtils.nonEmpty(writeConfig.getPreCommitValidators), "pre-commit validators"),
       (() => writeConfig.isRollbackPendingClustering
         || writeConfig.getClusteringUpdatesStrategyClass != classOf[SparkRejectUpdateStrategy[_]].getName,
         "clustering update strategies other than rejecting the update"),
@@ -158,8 +157,16 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with Logging {
     val writerSchema = org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(
       spec.writerSchema.getOrElse(HoodieSchema.parse(writeConfig.getSchema)))
 
+    // A micro-batch of the streaming sink only allows its physical plan to be executed, so the
+    // plan below is built over its rows.
+    val input = if (df.isStreaming) {
+      sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, df.queryExecution.toRdd, df.schema)
+    } else {
+      df
+    }
+
     // Stage 1 + 2: key generation, meta columns, and upfront precombine as pure projections.
-    val prepared = prepareInput(df, spec, writeConfig, table.getMetaClient, instantTime)
+    val prepared = prepareInput(input, spec, writeConfig, table.getMetaClient, instantTime)
 
     // Stage 3: index tagging (record-level-index point lookup or simple-index join), unless
     // the rows already carry their file group.
@@ -242,6 +249,12 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with Logging {
       writeConfig.getString(HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE),
       engineContext, HoodieDataCacheKey.of(writeConfig.getBasePath, instantTime))
     val replacedFileIds = partitionToReplacedFileIds(operation, javaRdd, table, writeConfig, pendingClusteringFileGroups)
+    if (StringUtils.nonEmpty(writeConfig.getPreCommitValidators)) {
+      val writeMetadata = new HoodieWriteMetadata[HoodieData[WriteStatus]]()
+      writeMetadata.setWriteStatuses(HoodieJavaRDD.of(javaRdd))
+      writeMetadata.setPartitionToReplaceFileIds(replacedFileIds)
+      SparkValidatorUtils.runValidators(writeConfig, writeMetadata, engineContext, table, instantTime)
+    }
     DataFrameWriteResult(new HoodieWriteResult(javaRdd, replacedFileIds), extraMetadata)
   }
 
