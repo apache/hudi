@@ -521,6 +521,8 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       return (row, ordinal) -> recordConsumer.addBoolean(row.getBoolean(ordinal));
     } else if (dataType == DataTypes.DateType) {
       return (row, ordinal) -> recordConsumer.addInteger((Integer) dateRebaseFunction.apply(row.getInt(ordinal)));
+    } else if (dataType == DataTypes.ByteType) {
+      return (row, ordinal) -> recordConsumer.addInteger(row.getByte(ordinal));
     } else if (dataType == DataTypes.ShortType) {
       return (row, ordinal) -> recordConsumer.addInteger(row.getShort(ordinal));
     } else if (dataType == DataTypes.IntegerType || dataType instanceof YearMonthIntervalType) {
@@ -788,9 +790,11 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType == DataTypes.DateType) {
       return Types.primitive(INT32, repetition)
           .as(LogicalTypeAnnotation.dateType()).named(structField.name());
-    } else if (dataType == DataTypes.ShortType) {
-      return Types.primitive(INT32, repetition)
-          .as(LogicalTypeAnnotation.intType(16, true)).named(structField.name());
+    } else if (dataType == DataTypes.ByteType || dataType == DataTypes.ShortType) {
+      // Plain INT32 without an INT(8) / INT(16) annotation: the table schema has no 8- or 16-bit
+      // integer type and records these columns as int, which is what every other write path writes
+      // too. An annotated column reads back as ByteType / ShortType instead of the table's int (#20503).
+      return Types.primitive(INT32, repetition).named(structField.name());
     } else if (dataType == DataTypes.IntegerType || dataType instanceof YearMonthIntervalType) {
       return Types.primitive(INT32, repetition).named(structField.name());
     } else if (dataType == DataTypes.LongType || dataType instanceof DayTimeIntervalType) {
