@@ -72,6 +72,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -279,12 +280,10 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     if (dryRun) {
       assertEquals(fileIdsBefore, fileIdsOf(PENDING_COMPACTION_INSTANT));
     } else {
-      // The admin client keeps the operations that differ from the unscheduled one in file id AND
-      // in partition path, so the sibling operation goes with it and the plan is left with no
-      // operations at all (https://github.com/apache/hudi/issues/19881). When that is fixed this
-      // expectation has to become the sibling on its own:
-      // fileIdsBefore minus the unscheduled file id.
-      assertEquals(Collections.emptySet(), fileIdsOf(PENDING_COMPACTION_INSTANT));
+      // Only the target file id is removed. The same-partition sibling stays on the plan.
+      Set<String> remaining = new HashSet<>(fileIdsBefore);
+      remaining.remove(unscheduled.getFileId());
+      assertEquals(remaining, fileIdsOf(PENDING_COMPACTION_INSTANT));
     }
   }
 
