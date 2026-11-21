@@ -44,9 +44,9 @@ import static java.util.Objects.requireNonNull;
 /**
  * Maps {@link HoodieSchema} to Trino types directly, one Trino type per {@link HoodieSchemaType}.
  * <p>
- * The connector does not use this mapping yet: its column types still come from the Hive type strings in the
- * metastore. That path gives different types for the rows marked below, because it goes through what Hive can
- * declare. Moving the connector onto this mapping changes those column types and is a separate, gated step.
+ * The connector uses this mapping when it needs Trino types from a Hudi schema directly, such as for table fields
+ * required by the file-group reader but absent from the metastore projection. User-visible column handles continue
+ * to use the metastore's Hive types; the rows marked below describe where those types can differ from this mapping.
  * <table>
  * <caption>HoodieSchema to Trino</caption>
  * <tr><th>HoodieSchema</th><th>Trino</th><th>Type identity</th></tr>
