@@ -188,6 +188,11 @@ public class UpgradeDowngrade {
       return;
     }
 
+    if (fromVersion.greaterThanOrEquals(HoodieTableVersion.NINE) && toVersion.lesserThan(HoodieTableVersion.NINE)) {
+      // refuse before the rollback, the compaction or the metadata table downgrade change the table
+      NineToEightDowngradeHandler.validateOrderingFields(metaClient.getTableConfig(), toVersion);
+    }
+
     // Perform rollback and compaction only if a specific handler requires it, before upgrade/downgrade process
     performRollbackAndCompactionIfRequired(fromVersion, toVersion, isUpgrade);
 
