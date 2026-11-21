@@ -280,9 +280,17 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       List<FileSlice> fileSlicesForDataPartition = fileSlices.stream()
           .filter(fileSlice -> HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(fileSlice.getFileId()).equals(dataTablePartition.get()))
           .collect(Collectors.toList());
-      // all keys will be from the same shard index so just calculate the first key and reduce partitionFileSlices to 1
+      // The whole-index slice check has already passed; a new data partition may still have no shards.
+      if (fileSlicesForDataPartition.isEmpty()) {
+        return HoodieListData.lazy(Collections.emptyList());
+      }
       TreeSet<String> distinctSortedKeys = getDistinctSortedKeysForSingleSlice(keys);
-      int fileGroupIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(distinctSortedKeys.stream().findFirst().get(), fileSlicesForDataPartition.size());
+      // An empty lookup has no shard to select.
+      if (distinctSortedKeys.isEmpty()) {
+        return HoodieListData.lazy(Collections.emptyList());
+      }
+      // Callers batch keys by shard, so the first key identifies the file group for the entire batch.
+      int fileGroupIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(distinctSortedKeys.first(), fileSlicesForDataPartition.size());
       return readSliceAndFilterByKeysIntoList(partitionName, distinctSortedKeys, fileSlicesForDataPartition.get(fileGroupIndex), true);
     } else if (partitionName.equals(RECORD_INDEX.getPartitionPath()) && !fileSlices.isEmpty() && HoodieTableMetadataUtil.verifyRLIFile(fileSlices.get(0).getFileId(), true)) {
       if (keys.isEmpty()) {
