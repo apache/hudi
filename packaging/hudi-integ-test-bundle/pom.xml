@@ -77,6 +77,7 @@
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-spark-dataframe_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
                   <include>org.apache.hudi:${hudi.spark.common.module}</include>

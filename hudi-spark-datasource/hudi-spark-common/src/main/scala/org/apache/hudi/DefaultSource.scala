@@ -209,7 +209,7 @@ class DefaultSource extends RelationProvider
   private def isDataFrameWritePathEnabled(opts: Map[String, String],
                                           mode: SaveMode,
                                           sqlContext: SQLContext): Boolean = {
-    val enabled = opts.getOrElse(DefaultSource.DATAFRAME_WRITE_PATH_ENABLE, "false").toBoolean
+    val enabled = opts.getOrElse(DefaultSource.DATAFRAME_WRITE_PATH_ENABLE, "true").toBoolean
     if (!enabled) {
       false
     } else {
