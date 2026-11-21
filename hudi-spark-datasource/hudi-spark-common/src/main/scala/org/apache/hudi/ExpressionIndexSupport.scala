@@ -43,6 +43,7 @@ import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoExpressionIndexFilterExpr
 import org.apache.spark.sql.hudi.dataskipping.{ExpressionIndexSource, IndexedExpression, Leaf, Op}
@@ -409,8 +410,8 @@ class ExpressionIndexSupport(spark: SparkSession,
   /**
    * Bloom filter keys: the values of `f(col) = v` and `f(col) IN (...)`, as strings like the writer added them. A file
    * passes if it may hold any key, which is conservative across conjuncts. A conjunct with a value that is not a
-   * non-null literal gives no keys, and is skipped. So does a term whose values the writer and the literal print
-   * differently, for ex a DATE is `2023-01-02` to the writer and `19359` here (#20567).
+   * non-null literal gives no keys, and is skipped. So does a term whose keys cannot be rebuilt here, see
+   * [[hasWriterKeys]].
    */
   private def bloomFilterKeys(use: IndexUse): List[String] =
     use.conjuncts.flatMap(Leaf.parse).filter(leaf => use.indexed.matches(leaf.term) && hasWriterKeys(leaf.term.dataType)).flatMap { leaf =>
@@ -418,12 +419,30 @@ class ExpressionIndexSupport(spark: SparkSession,
         case Literal(value, _) => value
         case _ => null
       }
-      if (values.isEmpty || values.contains(null)) Seq.empty else values.map(_.toString)
+      if (values.isEmpty || values.contains(null)) Seq.empty else values.flatMap(writerKeys(_, leaf.term.dataType))
     }.toList
 
+  /**
+   * Whether the writer's keys, `toString` of the external value, can be rebuilt from a literal of this type.
+   *
+   * NOTE: Not TIMESTAMP: the writer prints a `java.sql.Timestamp` in the executor's default time zone, or an `Instant`
+   * with `spark.sql.datetime.java8API.enabled`, which cannot be rebuilt here.
+   * NOTE: Not FLOAT/DOUBLE: `-0.0` and `0.0` print apart though they compare equal. Not DECIMAL: it prints its scale.
+   */
   private def hasWriterKeys(dataType: DataType): Boolean = dataType match {
-    case _: StringType | ByteType | ShortType | IntegerType | LongType => true
+    case _: StringType | ByteType | ShortType | IntegerType | LongType | DateType => true
     case _ => false
+  }
+
+  /**
+   * The writer's keys for an internal literal value. A DATE is epoch days here, and the writer prints a `java.sql.Date`,
+   * or a `LocalDate` with `spark.sql.datetime.java8API.enabled`; both are probed, as they differ for edge years.
+   */
+  private def writerKeys(value: Any, dataType: DataType): Seq[String] = dataType match {
+    case DateType =>
+      val days = value.asInstanceOf[Int]
+      Seq(DateTimeUtils.toJavaDate(days).toString, DateTimeUtils.daysToLocalDate(days).toString).distinct
+    case _ => Seq(value.toString)
   }
 
   private def loadExpressionIndexRecords(indexPartition: String,
