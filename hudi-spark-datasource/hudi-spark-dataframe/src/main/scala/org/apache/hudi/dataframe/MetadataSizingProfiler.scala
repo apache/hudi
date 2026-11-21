@@ -85,7 +85,10 @@ object MetadataSizingProfiler extends Logging {
             FSUtils.getRelativePartitionPath(basePath, baseFile.getStoragePath.getParent),
             paddingBucketPrefix + baseFile.getFileId))
       }
-      val smallFileSlots = candidates.toSeq
+      // A file group that a pending clustering is rewriting takes no new records.
+      val pendingClustering = fsView.getFileGroupsInPendingClustering.iterator().asScala
+        .map(_.getKey).map(fileGroup => (fileGroup.getPartitionPath, paddingBucketPrefix + fileGroup.getFileId)).toSet
+      val smallFileSlots = candidates.filterNot(pendingClustering.contains).toSeq
         .groupBy(_._1)
         .map { case (partition, slots) => (partition, slots.map(_._2).toArray) }
       log.info(s"Insert routing plan: ${smallFileSlots.values.map(_.length).sum} small-file "

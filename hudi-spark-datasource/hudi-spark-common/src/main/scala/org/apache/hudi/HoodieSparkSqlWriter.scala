@@ -458,7 +458,12 @@ class HoodieSparkSqlWriterInternal {
 
             // Create a HoodieWriteClient & issue the delete.
             val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
-            val deleteOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt)
+            val schemaEvolutionOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt)
+            val dataFrameWriteSpec = DataFrameWriteSpec(operation, schemaEvolutionOpts, tableMetaClient, None,
+              preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation,
+              streamingWritesParamsOpt.isDefined)
+            val dataFrameWritePath = HoodieDataFrameWritePath.select(dataFrameWriteSpec)
+            val deleteOpts = schemaEvolutionOpts ++ dataFrameWritePath.map(_.clientOptions(dataFrameWriteSpec)).getOrElse(Map.empty)
             // A client that is reused across writes gets the latest table schema upfront, so that a later change of the
             // table schema is detected. Otherwise the client sets it on its first delete.
             val deleteSchemaStr = if (writeClientOwnedByCaller) {
@@ -476,6 +481,13 @@ class HoodieSparkSqlWriterInternal {
             if (isAsyncClusteringEnabled(client, parameters)) {
               streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.get.apply(client))
             }
+
+            // scalastyle:off
+            if (dataFrameWritePath.isDefined) {
+              return writeAsDataFrame(dataFrameWritePath.get, dataFrameWriteSpec, client, parameters, df, basePath,
+                commitActionType, streamingWritesParamsOpt)
+            }
+            // scalastyle:on
 
             instantTime = recordStartedInstant(client, client.startCommit(commitActionType))
             // Ingestion setup may have recorded the encoding, and commit start may have upgraded the table.
@@ -568,8 +580,9 @@ class HoodieSparkSqlWriterInternal {
             // Create a HoodieWriteClient & issue the write.
             val schemaEvolutionOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema))
             val rowWriterBulkInsert = hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT
-            val dataFrameWriteSpec = DataFrameWriteSpec(operation, schemaEvolutionOpts, tableMetaClient, writerSchema,
-              preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation, streamingWritesParamsOpt.isDefined)
+            val dataFrameWriteSpec = DataFrameWriteSpec(operation, schemaEvolutionOpts, tableMetaClient, Some(writerSchema),
+              preppedSparkSqlWrites || preppedWriteOperation,
+              preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto, streamingWritesParamsOpt.isDefined)
             val dataFrameWritePath = if (rowWriterBulkInsert) None else HoodieDataFrameWritePath.select(dataFrameWriteSpec)
             val finalOpts = schemaEvolutionOpts ++ dataFrameWritePath.map(_.clientOptions(dataFrameWriteSpec)).getOrElse(Map.empty)
             val client = reusableWriteClient(hoodieWriteClient, streamingWritesParamsOpt, processedDataSchema.toString, finalOpts)

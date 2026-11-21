@@ -23,7 +23,8 @@ import org.apache.hudi.common.avro.{AvroRecordContext, HoodieAvroUtils}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.engine.{ReaderContextFactory, TaskContextSupplier}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieFileGroupId, HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieSparkRecord, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieEmptyRecord, HoodieFileGroupId, HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieSparkRecord, WriteOperationType}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.read.DeleteContext
 import org.apache.hudi.common.util.HoodieRecordUtils
@@ -89,6 +90,9 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          avroRecords: Option[AvroRecordSpec]) extends Serializable {
 
   import DataFrameWriteTask.RecordFactory
+
+  private val recordType: HoodieRecordType =
+    if (avroRecords.isDefined) HoodieRecordType.AVRO else HoodieRecordType.SPARK
 
   def execute(iter: Iterator[InternalRow]): Iterator[WriteStatus] = {
     if (!iter.hasNext) {
@@ -200,7 +204,12 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
           row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
           row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD))
         val isDelete = row.getString(rowOpOrdinal) == HoodieDataFrameWriter.ROW_OP_DELETE
-        val record = recordFactory(row, key, isDelete)
+        val record: HoodieRecord[_] = if (operation == WriteOperationType.DELETE) {
+          // A delete carries no row, only the key of the record to remove.
+          new HoodieEmptyRecord(key, recordType)
+        } else {
+          recordFactory(row, key, isDelete)
+        }
         // Append handles book records with a current location as updates in the delta stats.
         location.foreach(record.setCurrentLocation)
         record.asInstanceOf[HoodieRecord[InternalRow]]

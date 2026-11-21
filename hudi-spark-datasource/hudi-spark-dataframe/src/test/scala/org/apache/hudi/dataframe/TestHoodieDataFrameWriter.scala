@@ -534,6 +534,39 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testDeleteOperation(): Unit = {
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val rows = writeOnBothPaths(s"test_table_delete_$tableType",
+        Map("hoodie.datasource.write.table.type" -> tableType, "hoodie.compact.inline" -> "false"),
+        Seq(
+          "insert" -> Seq(("k1", "p1", 1L, "a1"), ("k2", "p1", 1L, "a2"), ("k3", "p2", 1L, "a3")),
+          // k9 does not exist, and k3 is deleted twice in the same batch.
+          "delete" -> Seq(("k1", "p1", 2L, "x"), ("k3", "p2", 2L, "x"), ("k3", "p2", 3L, "x"), ("k9", "p1", 2L, "x")),
+          "upsert" -> Seq(("k1", "p1", 5L, "back"))))
+      Assertions.assertEquals(Seq(("k1", "p1", 5L, "back"), ("k2", "p1", 1L, "a2")), rows)
+    }
+  }
+
+  @Test
+  def testInsertOverwriteReplacesTouchedPartitions(): Unit = {
+    val rows = writeOnBothPaths("test_table_insert_overwrite", Map.empty,
+      Seq(
+        "insert" -> Seq(("o1", "p1", 1L, "a1"), ("o2", "p1", 1L, "a2"), ("o3", "p2", 1L, "a3")),
+        "insert_overwrite" -> Seq(("o4", "p1", 2L, "b4")),
+        "upsert" -> Seq(("o3", "p2", 3L, "c3"))))
+    Assertions.assertEquals(Seq(("o3", "p2", 3L, "c3"), ("o4", "p1", 2L, "b4")), rows)
+  }
+
+  @Test
+  def testInsertOverwriteTableReplacesEveryPartition(): Unit = {
+    val rows = writeOnBothPaths("test_table_insert_overwrite_table", Map.empty,
+      Seq(
+        "insert" -> Seq(("w1", "p1", 1L, "a1"), ("w2", "p2", 1L, "a2")),
+        "insert_overwrite_table" -> Seq(("w3", "p3", 2L, "b3"))))
+    Assertions.assertEquals(Seq(("w3", "p3", 2L, "b3")), rows)
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)

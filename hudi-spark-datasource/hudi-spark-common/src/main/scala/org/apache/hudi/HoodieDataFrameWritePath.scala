@@ -29,15 +29,19 @@ import org.slf4j.LoggerFactory
  * A datasource write resolved by the writer's control plane: the operation, the merged write
  * options, the table, and the deduced writer schema.
  *
- * @param prepped whether the input rows already carry their Hudi meta columns (key, partition
- *                path and location), as SQL UPDATE, DELETE and MERGE produce them.
+ * @param writerSchema schema the rows are written with; empty for deletes, which write no rows.
+ * @param keysFromMetaColumns whether the input rows carry their record key and partition path
+ *                            in the Hudi meta columns, as prepped writes do.
+ * @param locationFromMetaColumns whether the input rows carry their file group in the Hudi meta
+ *                                columns, as SQL UPDATE, DELETE and MERGE produce them.
  * @param streaming whether the write is a micro-batch of the streaming sink.
  */
 case class DataFrameWriteSpec(operation: WriteOperationType,
                               parameters: Map[String, String],
                               metaClient: HoodieTableMetaClient,
-                              writerSchema: HoodieSchema,
-                              prepped: Boolean,
+                              writerSchema: Option[HoodieSchema],
+                              keysFromMetaColumns: Boolean,
+                              locationFromMetaColumns: Boolean,
                               streaming: Boolean)
 
 /**
