@@ -109,8 +109,14 @@ object HoodieDataFrameWritePath {
         case None => Some("the hudi-spark-dataframe module is not on the classpath")
         case Some(path) => path.unsupportedReason(spec)
       }
-      reason.foreach(r => log.warn(s"$FALLBACK_LOG_PREFIX$r"))
-      if (reason.isDefined) None else implementation
+      reason match {
+        case Some(r) =>
+          log.warn(s"$FALLBACK_LOG_PREFIX$r")
+          None
+        case None =>
+          log.info(s"DataFrame write path used for ${spec.operation.value}")
+          implementation
+      }
     }
   }
 }

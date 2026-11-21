@@ -101,6 +101,24 @@ class TestHoodieDataFrameWriter {
       "the write did not take the expected write path")
   }
 
+  /**
+   * Runs the same writes through the DataFrame write path and the RDD write path, asserts both
+   * tables read back the same rows, and returns them.
+   */
+  private def writeOnBothPaths(name: String,
+                               extraOpts: Map[String, String],
+                               writes: Seq[(String, Seq[(String, String, Long, String)])]): Seq[(String, String, Long, String)] = {
+    val snapshots = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"${name}_$enabled").toString
+      val opts = extraOpts + (DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writes.foreach { case (operation, rows) => writeHudi(rows, operation, path, opts) }
+      spark.read.format("hudi").load(path).select("key", "partition", "ts", "value").collect()
+        .map(r => (r.getString(0), r.getString(1), r.getLong(2), r.getString(3))).sorted.toSeq
+    }
+    Assertions.assertEquals(snapshots(1), snapshots.head)
+    snapshots.head
+  }
+
   private def readAsMap(path: String): Map[String, (Long, String, String)] = {
     spark.read.format("hudi").load(path)
       .select("key", "ts", "value", "_hoodie_record_key")
@@ -484,6 +502,35 @@ class TestHoodieDataFrameWriter {
     val fileIds = snapshot.select("_hoodie_file_name").collect()
       .map(r => org.apache.hudi.common.fs.FSUtils.getFileId(r.getString(0))).distinct
     Assertions.assertEquals(1, fileIds.length)
+  }
+
+  @Test
+  def testMergeOnReadWithAvroLogBlocks(): Unit = {
+    val rows = writeOnBothPaths("test_table_mor_avro_logs",
+      Map("hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+        "hoodie.logfile.data.block.format" -> "avro",
+        "hoodie.compact.inline" -> "false"),
+      Seq(
+        "insert" -> Seq(("m1", "p1", 1L, "a1"), ("m2", "p1", 1L, "a2"), ("m3", "p2", 1L, "a3")),
+        "upsert" -> Seq(("m1", "p1", 2L, "b1"), ("m4", "p2", 2L, "b4")),
+        "upsert" -> Seq(("m1", "p1", 1L, "stale"), ("m3", "p2", 3L, "c3"))))
+    Assertions.assertEquals(
+      Seq(("m1", "p1", 2L, "b1"), ("m2", "p1", 1L, "a2"), ("m3", "p2", 3L, "c3"), ("m4", "p2", 2L, "b4")), rows)
+  }
+
+  @Test
+  def testCustomPayloadMergesThroughThePayload(): Unit = {
+    // The payload keeps the stored row when the incoming one is older, on the ordering field
+    // it reads from the record, whichever write path builds the record.
+    val rows = writeOnBothPaths("test_table_custom_payload",
+      Map("hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.EventTimeAvroPayload",
+        "hoodie.combine.before.upsert" -> "false",
+        "hoodie.combine.before.insert" -> "false"),
+      Seq(
+        "insert" -> Seq(("c1", "p1", 5L, "a1"), ("c2", "p1", 5L, "a2")),
+        "upsert" -> Seq(("c1", "p1", 9L, "newer"), ("c2", "p1", 1L, "older"), ("c3", "p1", 1L, "a3"))))
+    Assertions.assertEquals(
+      Seq(("c1", "p1", 9L, "newer"), ("c2", "p1", 5L, "a2"), ("c3", "p1", 1L, "a3")), rows)
   }
 
   @Test

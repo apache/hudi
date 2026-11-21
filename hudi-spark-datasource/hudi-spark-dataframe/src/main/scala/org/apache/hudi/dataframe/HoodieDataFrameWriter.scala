@@ -17,19 +17,19 @@
 
 package org.apache.hudi.dataframe
 
-import org.apache.hudi.{DataFrameWriteResult, DataFrameWriteSpec, DataSourceUtils, DataSourceWriteOptions, HoodieDataFrameWritePath, HoodieSparkUtils}
+import org.apache.hudi.{DataFrameWriteResult, DataFrameWriteSpec, DataSourceUtils, DataSourceWriteOptions, HoodieDataFrameWritePath, HoodieSchemaConversionUtils, HoodieSparkUtils}
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient, WriteStatus}
 import org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieFileGroupId, HoodieRecord, HoodieTableType, MetaFieldsMode, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieFileGroupId, HoodieRecord, HoodieTableType, MetaFieldsMode, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{CommitUtils, HoodieDataUtils, Option => HOption, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, HoodieDataUtils, Option => HOption, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
@@ -89,10 +89,10 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with Logging {
       (() => tableConfig.getBaseFileFormat != HoodieFileFormat.PARQUET || tableConfig.isMultipleBaseFileFormatsEnabled,
         s"base file format ${tableConfig.getBaseFileFormat}"),
       (() => tableConfig.getBootstrapBasePath.isPresent, "bootstrapped tables"),
-      (() => writeConfig.getRecordMergeMode == RecordMergeMode.CUSTOM
-        || tableConfig.getRecordMergeMode == RecordMergeMode.CUSTOM, "custom merge modes and payloads"),
-      (() => params.contains(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY)
-        && writeConfig.getRecordMerger.getRecordType != HoodieRecordType.SPARK, "record mergers on Avro records"),
+      (() => isCustomMerge(writeConfig, tableConfig) && shouldCombine(spec.operation, writeConfig, tableConfig),
+        "custom merge modes and payloads that combine records before the write"),
+      (() => isCustomMerge(writeConfig, tableConfig) && SparkHoodieIndexFactory.isGlobalIndex(writeConfig),
+        "custom merge modes and payloads with a global index"),
       (() => enabled(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key)
         || enabled(DataSourceWriteOptions.RECONCILE_SCHEMA.key), "schema evolution and reconciliation"),
       (() => writeConfig.allowOperationMetadataField, "the operation meta field"),
@@ -100,18 +100,30 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with Logging {
       (() => writeConfig.isRollbackPendingClustering
         || writeConfig.getClusteringUpdatesStrategyClass != classOf[SparkRejectUpdateStrategy[_]].getName,
         "clustering update strategies other than rejecting the update"),
-      (() => tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
-        && CommonClientUtils.getLogBlockType(writeConfig, tableConfig) != HoodieLogBlockType.PARQUET_DATA_BLOCK,
-        "merge-on-read tables with non-parquet log blocks"))
+      (() => writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK
+        && mergeProps(writeConfig, tableConfig).containsKey(DefaultHoodieRecordPayload.DELETE_KEY),
+        "custom delete markers on engine-native records"))
     checks.collectFirst { case (applies, what) if applies() => s"$what are not supported by it yet" }
   }
 
   override def clientOptions(spec: DataFrameWriteSpec): Map[String, String] = {
-    // The engine-native record merger keeps the merge on InternalRow; a merger the user set is kept.
-    if (spec.parameters.contains(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY)) {
+    val params = spec.parameters
+    if (params.contains(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY)) {
+      // A merger the user set decides the record type.
       Map.empty
     } else {
-      Map(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY -> "org.apache.hudi.DefaultSparkRecordMerger")
+      val tableConfig = spec.metaClient.getTableConfig
+      val writeConfig = DataSourceUtils.createHoodieConfig(spec.writerSchema.toString,
+        spec.metaClient.getBasePath.toString, params(HoodieWriteConfig.TBL_NAME.key), params.asJava)
+      val avroLogBlocks = tableConfig.getTableType == HoodieTableType.MERGE_ON_READ &&
+        CommonClientUtils.getLogBlockType(writeConfig, tableConfig) != HoodieLogBlockType.PARQUET_DATA_BLOCK
+      if (isCustomMerge(writeConfig, tableConfig) || avroLogBlocks) {
+        // Payload-based merging and Avro log blocks take Avro records, built at the handles.
+        Map.empty
+      } else {
+        // The engine-native record merger keeps the merge on InternalRow.
+        Map(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY -> "org.apache.hudi.DefaultSparkRecordMerger")
+      }
     }
   }
 
@@ -164,7 +176,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with Logging {
     val task = new DataFrameWriteTask(
       writeConfig, sparkTable, readerContextFactory, instantTime, operation, withBucket.schema,
       df.schema.length, HoodieInternalRowUtils.getCachedSchema(spec.writerSchema), bucketOrdinal,
-      withBucket.schema.fieldIndex(ROW_OP_COL), mergeOnRead, pendingClusteringFileGroups)
+      withBucket.schema.fieldIndex(ROW_OP_COL), mergeOnRead, pendingClusteringFileGroups,
+      avroRecordSpec(spec, df.schema, writeConfig, table.getMetaClient.getTableConfig))
 
     val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
     val (statusRdd, extraMetadata) = if (profilerMode == PROFILER_SHUFFLE_STATS) {
@@ -220,6 +233,51 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with Logging {
       params(HoodieWriteConfig.TBL_NAME.key), params.asJava)
   }
 
+  /** How the handles take records when the write config's record merger works on Avro records. */
+  private def avroRecordSpec(spec: DataFrameWriteSpec,
+                             inputSchema: StructType,
+                             writeConfig: HoodieWriteConfig,
+                             tableConfig: HoodieTableConfig): Option[AvroRecordSpec] = {
+    if (writeConfig.getRecordMerger.getRecordType != HoodieRecordType.AVRO) {
+      None
+    } else {
+      val sourceSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+        inputSchema, spec.writerSchema.getName, spec.writerSchema.getNamespace.orElse(null))
+      val orderingFields = tableConfig.getOrderingFields
+      val payloadClass = writeConfig.getPayloadClass
+      Some(AvroRecordSpec(
+        sourceSchema = sourceSchema.toString,
+        writerSchema = spec.writerSchema.toString,
+        payloadClass = payloadClass,
+        orderingFields = orderingFields,
+        attachOrderingValue = shouldCombine(spec.operation, writeConfig, tableConfig) && !orderingFields.isEmpty,
+        requiresOrderingValue = !(tableConfig.getRecordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
+          || classOf[OverwriteWithLatestAvroPayload].getName == payloadClass),
+        consistentLogicalTimestamp = spec.parameters.getOrElse(
+          DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
+          DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean,
+        mergeProps = mergeProps(writeConfig, tableConfig),
+        recordBasedInserts = isCustomMerge(writeConfig, tableConfig)))
+    }
+  }
+
+  private def isCustomMerge(writeConfig: HoodieWriteConfig, tableConfig: HoodieTableConfig): Boolean =
+    writeConfig.getRecordMergeMode == RecordMergeMode.CUSTOM || tableConfig.getRecordMergeMode == RecordMergeMode.CUSTOM
+
+  private def mergeProps(writeConfig: HoodieWriteConfig, tableConfig: HoodieTableConfig): TypedProperties =
+    ConfigUtils.getMergeProps(writeConfig.getProps, tableConfig)
+
+  /** Whether the write deduplicates the incoming records of a key before writing them. */
+  private def shouldCombine(operation: WriteOperationType,
+                            writeConfig: HoodieWriteConfig,
+                            tableConfig: HoodieTableConfig): Boolean = {
+    tableConfig.getRecordKeyFields.isPresent && (if (operation == WriteOperationType.UPSERT) {
+      writeConfig.shouldCombineBeforeUpsert()
+    } else {
+      writeConfig.shouldCombineBeforeInsert()
+    })
+  }
+
   private def keyGeneratorProps(writeConfig: HoodieWriteConfig, metaClient: HoodieTableMetaClient): TypedProperties =
     KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(writeConfig.getProps), metaClient.getTableConfig)
 
@@ -249,12 +307,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with Logging {
           lit(null).cast(StringType).as(HoodieRecord.FILENAME_METADATA_FIELD))
           ++ dataColumns): _*)
 
-    val shouldCombine = !autoGenerateRecordKeys && (if (operation == WriteOperationType.UPSERT) {
-      writeConfig.shouldCombineBeforeUpsert()
-    } else {
-      writeConfig.shouldCombineBeforeInsert()
-    })
-    if (!shouldCombine) {
+    if (!shouldCombine(operation, writeConfig, tableConfig)) {
       withMeta
     } else {
       val dedupKeys = if (SparkHoodieIndexFactory.isGlobalIndex(writeConfig)) {

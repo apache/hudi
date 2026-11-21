@@ -17,12 +17,20 @@
 
 package org.apache.hudi.dataframe
 
+import org.apache.hudi.{AvroConversionUtils, HoodieCreateRecordUtils}
 import org.apache.hudi.client.WriteStatus
-import org.apache.hudi.common.engine.ReaderContextFactory
+import org.apache.hudi.common.avro.{AvroRecordContext, HoodieAvroUtils}
+import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.engine.{ReaderContextFactory, TaskContextSupplier}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileGroupId, HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieSparkRecord, WriteOperationType}
+import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.table.read.DeleteContext
+import org.apache.hudi.common.util.HoodieRecordUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieClusteringUpdateException
-import org.apache.hudi.io.{AppendHandleFactory, HoodieMergeHandleFactory, HoodieWriteMergeHandle, MergeContext, MergeUtils}
+import org.apache.hudi.execution.SparkLazyInsertIterable
+import org.apache.hudi.io.{AppendHandleFactory, CreateHandleFactory, HoodieMergeHandleFactory, HoodieWriteMergeHandle, MergeContext, MergeUtils}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper
@@ -36,13 +44,35 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 /**
+ * How routed rows become Avro records for the write handles, for tables whose merging or log
+ * format works on Avro: the row is converted with the input schema, rewritten to the writer
+ * schema when they differ, and wrapped with the table's payload class.
+ *
+ * @param attachOrderingValue whether records carry their ordering value, as they do when the
+ *                            write combines records and the table has ordering fields.
+ * @param recordBasedInserts whether inserts go through the record-based create handle, so the
+ *                           payload decides what an insert writes.
+ */
+case class AvroRecordSpec(sourceSchema: String,
+                          writerSchema: String,
+                          payloadClass: String,
+                          orderingFields: java.util.List[String],
+                          attachOrderingValue: Boolean,
+                          requiresOrderingValue: Boolean,
+                          consistentLogicalTimestamp: Boolean,
+                          mergeProps: TypedProperties,
+                          recordBasedInserts: Boolean)
+
+/**
  * Executor-side write task of the DataFrame write path: consumes one Spark partition of routed
  * rows (sorted by the routing-bucket column) and drives one write handle per bucket run.
  *
  * <p>Insert buckets go through {@link BulkInsertDataInternalWriterHelper}, which rotates
  * {@code HoodieRowCreateHandle}s on partition-path change and file-size limits. Update buckets
- * feed a streaming iterator of engine-native records into the merge handle resolved by
- * {@link HoodieMergeHandleFactory} ({@code FileGroupReaderBasedMergeHandle} by default).
+ * feed a streaming iterator of records into the merge handle resolved by
+ * {@link HoodieMergeHandleFactory} ({@code FileGroupReaderBasedMergeHandle} by default), or into
+ * the append handle on merge-on-read tables. Records are engine-native rows unless
+ * {@code avroRecords} is set.
  */
 class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          table: HoodieTable[InternalRow, _, _, _],
@@ -55,7 +85,10 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          bucketOrdinal: Int,
                          rowOpOrdinal: Int,
                          mergeOnRead: Boolean,
-                         pendingClusteringFileGroups: Set[HoodieFileGroupId]) extends Serializable {
+                         pendingClusteringFileGroups: Set[HoodieFileGroupId],
+                         avroRecords: Option[AvroRecordSpec]) extends Serializable {
+
+  import DataFrameWriteTask.RecordFactory
 
   def execute(iter: Iterator[InternalRow]): Iterator[WriteStatus] = {
     if (!iter.hasNext) {
@@ -69,8 +102,8 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     val metaFieldCount = HoodieRecord.HOODIE_META_COLUMNS.size()
     val writeSchema = StructType(routedSchema.fields.take(metaFieldCount) ++ writerSchema.fields)
     val writeProjection = DataFrameWriteTask.conformingProjection(routedSchema, 0, metaFieldCount + dataFieldCount, writeSchema)
-    val dataProjection = DataFrameWriteTask.conformingProjection(routedSchema, metaFieldCount, dataFieldCount, writerSchema)
-    val dataSchema = writerSchema
+    val recordFactory = avroRecords.map(avroRecordFactory).getOrElse(sparkRecordFactory)
+    val recordBasedInserts = avroRecords.exists(_.recordBasedInserts)
 
     val taskContextSupplier = table.getTaskContextSupplier
     val statuses = new ListBuffer[WriteStatus]()
@@ -80,13 +113,15 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     while (buffered.hasNext) {
       val bucket = buffered.head.getString(bucketOrdinal)
       if (bucket.startsWith(HoodieDataFrameWriter.MERGE_BUCKET_PREFIX)) {
-        statuses ++= mergeBucket(buffered, bucket, dataProjection, dataSchema, taskContextSupplier)
+        statuses ++= mergeBucket(buffered, bucket, recordFactory, taskContextSupplier)
       } else if (bucket.startsWith(HoodieDataFrameWriter.UPDATE_BUCKET_PREFIX)) {
         if (mergeOnRead) {
-          statuses ++= appendBucket(buffered, bucket, dataProjection, dataSchema, taskContextSupplier)
+          statuses ++= appendBucket(buffered, bucket, recordFactory, taskContextSupplier)
         } else {
-          statuses ++= mergeBucket(buffered, bucket, dataProjection, dataSchema, taskContextSupplier)
+          statuses ++= mergeBucket(buffered, bucket, recordFactory, taskContextSupplier)
         }
+      } else if (recordBasedInserts) {
+        statuses ++= insertBucket(buffered, bucket, recordFactory, taskContextSupplier)
       } else {
         if (insertHelper == null) {
           val partitionId = taskContextSupplier.getPartitionIdSupplier.get
@@ -105,14 +140,55 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     statuses.iterator
   }
 
-  /**
-   * Merges one contiguous run of update rows (all tagged to the same file group) into that file
-   * group by streaming engine-native records into the merge handle.
-   */
+  private def sparkRecordFactory: RecordFactory = {
+    val dataProjection = DataFrameWriteTask.conformingProjection(
+      routedSchema, HoodieRecord.HOODIE_META_COLUMNS.size(), dataFieldCount, writerSchema)
+    (row, key, isDelete) => {
+      // The projection reuses its output buffer, and the merge machinery buffers incoming
+      // records, so each record needs its own copy.
+      val dataRow = dataProjection(row).copy()
+      if (isDelete) {
+        new HoodieSparkRecord(key, dataRow, writerSchema, false,
+          null.asInstanceOf[org.apache.hudi.common.model.HoodieOperation],
+          null.asInstanceOf[Comparable[_]], true)
+      } else {
+        new HoodieSparkRecord(key, dataRow, writerSchema, false)
+      }
+    }
+  }
+
+  private def avroRecordFactory(spec: AvroRecordSpec): RecordFactory = {
+    val metaFieldCount = HoodieRecord.HOODIE_META_COLUMNS.size()
+    val sourceStructType = StructType(routedSchema.fields.slice(metaFieldCount, metaFieldCount + dataFieldCount))
+    val sourceSchema = HoodieSchema.parse(spec.sourceSchema)
+    val targetSchema = HoodieSchema.parse(spec.writerSchema)
+    val dataProjection = UnsafeProjection.create(
+      (metaFieldCount until metaFieldCount + dataFieldCount).map(i =>
+        BoundReference(i, routedSchema.fields(i).dataType, nullable = true)))
+    val toAvro = AvroConversionUtils.createInternalRowToAvroConverter(sourceStructType, sourceSchema, sourceSchema.isNullable)
+    val sameSchema = sourceSchema == targetSchema
+    val targetAvroSchema = targetSchema.toAvroSchema
+    val deleteContext = new DeleteContext(spec.mergeProps, targetSchema).withReaderSchema(targetSchema)
+    (row, key, isDeleteOperation) => {
+      val converted = toAvro(dataProjection(row))
+      val avroRecord = if (sameSchema) converted else HoodieAvroUtils.rewriteRecordDeep(converted, targetAvroSchema)
+      val isDelete = isDeleteOperation ||
+        AvroRecordContext.getFieldAccessorInstance.isDeleteRecord(avroRecord, deleteContext)
+      val record = if (spec.attachOrderingValue) {
+        val orderingValue = HoodieCreateRecordUtils.getOrderingValue(spec.orderingFields, avroRecord,
+          key.getRecordKey, spec.consistentLogicalTimestamp, spec.requiresOrderingValue)
+        HoodieRecordUtils.createHoodieRecord(avroRecord, orderingValue, key, spec.payloadClass, isDelete)
+      } else {
+        HoodieRecordUtils.createHoodieRecord(avroRecord, key, spec.payloadClass, isDelete)
+      }
+      record.asInstanceOf[HoodieRecord[_]]
+    }
+  }
+
+  /** The records of one contiguous bucket run, read off the shared row iterator. */
   private def bucketRecordIterator(buffered: BufferedIterator[InternalRow],
                                    bucket: String,
-                                   dataProjection: InternalRow => UnsafeRow,
-                                   dataSchema: StructType,
+                                   recordFactory: RecordFactory,
                                    location: Option[HoodieRecordLocation]): java.util.Iterator[HoodieRecord[InternalRow]] = {
     new java.util.Iterator[HoodieRecord[InternalRow]] {
       override def hasNext: Boolean =
@@ -124,16 +200,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
           row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
           row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD))
         val isDelete = row.getString(rowOpOrdinal) == HoodieDataFrameWriter.ROW_OP_DELETE
-        // The projection reuses its output buffer, and the merge machinery buffers incoming
-        // records, so each record needs its own copy.
-        val dataRow = dataProjection(row).copy()
-        val record = if (isDelete) {
-          new HoodieSparkRecord(key, dataRow, dataSchema, false,
-            null.asInstanceOf[org.apache.hudi.common.model.HoodieOperation],
-            null.asInstanceOf[Comparable[_]], true)
-        } else {
-          new HoodieSparkRecord(key, dataRow, dataSchema, false)
-        }
+        val record = recordFactory(row, key, isDelete)
         // Append handles book records with a current location as updates in the delta stats.
         location.foreach(record.setCurrentLocation)
         record.asInstanceOf[HoodieRecord[InternalRow]]
@@ -141,15 +208,18 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     }
   }
 
+  /**
+   * Merges one contiguous run of rows (all routed to the same file group) into that file group
+   * by streaming records into the merge handle.
+   */
   private def mergeBucket(buffered: BufferedIterator[InternalRow],
                           bucket: String,
-                          dataProjection: InternalRow => UnsafeRow,
-                          dataSchema: StructType,
-                          taskContextSupplier: org.apache.hudi.common.engine.TaskContextSupplier): Seq[WriteStatus] = {
+                          recordFactory: RecordFactory,
+                          taskContextSupplier: TaskContextSupplier): Seq[WriteStatus] = {
     val fileId = bucket.substring(2)
     val partitionPath = buffered.head.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
     rejectUpdateToPendingClustering(partitionPath, fileId)
-    val recordItr = bucketRecordIterator(buffered, bucket, dataProjection, dataSchema, None)
+    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, None)
 
     val mergeHandle = HoodieMergeHandleFactory.create(
       operation, writeConfig, instantTime,
@@ -168,13 +238,12 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
   /** MOR update run: append the bucket's records as a new log file of its file group. */
   private def appendBucket(buffered: BufferedIterator[InternalRow],
                            bucket: String,
-                           dataProjection: InternalRow => UnsafeRow,
-                           dataSchema: StructType,
-                           taskContextSupplier: org.apache.hudi.common.engine.TaskContextSupplier): Seq[WriteStatus] = {
+                           recordFactory: RecordFactory,
+                           taskContextSupplier: TaskContextSupplier): Seq[WriteStatus] = {
     val fileId = bucket.substring(2)
     val partitionPath = buffered.head.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
     rejectUpdateToPendingClustering(partitionPath, fileId)
-    val recordItr = bucketRecordIterator(buffered, bucket, dataProjection, dataSchema,
+    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory,
       Some(new HoodieRecordLocation(instantTime, fileId)))
     val appendHandle = new AppendHandleFactory[InternalRow, AnyRef, AnyRef, AnyRef]().create(
       writeConfig, instantTime,
@@ -182,6 +251,19 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
       partitionPath, fileId, recordItr, taskContextSupplier)
     appendHandle.doAppend()
     appendHandle.close().asScala.toSeq
+  }
+
+  /** Insert run through the record-based create handle, which rolls files over on size. */
+  private def insertBucket(buffered: BufferedIterator[InternalRow],
+                           bucket: String,
+                           recordFactory: RecordFactory,
+                           taskContextSupplier: TaskContextSupplier): Seq[WriteStatus] = {
+    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, None)
+    val writeStatuses: java.util.Iterator[java.util.List[WriteStatus]] =
+      new SparkLazyInsertIterable[InternalRow](recordItr, true, writeConfig, instantTime, table,
+        FSUtils.createNewFileIdPfx(), taskContextSupplier,
+        new CreateHandleFactory[InternalRow, AnyRef, AnyRef, AnyRef]())
+    writeStatuses.asScala.flatMap(_.asScala).toList
   }
 
   /** Updates to a file group that a pending clustering is rewriting are rejected. */
@@ -196,6 +278,9 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
 }
 
 object DataFrameWriteTask {
+
+  /** Builds the record a handle takes from a routed row, its key, and whether it is a delete. */
+  private[dataframe] type RecordFactory = (InternalRow, HoodieKey, Boolean) => HoodieRecord[_]
 
   /**
    * Projects `count` columns of `source` starting at `offset` into rows of `target`. Columns that
