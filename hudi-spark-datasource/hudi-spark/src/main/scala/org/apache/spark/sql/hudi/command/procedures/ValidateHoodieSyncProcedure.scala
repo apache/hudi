@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison, TimelineUtils}
 import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 
 import org.apache.spark.internal.Logging
@@ -105,8 +105,7 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
     val sourceLatestCommit =
       if (sourceTimeline.getInstants.iterator().hasNext) sourceTimeline.lastInstant().get().requestedTime else "0"
 
-    if (sourceLatestCommit != null
-      && compareTimestamps(targetLatestCommit, InstantComparison.GREATER_THAN, sourceLatestCommit))
+    if (compareTimestamps(targetLatestCommit, InstantComparison.GREATER_THAN, sourceLatestCommit))
       Seq(Row(getString(targetMetaClient, targetTimeline, srcMetaClient, sourceCount, targetCount, sourceLatestCommit)))
     else
       Seq(Row(getString(srcMetaClient, sourceTimeline, targetMetaClient, targetCount, sourceCount, targetLatestCommit)))
@@ -115,12 +114,13 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
   def getString(target: HoodieTableMetaClient, targetTimeline: HoodieTimeline, source: HoodieTableMetaClient,
                 sourceCount: Long, targetCount: Long, sourceLatestCommit: String): String = {
 
-    val commitsToCatchup: List[HoodieInstant] =
-      targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE).getInstantsAsStream.iterator().asScala.toList
+    // Only completed instants have commit metadata to count; a pending write is not caught up on yet.
+    val commitsToCatchup: List[HoodieInstant] = targetTimeline.filterCompletedInstants
+      .findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE).getInstantsAsStream.iterator().asScala.toList
     if (commitsToCatchup.isEmpty) {
       s"Count difference now is count(${target.getTableConfig.getTableName}) - count(${source.getTableConfig.getTableName}) == ${targetCount - sourceCount}"
     } else {
-      val newInserts = countNewRecords(target, commitsToCatchup.map(elem => elem.requestedTime))
+      val newInserts = countNewRecords(target, commitsToCatchup)
       s"Count difference now is count(${target.getTableConfig.getTableName}) - count(${source.getTableConfig.getTableName}) == ${targetCount - sourceCount}" +
         s". Catach up count is $newInserts"
     }
@@ -145,9 +145,11 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
 
       println(s"Total records in ${source.getTableConfig.getTableName} is $count")
     } finally {
-      conn.close()
       if (rs != null) {
         rs.close()
+      }
+      if (conn != null) {
+        conn.close()
       }
     }
     count
@@ -190,13 +192,11 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
   }
 
   @throws[IOException]
-  def countNewRecords(target: HoodieTableMetaClient, commitsToCatchup: List[String]): Long = {
+  def countNewRecords(target: HoodieTableMetaClient, commitsToCatchup: List[HoodieInstant]): Long = {
     var totalNew: Long = 0
-    val timeline: HoodieTimeline = target.reloadActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants
-    for (commit <- commitsToCatchup) {
-      val instantGenerator = target.getTimelineLayout.getInstantGenerator
-      val instant: HoodieInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, commit)
-      val c: HoodieCommitMetadata = timeline.readCommitMetadata(instant)
+    val timeline: HoodieTimeline = target.reloadActiveTimeline
+    for (instant <- commitsToCatchup) {
+      val c: HoodieCommitMetadata = TimelineUtils.getCommitMetadata(instant, timeline)
       totalNew += c.fetchTotalRecordsWritten - c.fetchTotalUpdateRecordsWritten
     }
     totalNew
