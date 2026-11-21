@@ -56,24 +56,25 @@ AS SELECT id, ts, value FROM STREAM guarded_upstream;
 '''
 
 
+def require(condition, message):
+    if not condition:
+        raise AssertionError(message)
+
+
 def verify(mode, remote, root):
     from pyspark.sql import SparkSession
 
     spark = SparkSession.builder.remote(remote).getOrCreate()
     try:
-        assert spark.conf.get("spark.hudi.test.run.id") == root.name
+        require(spark.conf.get("spark.hudi.test.run.id") == root.name, "Connected to the wrong server")
         if mode == "truncate-upstream":
             spark.sql("TRUNCATE TABLE sdp_test.upsert_events")
             return
-        if mode == "truncate-graph":
-            for table in ("upsert_events", "downstream_events"):
-                spark.sql(f"TRUNCATE TABLE sdp_test.{table}")
-            return
-        if mode == "rebuilt":
+        if mode in ("rebuilt", "rebuilt-restart"):
             for table in ("upsert_events", "downstream_events"):
                 actual = [tuple(row) for row in spark.table(f"sdp_test.{table}")
                           .select("id", "ts", "value").collect()]
-                assert actual == [(1, 3, "reset")], (table, actual)
+                require(actual == [(1, 3, "reset")], (table, actual))
             return
         old = (1, 1, "old")
         new = (1, 2, "new")
@@ -85,9 +86,9 @@ def verify(mode, remote, root):
                 continue
             actual = [tuple(row) for row in spark.table(f"sdp_test.{table}")
                       .select("id", "ts", "value").orderBy("ts").collect()]
-            assert actual == expected, (table, actual, expected)
+            require(actual == expected, (table, actual, expected))
             properties = dict(spark.sql(f"SHOW TBLPROPERTIES sdp_test.{table}").collect())
-            assert not any("write.operation" in key for key in properties), properties
+            require(not any("write.operation" in key for key in properties), properties)
         print(f"Verified {mode}: incremental upstream-to-downstream rows through Spark Connect")
     finally:
         spark.stop()
@@ -130,19 +131,19 @@ def scenario(harness, table_type, metadata):
             timeline = harness.root / "warehouse" / "sdp_test.db" / table / ".hoodie" / "timeline"
             result[table] = sorted(p.name for p in timeline.iterdir()
                                    if p.suffix in (".commit", ".deltacommit", ".replacecommit"))
-            assert result[table], f"No completed commits found for {table}"
+            require(result[table], f"No completed commits found for {table}")
         return result
 
     before = commits()
     if table_type == "mor":
         # The upsert update creates a log file and must actually exercise async compaction.
-        assert any(name.endswith(".commit") for name in before["upsert_events"]), before
+        require(any(name.endswith(".commit") for name in before["upsert_events"]), before)
         # AvailableNow may capture its end offset before async compaction completes.
         # Drain that maintenance instant before asserting a quiescent restart.
         harness.run_pipeline(spec_path, name="pipeline-compaction-catchup")
         harness.client(Path(__file__).resolve(), "restart")
         caught_up = commits()
-        assert before["upsert_events"] == caught_up["upsert_events"], (before, caught_up)
+        require(before["upsert_events"] == caught_up["upsert_events"], (before, caught_up))
         (harness.logs / "compaction-catchup.json").write_text(
             json.dumps({"before": before, "after": caught_up}, indent=2))
         before = caught_up
@@ -151,7 +152,7 @@ def scenario(harness, table_type, metadata):
     harness.run_pipeline(spec_path, name="pipeline-restart")
     harness.client(Path(__file__).resolve(), "restart")
     after = commits()
-    assert before == after, (before, after)
+    require(before == after, (before, after))
     (harness.logs / "restart-commits.json").write_text(json.dumps({"before": before, "after": after}, indent=2))
     downstream_before = commits()["downstream_events"]
     harness.client(Path(__file__).resolve(), "truncate-upstream")
@@ -160,25 +161,25 @@ def scenario(harness, table_type, metadata):
         harness.run_pipeline(spec_path, name="pipeline-expected-reset-failure")
     except RuntimeError:
         log = (harness.logs / "pipeline-expected-reset-failure.log").read_text()
-        assert "rebuild required" in log, log[-4000:]
-        assert harness.server.poll() is None, "Source failure killed the Connect server"
+        require("rebuild required" in log, log[-4000:])
+        require(harness.server.poll() is None, "Source failure killed the Connect server")
     else:
         raise AssertionError("A recreated upstream table was accepted with the old checkpoint")
-    assert commits()["downstream_events"] == downstream_before
+    require(commits()["downstream_events"] == downstream_before, 'Source safety acceptance failed')
     harness.client(Path(__file__).resolve(), "failed-reset")
     # All flows are stopped. Rebuild every affected table and start with fresh checkpoints.
-    # The full-refresh CLI path separately depends on catalog DeleteColumn support (#20492).
-    harness.client(Path(__file__).resolve(), "truncate-graph")
-    spec["storage"] = (harness.root / "rebuild-checkpoints").as_uri()
-    spec_path.write_text(json.dumps(spec, indent=2))
-    (harness.logs / "rebuild-spec.json").write_text(spec_path.read_text())
-    harness.run_pipeline(spec_path, name="pipeline-rebuild")
+    harness.run([str(harness.spark_home / "bin/spark-pipelines"), "run", "--remote", harness.remote,
+                 "--spec", str(spec_path), "--full-refresh-all"], "pipeline-rebuild")
     harness.client(Path(__file__).resolve(), "rebuilt")
-    print("PASS: guarded restart, reset rejection before downstream commit, and coordinated rebuild")
+    rebuilt = commits()
+    harness.run_pipeline(spec_path, name="pipeline-rebuilt-restart")
+    require(commits() == rebuilt, ("Rebuilt restart changed timelines", rebuilt, commits()))
+    harness.client(Path(__file__).resolve(), "rebuilt-restart")
+    print("PASS: guarded restart, reset rejection before downstream commit, full refresh and rebuilt restart")
 
 
 def main():
-    if len(sys.argv) == 4 and sys.argv[1] in ("first", "second", "restart", "truncate-upstream", "truncate-graph", "rebuilt", "failed-reset"):
+    if len(sys.argv) == 4 and sys.argv[1] in ("first", "second", "restart", "truncate-upstream", "rebuilt", "rebuilt-restart", "failed-reset"):
         verify(sys.argv[1], sys.argv[2], Path(sys.argv[3]))
         return
     parser = argparse.ArgumentParser(description=__doc__)
@@ -186,7 +187,7 @@ def main():
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--logs", type=Path, default=Path("target/source-safety-acceptance-logs"))
     parser.add_argument("--table-type", choices=("cow", "mor"), default="cow")
-    parser.add_argument("--metadata", choices=("enabled", "disabled"), default="disabled")
+    parser.add_argument("--metadata", choices=("enabled", "disabled"), default="enabled")
     args = parser.parse_args()
     if not (args.harness_dir / "harness.py").is_file():
         parser.error("The #20453 harness is required; pass its spark-pipelines directory with --harness-dir")

@@ -119,7 +119,8 @@ establish a new table identity.
 Snapshot recovery is a single unbounded batch. Chunked bootstrap and source
 admission control remain follow-ups; size the backlog and snapshot accordingly.
 Latest-state chaining does not propagate hard deletes or every intermediate
-change. CLI full-refresh acceptance remains separate from this recovery policy.
+change. Coordinated CLI full refresh rebuilds both targets; recovery strategies
+alone do not reconcile a downstream snapshot.
 
 ## Verification
 
@@ -130,12 +131,22 @@ continuation after recovery.
 
 `source_safety_acceptance.py` uses the #20453 Spark 4.1.1 CLI/Connect harness.
 It verifies exact two-stage rows, unchanged restarts, recreation rejection before
-any downstream commit, and explicit coordinated rebuild of both tables with new
-checkpoints. It does not validate the CLI full-refresh path.
+any downstream commit, and coordinated rebuild using `--full-refresh-all`. It
+retains the storage root while SDP resets both checkpoints and purges/rebuilds
+both targets. A subsequent ordinary restart must preserve exact rows and add no
+Hudi commits. Metadata is enabled by default. Checks remain active under Python
+optimization, including verification subprocesses.
+
+`TestHoodieSparkConnectPipelines` also covers COW/MOR `SELECT *` chaining through
+the real CLI: reserved upstream metadata must not create duplicate target fields,
+and an explicitly computed boolean `_hoodie_is_deleted` must remove only the
+intended key. This tests a delete marker carried by the flow, not propagation of
+an upstream hard delete. Reader-option precedence, expired history, logical
+resets, physical recreation and ordinary clustering are covered by the merged
+`TestStreamingSource` regressions for both offset versions and COW/MOR.
 
 ```sh
-python hudi-integ-test/spark-pipelines/source_safety_acceptance.py \
-  --harness-dir /path/to/harness-checkout/hudi-integ-test/spark-pipelines \
+PYTHONOPTIMIZE=1 python hudi-integ-test/spark-pipelines/source_safety_acceptance.py \
   --bundle /path/to/candidate-hudi-spark4.1-bundle.jar \
   --table-type cow
 # Repeat with --table-type mor.

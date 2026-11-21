@@ -257,21 +257,20 @@ commits. Skipping empty sink batches is proposed follow-up work for #20406;
 this scenario preserves the current sink behavior.
 
 Explicit projection of `id, ts, value, part` excludes reserved upstream metadata
-columns from the downstream input. **`SELECT * FROM STREAM upstream` is not
-validated by this scenario.** Its metadata-column handling remains acceptance
-work under #20407: add a real CLI case and either establish safe stripping or
-verify a clear rejection. Do not infer that wildcard chaining is supported from
-these passing projection-based runs. `_hoodie_is_deleted` is a separate supported
-business input marker, not a reason to drop every `_hoodie_*` field blindly.
+columns from this scenario. The separate `TestHoodieSparkConnectPipelines` CLI
+suite covers COW/MOR wildcard chaining, unique target metadata fields and an
+explicit boolean `_hoodie_is_deleted` expression. That marker remains supported;
+it is not removed along with reserved system fields.
 
 This tests the default earliest starting offset and checkpoint-based resume.
 The source emits latest-state incremental records, not every intermediate
 change or hard-delete events. Its AvailableNow fallback has no bounded admission
 control; size the input backlog to fit one micro-batch.
 
-This scenario covers the incremental portion and **leaves #20407 open**.
-Reset/recreation, expired-history recovery and reader-option behavior are
-covered separately by #20516. Stop downstream consumers before resetting
+This scenario covers the incremental portion of #20407. Reset/recreation,
+expired-history recovery and reader-option behavior are implemented by merged
+#20516; `source_safety_acceptance.py` adds real CLI rejection and coordinated
+full-refresh/restart checks (see [SOURCE_SAFETY.md](SOURCE_SAFETY.md)). Stop downstream consumers before resetting
 upstream tables; rebuild affected tables and checkpoints in dependency order.
 
 Validated with Spark 4.1.1 / Scala 2.13 / JDK 17, using a freshly built candidate

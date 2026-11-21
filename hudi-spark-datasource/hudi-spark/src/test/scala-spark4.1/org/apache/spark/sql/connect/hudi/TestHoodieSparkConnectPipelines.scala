@@ -190,6 +190,37 @@ class TestHoodieSparkConnectPipelines extends FunSuite with BeforeAndAfterAll {
     }
   }
 
+  Seq("cow", "mor").foreach { tableType =>
+    test(s"$tableType wildcard chaining handles metadata and preserves the explicit delete marker") {
+      withPipeline { (dir, database) =>
+        write(new File(dir, "input"), "stable.json", """{"id":2,"ts":1,"value":"stable"}""")
+        write(dir, "flows.sql",
+          s"""SET spark.hoodie.datasource.write.operation=upsert;
+             |CREATE STREAMING TABLE upstream USING hudi
+             |TBLPROPERTIES ('type'='$tableType', 'primaryKey'='id', 'preCombineField'='ts')
+             |AS SELECT * FROM STREAM input_events;
+             |CREATE STREAMING TABLE downstream USING hudi
+             |TBLPROPERTIES ('type'='$tableType', 'primaryKey'='id', 'preCombineField'='ts')
+             |AS SELECT *, ts = 2 AS _hoodie_is_deleted FROM STREAM upstream;
+             |""".stripMargin)
+        assertSuccess(runPipeline(dir, database))
+        assert(rows(database, "downstream") == Seq(Row(1, 1L, "old"), Row(2, 1L, "stable")))
+        val fields = spark.table(s"$database.downstream").schema.fieldNames.toSeq
+        assert(fields.distinct == fields, s"Duplicate metadata columns: $fields")
+        assert(fields.contains("_hoodie_record_key"), fields)
+        assert(fields.contains("_hoodie_is_deleted"), fields)
+
+        // The explicit marker comes from business logic, not a propagated upstream hard delete.
+        write(new File(dir, "input"), "delete.json", """{"id":1,"ts":2,"value":"delete"}""")
+        assertSuccess(runPipeline(dir, database))
+        assert(rows(database, "upstream") == Seq(Row(1, 2L, "delete"), Row(2, 1L, "stable")))
+        assert(rows(database, "downstream") == Seq(Row(2, 1L, "stable")))
+        assertSuccess(runPipeline(dir, database))
+        assert(rows(database, "downstream") == Seq(Row(2, 1L, "stable")))
+      }
+    }
+  }
+
   private def remote: String = s"sc://127.0.0.1:${SparkConnectService.localPort}"
 
   private def withPipeline(f: (File, String) => Unit): Unit = {
