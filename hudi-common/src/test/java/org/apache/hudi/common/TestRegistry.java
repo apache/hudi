@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common;
 
+import org.apache.hudi.common.metrics.LocalRegistry;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +28,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -76,4 +80,25 @@ public class TestRegistry {
     assertEquals(countsMap, r.getAllCounts());
   }
 
+  @Test
+  public void testGetRegistryOfClassRejectsAnotherClass() {
+    String tableName = "testGetRegistryOfClassRejectsAnotherClass";
+    Registry registry = Registry.getRegistryOfClass(tableName, "registry", LocalRegistry.class.getName());
+    assertSame(registry, Registry.getRegistryOfClass(tableName, "registry", LocalRegistry.class.getName()));
+
+    HoodieException exception = assertThrows(HoodieException.class,
+        () -> Registry.getRegistryOfClass(tableName, "registry", OtherRegistry.class.getName()));
+    assertEquals("Registry testGetRegistryOfClassRejectsAnotherClass::registry already exists with class "
+        + LocalRegistry.class.getName() + ", but class " + OtherRegistry.class.getName() + " was requested", exception.getMessage());
+    assertSame(registry, Registry.getRegistryOfClass(tableName, "registry", LocalRegistry.class.getName()));
+  }
+
+  /**
+   * A registry class other than {@link LocalRegistry}, as the Spark {@code DistributedRegistry} is.
+   */
+  public static class OtherRegistry extends LocalRegistry {
+    public OtherRegistry(String name) {
+      super(name);
+    }
+  }
 }

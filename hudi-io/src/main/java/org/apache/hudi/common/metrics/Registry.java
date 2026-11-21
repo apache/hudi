@@ -20,6 +20,7 @@ package org.apache.hudi.common.metrics;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,6 +93,7 @@ public interface Registry extends Serializable {
    * @param tableName Name of the table (empty string for singleton/process-wide registries).
    * @param registryName Name of the registry.
    * @param clazz The fully qualified name of the registry class to create.
+   * @throws HoodieException if the registry already exists with a different class.
    */
   static Registry getRegistryOfClass(String tableName, String registryName, String clazz) {
     String key = makeKey(tableName, registryName);
@@ -103,7 +105,8 @@ public interface Registry extends Serializable {
     });
 
     if (!registry.getClass().getName().equals(clazz)) {
-      LOG.error("Registry with name {} already exists with a different class {} than the requested class {}", registryName, registry.getClass().getName(), clazz);
+      throw new HoodieException(String.format("Registry %s already exists with class %s, but class %s was requested",
+          key, registry.getClass().getName(), clazz));
     }
     return registry;
   }
