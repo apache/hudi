@@ -15,16 +15,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Tears down everything up.sh created (the whole hudi-lakehouse namespace).
+# Stop local-dev workloads without deleting PVCs or Helm configuration.
 set -euo pipefail
 NS=hudi-lakehouse
-
-# Delete SparkApplications FIRST, while the operator is still alive to
-# process their finalizers -- otherwise the namespace hangs in Terminating.
-kubectl -n "$NS" delete sparkapplications --all --timeout=120s 2>/dev/null || true
-
-helm uninstall hudi-trino -n "$NS" 2>/dev/null || true
-helm uninstall hudi-spark-connect -n "$NS" 2>/dev/null || true
-helm uninstall spark-kubernetes-operator -n "$NS" 2>/dev/null || true
-kubectl delete namespace "$NS" --ignore-not-found --timeout=300s
-echo ">>> local-dev lakehouse removed"
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+if [[ $# -ne 0 ]]; then
+  echo 'Usage: down.sh (stops workloads and preserves data; no deletion flags)' >&2
+  exit 2
+fi
+# SparkApplication finalizers need the running operator. Preserve the original
+# developer cleanup ordering; application objects are disposable, PVCs are not.
+spark_resources="$(kubectl api-resources --api-group=spark.apache.org -o name)"
+if grep -qx 'sparkapplications.spark.apache.org' <<< "$spark_resources"; then
+  kubectl -n "$NS" delete sparkapplications.spark.apache.org --all --timeout=120s
+fi
+for deployment in hudi-agent-gateway hudi-spark-connect hudi-trino vllm minio hive-metastore spark-kubernetes-operator; do
+  existing="$(kubectl -n "$NS" get deployment "$deployment" --ignore-not-found -o name)"
+  if [[ -n "$existing" ]]; then
+    kubectl -n "$NS" scale deployment "$deployment" --replicas=0
+    kubectl -n "$NS" rollout status deployment/"$deployment" --timeout=180s
+  fi
+done
+# Replica counts can reach zero while a terminating pod still holds its volume.
+kubectl -n "$NS" wait --for=delete pod -l 'app.kubernetes.io/name in (minio,hive-metastore)' --timeout=180s
+kubectl -n "$NS" delete job minio-make-bucket --ignore-not-found --wait=true
+echo '>>> Workloads stopped. Namespace, Helm releases, MinIO and HMS PVCs are preserved.'
+echo 'Run the same up command to resume. Namespace/profile deletion would destroy local data.'

@@ -50,3 +50,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s-llm" (include "hudi-agent-gateway.fullname" .) -}}
 {{- end -}}
 {{- end -}}
+
+{{- define "hudi-agent-gateway.image" -}}
+{{- with .Values.image.digest -}}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .) -}}
+{{- fail "image.digest must be a sha256 digest with 64 lowercase hex digits" -}}
+{{- end -}}
+{{- printf "%s@%s" $.Values.image.repository . -}}
+{{- else -}}
+{{- printf "%s:%v" .Values.image.repository .Values.image.tag -}}
+{{- end -}}
+{{- end -}}

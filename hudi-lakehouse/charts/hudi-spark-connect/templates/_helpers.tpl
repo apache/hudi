@@ -71,3 +71,14 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/part-of: hudi-lakehouse
 {{- end -}}
+
+{{- define "hudi-spark-connect.image" -}}
+{{- with .Values.image.digest -}}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .) -}}
+{{- fail "image.digest must be a sha256 digest with 64 lowercase hex digits" -}}
+{{- end -}}
+{{- printf "%s@%s" $.Values.image.repository . -}}
+{{- else -}}
+{{- printf "%s:%v" .Values.image.repository .Values.image.tag -}}
+{{- end -}}
+{{- end -}}
