@@ -21,14 +21,13 @@ package org.apache.hudi.integ.testsuite.helpers;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 
-import org.apache.curator.framework.CuratorFramework;
 import org.apache.hadoop.conf.Configuration;
 
 public class ZookeeperServiceProvider {
 
-  Configuration configuration;
-  private CuratorFramework client;
-  private Config config;
+  private final Configuration configuration;
+  private final Config config;
+  private ZookeeperTestService zookeeperTestService;
 
   public ZookeeperServiceProvider(Config config, Configuration configuration) {
     this.configuration = configuration;
@@ -36,16 +35,45 @@ public class ZookeeperServiceProvider {
   }
 
   public void startLocalZookeeperIfNeeded() throws Exception {
-    if (config.isHiveLocal()) {
-      ZookeeperTestService zookeeperTestService = new ZookeeperTestService(configuration);
-      zookeeperTestService.start();
+    if (config.isHiveLocal() && zookeeperTestService == null) {
+      zookeeperTestService = new ZookeeperTestService(configuration);
+      try {
+        zookeeperTestService.start();
+      } catch (Exception e) {
+        try {
+          zookeeperTestService.stop();
+        } catch (Exception stopException) {
+          e.addSuppressed(stopException);
+        } finally {
+          zookeeperTestService = null;
+        }
+        throw e;
+      }
     }
   }
 
   public void stopLocalZookeeperIfNeeded() throws Exception {
-    if (config.isHiveLocal()) {
-      ZookeeperTestService zookeeperTestService = new ZookeeperTestService(configuration);
-      zookeeperTestService.stop();
+    if (config.isHiveLocal() && zookeeperTestService != null) {
+      try {
+        zookeeperTestService.stop();
+      } finally {
+        zookeeperTestService = null;
+      }
     }
+  }
+
+  public String getConnectString() {
+    return getZookeeperTestService().connectString();
+  }
+
+  public int getClientPort() {
+    return getZookeeperTestService().clientPort();
+  }
+
+  private ZookeeperTestService getZookeeperTestService() {
+    if (zookeeperTestService == null) {
+      throw new IllegalStateException("Local Zookeeper service is not running");
+    }
+    return zookeeperTestService;
   }
 }
