@@ -22,10 +22,12 @@ package org.apache.spark.sql.hudi.dml.others
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
+import org.apache.hudi.io.HoodieWriteMergeHandle
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -182,6 +184,63 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
    *
    * The test also provides test coverage for "Test merge into allowed patterns of assignment clauses".
    */
+  test("Test MergeInto with a non-nullable source and the row merge handle") {
+    withRecordType(Seq(HoodieRecordType.AVRO)) {
+      withTempDir { tmp =>
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> "false") {
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (name string, city string, rating int, ts bigint, country string)
+               |using hudi
+               |partitioned by (country)
+               |location '${tmp.getCanonicalPath}'
+               |tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'country,name',
+               |  preCombineField = 'ts',
+               |  '${HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key()}' = '${classOf[HoodieWriteMergeHandle[_, _, _, _]].getName}'
+               |)
+               |""".stripMargin)
+
+          spark.sql(
+            s"""
+               |insert into $tableName values
+               |  ('update', 'phoenix', 1, 1000L, 'United_States'),
+               |  ('keep', 'tucson', 2, 1000L, 'United_States'),
+               |  ('remove', 'tempe', 3, 1000L, 'United_States')
+               |""".stripMargin)
+          val originalCommit = spark.sql(s"select _hoodie_commit_time from $tableName where name = 'keep'").head().getString(0)
+
+          val source = """
+                         |select 'update' as name, 'scottsdale' as city, 9 as rating, 2000L as ts, 'United_States' as country
+                         |union all select 'keep', 'mesa', -1, 2000L, 'United_States'
+                         |union all select 'remove', 'tempe', 0, 2000L, 'United_States'
+                         |union all select 'insert', 'gilbert', 4, 2000L, 'United_States'
+                         |""".stripMargin
+          assert(spark.sql(source).schema.forall(field => !field.nullable))
+          assert(spark.table(tableName).schema("city").nullable)
+
+          spark.sql(
+            s"""
+               |merge into $tableName t
+               |using ($source) s
+               |on t.country = s.country and t.name = s.name
+               |when matched and s.rating = 0 then delete
+               |when matched and s.rating > 0 then update set *
+               |when not matched then insert *
+               |""".stripMargin)
+
+          checkAnswer(s"select name, city, rating, ts, country from $tableName")(
+            Seq("update", "scottsdale", 9, 2000L, "United_States"),
+            Seq("keep", "tucson", 2, 1000L, "United_States"),
+            Seq("insert", "gilbert", 4, 2000L, "United_States"))
+          checkAnswer(s"select _hoodie_commit_time from $tableName where name = 'keep'")(Seq(originalCommit))
+        }
+      }
+    }
+  }
+
   test("Test MergeInto with more than once update actions") {
 
     withTempDir { tmp =>

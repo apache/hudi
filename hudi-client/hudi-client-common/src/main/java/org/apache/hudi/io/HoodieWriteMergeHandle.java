@@ -386,19 +386,12 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
         BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema,
             readerContext.getRecordContext(), props, orderingFields, deleteContext);
         BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
-        HoodieSchema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
-        HoodieRecord combinedRecord = readerContext.getRecordContext().constructHoodieRecord(mergeResult);
-        if (combinedRecord.shouldIgnore(combineRecordSchema, props)) {
-          // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
-          copyOldRecord = true;
-        } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {
-          /*
-           * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully
-           * write the combined new value
-           *
-           * We no longer need to copy the old record over.
-           */
-          copyOldRecord = false;
+        if (mergeResult != oldBufferedRecord) {
+          HoodieSchema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
+          // The merger already applied the payload using the incoming record's schema.
+          HoodieRecord<T> combinedRecord = readerContext.getRecordContext().constructFinalHoodieRecord(mergeResult);
+          copyOldRecord = combinedRecord.shouldIgnore(combineRecordSchema, props)
+              || !writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema);
         }
         writtenRecordKeys.add(key);
       } catch (Exception e) {
