@@ -262,7 +262,7 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
           } else {
             if (metaBootstrapFileIdToFullPath.nonEmpty) {
               df = sqlContext.sparkSession.read
-                .format("hudi_v1")
+                .format(classOf[DefaultSource].getName)
                 .schema(prunedSchema)
                 .option(DataSourceReadOptions.READ_PATHS.key, filteredMetaBootstrapFullPaths.mkString(","))
                 // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
@@ -337,7 +337,7 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
 
   private def fullTableScanDataFrame(startInstantTime: String, endInstantTime: String, prunedSchema: StructType): DataFrame = {
     val hudiDF = sqlContext.read
-      .format("hudi_v1")
+      .format(classOf[DefaultSource].getName)
       .schema(prunedSchema)
       .load(basePath.toString)
       .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, //Notice the > in place of >= because we are working with optParam instead of first commit > optParam

@@ -17,9 +17,11 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceOptionsHelper, DataSourceReadOptions, DataSourceWriteOptions, DefaultSource}
+import org.apache.hudi.{DataSourceOptionsHelper, DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation,
+  IncrementalRelationV1, IncrementalRelationV2, MergeOnReadIncrementalRelationV1, MergeOnReadIncrementalRelationV2}
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
@@ -32,7 +34,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.io.FileNotFoundException
 import java.util.Properties
@@ -48,6 +50,11 @@ import scala.collection.JavaConverters._
  * current version, read through the V2 relations (completion-time ranges). V1 relations treat an instant archived
  * after the listing like an archived start instant: they fall back to a full table scan if enabled and fail with
  * HoodieIncrementalPathNotFoundException otherwise. V2 relations read it from the archived timeline.
+ *
+ * Each case runs with the file group reader on and off. With it on, the relation comes from DefaultSource, whose
+ * HadoopFsRelation factories plan with MergeOnReadIncrementalRelationV1/V2 for both table types. With it off, the
+ * relation is built the way the structured-streaming source builds it: IncrementalRelationV1/V2 for copy-on-write
+ * tables and MergeOnReadIncrementalRelationV1/V2 scanning on its own for merge-on-read tables.
  */
 class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
 
@@ -70,11 +77,13 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testLegacyTableFallsBackToFullTableScanWhenIncludedInstantArchivedAfterListing(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("readPaths"))
+  def testLegacyTableFallsBackToFullTableScanWhenIncludedInstantArchivedAfterListing(tableType: HoodieTableType,
+      fileGroupReaderEnabled: Boolean): Unit = {
     val batches = writeBatches(tableType, legacyTableVersion = true, 6)
     val listedMetaClient = loadMetaClient()
-    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion = true), fallbackToFullTableScan = true)
+    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion = true),
+      fallbackToFullTableScan = true, fileGroupReaderEnabled)
 
     archiveIncludedInstants(listedMetaClient, batches, legacyTableVersion = true)
 
@@ -83,11 +92,13 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testLegacyTableFailsWithPathNotFoundWhenIncludedInstantArchivedAfterListingWithoutFallback(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("readPaths"))
+  def testLegacyTableFailsWithPathNotFoundWhenIncludedInstantArchivedAfterListingWithoutFallback(tableType: HoodieTableType,
+      fileGroupReaderEnabled: Boolean): Unit = {
     val batches = writeBatches(tableType, legacyTableVersion = true, 6)
     val listedMetaClient = loadMetaClient()
-    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion = true), fallbackToFullTableScan = false)
+    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion = true),
+      fallbackToFullTableScan = false, fileGroupReaderEnabled)
 
     archiveIncludedInstants(listedMetaClient, batches, legacyTableVersion = true)
 
@@ -101,11 +112,13 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testReadsInstantsArchivedAfterListingFromArchivedTimeline(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("readPaths"))
+  def testReadsInstantsArchivedAfterListingFromArchivedTimeline(tableType: HoodieTableType,
+      fileGroupReaderEnabled: Boolean): Unit = {
     val batches = writeBatches(tableType, legacyTableVersion = false, 6)
     val listedMetaClient = loadMetaClient()
-    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion = false), fallbackToFullTableScan = false)
+    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion = false),
+      fallbackToFullTableScan = false, fileGroupReaderEnabled)
 
     archiveIncludedInstants(listedMetaClient, batches, legacyTableVersion = false)
 
@@ -113,12 +126,14 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testFailsWhenIncludedInstantIsNeitherActiveNorArchived(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("readPaths"))
+  def testFailsWhenIncludedInstantIsNeitherActiveNorArchived(tableType: HoodieTableType,
+      fileGroupReaderEnabled: Boolean): Unit = {
     val legacyTableVersion = false
     val batches = writeBatches(tableType, legacyTableVersion, 3)
     val listedMetaClient = loadMetaClient()
-    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion), fallbackToFullTableScan = false)
+    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion),
+      fallbackToFullTableScan = false, fileGroupReaderEnabled)
     val removedInstant = batches(1).instant
     // Remove every state file of the instant, as archival does, but without writing an archive entry.
     val removedFiles = storage.listDirectEntries(listedMetaClient.getTimelinePath).asScala.map(_.getPath)
@@ -139,15 +154,17 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testReadsReplaceCommitArchivedAfterListingFromArchivedTimeline(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("readPaths"))
+  def testReadsReplaceCommitArchivedAfterListingFromArchivedTimeline(tableType: HoodieTableType,
+      fileGroupReaderEnabled: Boolean): Unit = {
     // Batch 3 overwrites the table, replacing the file groups of batches 1 and 2.
     val overwriteBatch = 2
     val batches = writeBatches(tableType, legacyTableVersion = false, 6, overwriteTableBatch = Some(overwriteBatch))
     val replaceInstant = batches(overwriteBatch).instant
     assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, replaceInstant.getAction)
     val listedMetaClient = loadMetaClient()
-    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion = false), fallbackToFullTableScan = false)
+    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion = false),
+      fallbackToFullTableScan = false, fileGroupReaderEnabled)
 
     // The archiver keeps a replace commit until the file groups it replaced are cleaned.
     archiveIncludedInstants(listedMetaClient, batches, legacyTableVersion = false, cleanFirst = true)
@@ -249,14 +266,39 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
     }
   }
 
+  /**
+   * Builds the incremental relation for the read path under test. With the file group reader off, this is what the
+   * structured-streaming source builds, the only other caller of these relations.
+   */
   private def createRelation(metaClient: HoodieTableMetaClient, startCommit: String,
-                             fallbackToFullTableScan: Boolean): BaseRelation = {
+                             fallbackToFullTableScan: Boolean, fileGroupReaderEnabled: Boolean): BaseRelation = {
     val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(Map(
       "path" -> basePath,
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
       DataSourceReadOptions.START_COMMIT.key -> startCommit,
       DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key -> fallbackToFullTableScan.toString))
-    DefaultSource.createRelation(sqlContext, metaClient, null, parameters)
+    val legacyTableVersion = metaClient.getTableConfig.getTableVersion.lesserThan(HoodieTableVersion.EIGHT)
+    val relation = (fileGroupReaderEnabled, metaClient.getTableType, legacyTableVersion) match {
+      case (true, _, _) => DefaultSource.createRelation(sqlContext, metaClient, null, parameters)
+      case (false, HoodieTableType.COPY_ON_WRITE, true) => new IncrementalRelationV1(sqlContext, parameters, None, metaClient)
+      case (false, HoodieTableType.COPY_ON_WRITE, false) =>
+        new IncrementalRelationV2(sqlContext, parameters, None, metaClient, RangeType.OPEN_CLOSED)
+      case (false, HoodieTableType.MERGE_ON_READ, true) => MergeOnReadIncrementalRelationV1(sqlContext, parameters, metaClient, None)
+      case (false, HoodieTableType.MERGE_ON_READ, false) =>
+        MergeOnReadIncrementalRelationV2(sqlContext, parameters, metaClient, None, rangeType = RangeType.OPEN_CLOSED)
+    }
+    listBeforeArchival(relation)
+    relation
+  }
+
+  /**
+   * Relations that plan through a file index build it, and reload the meta client's active timeline, when Spark first
+   * plans the query. Builds it now, before the test archives, as when the writer archives during query planning;
+   * otherwise the relation would only ever see the timeline after archival.
+   */
+  private def listBeforeArchival(relation: BaseRelation): Unit = relation match {
+    case baseRelation: HoodieBaseRelation => baseRelation.fileIndex
+    case _ =>
   }
 
   private def readRows(relation: BaseRelation): Set[(String, String)] = {
@@ -275,5 +317,19 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
     val metaClient = createMetaClient(spark, basePath)
     metaClient.getActiveTimeline
     metaClient
+  }
+}
+
+object TestIncrementalReadConcurrentArchival {
+
+  /**
+   * Every table type, read with the file group reader on and off.
+   */
+  def readPaths(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      (for {
+        tableType <- HoodieTableType.values().toSeq
+        fileGroupReaderEnabled <- Seq(true, false)
+      } yield Arguments.of(tableType, java.lang.Boolean.valueOf(fileGroupReaderEnabled))): _*)
   }
 }
