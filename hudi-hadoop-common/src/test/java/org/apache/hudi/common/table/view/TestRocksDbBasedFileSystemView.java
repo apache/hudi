@@ -50,7 +50,7 @@ public class TestRocksDbBasedFileSystemView extends TestHoodieTableFileSystemVie
 
   /**
    * The driver reaches RocksDBDAO through this view, one per table, and the production symptom was
-   * those DAOs and their native logger callbacks accumulating for the life of the JVM. Close a view
+   * those DAOs and their native handles accumulating for the life of the JVM. Close a view
    * repeatedly and require that nothing it opened stays reachable.
    */
   @Test
@@ -62,20 +62,11 @@ public class TestRocksDbBasedFileSystemView extends TestHoodieTableFileSystemVie
       RocksDBDAO dao = (RocksDBDAO) readField(view, RocksDbBasedFileSystemView.class, "rocksDB");
       refs.add(new WeakReference<>(view));
       refs.add(new WeakReference<>(dao));
-      refs.add(new WeakReference<>(nativeLoggerOf(dao)));
+      refs.add(new WeakReference<>(readField(dao, RocksDBDAO.class, "dbOptions")));
+      refs.add(new WeakReference<>(readField(dao, RocksDBDAO.class, "statistics")));
       view.close();
     }
     assertAllCollectable(refs);
-  }
-
-  /**
-   * The logger is the object the JNI global reference actually pins, and asserting on the view or
-   * the DAO alone would pass while it leaks -- the logger is a static nested class now, so it no
-   * longer captures its DAO. Read reflectively rather than widening production visibility for a
-   * test; the accessor is package-private in a different package from this test.
-   */
-  private static Object nativeLoggerOf(RocksDBDAO dao) throws ReflectiveOperationException {
-    return readField(dao, RocksDBDAO.class, "logger");
   }
 
   private static Object readField(Object target, Class<?> declaringClass, String name)
