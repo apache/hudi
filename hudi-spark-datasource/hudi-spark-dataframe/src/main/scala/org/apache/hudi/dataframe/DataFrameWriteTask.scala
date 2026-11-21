@@ -46,6 +46,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          table: HoodieTable[InternalRow, _, _, _],
                          readerContextFactory: ReaderContextFactory[InternalRow],
                          instantTime: String,
+                         operation: WriteOperationType,
                          routedSchema: StructType,
                          writeSchemaLength: Int,
                          bucketOrdinal: Int,
@@ -150,7 +151,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     val recordItr = bucketRecordIterator(buffered, bucket, dataProjection, dataSchema, None)
 
     val mergeHandle = HoodieMergeHandleFactory.create(
-      WriteOperationType.UPSERT, writeConfig, instantTime,
+      operation, writeConfig, instantTime,
       table.asInstanceOf[HoodieTable[InternalRow, AnyRef, AnyRef, AnyRef]],
       MergeContext.create(recordItr), partitionPath, fileId, taskContextSupplier,
       HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig))

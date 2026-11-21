@@ -155,7 +155,7 @@ object HoodieDataFrameWriter extends Logging {
       val sparkTable = table.asInstanceOf[HoodieTable[InternalRow, _, _, _]]
       val readerContextFactory = sparkTable.getReaderContextFactoryForWrite
       val task = new DataFrameWriteTask(
-        writeConfig, sparkTable, readerContextFactory, instantTime, withBucket.schema,
+        writeConfig, sparkTable, readerContextFactory, instantTime, operation, withBucket.schema,
         writeSchemaLength, bucketOrdinal, withBucket.schema.fieldIndex(ROW_OP_COL),
         mergeOnRead)
 

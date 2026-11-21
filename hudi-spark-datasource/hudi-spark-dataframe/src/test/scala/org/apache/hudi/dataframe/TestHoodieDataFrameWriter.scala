@@ -182,6 +182,23 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testInsertPaddingKeepsDuplicateKeysLikeLegacyPath(): Unit = {
+    val snapshots = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_insert_dups_$enabled").toString
+      val opts = Map(HoodieDataFrameWriter.DATAFRAME_WRITE_PATH_ENABLE -> enabled)
+      writeHudi(Seq(("d1", "p1", 1L, "x1"), ("d2", "p1", 1L, "x2")), "insert", path, opts)
+      writeHudi(Seq(("d1", "p1", 2L, "y1"), ("d3", "p1", 2L, "y3")), "insert", path, opts)
+      spark.read.format("hudi").load(path).select("key", "ts", "value").collect()
+        .map(r => (r.getString(0), r.getLong(1), r.getString(2))).sorted.toSeq
+    }
+    // Inserts allow duplicate keys by default, so the second d1 lands next to the first one
+    // even when it pads the same small file group.
+    Assertions.assertEquals(
+      Seq(("d1", 1L, "x1"), ("d1", 2L, "y1"), ("d2", 1L, "x2"), ("d3", 2L, "y3")), snapshots.head)
+    Assertions.assertEquals(snapshots(1), snapshots.head)
+  }
+
+  @Test
   def testInsertsPadExistingSmallFiles(): Unit = {
     val path = tempDir.resolve("test_table_padding").toString
 
