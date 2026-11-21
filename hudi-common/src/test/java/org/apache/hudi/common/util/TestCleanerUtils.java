@@ -238,6 +238,72 @@ class TestCleanerUtils {
     assertEquals(timestamps.get(10), result.get().requestedTime());
   }
 
+  @Test
+  void testKeepLatestByHoursRetainsLatestCommitWhenEveryCommitIsOlderThanTheWindow() {
+    List<String> timestamps = timestampsEndingHoursAgo(3, 5);
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithTimestamps(timestamps), HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, 12, Instant.now(), 2,
+        HoodieTimelineTimeZone.UTC, Option.empty(), Long.MAX_VALUE);
+    assertTrue(result.isPresent());
+    assertEquals(timestamps.get(2), result.get().requestedTime());
+  }
+
+  @Test
+  void testKeepLatestByHoursEveryCommitOlderThanTheWindowRespectsMaxCommitsToClean() {
+    List<String> timestamps = timestampsEndingHoursAgo(100, 5);
+    HoodieTimeline timeline = createMockTimelineWithTimestamps(timestamps);
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        timeline, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, 12, Instant.now(), 2,
+        HoodieTimelineTimeZone.UTC, Option.of(timestamps.get(0)), 10L);
+    assertTrue(result.isPresent());
+    assertEquals(timestamps.get(10), result.get().requestedTime());
+
+    result = CleanerUtils.getEarliestCommitToRetain(
+        timeline, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, 12, Instant.now(), 2,
+        HoodieTimelineTimeZone.UTC, Option.of(timestamps.get(95)), 10L);
+    assertEquals(timestamps.get(99), result.get().requestedTime());
+  }
+
+  @Test
+  void testKeepLatestByHoursEveryCommitOlderThanTheWindowStopsBeforeAPendingCommit() {
+    List<String> timestamps = timestampsEndingHoursAgo(10, 5);
+    HoodieInstant pending = new HoodieInstant(HoodieInstant.State.INFLIGHT,
+        HoodieTimeline.COMMIT_ACTION, timestamps.get(6), InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    List<String> completed = new ArrayList<>(timestamps);
+    completed.remove(6);
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithTimestamps(completed, Option.of(pending)), HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, 12,
+        Instant.now(), 2, HoodieTimelineTimeZone.UTC, Option.empty(), Long.MAX_VALUE);
+    assertTrue(result.isPresent());
+    assertEquals(timestamps.get(5), result.get().requestedTime());
+
+    result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithTimestamps(completed, Option.of(pending)), HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, 12,
+        Instant.now(), 2, HoodieTimelineTimeZone.UTC, Option.of(timestamps.get(8)), Long.MAX_VALUE);
+    assertEquals(timestamps.get(8), result.get().requestedTime(), "not from before the commit the previous clean retained from");
+  }
+
+  @Test
+  void testKeepLatestByHoursEveryCommitOlderThanTheWindowRetainsNothingAfterAnEarlierPendingCommit() {
+    List<String> timestamps = timestampsEndingHoursAgo(10, 5);
+    HoodieInstant pending = new HoodieInstant(HoodieInstant.State.INFLIGHT,
+        HoodieTimeline.COMMIT_ACTION, timestamps.get(0), InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    List<String> completed = new ArrayList<>(timestamps.subList(1, timestamps.size()));
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithTimestamps(completed, Option.of(pending)), HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, 12,
+        Instant.now(), 2, HoodieTimelineTimeZone.UTC, Option.of(timestamps.get(1)), Long.MAX_VALUE);
+    assertFalse(result.isPresent(), "no completed commit precedes the pending one");
+  }
+
+  private static List<String> timestampsEndingHoursAgo(int numCommits, int hoursAgo) {
+    ZonedDateTime last = ZonedDateTime.ofInstant(Instant.now(), ZoneId.of("UTC")).minusHours(hoursAgo);
+    List<String> timestamps = new ArrayList<>();
+    for (int i = numCommits - 1; i >= 0; i--) {
+      timestamps.add(org.apache.hudi.common.table.timeline.TimelineUtils.formatDate(Date.from(last.minusMinutes(i).toInstant())));
+    }
+    return timestamps;
+  }
+
   /**
    * Helper method to create a mock timeline with specified number of commits.
    * Commits are named as "20000000000000", "20000000000001", etc.
@@ -254,6 +320,10 @@ class TestCleanerUtils {
    * Helper method to create a mock timeline with specified timestamps.
    */
   private HoodieTimeline createMockTimelineWithTimestamps(List<String> timestamps) {
+    return createMockTimelineWithTimestamps(timestamps, Option.empty());
+  }
+
+  private HoodieTimeline createMockTimelineWithTimestamps(List<String> timestamps, Option<HoodieInstant> pendingInstant) {
     int numCommits = timestamps.size();
     HoodieTimeline timeline = mock(HoodieTimeline.class);
     HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
@@ -268,6 +338,7 @@ class TestCleanerUtils {
     when(timeline.filterCompletedInstants()).thenReturn(completedTimeline);
     when(completedTimeline.countInstants()).thenReturn(numCommits);
     when(completedTimeline.getInstantsAsStream()).thenAnswer(invocation -> instants.stream());
+    when(completedTimeline.lastInstant()).thenReturn(instants.isEmpty() ? Option.empty() : Option.of(instants.get(numCommits - 1)));
 
     // Mock nthInstant to return the nth instant from the list
     for (int i = 0; i < numCommits; i++) {
@@ -284,13 +355,15 @@ class TestCleanerUtils {
               .filter(i -> i.requestedTime().compareTo(timestamp) < 0)
               .collect(Collectors.toList());
           when(beforeTimeline.getInstantsAsStream()).thenAnswer(inv -> beforeInstants.stream());
+          when(beforeTimeline.lastInstant()).thenReturn(
+              beforeInstants.isEmpty() ? Option.empty() : Option.of(beforeInstants.get(beforeInstants.size() - 1)));
           return beforeTimeline;
         });
 
-    // Mock filter for pending commits (empty for this test)
-    HoodieTimeline emptyTimeline = mock(HoodieTimeline.class);
-    when(emptyTimeline.firstInstant()).thenReturn(Option.empty());
-    when(timeline.filter(org.mockito.ArgumentMatchers.any())).thenReturn(emptyTimeline);
+    // Mock filter for pending commits
+    HoodieTimeline pendingTimeline = mock(HoodieTimeline.class);
+    when(pendingTimeline.firstInstant()).thenReturn(pendingInstant);
+    when(timeline.filter(org.mockito.ArgumentMatchers.any())).thenReturn(pendingTimeline);
 
     return timeline;
   }

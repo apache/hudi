@@ -64,10 +64,12 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -672,6 +674,55 @@ public class TestCleaner extends HoodieCleanerTestBase {
     assertTrue(testTable.baseFileExists(p1, "00000000000003", file3P1C2));
     assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
+  }
+
+  @Test
+  void testKeepLatestByHoursWithoutCommitInWindowKeepsTheReplacedSavepointGuard() throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS).cleanerNumHoursRetained(2).build())
+        .build();
+
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, getMetadataWriter(config), Option.of(context));
+    try {
+      String p0 = "2020/01/01";
+      String file1 = UUID.randomUUID().toString();
+      String file2 = UUID.randomUUID().toString();
+      commitWithMdt("00000000000001", Collections.singletonMap(p0, CollectionUtils.createImmutableList(file1, file2)), testTable, config);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+      testTable.addSavepoint("00000000000001", testTable.getSavepointMetadata("00000000000001",
+          Collections.singletonMap(p0, CollectionUtils.createImmutableList(
+              FileCreateUtils.baseFileName("00000000000001", file1), FileCreateUtils.baseFileName("00000000000001", file2)))));
+
+      String file3 = testTable.forReplaceCommit("00000000000002").getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+      Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
+          generateReplaceCommitMetadata("00000000000002", p0, file2, file3);
+      testTable.addCluster("00000000000002", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
+      testTable = tearDownTestTableAndReinit(testTable, config);
+      for (String instant : Arrays.asList("00000000000003", "00000000000004", "00000000000005")) {
+        commitWithMdt(instant, Collections.singletonMap(p0, CollectionUtils.createImmutableList(file1)), testTable, config);
+        testTable = tearDownTestTableAndReinit(testTable, config);
+      }
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      runCleaner(config, 6, true);
+
+      assertTrue(testTable.baseFileExists(p0, "00000000000001", file1), "savepointed slice is kept");
+      assertTrue(testTable.baseFileExists(p0, "00000000000001", file2), "savepointed replaced file group is kept");
+      assertFalse(testTable.baseFileExists(p0, "00000000000003", file1));
+      assertTrue(testTable.baseFileExists(p0, "00000000000004", file1));
+      assertTrue(testTable.baseFileExists(p0, "00000000000005", file1));
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieInstant clean = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant().get();
+      HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, clean);
+      assertEquals("00000000000005", cleanerPlan.getEarliestInstantToRetain().getTimestamp());
+      assertEquals(Option.of("00000000000001"),
+          ClusteringUtils.getEarliestReplacedSavepointInClean(metaClient.getActiveTimeline(), HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, cleanerPlan));
+    } finally {
+      testTable.close();
+    }
   }
 
   private Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(
