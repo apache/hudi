@@ -561,7 +561,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
     val recordIndexReady = recordIndexConfigured &&
       table.getMetaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)
-    val globalIndex = recordIndexConfigured || indexType == HoodieIndex.IndexType.GLOBAL_SIMPLE
+    val globalIndex = recordIndexConfigured || indexType == HoodieIndex.IndexType.GLOBAL_SIMPLE ||
+      indexType == HoodieIndex.IndexType.GLOBAL_BLOOM
     val deleteMarker: Column = if (operation == WriteOperationType.DELETE) {
       lit(true)
     } else if (prepared.columns.contains(DELETE_MARKER_COL)) {
@@ -609,6 +610,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       // A delete goes to wherever the key is; only an upsert can move a key to a new partition.
       val updatePartitionPath = globalIndex && operation == WriteOperationType.UPSERT && (if (recordIndexConfigured) {
         writeConfig.getRecordIndexUpdatePartitionPath
+      } else if (indexType == HoodieIndex.IndexType.GLOBAL_BLOOM) {
+        writeConfig.getGlobalBloomIndexUpdatePartitionPath
       } else {
         writeConfig.getGlobalSimpleIndexUpdatePartitionPath
       })
@@ -877,6 +880,7 @@ object HoodieDataFrameWriter {
   private val SUPPORTED_INDEX_TYPES: Set[HoodieIndex.IndexType] = Set(
     HoodieIndex.IndexType.SIMPLE,
     HoodieIndex.IndexType.GLOBAL_SIMPLE,
+    HoodieIndex.IndexType.GLOBAL_BLOOM,
     HoodieIndex.IndexType.BLOOM,
     HoodieIndex.IndexType.RECORD_INDEX,
     HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX,

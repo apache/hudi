@@ -683,10 +683,12 @@ class TestHoodieDataFrameWriter {
 
   @Test
   def testGlobalIndexMovesAKeyOnlyWhenItsOrderingValueIsNotBehind(): Unit = {
-    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
-      val rows = writeOnBothPaths(s"test_table_global_move_ordering_$tableType",
-        Map("hoodie.index.type" -> "GLOBAL_SIMPLE",
-          "hoodie.simple.index.update.partition.path" -> "true",
+    for (tableType <- Seq("COPY_ON_WRITE", "MERGE_ON_READ");
+         (indexType, moveKey) <- Seq("GLOBAL_SIMPLE" -> "hoodie.simple.index.update.partition.path",
+           "GLOBAL_BLOOM" -> "hoodie.bloom.index.update.partition.path")) {
+      val rows = writeOnBothPaths(s"test_table_global_move_ordering_${tableType}_$indexType",
+        Map("hoodie.index.type" -> indexType,
+          moveKey -> "true",
           "hoodie.datasource.write.table.type" -> tableType,
           "hoodie.compact.inline" -> "false"),
         Seq(
