@@ -13,8 +13,6 @@
  */
 package io.trino.plugin.hudi.testing;
 
-import com.google.common.collect.ImmutableList;
-import io.trino.metastore.Column;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -28,19 +26,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static io.trino.metastore.HiveType.HIVE_DOUBLE;
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
 
 /**
- * Creates a table whose base file was written BEFORE its columns were widened, while the metastore reports the types
- * they were widened TO -- the state every unrewritten base file is in after a Hudi type evolution followed by a hive
- * sync. The two halves are declared independently on purpose: {@link #avroSchema()} is what the write client puts in
- * the file, {@link #dataColumns()} is what the metastore hands the connector, and only their disagreement is being
- * modelled.
+ * Creates a table whose base file was written BEFORE its columns were widened, while the table schema and the metastore
+ * report the types they were widened TO -- the state every unrewritten base file is in after a Hudi type evolution
+ * followed by a hive sync. {@link #avroSchema()} is what the write client puts in the file; a second, empty commit
+ * records {@link #WIDENED_SCHEMA} as the latest table schema, which is what the connector types the columns from and
+ * what the metastore columns are derived from, as a hive sync of it would.
  * <p>
  * No schema-evolution write path is exercised, because none is needed to reproduce apache/hudi#19457 and because
  * neither route can run here. A real evolution is produced either by a DataFrame append carrying a widened schema -
@@ -61,7 +53,7 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
  * {@code TestHudiSmokeTest} loads this fixture and {@code TestHudiConnectorParquetColumnNamesTest} reruns that class
  * positionally.
  * <p>
- * A single bulk-insert commit, so the file slice has no log files: predicate pushdown is only enabled for
+ * A single bulk-insert commit writes data, so the file slice has no log files: predicate pushdown is only enabled for
  * base-file-only splits.
  */
 public class SchemaEvolutionHudiTablesInitializer
@@ -69,17 +61,20 @@ public class SchemaEvolutionHudiTablesInitializer
 {
     public static final String TABLE_NAME = "schema_evolved_mor";
 
-    /** Written as Avro {@code float}, reported by the metastore as {@code double}. */
+    /** Written as Avro {@code float}, widened to {@code double}. */
     public static final String FLOAT_TO_DOUBLE_COLUMN = "float_value";
-    /** Written as Avro {@code int}, reported by the metastore as {@code bigint}. */
+    /** Written as Avro {@code int}, widened to {@code long} ({@code bigint}). */
     public static final String INT_TO_BIGINT_COLUMN = "int_value";
-    /** Written as Avro {@code int}, reported by the metastore as {@code string}. */
+    /** Written as Avro {@code int}, widened to {@code string}. */
     public static final String INT_TO_VARCHAR_COLUMN = "string_value";
 
     /** Sits between the third and the fourth row, so a predicate on it keeps some rows and drops others. */
     public static final String DOUBLE_THRESHOLD = "1003.0";
     public static final long BIGINT_THRESHOLD = 1003;
     public static final String VARCHAR_THRESHOLD = "1003";
+
+    /** The table schema after the widening, recorded by the last commit. */
+    private static final Schema WIDENED_SCHEMA = schema(Schema.Type.DOUBLE, Schema.Type.LONG, Schema.Type.STRING);
 
     private static final int ROW_COUNT = 5;
     private static final int BASE_VALUE = 1000;
@@ -90,23 +85,17 @@ public class SchemaEvolutionHudiTablesInitializer
     }
 
     @Override
-    protected List<Column> dataColumns()
-    {
-        return ImmutableList.of(
-                new Column(FLOAT_TO_DOUBLE_COLUMN, HIVE_DOUBLE, Optional.empty(), Map.of()),
-                new Column(INT_TO_BIGINT_COLUMN, HIVE_LONG, Optional.empty(), Map.of()),
-                new Column(INT_TO_VARCHAR_COLUMN, HIVE_STRING, Optional.empty(), Map.of()),
-                new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
-                new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()));
-    }
-
-    @Override
     protected Schema avroSchema()
     {
+        return schema(Schema.Type.FLOAT, Schema.Type.INT, Schema.Type.INT);
+    }
+
+    private static Schema schema(Schema.Type floatToDoubleType, Schema.Type intToBigintType, Schema.Type intToVarcharType)
+    {
         List<Schema.Field> fields = new ArrayList<>();
-        fields.add(new Schema.Field(FLOAT_TO_DOUBLE_COLUMN, Schema.create(Schema.Type.FLOAT)));
-        fields.add(new Schema.Field(INT_TO_BIGINT_COLUMN, Schema.create(Schema.Type.INT)));
-        fields.add(new Schema.Field(INT_TO_VARCHAR_COLUMN, Schema.create(Schema.Type.INT)));
+        fields.add(new Schema.Field(FLOAT_TO_DOUBLE_COLUMN, Schema.create(floatToDoubleType)));
+        fields.add(new Schema.Field(INT_TO_BIGINT_COLUMN, Schema.create(intToBigintType)));
+        fields.add(new Schema.Field(INT_TO_VARCHAR_COLUMN, Schema.create(intToVarcharType)));
         fields.add(new Schema.Field(RECORD_KEY_FIELD, Schema.create(Schema.Type.STRING)));
         fields.add(new Schema.Field(ORDERING_FIELD, Schema.create(Schema.Type.LONG)));
         return Schema.createRecord(TABLE_NAME, null, null, false, fields);
@@ -132,10 +121,17 @@ public class SchemaEvolutionHudiTablesInitializer
         for (int row = 1; row <= ROW_COUNT; row++) {
             records.add(record(schema, row));
         }
-        // One commit only: a file slice with log files would take the merge path, which disables pushdown.
+        // One data commit only: a file slice with log files would take the merge path, which disables pushdown.
         String commit = client.startCommit();
         List<WriteStatus> statuses = client.bulkInsert(records, commit);
         client.commit(commit, statuses);
+
+        // The evolution itself: a commit that writes no file but records the widened schema, so the latest table
+        // schema disagrees with the base file the way it does after a widening that left the file unrewritten
+        try (HoodieJavaWriteClient<HoodieAvroPayload> widenedClient = createWriteClient(WIDENED_SCHEMA)) {
+            String evolutionCommit = widenedClient.startCommit();
+            widenedClient.commit(evolutionCommit, widenedClient.upsert(List.of(), evolutionCommit));
+        }
     }
 
     /**

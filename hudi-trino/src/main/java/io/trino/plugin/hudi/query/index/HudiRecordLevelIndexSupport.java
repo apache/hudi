@@ -14,7 +14,6 @@
 package io.trino.plugin.hudi.query.index;
 
 import io.airlift.log.Logger;
-import io.airlift.slice.Slice;
 import io.airlift.units.Duration;
 import io.trino.plugin.hudi.util.TupleDomainUtils;
 import io.trino.spi.TrinoException;
@@ -25,6 +24,8 @@ import io.trino.spi.predicate.TupleDomain;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -44,12 +45,14 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
 import static io.trino.plugin.hudi.HudiSessionProperties.getRecordIndexWaitTimeout;
 import static io.trino.plugin.hudi.HudiUtil.collectAsMap;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.apache.hudi.keygen.KeyGenerator.EMPTY_RECORDKEY_PLACEHOLDER;
 
 public class HudiRecordLevelIndexSupport
         extends HudiBaseIndexSupport
@@ -62,7 +65,7 @@ public class HudiRecordLevelIndexSupport
     private final Duration recordIndexWaitTimeout;
     private final long futureStartTimeMs;
 
-    public HudiRecordLevelIndexSupport(ConnectorSession session, SchemaTableName schemaTableName, Lazy<HoodieTableMetaClient> lazyMetaClient, Lazy<HoodieTableMetadata> lazyTableMetadata, TupleDomain<String> regularColumnPredicates)
+    public HudiRecordLevelIndexSupport(ConnectorSession session, SchemaTableName schemaTableName, Lazy<HoodieTableMetaClient> lazyMetaClient, Lazy<HoodieTableMetadata> lazyTableMetadata, TupleDomain<String> regularColumnPredicates, HoodieSchema tableSchema)
     {
         super(log, schemaTableName, lazyMetaClient);
         this.recordIndexWaitTimeout = getRecordIndexWaitTimeout(session);
@@ -84,7 +87,7 @@ public class HudiRecordLevelIndexSupport
                 TupleDomain<String> filteredDomains = extractPredicatesForColumns(regularColumnPredicates, recordKeyFields);
 
                 // Construct the actual record keys based on the filtered predicates using Hudi's encoding scheme
-                List<String> recordKeys = constructRecordKeys(filteredDomains, recordKeyFields);
+                List<String> recordKeys = constructRecordKeys(filteredDomains, recordKeyFields, tableSchema, IndexKeyForm.RECORD_KEY);
 
                 if (recordKeys.isEmpty()) {
                     // If key construction fails (e.g., incompatible predicates not caught by canApply, or placeholder issue)
@@ -211,17 +214,16 @@ public class HudiRecordLevelIndexSupport
     }
 
     /**
-     * Constructs a record key from TupleDomain based on whether it's a complex key or not.
+     * Constructs the keys an index lookup needs from the EQUAL or IN domains of the key columns, a single-column key
+     * as the value's key text and a composite one as {@code field:text} parts joined by commas, the form
+     * {@code KeyGenerator#constructRecordKey} writes.
      * <p>
-     * Construction of record keys will only be handled for domains generated from EQUALITY or IN predicates.
-     * <p>
-     * An empty list of record keys will be generated if the following conditions are not met:
+     * Each value's text comes from {@link IndexKeyForm#keyText}, driven by the key field's type in
+     * {@code tableSchema}. An empty list, so no pruning, is returned when:
      * <ol>
-     * <li>recordKeysFields is empty</li>
-     * <li>recordKeyDomains isAll</li>
-     * <li>For the case of complex key, domains are not applied to all recordKeysFields</li>
-     * <li>For the case of complex key, domains are applied to all recordKeyFields, but one of the domain is <b>NOT</b>
-     * generated from an equality or IN predicate</li>
+     * <li>keyFields is empty, or keyDomains isAll</li>
+     * <li>a key field has no domain, or a domain is not an EQUAL or IN domain</li>
+     * <li>the table schema is unknown, or a key field's value has no key text (see {@link IndexKeyForm#keyText})</li>
      * </ol>
      * <p>
      * Note: This function is O(m^n) where m is the average size of value literals and n is the number of record keys.
@@ -231,97 +233,112 @@ public class HudiRecordLevelIndexSupport
      * Optimization 2: We should also consider limiting the number of recordKeys generated, if it is estimated to be more than a limit, RLI should just be skipped
      * as it may just be faster to read out all data and filer accordingly.
      *
-     * @param recordKeyDomains The filtered TupleDomain containing column handles and values
-     * @param recordKeyFields List of column names that represent the record keys
-     * @return List of string values representing the record key(s)
+     * @param keyDomains The filtered TupleDomain containing column handles and values
+     * @param keyFields List of column names that represent the key
+     * @param tableSchema The table schema the key fields are typed from; null when it could not be resolved
+     * @param keyForm How the index writes a value as key text
+     * @return List of string values representing the key(s)
      */
-    public static List<String> constructRecordKeys(TupleDomain<String> recordKeyDomains, List<String> recordKeyFields)
+    public static List<String> constructRecordKeys(TupleDomain<String> keyDomains, List<String> keyFields, HoodieSchema tableSchema, IndexKeyForm keyForm)
     {
         // TODO: Move this to TupleDomainUtils
         // If no recordKeys or no recordKeyDomains, return empty list
-        if (recordKeyFields == null || recordKeyFields.isEmpty() || recordKeyDomains.isAll()) {
+        if (keyFields == null || keyFields.isEmpty() || keyDomains.isAll() || tableSchema == null) {
             return Collections.emptyList();
         }
 
         // All recordKeys must have a domain else, return empty list (applicable to complexKeys)
         // If a one of the recordKey in the set of complexKeys does not have a domain, we are unable to construct
         // a complete complexKey
-        if (!recordKeyDomains.getDomains().get().keySet().containsAll(recordKeyFields)) {
+        Map<String, Domain> domains = keyDomains.getDomains().get();
+        if (!domains.keySet().containsAll(keyFields)) {
             return Collections.emptyList();
         }
 
-        // Extract the domain mappings from the tuple domain
-        Map<String, Domain> domains = recordKeyDomains.getDomains().get();
+        List<List<String>> keyTexts = new ArrayList<>(keyFields.size());
+        for (String keyField : keyFields) {
+            Domain domain = domains.get(keyField);
+            Optional<HoodieSchemaField> field = findField(tableSchema, keyField);
+            if (field.isEmpty()) {
+                return Collections.emptyList();
+            }
+            Optional<Function<Object, String>> keyText = keyForm.keyText(keyField, field.get().schema(), domain.getType());
+            if (keyText.isEmpty()) {
+                return Collections.emptyList();
+            }
+            List<String> values = extractStringValues(domain, keyText.get());
+            if (values.isEmpty()) {
+                return Collections.emptyList();
+            }
+            keyTexts.add(values);
+        }
 
         // Case 1: Not a complex key (single record key)
-        if (recordKeyFields.size() == 1) {
-            String recordKey = recordKeyFields.getFirst();
-
-            // Extract value for this key
-            Domain domain = domains.get(recordKey);
-            return extractStringValues(domain);
+        if (keyFields.size() == 1) {
+            return keyTexts.getFirst();
         }
         // Case 2: Complex/Composite key (multiple record keys)
-        else {
-            // Create a queue to manage the Cartesian product generation
-            Queue<String> results = new LinkedList<>();
-
-            // For each key in the complex key
-            for (String recordKeyField : recordKeyFields) {
-                // Extract value for this key
-                Domain domain = domains.get(recordKeyField);
-                List<String> values = extractStringValues(domain);
+        // Create a queue to manage the Cartesian product generation
+        Queue<String> results = new LinkedList<>();
+        for (int i = 0; i < keyFields.size(); i++) {
+            String keyField = keyFields.get(i);
+            List<String> values = keyTexts.get(i);
+            if (results.isEmpty()) {
                 // First iteration: initialize the queue
-                if (results.isEmpty()) {
-                    values.forEach(v -> results.offer(recordKeyField + DEFAULT_COLUMN_VALUE_SEPARATOR + v));
-                }
-                else {
-                    int size = results.size();
-                    for (int j = 0; j < size; j++) {
-                        String currentEntry = results.poll();
+                values.forEach(v -> results.offer(compositeKeyPart(keyField, v)));
+            }
+            else {
+                int size = results.size();
+                for (int j = 0; j < size; j++) {
+                    String currentEntry = results.poll();
 
-                        // Generate new combinations by appending keyParts to existing keyParts
-                        for (String v : values) {
-                            String newKeyPart = recordKeyField + DEFAULT_COLUMN_VALUE_SEPARATOR + v;
-                            String newEntry = currentEntry + DEFAULT_RECORD_KEY_PARTS_SEPARATOR + newKeyPart;
-                            results.offer(newEntry);
-                        }
+                    // Generate new combinations by appending keyParts to existing keyParts
+                    for (String v : values) {
+                        results.offer(currentEntry + DEFAULT_RECORD_KEY_PARTS_SEPARATOR + compositeKeyPart(keyField, v));
                     }
                 }
             }
-            return results.stream().toList();
         }
+        return results.stream().toList();
     }
 
     /**
-     * Extract string values from a domain, handle EQUAL and IN domains only.
-     * Note: Actual implementation depends on your Domain class structure.
+     * A part of a composite key; an empty value is written as a placeholder, as {@code KeyGenerator#constructRecordKey}
+     * does.
      */
-    private static List<String> extractStringValues(Domain domain)
+    private static String compositeKeyPart(String keyField, String keyText)
+    {
+        return keyField + DEFAULT_COLUMN_VALUE_SEPARATOR + (keyText.isEmpty() ? EMPTY_RECORDKEY_PLACEHOLDER : keyText);
+    }
+
+    private static Optional<HoodieSchemaField> findField(HoodieSchema tableSchema, String name)
+    {
+        Option<HoodieSchemaField> field = tableSchema.getField(name);
+        if (field.isPresent()) {
+            return Optional.of(field.get());
+        }
+        return tableSchema.getFields().stream()
+                .filter(candidate -> candidate.name().equalsIgnoreCase(name))
+                .findFirst();
+    }
+
+    /**
+     * The key texts of the values of an EQUAL or IN domain; empty for any other domain.
+     */
+    private static List<String> extractStringValues(Domain domain, Function<Object, String> keyText)
     {
         List<String> values = new ArrayList<>();
 
         if (domain.isSingleValue()) {
             // Handle EQUAL condition (single value domain)
-            Object value = domain.getSingleValue();
-            values.add(convertToString(value));
+            values.add(keyText.apply(domain.getSingleValue()));
         }
         else if (domain.getValues().isDiscreteSet()) {
             // Handle IN condition (set of discrete values)
             for (Object value : domain.getValues().getDiscreteSet()) {
-                values.add(convertToString(value));
+                values.add(keyText.apply(value));
             }
         }
         return values;
-    }
-
-    private static String convertToString(Object value)
-    {
-        if (value instanceof Slice) {
-            return ((Slice) value).toStringUtf8();
-        }
-        else {
-            return value.toString();
-        }
     }
 }

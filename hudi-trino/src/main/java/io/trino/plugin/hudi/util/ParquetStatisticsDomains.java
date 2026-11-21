@@ -180,11 +180,17 @@ public final class ParquetStatisticsDomains
             return (primitiveType == BINARY || primitiveType == FIXED_LEN_BYTE_ARRAY)
                     && !(annotation instanceof DecimalLogicalTypeAnnotation);
         }
-        if (domainType instanceof CharType || domainType instanceof VarbinaryType || domainType instanceof UuidType) {
-            // getDomain has no branch for any of these, so it falls through to a domain covering every value and only
-            // the null count prunes. checkInBloomFilter does have one for varbinary and uuid, hashing the lookup as
+        if (domainType instanceof CharType || domainType instanceof VarbinaryType) {
+            // getDomain has no branch for either, so it falls through to a domain covering every value and only
+            // the null count prunes. checkInBloomFilter does have one for varbinary, hashing the lookup as
             // raw bytes, so the column still has to be one parquet-mr hashed as bytes.
             return primitiveType == BINARY || primitiveType == FIXED_LEN_BYTE_ARRAY;
+        }
+        if (domainType instanceof UuidType) {
+            // As for varbinary, but checkInBloomFilter hashes the uuid's 16 raw bytes, which matches only a
+            // FIXED_LEN_BYTE_ARRAY uuid. Hudi writes a uuid as its 36-character text by default, and a bloom miss on
+            // that column would drop the row group with its rows.
+            return primitiveType == FIXED_LEN_BYTE_ARRAY;
         }
         if (domainType instanceof TimestampType) {
             // INT96 is read from the binary statistics and INT64 from the long ones, but an INT64 column has to say
