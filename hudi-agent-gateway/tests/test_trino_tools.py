@@ -129,6 +129,10 @@ async def test_shape_result_failsafe_when_metadata_exceeds_cap() -> None:
     body = json.loads(text)
     assert body["truncated"] is True and body["rows"] == []
     assert body["column_count"] == 500
+    # Even a zero-row Spark result can exceed the cap on type metadata alone.
+    typed = QueryResult(columns=["s"], rows=[], column_types=["struct<" + "x" * 500 + ":int>"])
+    text = shape_result(typed, max_bytes=400, sql="SELECT s", row_cap=100)
+    assert len(text.encode()) <= 400 and json.loads(text)["truncated"] is True
     # extreme cap: degrades to a bare bounded error payload
     tiny = shape_result(result, max_bytes=80, sql="SELECT 1", row_cap=100)
     assert len(tiny.encode()) <= 80 and json.loads(tiny)["truncated"] is True
