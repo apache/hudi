@@ -84,10 +84,17 @@ public class HoodieInstantTimeGenerator {
   }
 
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
+    return parseDateFromInstantTime(timestamp, ZoneId.systemDefault());
+  }
+
+  /**
+   * Parses an instant time written in the given zone, which is the timeline timezone of the table the instant belongs to.
+   */
+  public static Date parseDateFromInstantTime(String timestamp, ZoneId zoneId) throws ParseException {
     try {
       String timestampInMillis = fixInstantTimeCompatibility(timestamp);
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
-      return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
+      return Date.from(dt.atZone(zoneId).toInstant());
     } catch (DateTimeParseException e) {
       throw new ParseException(e.getMessage(), e.getErrorIndex());
     }

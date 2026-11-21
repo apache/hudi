@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
@@ -31,9 +32,11 @@ import java.text.ParseException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * Metrics for flink stream read.
@@ -46,6 +49,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
 
   private final Clock clock;
+
+  private final Supplier<HoodieTimelineTimeZone> timelineTimeZone;
 
   /**
    * The last issued instant in streaming read, null until the first one is issued.
@@ -69,13 +74,26 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
    */
   private final Map<String, Instant> activeSplitCommits = new ConcurrentHashMap<>();
 
-  public FlinkStreamReadMetrics(MetricGroup metricGroup, String tableName) {
-    this(metricGroup, tableName, Clock.systemUTC());
+  /**
+   * For a table that exists when the metrics are created.
+   */
+  public FlinkStreamReadMetrics(MetricGroup metricGroup, String tableName, HoodieTimelineTimeZone timelineTimeZone) {
+    this(metricGroup, tableName, () -> timelineTimeZone);
+  }
+
+  /**
+   * For a streaming read that can start before the table exists. {@code timelineTimeZone} supplies the
+   * timeline timezone of the table and is called each time an instant is parsed, which only happens
+   * once there is a table to read.
+   */
+  public FlinkStreamReadMetrics(MetricGroup metricGroup, String tableName, Supplier<HoodieTimelineTimeZone> timelineTimeZone) {
+    this(metricGroup, tableName, timelineTimeZone, Clock.systemUTC());
   }
 
   @VisibleForTesting
-  FlinkStreamReadMetrics(MetricGroup metricGroup, String tableName, Clock clock) {
+  FlinkStreamReadMetrics(MetricGroup metricGroup, String tableName, Supplier<HoodieTimelineTimeZone> timelineTimeZone, Clock clock) {
     super(metricGroup.addGroup("table", tableName));
+    this.timelineTimeZone = timelineTimeZone;
     this.clock = clock;
   }
 
@@ -89,7 +107,7 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
 
   public void setIssuedInstant(String issuedInstant) {
     try {
-      this.issuedInstant = HoodieInstantTimeGenerator.parseDateFromInstantTime(issuedInstant).toInstant();
+      this.issuedInstant = parseInstant(issuedInstant);
     } catch (ParseException e) {
       log.warn("Invalid input issued instant: {}", issuedInstant);
     }
@@ -101,7 +119,7 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
    */
   public void startSplit(String splitId, String splitLatestCommit) {
     try {
-      Instant commit = HoodieInstantTimeGenerator.parseDateFromInstantTime(splitLatestCommit).toInstant();
+      Instant commit = parseInstant(splitLatestCommit);
       this.splitLatestCommit = commit;
       activeSplitCommits.put(splitId, commit);
     } catch (ParseException e) {
@@ -116,6 +134,13 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
    */
   public void finishSplit(String splitId) {
     activeSplitCommits.remove(splitId);
+  }
+
+  private Instant parseInstant(String instantTime) throws ParseException {
+    HoodieTimelineTimeZone timeZone = timelineTimeZone.get();
+    // LOCAL is the zone of the JVM that reads, which is what the one-argument parser applies
+    ZoneId zone = HoodieTimelineTimeZone.UTC.equals(timeZone) ? timeZone.getZoneId() : ZoneId.systemDefault();
+    return HoodieInstantTimeGenerator.parseDateFromInstantTime(instantTime, zone).toInstant();
   }
 
   private long getIssuedInstantDelay() {

@@ -20,6 +20,7 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -80,6 +81,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
   private final HoodieTableMetaClient metaClient;
   private final HoodieRecordEmitter<T> recordEmitter;
   private final String tableName;
+  private final HoodieTimelineTimeZone timelineTimeZone;
 
   public HoodieSource(
       HoodieScanContext scanContext,
@@ -99,6 +101,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
     this.metaClient = metaClient;
     this.recordEmitter = recordEmitter;
     this.tableName = metaClient.getTableConfig().getTableName();
+    this.timelineTimeZone = metaClient.getTableConfig().getTimelineTimezone();
   }
 
   @Override
@@ -130,7 +133,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
   @Override
   public SourceReader<T, HoodieSourceSplit> createReader(SourceReaderContext readerContext) throws Exception {
     return new HoodieSourceReader<T>(
-        tableName, recordEmitter, scanContext, readerContext, readerFunctionSupplier, splitComparator);
+        tableName, timelineTimeZone, recordEmitter, scanContext, readerContext, readerFunctionSupplier, splitComparator);
   }
 
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(
@@ -167,14 +170,14 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
           scanContext);
 
       return new HoodieContinuousSplitEnumerator(
-              tableName, enumContext, splitProvider, discover, scanContext,
+              tableName, timelineTimeZone, enumContext, splitProvider, discover, scanContext,
               enumeratorState == null ? Option.empty() : Option.of(enumeratorState));
     } else {
       if (enumeratorState == null) {
         List<HoodieSourceSplit> splits = createBatchHoodieSplits();
         splitProvider.onDiscoveredSplits(splits);
       }
-      return new HoodieStaticSplitEnumerator(tableName, enumContext, splitProvider);
+      return new HoodieStaticSplitEnumerator(tableName, timelineTimeZone, enumContext, splitProvider);
     }
   }
 

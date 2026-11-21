@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.enumerator;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.split.HoodieSourceSplit;
@@ -63,6 +64,7 @@ abstract class AbstractHoodieSplitEnumerator
 
   AbstractHoodieSplitEnumerator(
       String tableName,
+      HoodieTimelineTimeZone timelineTimeZone,
       SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext,
       HoodieSplitProvider splitProvider) {
     this.tableName = tableName;
@@ -75,7 +77,7 @@ abstract class AbstractHoodieSplitEnumerator
       // This number may not capture the entire backlog due to split discovery throttling to avoid
       // excessive memory footprint. Some pending splits may not have been discovered yet.
       this.enumeratorContext.metricGroup().setUnassignedSplitsGauge(() -> (long) splitProvider.pendingSplitCount());
-      this.enumeratorMetrics = new FlinkStreamReadMetrics(this.enumeratorContext.metricGroup(), tableName);
+      this.enumeratorMetrics = new FlinkStreamReadMetrics(this.enumeratorContext.metricGroup(), tableName, timelineTimeZone);
       this.enumeratorMetrics.registerMetrics();
     } else {
       // Some test or runtime contexts can omit the metrics group.

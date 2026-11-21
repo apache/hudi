@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.enumerator;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.source.HoodieScanContext;
@@ -49,12 +50,13 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
 
   public HoodieContinuousSplitEnumerator(
       String tableName,
+      HoodieTimelineTimeZone timelineTimeZone,
       SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext,
       HoodieSplitProvider splitProvider,
       HoodieContinuousSplitDiscover splitDiscover,
       HoodieScanContext scanContext,
       Option<HoodieSplitEnumeratorState> enumStateOpt) {
-    super(tableName, enumeratorContext, splitProvider);
+    super(tableName, timelineTimeZone, enumeratorContext, splitProvider);
     this.enumeratorContext = enumeratorContext;
     this.splitProvider = splitProvider;
     this.splitDiscover = splitDiscover;

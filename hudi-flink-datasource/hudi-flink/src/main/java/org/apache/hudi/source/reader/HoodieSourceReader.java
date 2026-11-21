@@ -19,6 +19,7 @@
 package org.apache.hudi.source.reader;
 
 import org.apache.hudi.common.function.SerializableSupplier;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
@@ -47,12 +48,13 @@ public class HoodieSourceReader<T> extends
 
   public HoodieSourceReader(
           String tableName,
+          HoodieTimelineTimeZone timelineTimeZone,
           RecordEmitter<HoodieRecordWithPosition<T>, T, HoodieSourceSplit> recordEmitter,
           HoodieScanContext scanContext,
           SourceReaderContext context,
           SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
           SerializableComparator<HoodieSourceSplit> splitComparator) {
-    this(createReaderMetrics(context, tableName), recordEmitter, scanContext, context, readerFunctionSupplier, splitComparator);
+    this(createReaderMetrics(context, tableName, timelineTimeZone), recordEmitter, scanContext, context, readerFunctionSupplier, splitComparator);
   }
 
   @VisibleForTesting
@@ -69,8 +71,9 @@ public class HoodieSourceReader<T> extends
     this.readerMetrics = readerMetrics;
   }
 
-  private static FlinkStreamReadMetrics createReaderMetrics(SourceReaderContext context, String tableName) {
-    FlinkStreamReadMetrics readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName);
+  private static FlinkStreamReadMetrics createReaderMetrics(
+      SourceReaderContext context, String tableName, HoodieTimelineTimeZone timelineTimeZone) {
+    FlinkStreamReadMetrics readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName, timelineTimeZone);
     readerMetrics.registerMetrics();
     return readerMetrics;
   }
