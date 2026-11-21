@@ -19,6 +19,8 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -27,6 +29,7 @@ import org.apache.hudi.parquet.io.HoodieParquetFileBinaryCopier;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.TestBaseHoodieTable;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
@@ -37,6 +40,8 @@ import java.util.Collections;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -50,9 +55,7 @@ class TestHoodieBinaryCopyHandle extends HoodieCommonTestHarness {
   void testWriteFailureClosesCopierAndPreservesOriginalException() throws Exception {
     initPath();
     initMetaClient();
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(TRIP_EXAMPLE_SCHEMA).build();
-    config.setValue(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, "true");
+    HoodieWriteConfig config = writeConfig();
     HoodieTable table = new TestBaseHoodieTable(config, getEngineContext(), metaClient);
     IOException failure = new IOException("copy failed");
     IOException closeFailure = new IOException("close failed");
@@ -70,5 +73,31 @@ class TestHoodieBinaryCopyHandle extends HoodieCommonTestHarness {
     } finally {
       cleanMetaClient();
     }
+  }
+
+  @Test
+  void testConstructorCreatesMarkerBeforeOutputFile() throws Exception {
+    initPath();
+    initMetaClient();
+    HoodieWriteConfig config = writeConfig();
+    HoodieTable table = new TestBaseHoodieTable(config, getEngineContext(), metaClient);
+    try {
+      new HoodieBinaryCopyHandle(config, "100", "partition", "file-1",
+          table, new LocalTaskContextSupplier(), Collections.singletonList(new StoragePath(basePath, "input.parquet")));
+      String outputFileName = FSUtils.makeBaseFileName("100", FSUtils.makeWriteToken(0, 0, 0L), "file-1", ".parquet");
+      assertEquals(Collections.singleton("partition/" + outputFileName + ".marker.CREATE"),
+          WriteMarkersFactory.get(MarkerType.DIRECT, table, "100").allMarkerFilePaths());
+      // the copier creates the output file when the copy starts, after the marker
+      assertFalse(metaClient.getStorage().exists(new StoragePath(new StoragePath(basePath, "partition"), outputFileName)));
+    } finally {
+      cleanMetaClient();
+    }
+  }
+
+  private HoodieWriteConfig writeConfig() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA).withMarkersType(MarkerType.DIRECT.name()).build();
+    config.setValue(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, "true");
+    return config;
   }
 }

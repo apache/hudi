@@ -19,6 +19,8 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.run.strategy.SparkBinaryCopyClusteringExecutionStrategy;
@@ -29,10 +31,14 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -41,15 +47,20 @@ import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -64,17 +75,22 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.parquet.schema.MessageType;
+import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.functions;
+import org.apache.spark.util.TaskFailureListener;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -85,6 +101,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.bloom.BloomFilterTypeCode.DYNAMIC_V0;
@@ -95,10 +113,13 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
 public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClientTestBase {
+
+  private static final String PARTITION_PATH = "2015/03/16";
 
   private FileSystem fs;
 
@@ -452,6 +473,155 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
         "the opted-in commit time must survive binary-copy clustering on every row");
   }
 
+  /**
+   * A copy attempt that fails on its second input leaves a readable file with the rows of the first input, and
+   * Spark retries the task with a new file ID. The commit must delete the failed attempt's file through its
+   * marker, so a read that lists the partition (no metadata table) and the cleaner see only the committed file.
+   */
+  @ParameterizedTest
+  @EnumSource(MarkerType.class)
+  public void testFailedCopyAttemptIsDeletedWhenTaskIsRetried(MarkerType markerType) throws IOException {
+    // local[n, maxFailures]: the second number lets Spark retry the failed clustering task once
+    cleanupSparkContexts();
+    extraConf.put("spark.master", "local[2,2]");
+    initSparkContexts();
+    SparkRDDWriteClient client = getHoodieWriteClient(failingCopyConfig(markerType));
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    String clusteringInstant = writeTwoFilesAndScheduleClustering(client, allRecords).getLeft();
+
+    client.cluster(clusteringInstant, true);
+
+    assertEquals(1, FailSecondInputOnceStrategy.FAILED_ATTEMPTS.get(), "the first copy attempt must fail");
+    assertOnlyCommittedFileRemains(client, clusteringInstant, allRecords);
+  }
+
+  /**
+   * The same failure without a task retry fails the clustering, and the failed attempt's file holds exactly the
+   * first input's rows. Running the clustering again rolls back its inflight instant first, and the new run
+   * commits under the same instant time, so the rollback must delete that file through its marker.
+   */
+  @ParameterizedTest
+  @EnumSource(MarkerType.class)
+  public void testFailedCopyAttemptIsRolledBackWhenClusteringIsRetried(MarkerType markerType) throws IOException {
+    SparkRDDWriteClient client = getHoodieWriteClient(failingCopyConfig(markerType));
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    Pair<String, List<String>> scheduled = writeTwoFilesAndScheduleClustering(client, allRecords);
+    String clusteringInstant = scheduled.getLeft();
+    List<String> inputFiles = scheduled.getRight();
+
+    Exception failure = assertThrows(Exception.class, () -> client.cluster(clusteringInstant, true));
+    assertTrue(hasCause(failure, "Failed to retrieve prefetched content for ", new StoragePath(inputFiles.get(1)).getName()),
+        "the copy must fail on the second input");
+    List<String> failedAttemptFiles = baseFilesInPartition(clusteringInstant);
+    assertEquals(1, failedAttemptFiles.size());
+    assertEquals(recordKeys(inputFiles.get(0)), recordKeys(basePath + "/" + failedAttemptFiles.get(0)));
+
+    client.cluster(clusteringInstant, true);
+
+    assertEquals(1, FailSecondInputOnceStrategy.FAILED_ATTEMPTS.get());
+    assertOnlyCommittedFileRemains(client, clusteringInstant, allRecords);
+  }
+
+  private HoodieWriteConfig failingCopyConfig(MarkerType markerType) {
+    Properties properties = new Properties();
+    properties.setProperty("hoodie.parquet.small.file.limit", "-1");
+    return new HoodieWriteConfig.Builder()
+        .withPath(basePath)
+        .withSchema(TRIP_NESTED_EXAMPLE_SCHEMA)
+        // without the metadata table, the file system view and the cleaner list the partition
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMarkersType(markerType.name())
+        // timeline-server-based markers fall back to direct markers without the embedded timeline server
+        .withEmbeddedTimelineServerEnabled(markerType == MarkerType.TIMELINE_SERVER_BASED)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(false)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .retainFileVersions(1)
+            .build())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withClusteringExecutionStrategyClass(FailSecondInputOnceStrategy.class.getName())
+            .build())
+        .withProps(properties)
+        .build();
+  }
+
+  /**
+   * Writes two base files to one partition, schedules their clustering into one file, and makes the copy fail on
+   * the second one. Returns the clustering instant and the input files in the order the copy reads them.
+   */
+  private Pair<String, List<String>> writeTwoFilesAndScheduleClustering(SparkRDDWriteClient client, List<HoodieRecord> allRecords) {
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_NESTED_EXAMPLE_SCHEMA,
+        0xDEED, new String[] {PARTITION_PATH}, new HashMap<>());
+    for (int i = 0; i < 2; i++) {
+      String commitTime = client.startCommit("commit");
+      List<HoodieRecord> records = dataGen.generateInsertsNestedExample(commitTime, 30);
+      allRecords.addAll(records);
+      client.commit(commitTime, client.insert(jsc.parallelize(records, 1), commitTime));
+    }
+    String clusteringInstant = (String) client.scheduleClustering(Option.empty()).get();
+    HoodieClusteringPlan plan = ClusteringUtils.getPendingClusteringPlan(HoodieTableMetaClient.reload(metaClient), clusteringInstant);
+    assertEquals(1, plan.getInputGroups().size());
+    List<String> inputFiles = plan.getInputGroups().get(0).getSlices().stream()
+        .map(HoodieSliceInfo::getDataFilePath).collect(Collectors.toList());
+    assertEquals(2, inputFiles.size());
+    FailSecondInputOnceStrategy.failOnce(inputFiles.get(1));
+    return Pair.of(clusteringInstant, inputFiles);
+  }
+
+  private void assertOnlyCommittedFileRemains(SparkRDDWriteClient client, String clusteringInstant,
+                                              List<HoodieRecord> allRecords) throws IOException {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieInstant replaceCommit = metaClient.getActiveTimeline().getCompletedReplaceTimeline().lastInstant().get();
+    assertEquals(clusteringInstant, replaceCommit.requestedTime());
+    List<String> committedFiles = new ArrayList<>();
+    metaClient.getActiveTimeline().readReplaceCommitMetadata(replaceCommit).getPartitionToWriteStats()
+        .forEach((partition, stats) -> stats.forEach(stat -> committedFiles.add(stat.getPath())));
+    assertEquals(1, committedFiles.size());
+    assertEquals(committedFiles, baseFilesInPartition(clusteringInstant), "the failed attempt's file must be deleted");
+
+    List<String> keys = sqlContext.read().format("hudi")
+        .option(HoodieMetadataConfig.ENABLE.key(), "false")
+        .load(basePath)
+        .select(HoodieRecord.RECORD_KEY_METADATA_FIELD).collectAsList()
+        .stream().map(row -> row.getString(0)).sorted().collect(Collectors.toList());
+    assertEquals(allRecords.stream().map(HoodieRecord::getRecordKey).sorted().collect(Collectors.toList()), keys,
+        "a read that lists the partition must return each record once");
+
+    // the cleaner deletes the two replaced inputs and leaves the committed file alone in the partition
+    client.clean();
+    assertEquals(committedFiles, baseFilesInPartition(null));
+  }
+
+  /**
+   * Returns the base files in {@link #PARTITION_PATH}, relative to the base path, optionally only those written
+   * at the given instant.
+   */
+  private List<String> baseFilesInPartition(String instantTime) throws IOException {
+    return Arrays.stream(fs.listStatus(new Path(basePath, PARTITION_PATH)))
+        .map(status -> status.getPath().getName())
+        .filter(name -> name.endsWith(HoodieFileFormat.PARQUET.getFileExtension()))
+        .filter(name -> instantTime == null || FSUtils.getCommitTime(name).equals(instantTime))
+        .map(name -> PARTITION_PATH + "/" + name)
+        .sorted()
+        .collect(Collectors.toList());
+  }
+
+  private List<String> recordKeys(String parquetFile) {
+    return sqlContext.read().format("parquet").load(parquetFile)
+        .select(HoodieRecord.RECORD_KEY_METADATA_FIELD).collectAsList()
+        .stream().map(row -> row.getString(0)).sorted().collect(Collectors.toList());
+  }
+
+  private static boolean hasCause(Throwable failure, String messagePrefix, String messagePart) {
+    for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+      String message = cause.getMessage();
+      if (message != null && message.startsWith(messagePrefix) && message.contains(messagePart)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private String makeTestFile(String fileName, HoodieSchema schema, MessageType messageType, BloomFilter filter) throws IOException {
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(messageType, schema, Option.of(filter), new Properties());
     StoragePath filePath = new StoragePath(tempDir.resolve(fileName).toAbsolutePath().toString());
@@ -486,5 +656,50 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     group.setNumOutputGroups(1);
     group.setOperations(operations);
     return Collections.singletonList(group);
+  }
+
+  /**
+   * Binary-copy clustering whose first task attempt fails on the input given to {@link #failOnce}. The strategy
+   * reads its write config in the clustering task, right before it creates the copy handle. At that point this
+   * hides the input, so the copy fails on it after copying the inputs before it, and restores it when the
+   * attempt fails.
+   */
+  public static class FailSecondInputOnceStrategy<T> extends SparkBinaryCopyClusteringExecutionStrategy<T> {
+    private static final AtomicReference<String> INPUT_TO_FAIL = new AtomicReference<>();
+    private static final AtomicInteger FAILED_ATTEMPTS = new AtomicInteger();
+
+    public FailSecondInputOnceStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
+      super(table, engineContext, writeConfig);
+    }
+
+    static void failOnce(String inputFile) {
+      FAILED_ATTEMPTS.set(0);
+      INPUT_TO_FAIL.set(inputFile);
+    }
+
+    @Override
+    protected HoodieWriteConfig getWriteConfig() {
+      TaskContext taskContext = TaskContext.get();
+      String inputFile = taskContext == null ? null : INPUT_TO_FAIL.getAndSet(null);
+      if (inputFile != null) {
+        HoodieStorage storage = getHoodieTable().getStorage();
+        StoragePath input = new StoragePath(inputFile);
+        StoragePath hidden = new StoragePath(input.getParent(), input.getName() + ".hidden");
+        rename(storage, input, hidden);
+        taskContext.addTaskFailureListener((TaskFailureListener) (context, error) -> {
+          rename(storage, hidden, input);
+          FAILED_ATTEMPTS.incrementAndGet();
+        });
+      }
+      return super.getWriteConfig();
+    }
+
+    private static void rename(HoodieStorage storage, StoragePath from, StoragePath to) {
+      try {
+        assertTrue(storage.rename(from, to), "failed to rename " + from + " to " + to);
+      } catch (IOException e) {
+        throw new UncheckedIOException(e);
+      }
+    }
   }
 }

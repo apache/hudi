@@ -99,6 +99,9 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     this.writeScheMessageType = getWriteSchema(config, inputFilePaths, conf, hoodieTable);
     HoodieFileMetadataMerger fileMetadataMerger = new HoodieFileMetadataMerger();
     this.path = makeNewPath(partitionPath);
+    // Create the marker before the copier creates the file, as the other write handles do: the output of
+    // a failed or retried attempt is then deleted by the marker reconciliation at commit or by the rollback.
+    createMarkerFile(partitionPath, path.getName());
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setStat(new HoodieWriteStat());
@@ -133,6 +136,10 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     log.info("Finish rewriting {}. Using {} mills", this.path, timer.endTimer());
   }
 
+  /**
+   * Releases the copier after a failed copy. Closing writes the footer, so the file stays readable with the
+   * row groups copied so far. Its marker makes the commit or the rollback of this instant delete it.
+   */
   private void closeWriterQuietly(Throwable failure) {
     markClosed();
     CloseableUtils.closeSuppressing(writer::close, failure);
