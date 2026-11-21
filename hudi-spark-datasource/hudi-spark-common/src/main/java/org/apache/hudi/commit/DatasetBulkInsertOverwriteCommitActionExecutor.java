@@ -64,8 +64,8 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
    * For INSERT_OVERWRITE: enumerate latest file groups in the targeted partitions so the caller
    * can reject overlap with pending clustering before the bulk-insert materializes. Mirrors
    * {@code SparkInsertOverwriteCommitActionExecutor#getFileGroupsBeingReplaced}; called by the
-   * base class on the prepared dataset (after {@code prepareForBulkInsert} populates the
-   * {@code _hoodie_partition_path} meta field), so dynamic partition resolution can read it.
+   * base class on the prepared dataset (after {@code prepareForBulkInsert}), so dynamic partition
+   * resolution sees the same partition paths the row writer will use.
    */
   @Override
   protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(Dataset<Row> preparedRecords) {
@@ -91,13 +91,16 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
     if (StringUtils.nonEmpty(staticOverwritePartitionPaths)) {
       return Arrays.asList(staticOverwritePartitionPaths.split(","));
     }
-    // Dynamic partition path: read the populated _hoodie_partition_path meta field. The base
-    // class invokes this hook after HoodieDatasetBulkInsertHelper.prepareForBulkInsert, so the
-    // field is guaranteed to be present and populated by the configured key generator.
-    return preparedRecords.select(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
-        .distinct()
-        .as(Encoders.STRING())
-        .collectAsList();
+    if (writeConfig.populateMetaFields()) {
+      // prepareForBulkInsert fills _hoodie_partition_path with the key generator's output.
+      return preparedRecords.select(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+          .distinct()
+          .as(Encoders.STRING())
+          .collectAsList();
+    }
+    // prepareForBulkInsert stubs the meta columns as null when meta fields are not populated, so
+    // derive the partitions with the key generator the row writer uses to route each row.
+    return HoodieDatasetBulkInsertHelper.getDistinctPartitionPaths(preparedRecords, writeConfig);
   }
 
   @Override
