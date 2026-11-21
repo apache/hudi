@@ -19,6 +19,8 @@ package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
@@ -35,6 +37,7 @@ import org.apache.spark.sql.types.{DataType, IntegerType, LongType, StringType, 
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.io.File
+import java.nio.file.Files
 import java.util.Locale
 
 import scala.collection.JavaConverters._
@@ -292,6 +295,105 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       // The table is still writable with its original configuration.
       spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
       checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "a1", 1000))
+    }
+  }
+
+  for (tableType <- Seq("cow", "mor"); version <- Seq("6", "8")) {
+    test(s"alterTable protects partition and key-generator aliases: $tableType version $version") {
+      withTempDir { tmp =>
+        val catalog = hoodieCatalog
+        val name = generateTableName
+        val ident = Identifier.of(Array("default"), name)
+        val tableIdent = TableIdentifier(name, Some("default"))
+        val path = s"${tmp.getCanonicalPath}/$name"
+        val classKey = "hoodie.datasource.write.keygenerator.class"
+        val typeKey = "hoodie.datasource.write.keygenerator.type"
+        val partitionKey = "hoodie.datasource.write.partitionpath.field"
+        val aliases = Map(classKey -> KeyGeneratorType.SIMPLE.getClassName, typeKey -> "SIMPLE", partitionKey -> "part")
+        catalog.createTable(ident,
+          StructType(Seq(StructField("id", IntegerType), StructField("ts", LongType), StructField("part", StringType))),
+          Array[Transform](Expressions.identity("part")),
+          (aliases ++ Map("provider" -> "hudi", "primaryKey" -> "id", "preCombineField" -> "ts",
+            "type" -> tableType, "hoodie.write.table.version" -> version, "location" -> path)).asJava)
+        try {
+          spark.sql(s"INSERT INTO $name VALUES (1, 1L, 'a')")
+          val session = spark.sessionState.catalog
+          val before = session.getTableMetadata(tableIdent)
+          val schemaBefore = catalog.loadTable(ident).schema()
+          val propertiesFile = new File(s"$path/.hoodie/hoodie.properties").toPath
+          val persistedBefore = Files.readAllBytes(propertiesFile).toSeq
+          val config = HoodieCatalogTable(spark, before).tableConfig
+          assertEquals(version.toInt, config.getTableVersion.versionCode())
+          assertEquals(KeyGeneratorType.SIMPLE.getClassName, config.getKeyGeneratorClassName)
+          (1 to 3).foreach { _ =>
+            catalog.alterTable(ident, (aliases ++ Map(
+              typeKey -> "simple",
+              HoodieTableConfig.PARTITION_FIELDS.key -> "part",
+              HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key -> KeyGeneratorType.SIMPLE.getClassName,
+              HoodieTableConfig.KEY_GENERATOR_TYPE.key -> "SIMPLE")).toSeq.map {
+              case (key, value) => TableChange.setProperty(key, value)
+            }: _*)
+          }
+          assertEquals(before, session.getTableMetadata(tableIdent))
+
+          val changes = Seq(
+            TableChange.setProperty(classKey, KeyGeneratorType.COMPLEX.getClassName),
+            TableChange.setProperty(classKey, KeyGeneratorType.SIMPLE.getClassName.toUpperCase(Locale.ROOT)),
+            TableChange.setProperty(typeKey, "COMPLEX"),
+            TableChange.setProperty(partitionKey, "id")) ++ aliases.keys.toSeq.map(TableChange.removeProperty)
+          changes.foreach { change =>
+            val error = intercept[HoodieAnalysisException] {
+              catalog.alterTable(ident, TableChange.setProperty("some.key", "changed"),
+                TableChange.addColumn(Array("added"), StringType), change)
+            }
+            assertTrue(error.getMessage.contains("hoodie.properties"), error.getMessage)
+            assertEquals(before, session.getTableMetadata(tableIdent))
+            assertEquals(schemaBefore, catalog.loadTable(ident).schema())
+            assertEquals(persistedBefore, Files.readAllBytes(propertiesFile).toSeq)
+          }
+
+          // An old catalog entry may already disagree with the persisted table. Re-sending it is not a safe no-op.
+          session.alterTable(before.copy(properties = before.properties + (partitionKey -> "id")))
+          try {
+            intercept[HoodieAnalysisException] {
+              catalog.alterTable(ident, TableChange.setProperty(partitionKey, "id"))
+            }
+          } finally {
+            session.alterTable(before)
+          }
+          assertEquals(persistedBefore, Files.readAllBytes(propertiesFile).toSeq)
+          spark.sql(s"INSERT INTO $name VALUES (2, 2L, 'b')")
+          checkAnswer(s"SELECT id, ts, part FROM $name ORDER BY id")(Seq(1, 1L, "a"), Seq(2, 2L, "b"))
+        } finally {
+          catalog.dropTable(ident)
+        }
+      }
+    }
+  }
+
+  test("alterTable accepts unchanged identity aliases absent from an unpartitioned catalog entry") {
+    withTempDir { tmp =>
+      val catalog = hoodieCatalog
+      val name = generateTableName
+      val ident = Identifier.of(Array("default"), name)
+      val tableIdent = TableIdentifier(name, Some("default"))
+      catalog.createTable(ident, StructType(Seq(StructField("id", IntegerType))), Array.empty[Transform],
+        Map("provider" -> "hudi", "primaryKey" -> "id", "location" -> s"${tmp.getCanonicalPath}/$name").asJava)
+      try {
+        val before = spark.sessionState.catalog.getTableMetadata(tableIdent)
+        val config = HoodieCatalogTable(spark, before).tableConfig
+        catalog.alterTable(ident,
+          TableChange.setProperty("hoodie.datasource.write.partitionpath.field", ""),
+          TableChange.setProperty("hoodie.datasource.write.keygenerator.class", config.getKeyGeneratorClassName),
+          TableChange.setProperty("hoodie.datasource.write.keygenerator.type", "non_partition"))
+        assertEquals(before, spark.sessionState.catalog.getTableMetadata(tableIdent))
+        intercept[HoodieAnalysisException] {
+          catalog.alterTable(ident, TableChange.setProperty("hoodie.datasource.write.partitionpath.field", "id"))
+        }
+        assertEquals(before, spark.sessionState.catalog.getTableMetadata(tableIdent))
+      } finally {
+        catalog.dropTable(ident)
+      }
     }
   }
 
