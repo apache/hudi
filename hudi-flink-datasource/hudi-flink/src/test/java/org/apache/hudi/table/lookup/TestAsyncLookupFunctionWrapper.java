@@ -32,6 +32,7 @@ import java.util.concurrent.CompletionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -44,12 +45,16 @@ class TestAsyncLookupFunctionWrapper {
   @Test
   void testLifecycleAndAsyncLookup() throws Exception {
     TestingLookupFunction function = new TestingLookupFunction();
-    AsyncLookupFunctionWrapper wrapper = new AsyncLookupFunctionWrapper(function, 2);
+    AsyncLookupFunctionWrapper wrapper = new AsyncLookupFunctionWrapper(function);
     RowData key = GenericRowData.of(1);
 
     wrapper.open(null);
     Collection<RowData> result = wrapper.asyncLookup(key).join();
 
+    Thread firstWorker = function.lookupThread;
+    wrapper.asyncLookup(key).join();
+    assertSame(firstWorker, function.lookupThread);
+    assertNotSame(Thread.currentThread(), firstWorker);
     assertEquals(1, result.size());
     assertSame(key, result.iterator().next());
     assertTrue(function.opened);
@@ -60,8 +65,9 @@ class TestAsyncLookupFunctionWrapper {
   @Test
   void testIOExceptionIsPropagatedAsUncheckedIOException() throws Exception {
     AsyncLookupFunctionWrapper wrapper =
-        new AsyncLookupFunctionWrapper(new FailingLookupFunction(), 1);
+        new AsyncLookupFunctionWrapper(new FailingLookupFunction());
 
+    wrapper.open(null);
     CompletionException exception = assertThrows(
         CompletionException.class,
         () -> wrapper.asyncLookup(GenericRowData.of(1)).join());
@@ -71,6 +77,7 @@ class TestAsyncLookupFunctionWrapper {
   }
 
   private static class TestingLookupFunction extends LookupFunction {
+    private Thread lookupThread;
     private boolean opened;
     private boolean closed;
 
@@ -81,6 +88,7 @@ class TestAsyncLookupFunctionWrapper {
 
     @Override
     public Collection<RowData> lookup(RowData keyRow) {
+      lookupThread = Thread.currentThread();
       return Collections.singletonList(keyRow);
     }
 
