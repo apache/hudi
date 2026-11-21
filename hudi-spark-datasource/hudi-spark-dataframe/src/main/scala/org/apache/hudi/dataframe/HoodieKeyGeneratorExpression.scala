@@ -41,12 +41,15 @@ import org.apache.spark.unsafe.types.UTF8String
  * @param keyGenProps properties the key generator is created from.
  * @param instantTime instant of the write, the prefix of auto-generated record keys.
  * @param autoGenerateRecordKeys whether the table has no record key fields.
+ * @param avroKeys whether the key generator is given the row as an Avro record, as it is on a
+ *                 write of Avro records: a key generator may answer differently for the two.
  */
 case class HoodieKeyGeneratorExpression(children: Seq[Expression],
                                         inputSchema: StructType,
                                         keyGenProps: TypedProperties,
                                         instantTime: String,
-                                        autoGenerateRecordKeys: Boolean)
+                                        autoGenerateRecordKeys: Boolean,
+                                        avroKeys: Boolean)
   extends Expression with Nondeterministic with CodegenFallback {
 
   @transient private var generateKeys: InternalRow => InternalRow = _
@@ -62,12 +65,12 @@ case class HoodieKeyGeneratorExpression(children: Seq[Expression],
       props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
     }
     generateKeys = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props) match {
-      case rowKeyGenerator: SparkKeyGeneratorInterface =>
+      case rowKeyGenerator: SparkKeyGeneratorInterface if !avroKeys =>
         row => InternalRow(
           rowKeyGenerator.getRecordKey(row, inputSchema),
           rowKeyGenerator.getPartitionPath(row, inputSchema))
       case avroKeyGenerator =>
-        // A key generator that only reads Avro records gets the row converted for it.
+        // The row is converted for a key generator that reads Avro records.
         val avroSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
           inputSchema, HoodieKeyGeneratorExpression.AVRO_RECORD_NAME, HoodieKeyGeneratorExpression.AVRO_RECORD_NAMESPACE)
         val toAvro = AvroConversionUtils.createInternalRowToAvroConverter(inputSchema, avroSchema, nullable = false)
@@ -108,9 +111,11 @@ object HoodieKeyGeneratorExpression extends SparkAdapterSupport {
   def column(input: DataFrame,
              keyGenProps: TypedProperties,
              instantTime: String,
-             autoGenerateRecordKeys: Boolean): Column = {
-    val children = input.columns.toSeq.map(name => sparkAdapter.getExpressionFromColumn(input(name)))
+             autoGenerateRecordKeys: Boolean,
+             avroKeys: Boolean): Column = {
+    val children = input.schema.fieldNames.toSeq.map(name =>
+      sparkAdapter.getExpressionFromColumn(input.col("`" + name.replace("`", "``") + "`")))
     sparkAdapter.createColumnFromExpression(
-      HoodieKeyGeneratorExpression(children, input.schema, keyGenProps, instantTime, autoGenerateRecordKeys))
+      HoodieKeyGeneratorExpression(children, input.schema, keyGenProps, instantTime, autoGenerateRecordKeys, avroKeys))
   }
 }

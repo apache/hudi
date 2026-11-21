@@ -672,6 +672,41 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testMissingRecordKeyFieldFailsWithTheSameError(): Unit = {
+    Seq("missing", "key,missing").foreach { recordKeyFields =>
+      val messages = Seq("true", "false").map { enabled =>
+        val path = tempDir.resolve(s"test_table_missing_key_${recordKeyFields.hashCode}_$enabled").toString
+        val failure = Assertions.assertThrows(classOf[Exception], () =>
+          makeDf(Seq(("e1", "p1", 1L, "a1"))).write.format("hudi")
+            .options(writeOptions("insert", Map(
+              DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+              DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyFields)))
+            .mode(SaveMode.Append).save(path))
+        var cause: Throwable = failure
+        while (cause.getCause != null) {
+          cause = cause.getCause
+        }
+        cause.getMessage
+      }
+      Assertions.assertTrue(messages.head.contains("missing"), messages.head)
+      Assertions.assertEquals(messages(1), messages.head)
+    }
+  }
+
+  @Test
+  def testInputWithoutColumnsCommitsNothing(): Unit = {
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_no_columns_$enabled").toString
+      val opts = Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writeHudi(Seq(("g1", "p1", 1L, "a1")), "insert", path, opts)
+      spark.emptyDataFrame.write.format("hudi")
+        .options(writeOptions("upsert", opts)).mode(SaveMode.Append).save(path)
+      Assertions.assertEquals(2, completedCommits(path))
+      Assertions.assertEquals(1L, spark.read.format("hudi").load(path).count())
+    }
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)

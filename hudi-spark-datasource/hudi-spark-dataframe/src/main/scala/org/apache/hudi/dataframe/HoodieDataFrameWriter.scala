@@ -38,6 +38,8 @@ import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.{HoodieClusteringUpdateException, HoodieDuplicateKeyException}
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
 import org.apache.hudi.keygen.KeyGenUtils
+import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.metadata.{HoodieIndexVersion, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.HoodieWriteMetadata
@@ -50,6 +52,7 @@ import org.apache.spark.sql.{Column, DataFrame, Dataset, HoodieInternalRowUtils,
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{coalesce, col, hash, lit, monotonically_increasing_id, row_number, struct, udf, when}
+import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
@@ -394,6 +397,37 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     })
   }
 
+  /**
+   * Whether the key generator is given rows as Avro records. The built-in key generators answer
+   * the same for rows and for Avro records, so they read rows. A key generator of the user's can
+   * differ between the two, so it reads what the write's records are without this path, Avro by
+   * default. A key field the input does not have also goes through the Avro side, which raises
+   * the errors a write of Avro records raises for it.
+   */
+  private def generatesKeysFromAvro(input: DataFrame,
+                                    spec: DataFrameWriteSpec,
+                                    writeConfig: HoodieWriteConfig,
+                                    metaClient: HoodieTableMetaClient): Boolean = {
+    val props = keyGeneratorProps(writeConfig, metaClient)
+    val configuredClass = HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props)
+    val keyGeneratorClass = if (configuredClass == classOf[SqlKeyGenerator].getName) {
+      props.getString(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null)
+    } else {
+      configuredClass
+    }
+    val userProvided = keyGeneratorClass != null &&
+      KeyGeneratorType.fromClassName(keyGeneratorClass) == KeyGeneratorType.USER_PROVIDED
+    val avroRecordsWithoutThisPath = !spec.parameters.contains(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY) ||
+      writeConfig.getRecordMerger.getRecordType == HoodieRecordType.AVRO
+    val keyFields = (props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, "").split(",") ++
+      props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key, "").split(",").map(_.split(":")(0)))
+      .map(_.trim).filter(_.nonEmpty)
+    (userProvided && avroRecordsWithoutThisPath) || !keyFields.forall(resolves(input, _))
+  }
+
+  private def resolves(frame: DataFrame, field: String): Boolean =
+    scala.util.Try(frame.select(col(field))).isSuccess
+
   private def keyGeneratorProps(writeConfig: HoodieWriteConfig, metaClient: HoodieTableMetaClient): TypedProperties =
     KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(writeConfig.getProps), metaClient.getTableConfig)
 
@@ -428,7 +462,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         col(HoodieRecord.PARTITION_PATH_METADATA_FIELD).as(HoodieKeyGeneratorExpression.PARTITION_PATH_FIELD))
     } else {
       HoodieKeyGeneratorExpression.column(input, keyGeneratorProps(writeConfig, metaClient), instantTime,
-        !tableConfig.getRecordKeyFields.isPresent)
+        !tableConfig.getRecordKeyFields.isPresent, generatesKeysFromAvro(input, spec, writeConfig, metaClient))
     }
     val location = if (spec.locationFromMetaColumns) {
       val fileIdFromName = udf((fileName: String) => FSUtils.getFileId(fileName))
@@ -465,7 +499,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       } else {
         Seq.empty
       }
-      val ordering = orderingFields.map(f => col(f).desc) :+ col(INPUT_ORDER_COL).desc
+      // An ordering field the input does not have is a null ordering value on every row.
+      val (presentOrderingFields, missingOrderingFields) = orderingFields.partition(f => resolves(withMeta, f))
+      val ordering = presentOrderingFields.map(f => col(f).desc) :+ col(INPUT_ORDER_COL).desc
       val window = Window.partitionBy(dedupKeys: _*).orderBy(ordering: _*)
       // A record that is combined on its ordering value has to have one.
       val requireOrderingValue = udf((field: String, recordKey: String) => {
@@ -477,9 +513,10 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         }
         true
       })
-      val nullOrderingField = orderingFields.foldRight(lit(null).cast(StringType)) { (field, otherwise) =>
-        when(col(field).isNull, lit(field)).otherwise(otherwise)
-      }
+      val nullOrderingField = missingOrderingFields.headOption.map(lit(_)).getOrElse(
+        presentOrderingFields.foldRight(lit(null).cast(StringType)) { (field, otherwise) =>
+          when(col(field).isNull, lit(field)).otherwise(otherwise)
+        })
       val checked = if (orderingFields.isEmpty) {
         withMeta
       } else {
