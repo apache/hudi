@@ -627,31 +627,6 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
-  def testInsertsAreSizedIntoFilesLikeTheLegacyPath(): Unit = {
-    // 100 KB files at the default 1 KB record size estimate: 100 records per new file.
-    val fileCounts = Seq("true", "false").map { enabled =>
-      val path = tempDir.resolve(s"test_table_insert_sizing_$enabled").toString
-      val opts = Map(
-        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
-        "hoodie.parquet.max.file.size" -> (100 * 1024).toString,
-        "hoodie.parquet.small.file.limit" -> (50 * 1024).toString)
-      def fileIds(): Set[String] = spark.read.format("hudi").load(path).select("_hoodie_file_name").distinct().collect()
-        .map(r => org.apache.hudi.common.fs.FSUtils.getFileId(r.getString(0))).toSet
-
-      writeHudi((1 to 1000).map(i => (s"z$i", "p1", 1L, s"v$i")), "insert", path, opts)
-      val afterFirst = fileIds()
-      writeHudi((1001 to 1010).map(i => (s"z$i", "p2", 1L, s"v$i")), "insert", path, opts)
-      val afterSecond = fileIds()
-      writeHudi((1011 to 1012).map(i => (s"z$i", "p2", 1L, s"v$i")), "insert", path, opts)
-      val afterThird = fileIds()
-      Assertions.assertEquals(1012L, spark.read.format("hudi").load(path).count())
-      Seq(afterFirst.size, afterSecond.size, afterThird.size)
-    }
-    Assertions.assertEquals(10, fileCounts.head.head)
-    Assertions.assertEquals(fileCounts(1), fileCounts.head)
-  }
-
-  @Test
   def testNullOrderingValueFailsTheWrite(): Unit = {
     val nullableSchema = StructType(schema.map(_.copy(nullable = true)))
     Seq("true", "false").foreach { enabled =>
@@ -720,6 +695,36 @@ class TestHoodieDataFrameWriter {
           "upsert" -> Seq(("v1", "p2", 9L, "moved"), ("v2", "p2", 1L, "behind"), ("v3", "p2", 5L, "tie"))))
       Assertions.assertEquals(
         Seq(("v1", "p2", 9L, "moved"), ("v2", "p1", 5L, "a2"), ("v3", "p2", 5L, "tie")), rows)
+    }
+  }
+
+  @Test
+  def testMergeOnReadUpdatesOfASmallFileGroupAppendUnlessInsertsPadIt(): Unit = {
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_mor_small_file_updates_$enabled").toString
+      val opts = Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        "hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+        "hoodie.compact.inline" -> "false")
+      def lastCommitFiles(): Seq[String] = {
+        val metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+          .setBasePath(path).build()
+        val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
+        timeline.readCommitMetadata(timeline.lastInstant().get()).getFileIdAndRelativePaths.values().asScala.toSeq
+      }
+
+      writeHudi(Seq(("y1", "p1", 1L, "a1"), ("y2", "p1", 1L, "a2")), "insert", path, opts)
+      // Updates alone go to a log file of the small file group.
+      writeHudi(Seq(("y1", "p1", 2L, "b1")), "upsert", path, opts)
+      Assertions.assertTrue(lastCommitFiles().forall(_.contains(".log")), lastCommitFiles().mkString(","))
+      // With an insert in the batch, the small file group is rewritten with both.
+      writeHudi(Seq(("y2", "p1", 3L, "c2"), ("y3", "p1", 3L, "c3")), "upsert", path, opts)
+      Assertions.assertTrue(lastCommitFiles().forall(_.endsWith(".parquet")), lastCommitFiles().mkString(","))
+      Assertions.assertEquals(
+        Seq(("y1", 2L, "b1"), ("y2", 3L, "c2"), ("y3", 3L, "c3")),
+        spark.read.format("hudi").load(path).select("key", "ts", "value").collect()
+          .map(r => (r.getString(0), r.getLong(1), r.getString(2))).sorted.toSeq)
     }
   }
 

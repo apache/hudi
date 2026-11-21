@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, Typed
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey
 import org.apache.hudi.common.data.HoodieListData
+import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieFileGroupId, HoodieRecord, HoodieTableType, MetaFieldsMode, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -32,7 +33,7 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, HoodieDataUtils, HoodieRecordUtils, Option => HOption, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, HoodieDataUtils, HoodieRecordUtils, HoodieTimer, Option => HOption, StringUtils}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.{HoodieClusteringUpdateException, HoodieDuplicateKeyException}
@@ -41,6 +42,7 @@ import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.metadata.{HoodieIndexVersion, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metrics.RecordIndexLookupMetrics
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.HoodieWriteMetadata
 import org.apache.hudi.util.CommonClientUtils
@@ -190,15 +192,24 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
 
     // Stage 3: index tagging (record-level-index point lookup or simple-index join), unless
     // the rows already carry their file group.
-    val tagged = tagRecords(spark, prepared.rows, spec, writeConfig, table)
+    val tagged = tagRecords(spark, prepared.rows, spec, writeConfig, table, engineContext)
 
-    // Stage 4: routing on a bucket column; updates pin to their file group, inserts go to the
-    // small file group their partition pads or hash across new-file buckets, as planned from
-    // table metadata. An overwrite replaces the file groups it would pad, so it only opens new ones.
+    // Stage 4: routing on a bucket column; updates pin to their file group, inserts hash
+    // across small-file padding slots and new-file buckets planned from table metadata. An
+    // overwrite replaces the file groups it would pad, so it only opens new ones.
     val newFileBuckets = params.get(INSERT_BUCKETS_PER_PARTITION).map(_.toInt).getOrElse(1)
-    val insertPlan = MetadataSizingProfiler.plan(table, writeConfig, newFileBuckets, mergeOnRead,
-      if (mergeOnRead) MERGE_BUCKET_PREFIX else UPDATE_BUCKET_PREFIX, padSmallFiles = !overwrite)
-    val withBucket = withRoutingBucket(tagged, insertPlan)
+    val insertPlan = if (overwrite) {
+      InsertRoutingPlan(Map.empty, newFileBuckets)
+    } else {
+      MetadataSizingProfiler.plan(table, writeConfig, newFileBuckets, mergeOnRead,
+        if (mergeOnRead) MERGE_BUCKET_PREFIX else UPDATE_BUCKET_PREFIX)
+    }
+    val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
+    // The tagged updates of a small file group that takes inserts join them in one bucket, so
+    // one handle writes the file group, when the write task can rely on the order of rows
+    // within a bucket.
+    val colocateUpdatesWithPadding = profilerMode != PROFILER_SHUFFLE_STATS
+    val withBucket = withRoutingBucket(tagged, insertPlan, colocateUpdatesWithPadding)
     val bucketOrdinal = withBucket.schema.fieldIndex(ROUTING_BUCKET_COL)
 
     val actionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
@@ -209,7 +220,6 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     // Stage 5: per-bucket write tasks driving the write handles. The reader context factory is
     // created on the driver (the table's engine context is not usable on executors) and shipped
     // with the task.
-    val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
     val sparkTable = table.asInstanceOf[HoodieTable[InternalRow, _, _, _]]
     val readerContextFactory = sparkTable.getReaderContextFactoryForWrite
     val pendingClusteringFileGroups: Set[HoodieFileGroupId] =
@@ -218,9 +228,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       writeConfig, sparkTable, readerContextFactory, instantTime, operation, withBucket.schema,
       prepared.dataSchema.length, HoodieInternalRowUtils.getCachedSchema(writerSchema), bucketOrdinal,
       withBucket.schema.fieldIndex(ROW_OP_COL), withBucket.schema.fieldIndex(TAGGED_FILE_ID_COL), mergeOnRead,
-      // The shuffle-stats profiler orders rows by bucket alone, so it pads without a budget.
-      if (profilerMode == PROFILER_SHUFFLE_STATS) Map.empty else insertPlan.paddingByPartition.values.map(slot => slot.bucket -> slot.recordBudget).toMap,
-      insertPlan.recordsPerNewFile, pendingClusteringFileGroups,
+      pendingClusteringFileGroups,
       avroRecordSpec(spec, prepared.dataSchema, writerSchema, writeConfig, tableConfig),
       // The row-based create handle takes rows in the writer schema and neither consults a
       // payload class nor tracks the event-time watermark.
@@ -260,10 +268,10 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     } else {
       val numWriteTasks = params.get(WRITE_TASKS).map(_.toInt)
         .getOrElse(spark.sparkContext.defaultParallelism)
-      // Within a bucket, tagged updates come before the inserts that pad the file group, so the
-      // write task can stop taking inserts once the file group is full. Combining in the write
-      // task also needs the records of a key next to each other.
-      val sortColumns = Seq(col(ROUTING_BUCKET_COL), col(TAGGED_FILE_ID_COL).isNull) ++
+      // Within a bucket, the inserts that pad the file group come before its tagged updates, so
+      // the write task sees from the first row whether the run pads. Combining in the write task
+      // also needs the records of a key next to each other.
+      val sortColumns = Seq(col(ROUTING_BUCKET_COL), col(TAGGED_FILE_ID_COL).isNotNull) ++
         (if (combinesInTask(spec, writeConfig, tableConfig)) Seq(col(HoodieRecord.RECORD_KEY_METADATA_FIELD)) else Seq.empty)
       val routed = withBucket
         .repartition(numWriteTasks, col(ROUTING_BUCKET_COL))
@@ -541,7 +549,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
                          prepared: Dataset[Row],
                          spec: DataFrameWriteSpec,
                          writeConfig: HoodieWriteConfig,
-                         table: HoodieTable[_, _, _, _]): Dataset[Row] = {
+                         table: HoodieTable[_, _, _, _],
+                         engineContext: HoodieEngineContext): Dataset[Row] = {
     val operation = spec.operation
     val indexType = writeConfig.getIndexType
     val recordIndexConfigured = indexType == HoodieIndex.IndexType.RECORD_INDEX ||
@@ -559,7 +568,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
 
     def located: Dataset[Row] = if (recordIndexReady) {
       log.info("Tagging incoming records via the record-level index")
-      tagViaRecordIndex(spark, prepared, table)
+      tagViaRecordIndex(spark, prepared, table, engineContext, writeConfig)
     } else {
       // A configured-but-uninitialized record index keeps global semantics through the
       // base-file join, mirroring the legacy fallback to the global simple index.
@@ -675,7 +684,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
    */
   private def tagViaRecordIndex(spark: org.apache.spark.sql.SparkSession,
                                 prepared: Dataset[Row],
-                                table: HoodieTable[_, _, _, _]): Dataset[Row] = {
+                                table: HoodieTable[_, _, _, _],
+                                engineContext: HoodieEngineContext,
+                                writeConfig: HoodieWriteConfig): Dataset[Row] = {
     val numFileGroups = table.getTableMetadata.getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX)
     val indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(
       MetadataPartitionType.RECORD_INDEX.getPartitionPath, table.getMetaClient)
@@ -683,6 +694,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       .fromPartitionPath(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
       .getFileGroupMappingFunction(indexVersion)
     val serTable = table
+    // Resolved on the driver, from the context of the client that commits, so the closure
+    // carries the counters to executors and the commit publishes them.
+    val lookupMetrics = RecordIndexLookupMetrics.resolveRegistry(engineContext, writeConfig)
 
     val locationRows = prepared.select(col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
       .queryExecution.toRdd
@@ -696,11 +710,16 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         if (keyList.isEmpty) {
           Iterator.empty
         } else {
+          val shardTimer = HoodieTimer.start()
           val locations = serTable.getTableMetadata
             .readRecordIndexLocationsWithKeys(HoodieListData.eager[String](keyList))
           try {
-            HoodieDataUtils.dedupeAndCollectAsList(locations).asScala
-              .map(pair => Row(pair.getKey, pair.getValue.getPartitionPath, pair.getValue.getFileId))
+            val found = HoodieDataUtils.dedupeAndCollectAsList(locations).asScala
+            if (lookupMetrics.isPresent) {
+              RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get, keyList,
+                found.map(_.getKey).toSet.asJava, shardTimer.endTimer())
+            }
+            found.map(pair => Row(pair.getKey, pair.getValue.getPartitionPath, pair.getValue.getFileId))
               .iterator
           } finally {
             locations.unpersistWithDependencies()
@@ -761,24 +780,33 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
   }
 
   /**
-   * Adds the routing-bucket column. Tagged updates pin to their file group. Inserts of a
-   * partition that pads a small file group go to that file group's bucket, which merges, and
-   * tagged updates of the same file group join them there; other inserts hash across the
-   * partition's new-file buckets. The profiler mode decides how buckets then map to write tasks.
+   * Adds the routing-bucket column. Tagged updates pin to their file group. Inserts hash across
+   * their partition's slots: the small file groups that take inserts, whose buckets merge, or
+   * else the new-file buckets. The tagged updates of a small file group that takes inserts go
+   * to its padding bucket too. The profiler mode decides how buckets then map to write tasks.
    */
   private def withRoutingBucket(tagged: Dataset[Row],
-                                insertPlan: InsertRoutingPlan): Dataset[Row] = {
-    val padding = insertPlan.paddingByPartition
+                                insertPlan: InsertRoutingPlan,
+                                colocateUpdatesWithPadding: Boolean): Dataset[Row] = {
+    val smallFileSlots = insertPlan.smallFileSlotsByPartition
+    val paddingBuckets: Set[String] = if (colocateUpdatesWithPadding) smallFileSlots.values.flatten.toSet else Set.empty
+    val paddingPrefix = smallFileSlots.values.flatten.headOption.map(_.substring(0, 2)).getOrElse(UPDATE_BUCKET_PREFIX)
     val newFileBuckets = insertPlan.newFileBuckets
     val routingBucket = udf { (partitionPath: String, taggedFileId: String, keyHash: Int) =>
-      val slot = padding.get(partitionPath)
       if (taggedFileId != null) {
-        if (slot.exists(_.fileId == taggedFileId)) slot.get.bucket else UPDATE_BUCKET_PREFIX + taggedFileId
-      } else if (slot.isDefined) {
-        slot.get.bucket
+        val paddingBucket = paddingPrefix + taggedFileId
+        if (paddingBuckets.contains(paddingBucket)) paddingBucket else UPDATE_BUCKET_PREFIX + taggedFileId
       } else {
-        val newFileBucket = ((keyHash % newFileBuckets) + newFileBuckets) % newFileBuckets
-        INSERT_BUCKET_PREFIX + partitionPath + ":" + "%010d".format(newFileBucket)
+        // Padding-first: without a count pass there is no record budget per small file group, so
+        // a partition's inserts fill its small file groups before any new one opens.
+        val padding = smallFileSlots.getOrElse(partitionPath, Array.empty[String])
+        val totalSlots = if (padding.nonEmpty) padding.length else newFileBuckets
+        val slot = ((keyHash % totalSlots) + totalSlots) % totalSlots
+        if (padding.nonEmpty) {
+          padding(slot)
+        } else {
+          INSERT_BUCKET_PREFIX + partitionPath + ":" + "%010d".format(slot)
+        }
       }
     }
     tagged.withColumn(ROUTING_BUCKET_COL, routingBucket(
