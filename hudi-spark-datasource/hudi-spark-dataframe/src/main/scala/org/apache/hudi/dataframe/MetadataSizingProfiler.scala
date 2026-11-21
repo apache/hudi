@@ -55,7 +55,9 @@ object MetadataSizingProfiler extends Logging {
     val maxFileSize = writeConfig.getParquetMaxFileSize
     val completedCommits = table.getMetaClient.getActiveTimeline
       .getCommitsTimeline.filterCompletedInstants()
-    if (smallFileLimit <= 0 || completedCommits.countInstants() == 0) {
+    // Partial updates only exist as log blocks, so a write that carries them never merges
+    // inserts into a base file alongside them.
+    if (smallFileLimit <= 0 || completedCommits.countInstants() == 0 || writeConfig.shouldWritePartialUpdates) {
       InsertRoutingPlan(Map.empty, newFileBuckets)
     } else {
       val avgRecordSize = averageRecordSize(table, writeConfig)
@@ -65,7 +67,9 @@ object MetadataSizingProfiler extends Logging {
       val candidates: Iterator[(String, String)] = if (mergeOnRead) {
         // Slice-based sizing, and never pad a slice that has log files: the write-path merge
         // handle reads only the base file, so padding a logged slice would drop its log records.
-        // Pending-compaction slices are excluded so the rewrite cannot race the compactor.
+        // Pending-compaction slices are excluded so the rewrite cannot race the compactor. A
+        // partition offers its smallest slices, as many as the candidates limit allows.
+        val candidatesLimit = writeConfig.getSmallFileGroupCandidatesLimit
         val latestCompleted = completedCommits.lastInstant().get().requestedTime()
         table.getTableMetadata.getAllPartitionPaths.asScala.iterator.flatMap { partition =>
           fsView.getLatestFileSlicesBeforeOrOn(partition, latestCompleted, false).iterator().asScala
@@ -74,6 +78,7 @@ object MetadataSizingProfiler extends Logging {
               && slice.getBaseFile.get().getFileSize > 0
               && slice.getTotalFileSizeAsParquetFormat(writeConfig) < smallFileLimit
               && (maxFileSize - slice.getTotalFileSizeAsParquetFormat(writeConfig)) / avgRecordSize > 0)
+            .toSeq.sortBy(_.getBaseFile.get().getFileSize).take(candidatesLimit)
             .map(slice => (partition, slice.getFileId))
         }
       } else {

@@ -400,7 +400,11 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
   private def shouldCombine(spec: DataFrameWriteSpec,
                             writeConfig: HoodieWriteConfig,
                             tableConfig: HoodieTableConfig): Boolean = {
-    !spec.keysFromMetaColumns && tableConfig.getRecordKeyFields.isPresent && (spec.operation match {
+    // Keys generated for this write are unique, and rows that bring their keys in the meta
+    // columns are written as they are. A MERGE into a table without record keys does combine:
+    // its rows are keyed by the stored rows they matched.
+    val generatesKeys = !tableConfig.getRecordKeyFields.isPresent && !spec.locationFromMetaColumns
+    !spec.keysFromMetaColumns && !generatesKeys && (spec.operation match {
       case WriteOperationType.UPSERT => writeConfig.shouldCombineBeforeUpsert()
       case WriteOperationType.DELETE => writeConfig.shouldCombineBeforeDelete()
       case _ => writeConfig.shouldCombineBeforeInsert()
