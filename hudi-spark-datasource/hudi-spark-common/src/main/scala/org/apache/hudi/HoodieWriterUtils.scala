@@ -292,6 +292,14 @@ object HoodieWriterUtils {
     }
     // If Overwrite is set as save mode, we don't need to do table config validation.
     if (!isOverWriteMode) {
+      // A table without the property writes truncated paths, so a row with fractional seconds would land
+      // under a different partition path than its earlier versions. A persisted value is held by the diff below.
+      val fractionalSecondsKey = HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key
+      if (null != tableConfig && !tableConfig.contains(fractionalSecondsKey)
+        && params.get(fractionalSecondsKey).exists(_.equalsIgnoreCase("true"))) {
+        throw new HoodieException(s"$fractionalSecondsKey can only be set when a table is created: this table"
+          + " writes TIMESTAMP partition paths truncated to whole seconds.")
+      }
       val resolver = spark.sessionState.conf.resolver
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>

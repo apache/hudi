@@ -1046,6 +1046,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String partitionValueExtractorClass;
     private String keyGeneratorType;
     private Boolean slashSeparatedDatePartitioning;
+    private Boolean timestampPartitionFractionalSeconds;
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
@@ -1248,6 +1249,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public TableBuilder setSlashSeparatedDatePartitioning(Boolean slashSeparatedDatePartitioning) {
       this.slashSeparatedDatePartitioning = slashSeparatedDatePartitioning;
+      return this;
+    }
+
+    public TableBuilder setTimestampPartitionFractionalSeconds(Boolean timestampPartitionFractionalSeconds) {
+      this.timestampPartitionFractionalSeconds = timestampPartitionFractionalSeconds;
       return this;
     }
 
@@ -1469,6 +1475,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING)) {
         setSlashSeparatedDatePartitioning(hoodieConfig.getBoolean(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS)) {
+        setTimestampPartitionFractionalSeconds(hoodieConfig.getBoolean(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS)) {
         setPartitionValueExtractorClass(hoodieConfig.getString(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS));
       }
@@ -1591,6 +1600,13 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != partitionFields) {
         tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, partitionFields);
+      }
+      if (null != timestampPartitionFractionalSeconds) {
+        tableConfig.setValue(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS, Boolean.toString(timestampPartitionFractionalSeconds));
+      } else if (StringUtils.nonEmpty(partitionFields)) {
+        // Recorded even when false, so a later change of the default never changes the table's layout
+        tableConfig.setValue(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS,
+            Boolean.toString(tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN)));
       }
       if (null != recordKeyFields) {
         tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, recordKeyFields);

@@ -42,6 +42,19 @@ public class KeyGeneratorOptions extends HoodieConfig {
           + "If set to true, date partition values in yyyy-MM-dd format will be transformed to yyyy/MM/dd directory structure.\n"
           + "By default false. Cannot be used together with hive-style partitioning.");
 
+  public static final ConfigProperty<String> TIMESTAMP_PARTITION_FRACTIONAL_SECONDS = ConfigProperty
+      .key("hoodie.datasource.write.partitionpath.timestamp.fractional.seconds")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Whether a Spark SQL write keeps the fractional seconds of a TIMESTAMP partition value in the "
+          + "partition path, as Spark renders a timestamp cast to a string (`2024-02-29 10:30:00.123456`), rather than "
+          + "truncating it to whole seconds. A whole-second value has the same path either way. Recorded when a "
+          + "partitioned table is created, true for a table created at table version 10 or later and false for an "
+          + "older version, and fixed from then on: changing it would route a row with fractional seconds to a "
+          + "different partition path than the one its earlier versions were written under. A table without the "
+          + "property truncates. Kept across upgrades and downgrades; a writer that predates it truncates.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = ConfigProperty
       .key("hoodie.datasource.write.partitionpath.urlencode")
       .defaultValue("false")
