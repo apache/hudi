@@ -28,7 +28,7 @@ import org.apache.hudi.common.schema.internal.utils.SerDeHelper
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieArchivedTimeline, HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.util.IncrementalRelationUtil
@@ -94,6 +94,11 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
 
   private val commitsToReturn = queryContext.getInstants.asScala.toList
 
+  // Loaded only if the writer archives a commit to return after the query context listed the timeline, and then once
+  // for all of them
+  private lazy val archivedTimelineForCommitsToReturn: HoodieArchivedTimeline =
+    metaClient.getArchivedTimeline(commitsToReturn.map(_.requestedTime).min, false)
+
   private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
     INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean
 
@@ -149,7 +154,8 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
       // create Replaced file group
       val replacedInstants = commitsToReturn.filter(_.getAction.equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
       val replacedFile = replacedInstants.flatMap { instant =>
-        val replaceMetadata = metaClient.getActiveTimeline.readReplaceCommitMetadata(instant)
+        val replaceMetadata = TimelineUtils.readInstantContentOrArchived(metaClient, metaClient.getActiveTimeline,
+          () => archivedTimelineForCommitsToReturn, instant, (t: HoodieTimeline) => t.readReplaceCommitMetadata(instant))
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().asScala.flatMap { entry =>
           entry.getValue.asScala.map { e =>
             val fullPath = FSUtils.constructAbsolutePath(basePath, entry.getKey).toString
@@ -160,7 +166,8 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
       log.info(s"buildScan commitsToReturn = ${commitsToReturn.map(_.requestedTime()).mkString("[", ",", "]")}")
 
       for (commit <- commitsToReturn) {
-        val metadata: HoodieCommitMetadata = commitTimeline.readCommitMetadata(commit)
+        val metadata: HoodieCommitMetadata = TimelineUtils.readInstantContentOrArchived(metaClient, commitTimeline,
+          () => archivedTimelineForCommitsToReturn, commit, (t: HoodieTimeline) => t.readCommitMetadata(commit))
 
         if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.requestedTime) {
           metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>
@@ -255,7 +262,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
           } else {
             if (metaBootstrapFileIdToFullPath.nonEmpty) {
               df = sqlContext.sparkSession.read
-                .format("hudi_v1")
+                .format(classOf[DefaultSource].getName)
                 .schema(prunedSchema)
                 .option(DataSourceReadOptions.READ_PATHS.key, filteredMetaBootstrapFullPaths.mkString(","))
                 // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
@@ -293,7 +300,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
   private def fullTableScanDataFrame(commitsToFilter: List[HoodieInstant], prunedSchema: StructType): DataFrame = {
     val commitTimesToFilter = commitsToFilter.map(_.requestedTime)
     val hudiDF = sqlContext.read
-      .format("hudi_v1")
+      .format(classOf[DefaultSource].getName)
       .schema(prunedSchema)
       .load(basePath.toString)
       .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToFilter: _*))
