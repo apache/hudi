@@ -214,6 +214,8 @@ public class HoodieTableMetadataUtil {
       HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName(),
       HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName()));
 
+  private static final String FIRST_INITIALIZATION_TIME_SUFFIX = "010";
+
   // The maximum allowed precision and scale as per the payload schema. See DecimalWrapper in HoodieMetadata.avsc:
   // https://github.com/apache/hudi/blob/45dedd819e56e521148bde51a3dfa4e472ea70cd/hudi-common/src/main/avro/HoodieMetadata.avsc#L247
   private static final int DECIMAL_MAX_PRECISION = 30;
@@ -1638,6 +1640,31 @@ public class HoodieTableMetadataUtil {
     // filter out any MDT instant that has pending corespondent dataset instant,
     // this comes from a case that one instant fails to commit after MDT had been committed.
     return instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION) && !datasetPendingInstants.contains(instant.requestedTime());
+  }
+
+  /**
+   * Checks whether every delta commit on the active timeline of a metadata table initializes a metadata partition.
+   * Such a table holds no delta commit of a data table instant, as after a rebuild from the file system.
+   * <p>
+   * From table version 8 an initialization instant starts with {@link HoodieTableMetadata#SOLO_COMMIT_TIMESTAMP}.
+   * Before it, the instant is the latest completed data table instant followed by a three-digit suffix of 010 or
+   * above; lower suffixes mark table services and the commit that syncs a restore, which do not count.
+   *
+   * @param metadataMetaClient meta client of the metadata table.
+   * @return {@code true} if the active timeline holds no other delta commit.
+   */
+  public static boolean hasOnlyInitializationDeltaCommits(HoodieTableMetaClient metadataMetaClient) {
+    boolean suffixedInitialization = metadataMetaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT);
+    return metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().getInstantsAsStream()
+        .map(HoodieInstant::requestedTime)
+        .allMatch(requestedTime -> requestedTime.startsWith(SOLO_COMMIT_TIMESTAMP)
+            || (suffixedInitialization && hasInitializationSuffix(requestedTime)));
+  }
+
+  private static boolean hasInitializationSuffix(String requestedTime) {
+    int suffixStart = HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
+    return requestedTime.length() == suffixStart + FIRST_INITIALIZATION_TIME_SUFFIX.length()
+        && requestedTime.substring(suffixStart).compareTo(FIRST_INITIALIZATION_TIME_SUFFIX) >= 0;
   }
 
   /**

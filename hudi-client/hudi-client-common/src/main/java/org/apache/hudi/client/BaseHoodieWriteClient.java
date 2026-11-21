@@ -895,6 +895,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *   <li>The target is at or before the oldest completed compaction. We cannot restore to before
    *       the oldest compaction because we don't have base files before that time.</li>
    *   <li>The target is before the MDT timeline start (the relevant history was archived away).</li>
+   *   <li>The target is a completed instant of the data table, the MDT timeline holds no completed instant
+   *       for it, and the MDT holds delta commits of data table instants (they include commits the restore rolls
+   *       back). This rule applies only to completed data table instants; an MDT that holds only initialization
+   *       delta commits is restored in place.</li>
    * </ol>
    * Returns false when the MDT directory does not exist or is not readable (nothing to delete or
    * worry about). Wraps genuine IO failures ({@link IOException}) in a {@link HoodieException}
@@ -922,6 +926,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
       if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(targetInstant)) {
         log.warn("Deleting MDT before restore to {}: target is before MDT timeline start", targetInstant);
+        return true;
+      }
+      if (!mdtMetaClient.getCommitsTimeline().filterCompletedInstants().containsInstant(targetInstant)
+          && !HoodieTableMetadataUtil.hasOnlyInitializationDeltaCommits(mdtMetaClient)
+          && createMetaClient(true).getActiveTimeline().filterCompletedInstants().containsInstant(targetInstant)) {
+        log.warn("Deleting MDT before restore to {}: MDT holds no completed instant for the target", targetInstant);
         return true;
       }
       return false;
