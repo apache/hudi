@@ -18,10 +18,19 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.junit.jupiter.api.Test;
@@ -36,13 +45,15 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 /**
- * Tests for {@link HoodieTable#validateSecondaryIndexSchemaEvolution}.
+ * Tests for {@link HoodieTable#validateSecondaryIndexSchemaEvolution} and {@link HoodieTable#validateAlterSchema}.
  */
-public class TestHoodieTableSchemaEvolution {
+public class TestHoodieTableSchemaEvolution extends HoodieCommonTestHarness {
 
   private static final String TABLE_SCHEMA = "{"
       + "\"type\": \"record\","
@@ -298,6 +309,72 @@ public class TestHoodieTableSchemaEvolution {
     
     assertTrue(exception.getMessage().contains("fixed_field"));
     assertTrue(exception.getMessage().contains("secondary index"));
+  }
+
+  @Test
+  public void testValidateAlterSchemaOnlyChecksSecondaryIndexColumns() throws Exception {
+    initMetaClient();
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, TABLE_SCHEMA);
+    HoodieTestTable.of(metaClient).addCommit("001", Option.of(commitMetadata));
+    metaClient.reloadActiveTimeline();
+    String indexName = MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "idx_age";
+    metaClient.buildIndexDefinition(HoodieIndexDefinition.newBuilder()
+        .withIndexName(indexName)
+        .withIndexType(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath())
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexName))
+        .withSourceFields(Collections.singletonList("age"))
+        .build());
+
+    // ALTER TABLE ... RENAME COLUMN name TO full_name, then DROP COLUMN salary, under default configs
+    HoodieTable renameAndDrop = createTable(TABLE_SCHEMA
+        .replace("{\"name\": \"name\",", "{\"name\": \"full_name\",")
+        .replace("  {\"name\": \"salary\", \"type\": \"double\"},", ""), false);
+    // The write path check sees both columns as missing from the incoming schema
+    MissingSchemaFieldException missingFields = assertThrows(MissingSchemaFieldException.class, renameAndDrop::validateSchema);
+    assertTrue(missingFields.getMessage().startsWith(
+        "Schema validation failed due to missing field. Fields missing from incoming schema: {name, salary}"), missingFields.getMessage());
+    assertDoesNotThrow(renameAndDrop::validateAlterSchema);
+
+    // ALTER TABLE ... ALTER COLUMN age TYPE long, with the column drop config on, which skips every check in validateSchema
+    HoodieTable retypeIndexedColumn = createTable(TABLE_SCHEMA.replace("\"age\", \"type\": \"int\"", "\"age\", \"type\": \"long\""), true);
+    assertDoesNotThrow(retypeIndexedColumn::validateSchema);
+    SchemaCompatibilityException exception = assertThrows(SchemaCompatibilityException.class, retypeIndexedColumn::validateAlterSchema);
+    assertEquals("Column 'age' has secondary index 'secondary_index_idx_age' and cannot evolve from schema '\"int\"' to '\"long\"'. "
+        + "Please drop the secondary index before changing the column type.", exception.getMessage());
+
+    // ALTER TABLE ... RENAME COLUMN age TO years, and ALTER TABLE ... DROP COLUMN age, would leave the index on a missing column
+    for (String alteredSchema : Arrays.asList(
+        TABLE_SCHEMA.replace("{\"name\": \"age\",", "{\"name\": \"years\","),
+        TABLE_SCHEMA.replace("  {\"name\": \"age\", \"type\": \"int\"},", ""))) {
+      HoodieTable alterIndexedColumn = createTable(alteredSchema, true);
+      exception = assertThrows(SchemaCompatibilityException.class, alterIndexedColumn::validateAlterSchema);
+      assertEquals("Column 'age' has secondary index 'secondary_index_idx_age' and cannot be renamed or dropped. "
+          + "Please drop the secondary index before renaming or dropping the column.", exception.getMessage());
+    }
+  }
+
+  @Test
+  public void testIndexedColumnMissingFromWriterSchema() {
+    HoodieSchema tableSchema = HoodieSchema.parse(TABLE_SCHEMA);
+    HoodieSchema writerSchema = HoodieSchema.parse(TABLE_SCHEMA.replace("  {\"name\": \"age\", \"type\": \"int\"},", ""));
+    HoodieIndexMetadata indexMetadata = createIndexMetadata(createSecondaryIndexDefinition("secondary_index_age", "age"));
+
+    // Allowed for validateSchema, where the column drop config decides whether a column may be missing
+    assertDoesNotThrow(() ->
+        HoodieTable.validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata));
+    SchemaCompatibilityException exception = assertThrows(SchemaCompatibilityException.class, () ->
+        HoodieTable.validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata, false));
+    assertTrue(exception.getMessage().contains("cannot be renamed or dropped"));
+  }
+
+  private HoodieTable createTable(String writerSchema, boolean allowAutoEvolutionColumnDrop) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withSchema(writerSchema)
+        .withAllowAutoEvolutionColumnDrop(allowAutoEvolutionColumnDrop)
+        .build();
+    return new TestBaseHoodieTable(writeConfig, mock(HoodieEngineContext.class), metaClient);
   }
 
   private HoodieIndexDefinition createSecondaryIndexDefinition(String indexName, String... sourceFields) {

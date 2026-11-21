@@ -1177,6 +1177,25 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           spark.sql(s"ALTER TABLE $tableName ALTER COLUMN quantity2 TYPE double")
         }
         validateSchemaEvolutionException(caughtAlterException, "quantity2", "secondary_index_idx_quantity2")
+        // The column drop config skips the checks of the write path, but not this one
+        withSQLConf(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true") {
+          val caughtAlterWithColumnDropException = intercept[Exception] {
+            spark.sql(s"ALTER TABLE $tableName ALTER COLUMN quantity2 TYPE double")
+          }
+          validateSchemaEvolutionException(caughtAlterWithColumnDropException, "quantity2", "secondary_index_idx_quantity2")
+        }
+        // Renaming or dropping the column would leave the index on a column that no longer exists
+        Seq(s"ALTER TABLE $tableName RENAME COLUMN quantity2 TO quantity3", s"ALTER TABLE $tableName DROP COLUMN quantity2").foreach { ddl =>
+          checkExceptionContain(ddl)("Column 'quantity2' has secondary index 'secondary_index_idx_quantity2' and cannot be renamed or dropped")
+        }
+        // The check runs before the ALTER starts its commit, so the rejected ALTERs leave no instant behind
+        val timeline = HoodieTableMetaClient.builder()
+          .setBasePath(basePath)
+          .setConf(HoodieTestUtils.getDefaultStorageConf)
+          .build()
+          .getActiveTimeline
+        assertTrue(timeline.filterInflightsAndRequested().empty(),
+          s"Pending instants after the rejected ALTERs: ${timeline.filterInflightsAndRequested().getInstants}")
 
         // Try data source write evolution on quantity1 - should fail because of secondary index
         val caughtDSWriteException = intercept[Exception] {

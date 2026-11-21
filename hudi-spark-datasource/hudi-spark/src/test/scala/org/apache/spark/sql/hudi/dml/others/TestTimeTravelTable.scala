@@ -288,10 +288,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
 
   test("Test Time Travel With Schema Evolution") {
     withRecordType()(withTempDir { tmp =>
-      withSparkSqlSessionConfig("hoodie.schema.on.read.enable" -> "true",
-        "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
-        "hoodie.schema.on.read.enable" -> "true"
-      ) {
+      withSparkSqlSessionConfig("hoodie.schema.on.read.enable" -> "true") {
         val tableName = generateTableName
         spark.sql(
           s"""
