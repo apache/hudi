@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -241,6 +242,136 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         Collections.singletonList(INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "25"))));
 
     view.close();
+  }
+
+  @Test
+  public void testCompactionScheduledAfterRollbackLeavingLogFile() throws IOException {
+    SyncableFileSystemView view = getFileSystemView(metaClient);
+    view.sync();
+    testMultipleWriteSteps(view, Arrays.asList("11", "12", "13", "14"), true, "11");
+    testRestore(view, Collections.singletonList("15"), new HashMap<>(), Collections.singletonList(getHoodieCommitInstant("14", true)), "24", false);
+    scheduleCompaction(view, "16");
+    assertEquals(rawSlicesOfAFreshView(), rawSlices(view), "after the compaction is scheduled");
+    view.close();
+  }
+
+  @Test
+  public void testCompactionScheduledWhileListedDeltaCommitIsInflight() throws IOException {
+    String firstInstant = "20260101000000011";
+    String inflightInstant = "20260101000000014";
+    SyncableFileSystemView first = getFileSystemView(metaClient);
+    first.sync();
+    testMultipleWriteSteps(first, Arrays.asList(firstInstant, "20260101000000012", "20260101000000013"), true, firstInstant);
+    first.close();
+    List<Pair<String, HoodieWriteStat>> writeStats = generateDataForInstant(inflightInstant, true);
+    HoodieInstant inflight = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, inflightInstant);
+    metaClient.getActiveTimeline().createNewInstant(inflight);
+    metaClient.reloadActiveTimeline();
+    SyncableFileSystemView view = getFileSystemView(metaClient);
+    List<Pair<String, FileSlice>> slices = PARTITIONS.stream()
+        .flatMap(p -> view.getLatestFileSlices(p).map(s -> Pair.of(p, s))).collect(Collectors.toList());
+    metaClient.getActiveTimeline().saveToCompactionRequested(
+        INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMPACTION_ACTION, metaClient.createNewInstantTime(false)),
+        CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty()));
+    view.sync();
+    assertEquals(rawSlicesOfAFreshView(), rawSlices(view), "after the compaction is scheduled");
+
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    writeStats.forEach(e -> metadata.addWriteStat(e.getKey(), e.getValue()));
+    metaClient.getActiveTimeline().saveAsComplete(inflight, Option.of(metadata));
+    view.sync();
+    assertEquals(rawSlicesOfAFreshView(), rawSlices(view), "after the delta commit completes");
+    view.close();
+  }
+
+  @Test
+  public void testOneSyncSeesTheCompletedDeltaCommitAndTheScheduledCompaction() throws IOException {
+    oneSyncSeesTheCompletedDeltaCommitAndTheScheduledCompaction(false);
+  }
+
+  @Test
+  public void testOneSyncSeesTheListedDeltaCommitCompletedAndTheScheduledCompaction() throws IOException {
+    oneSyncSeesTheCompletedDeltaCommitAndTheScheduledCompaction(true);
+  }
+
+  /**
+   * A compaction is scheduled while a delta commit is inflight, the delta commit completes, and only then the view
+   * syncs; the view lists the inflight delta commit's log files first when {@code listInflightLogFiles} is set.
+   */
+  private void oneSyncSeesTheCompletedDeltaCommitAndTheScheduledCompaction(boolean listInflightLogFiles) throws IOException {
+    String firstInstant = "20260101000000011";
+    String inflightInstant = "20260101000000014";
+    SyncableFileSystemView first = getFileSystemView(metaClient);
+    first.sync();
+    testMultipleWriteSteps(first, Arrays.asList(firstInstant, "20260101000000012", "20260101000000013"), true, firstInstant);
+    List<Pair<String, HoodieWriteStat>> writeStats = generateDataForInstant(inflightInstant, true);
+    HoodieInstant inflight = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, inflightInstant);
+    metaClient.getActiveTimeline().createNewInstant(inflight);
+    metaClient.reloadActiveTimeline();
+    SyncableFileSystemView view = first;
+    if (listInflightLogFiles) {
+      first.close();
+      view = getFileSystemView(metaClient);
+    }
+    SyncableFileSystemView planned = view;
+    List<Pair<String, FileSlice>> slices = PARTITIONS.stream()
+        .flatMap(p -> planned.getLatestFileSlices(p).map(s -> Pair.of(p, s))).collect(Collectors.toList());
+    metaClient.getActiveTimeline().saveToCompactionRequested(
+        INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMPACTION_ACTION, metaClient.createNewInstantTime(false)),
+        CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty()));
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    writeStats.forEach(e -> metadata.addWriteStat(e.getKey(), e.getValue()));
+    metaClient.getActiveTimeline().saveAsComplete(inflight, Option.of(metadata));
+    view.sync();
+    assertEquals(rawSlicesOfAFreshView(), rawSlices(view), "one sync sees the completed delta commit and the scheduled compaction");
+    view.close();
+  }
+
+  @Test
+  public void testRollbackOfADeltaCommitKeepsThePendingCompactionSlice() throws IOException {
+    String firstInstant = "20260101000000011";
+    SyncableFileSystemView view = getFileSystemView(metaClient);
+    view.sync();
+    testMultipleWriteSteps(view, Arrays.asList(firstInstant, "20260101000000012", "20260101000000013"), true, firstInstant);
+    List<Pair<String, FileSlice>> slices = PARTITIONS.stream()
+        .flatMap(p -> view.getLatestFileSlices(p).map(s -> Pair.of(p, s))).collect(Collectors.toList());
+    metaClient.getActiveTimeline().saveToCompactionRequested(
+        INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMPACTION_ACTION, metaClient.createNewInstantTime(false)),
+        CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty()));
+    view.sync();
+
+    String deltaInstant = metaClient.createNewInstantTime(false);
+    List<Pair<String, HoodieWriteStat>> writeStats = generateDataForInstant(deltaInstant, true);
+    HoodieInstant inflight = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstant);
+    metaClient.getActiveTimeline().createNewInstant(inflight);
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    writeStats.forEach(e -> metadata.addWriteStat(e.getKey(), e.getValue()));
+    metaClient.getActiveTimeline().saveAsComplete(inflight, Option.of(metadata));
+    view.sync();
+    assertEquals(rawSlicesOfAFreshView(), rawSlices(view), "after the delta commit into the pending compaction slice");
+
+    performRestore(getHoodieCommitInstant(deltaInstant, true), writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList()),
+        metaClient.createNewInstantTime(false), false);
+    view.sync();
+    assertEquals(rawSlicesOfAFreshView(), rawSlices(view), "after the delta commit is rolled back");
+    view.close();
+  }
+
+  private String rawSlicesOfAFreshView() throws IOException {
+    metaClient.reloadActiveTimeline();
+    SyncableFileSystemView fresh = getFileSystemView(metaClient);
+    String slices = rawSlices(fresh);
+    fresh.close();
+    return slices;
+  }
+
+  private static String rawSlices(SyncableFileSystemView view) {
+    return PARTITIONS.stream().flatMap(view::getAllFileGroups)
+        .sorted(Comparator.comparing(fg -> fg.getFileGroupId().toString()))
+        .map(fg -> fg.getFileGroupId() + fg.getAllRawFileSlices()
+            .map(s -> s.getBaseInstantTime() + "<-" + s.getLogFiles().map(HoodieLogFile::getFileName).sorted().collect(Collectors.joining(",")))
+            .collect(Collectors.joining(" | ", " {", "}")))
+        .collect(Collectors.joining("; "));
   }
 
   @Test
