@@ -89,8 +89,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       (() => tableConfig.getBaseFileFormat != HoodieFileFormat.PARQUET || tableConfig.isMultipleBaseFileFormatsEnabled,
         s"base file format ${tableConfig.getBaseFileFormat}"),
       (() => tableConfig.getBootstrapBasePath.isPresent, "bootstrapped tables"),
-      (() => combinesInTask(spec, writeConfig, tableConfig) && SparkHoodieIndexFactory.isGlobalIndex(writeConfig),
-        "custom merging that combines records under a global index"),
+      (() => (isCustomMerge(writeConfig, tableConfig) || payloadDecides(writeConfig))
+        && SparkHoodieIndexFactory.isGlobalIndex(writeConfig), "custom merging under a global index"),
       (() => combinesInTask(spec, writeConfig, tableConfig)
         && params.getOrElse(PROFILER, PROFILER_METADATA) == PROFILER_SHUFFLE_STATS,
         "custom merging that combines records with the shuffle-stats profiler"),
@@ -222,7 +222,11 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       if (profilerMode == PROFILER_SHUFFLE_STATS) Map.empty else insertPlan.paddingByPartition.values.map(slot => slot.bucket -> slot.recordBudget).toMap,
       insertPlan.recordsPerNewFile, pendingClusteringFileGroups,
       avroRecordSpec(spec, prepared.dataSchema, writerSchema, writeConfig, tableConfig),
-      combinesInTask(spec, writeConfig, tableConfig))
+      // The row-based create handle takes rows in the writer schema and neither consults a
+      // payload class nor tracks the event-time watermark.
+      recordBasedInserts = payloadDecides(writeConfig) || !rowsConformToWriterSchema(spec) ||
+        (ConfigUtils.isTrackingEventTimeWatermark(writeConfig.getProps) && ConfigUtils.getEventTimeFieldName(writeConfig.getProps) != null),
+      combineRecords = combinesInTask(spec, writeConfig, tableConfig))
 
     val (statusRdd, extraMetadata) = if (profilerMode == PROFILER_SHUFFLE_STATS) {
       // The routing shuffle doubles as the profiling pass and lives inside a physical-plan
@@ -347,9 +351,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         consistentLogicalTimestamp = spec.parameters.getOrElse(
           DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
           DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean,
-        mergeProps = mergeProps(writeConfig, tableConfig),
-        // The row-based create handle needs rows in the writer schema.
-        recordBasedInserts = payloadDecides(writeConfig) || !rowsConformToWriterSchema(spec)))
+        mergeProps = mergeProps(writeConfig, tableConfig)))
     }
   }
 
@@ -597,7 +599,12 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       } else {
         writeConfig.getGlobalSimpleIndexUpdatePartitionPath
       })
-      resolveTagged(joined, globalIndex, updatePartitionPath, deleteMarker)
+      val moveOrderingFields = if (writeConfig.getRecordMergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
+        table.getMetaClient.getTableConfig.getOrderingFields.asScala.toSeq
+      } else {
+        Seq.empty
+      }
+      resolveTagged(joined, globalIndex, updatePartitionPath, deleteMarker, writeConfig.getBasePath, moveOrderingFields)
     }
   }
 
@@ -605,12 +612,16 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
    * Applies global-index semantics and the row-operation column on the tagged frame: no-op
    * deletes are dropped; with update-partition-path off, located rows route to their original
    * partition; with it on, a key that moved partitions fans out into a delete against the old
-   * file group plus an insert into the new partition.
+   * file group plus an insert into the new partition. Under event-time ordering the move only
+   * happens when the incoming row's ordering value is not behind the stored row's, which is
+   * read from the table for the moved keys; otherwise the stored row stays where it is.
    */
   private def resolveTagged(joined: Dataset[Row],
                             globalIndex: Boolean,
                             updatePartitionPath: Boolean,
-                            deleteMarker: Column): Dataset[Row] = {
+                            deleteMarker: Column,
+                            basePath: String = null,
+                            orderingFields: Seq[String] = Seq.empty): Dataset[Row] = {
     val base = joined
       .withColumn(ROW_OP_COL, when(deleteMarker, lit(ROW_OP_DELETE)).otherwise(lit(ROW_OP_UPSERT)))
       .filter(col(ROW_OP_COL) === ROW_OP_UPSERT || col(TAGGED_FILE_ID_COL).isNotNull)
@@ -624,11 +635,31 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       val moved = col(TAGGED_FILE_ID_COL).isNotNull && col(LOCATED_PARTITION_COL).isNotNull &&
         col(LOCATED_PARTITION_COL) =!= col(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
       val staying = base.filter(!moved).drop(LOCATED_PARTITION_COL)
-      val oldCopyDeletes = base.filter(moved)
+      val comparedFields = orderingFields.filter(resolves(base, _))
+      val moving = if (comparedFields.isEmpty) {
+        base.filter(moved)
+      } else {
+        val stored = joined.sparkSession.read.format("hudi").load(basePath).select(
+          (Seq(col(HoodieRecord.RECORD_KEY_METADATA_FIELD).as(STORED_KEY_COL),
+            col(HoodieRecord.PARTITION_PATH_METADATA_FIELD).as(STORED_PARTITION_COL))
+            ++ comparedFields.zipWithIndex.map { case (field, i) => col(field).as(STORED_ORDERING_COL_PREFIX + i) }): _*)
+        // Lexicographic over the ordering fields; an equal ordering value lets the incoming row win.
+        val notBehind = comparedFields.zipWithIndex.foldRight(lit(true)) { case ((field, i), rest) =>
+          val storedValue = col(STORED_ORDERING_COL_PREFIX + i)
+          col(field) > storedValue || (col(field) <=> storedValue && rest)
+        }
+        base.filter(moved)
+          .join(stored, col(HoodieRecord.RECORD_KEY_METADATA_FIELD) === col(STORED_KEY_COL)
+            && col(LOCATED_PARTITION_COL) === col(STORED_PARTITION_COL), "left_outer")
+          .filter(col(STORED_KEY_COL).isNull || notBehind)
+          .drop((Seq(STORED_KEY_COL, STORED_PARTITION_COL)
+            ++ comparedFields.indices.map(STORED_ORDERING_COL_PREFIX + _)): _*)
+      }
+      val oldCopyDeletes = moving
         .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, col(LOCATED_PARTITION_COL))
         .withColumn(ROW_OP_COL, lit(ROW_OP_DELETE))
         .drop(LOCATED_PARTITION_COL)
-      val newPartitionInserts = base.filter(moved && col(ROW_OP_COL) === ROW_OP_UPSERT)
+      val newPartitionInserts = moving.filter(col(ROW_OP_COL) === ROW_OP_UPSERT)
         .withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))
         .drop(LOCATED_PARTITION_COL)
       staying.unionByName(oldCopyDeletes).unionByName(newPartitionInserts)
@@ -797,6 +828,9 @@ object HoodieDataFrameWriter {
   private val KEYS_COL = "_hoodie_keys"
   private val DEDUP_RANK_COL = "_hoodie_dedup_rank"
   private val INPUT_ORDER_COL = "_hoodie_input_order"
+  private val STORED_KEY_COL = "_hoodie_stored_key"
+  private val STORED_PARTITION_COL = "_hoodie_stored_partition"
+  private val STORED_ORDERING_COL_PREFIX = "_hoodie_stored_ordering_"
   private val TAGGED_FILE_ID_COL = "_hoodie_tagged_file_id"
   private val LOCATED_PARTITION_COL = "_hoodie_located_partition"
   private val ROUTING_BUCKET_COL = "_hoodie_routing_bucket"

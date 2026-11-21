@@ -51,8 +51,6 @@ import scala.collection.mutable.ListBuffer
  *
  * @param attachOrderingValue whether records carry their ordering value, as they do when the
  *                            write combines records and the table has ordering fields.
- * @param recordBasedInserts whether inserts go through the record-based create handle, so the
- *                           payload decides what an insert writes.
  */
 case class AvroRecordSpec(sourceSchema: String,
                           writerSchema: String,
@@ -61,15 +59,15 @@ case class AvroRecordSpec(sourceSchema: String,
                           attachOrderingValue: Boolean,
                           requiresOrderingValue: Boolean,
                           consistentLogicalTimestamp: Boolean,
-                          mergeProps: TypedProperties,
-                          recordBasedInserts: Boolean)
+                          mergeProps: TypedProperties)
 
 /**
  * Executor-side write task of the DataFrame write path: consumes one Spark partition of routed
  * rows (sorted by the routing-bucket column) and drives one write handle per bucket run.
  *
  * <p>Insert buckets go through {@link BulkInsertDataInternalWriterHelper}, which rotates
- * {@code HoodieRowCreateHandle}s on partition-path change and file-size limits. Update buckets
+ * {@code HoodieRowCreateHandle}s on partition-path change and file-size limits, or with
+ * {@code recordBasedInserts} through the record-based create handle. Update buckets
  * feed a streaming iterator of records into the merge handle resolved by
  * {@link HoodieMergeHandleFactory} ({@code FileGroupReaderBasedMergeHandle} by default), or into
  * the append handle on merge-on-read tables. Records are engine-native rows unless
@@ -102,6 +100,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          recordsPerNewFile: Long,
                          pendingClusteringFileGroups: Set[HoodieFileGroupId],
                          avroRecords: Option[AvroRecordSpec],
+                         recordBasedInserts: Boolean,
                          combineRecords: Boolean) extends Serializable {
 
   import DataFrameWriteTask.RecordFactory
@@ -124,7 +123,6 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     val writeSchema = StructType(routedSchema.fields.take(metaFieldCount) ++ writerSchema.fields)
     val writeProjection = DataFrameWriteTask.conformingProjection(routedSchema, 0, metaFieldCount + dataFieldCount, writeSchema)
     val recordFactory = avroRecords.map(avroRecordFactory).getOrElse(sparkRecordFactory)
-    val recordBasedInserts = avroRecords.exists(_.recordBasedInserts)
     recordReducer = if (combineRecords) Some(createRecordReducer()) else None
 
     val taskContextSupplier = table.getTaskContextSupplier

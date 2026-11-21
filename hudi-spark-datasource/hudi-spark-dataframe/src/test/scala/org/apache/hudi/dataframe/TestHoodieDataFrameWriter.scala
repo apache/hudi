@@ -707,6 +707,23 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testGlobalIndexMovesAKeyOnlyWhenItsOrderingValueIsNotBehind(): Unit = {
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val rows = writeOnBothPaths(s"test_table_global_move_ordering_$tableType",
+        Map("hoodie.index.type" -> "GLOBAL_SIMPLE",
+          "hoodie.simple.index.update.partition.path" -> "true",
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.compact.inline" -> "false"),
+        Seq(
+          "insert" -> Seq(("v1", "p1", 5L, "a1"), ("v2", "p1", 5L, "a2"), ("v3", "p1", 5L, "a3")),
+          // v1 moves with a newer value, v2 would move with an older one, v3 moves on a tie.
+          "upsert" -> Seq(("v1", "p2", 9L, "moved"), ("v2", "p2", 1L, "behind"), ("v3", "p2", 5L, "tie"))))
+      Assertions.assertEquals(
+        Seq(("v1", "p2", 9L, "moved"), ("v2", "p1", 5L, "a2"), ("v3", "p2", 5L, "tie")), rows)
+    }
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)
