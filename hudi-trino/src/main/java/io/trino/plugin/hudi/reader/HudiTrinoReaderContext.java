@@ -25,7 +25,6 @@ import io.trino.spi.connector.SourcePage;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -36,7 +35,6 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -86,11 +84,9 @@ public class HudiTrinoReaderContext
             ConnectorPageSource pageSource,
             List<HiveColumnHandle> columnHandles,
             PrefilledColumnValues prefilledColumnValues,
-            LogFileParquetPageSourceFactory logPageSourceFactory,
-            TypedProperties props)
+            LogFileParquetPageSourceFactory logPageSourceFactory)
     {
-        super(storageConfiguration, tableConfig, Option.empty(), Option.empty(),
-                new AvroRecordContext(tableConfig, tableConfig.getPayloadClass(), ConfigUtils.getMergeProps(props, tableConfig)));
+        super(storageConfiguration, tableConfig, Option.empty(), Option.empty(), new AvroRecordContext(tableConfig, tableConfig.getPayloadClass()));
         this.pageSource = pageSource;
         this.prefilledColumnValues = prefilledColumnValues;
         this.columnHandles = columnHandles;

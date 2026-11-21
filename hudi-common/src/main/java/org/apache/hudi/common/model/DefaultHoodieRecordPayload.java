@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -167,15 +166,12 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     if (orderingFields == null) {
       return true;
     }
-    boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
-        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
     Comparable persistedOrderingVal = OrderingValues.create(
         orderingFields,
-        field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue, field, true, consistentLogicalTimestampEnabled));
+        field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue, field, true, false));
     Comparable incomingOrderingVal = incomingRecord.map(record -> OrderingValues.create(
             orderingFields,
-            field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, field, true, consistentLogicalTimestampEnabled)))
+            field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, field, true, false)))
         .orElse(orderingVal);
     // If the incoming record is a delete record without an ordering value, it is processed as "commit time" ordering.
     if (incomingRecord.isEmpty() && OrderingValues.isDefault(incomingOrderingVal)) {
