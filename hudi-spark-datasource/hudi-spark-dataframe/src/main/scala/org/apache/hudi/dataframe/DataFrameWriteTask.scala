@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieClusteringUpdateException
 import org.apache.hudi.execution.SparkLazyInsertIterable
 import org.apache.hudi.io.{AppendHandleFactory, CreateHandleFactory, HoodieMergeHandleFactory, HoodieWriteMergeHandle, MergeContext, MergeUtils}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.commit.{BaseWriteHelper, BulkInsertDataInternalWriterHelper}
 
@@ -137,7 +138,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
         } else {
           statuses ++= appendBucket(buffered, bucket, recordFactory, taskContextSupplier)
         }
-      } else if (recordBasedInserts) {
+      } else if (recordBasedInserts || handlesTrackSecondaryIndexes) {
         statuses ++= insertBucket(buffered, bucket, recordFactory, taskContextSupplier)
       } else {
         if (insertHelper == null) {
@@ -155,6 +156,18 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
       statuses ++= insertHelper.getWriteStatuses.asScala
     }
     statuses.iterator
+  }
+
+  /**
+   * Whether the metadata table takes the secondary index entries of the write from what the
+   * write handles track, which the row-based create handle does not do. The task looks the
+   * index definitions up the way a handle does.
+   */
+  private lazy val handlesTrackSecondaryIndexes: Boolean = {
+    val indexMetadata = table.getMetaClient.getIndexMetadata
+    writeConfig.isMetadataStreamingWritesEnabled(table.getMetaClient.getTableConfig.getTableVersion) &&
+      indexMetadata.isPresent && indexMetadata.get.getIndexDefinitions.values.asScala
+        .exists(_.getIndexName.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
   }
 
   private def sparkRecordFactory: RecordFactory = {

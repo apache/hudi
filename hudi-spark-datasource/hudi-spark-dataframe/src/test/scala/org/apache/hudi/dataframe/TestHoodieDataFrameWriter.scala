@@ -479,6 +479,28 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testInsertsIntoNewFilesGetSecondaryIndexEntries(): Unit = {
+    val entries = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_secondary_index_$enabled").toString
+      val options = Map(
+        "hoodie.metadata.record.index.enable" -> "true",
+        "hoodie.metadata.index.secondary.column" -> "value",
+        "hoodie.parquet.small.file.limit" -> "0",
+        "hoodie.embed.timeline.server" -> "true",
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writeHudi(Seq(("s1", "p1", 1L, "a1"), ("s2", "p1", 1L, "a2")), "insert", path, options)
+      // The index exists by now, so the entries of these rows come with the write.
+      writeHudi(Seq(("s3", "p1", 2L, "a3")), "insert", path, options)
+      writeHudi(Seq(("s4", "p2", 3L, "a4")), "upsert", path, options)
+
+      spark.read.format("hudi").load(path + "/.hoodie/metadata")
+        .where("SecondaryIndexMetadata is not null").select("key").collect().map(_.getString(0)).toSet
+    }
+    Assertions.assertEquals(entries(1), entries.head)
+    Assertions.assertTrue(Set("a3$s3", "a4$s4").subsetOf(entries.head), s"secondary index entries: ${entries.head}")
+  }
+
+  @Test
   def testRecordIndexConfigFallsBackToGlobalTaggingWhenNotReady(): Unit = {
     val path = tempDir.resolve("test_table_rli_not_ready").toString
     writeHudi(Seq(("f1", "pA", 1L, "orig")), "insert", path)
