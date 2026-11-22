@@ -18,10 +18,10 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.analysis.AnalysisErrorAt
+import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, AssignmentUtils}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, LogicalPlan, MergeIntoTable}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 
@@ -33,6 +33,16 @@ object HoodieSpark35CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
         Some((targetTable, sourceTable, mergeCondition))
       case _ => None
     }
+  }
+
+  override protected def alignRowLevelAssignments(attrs: Seq[Attribute],
+                                                  assignments: Seq[Assignment],
+                                                  isInsert: Boolean): Option[Seq[Assignment]] = {
+    Some(if (isInsert) {
+      AssignmentUtils.alignInsertAssignments(attrs, assignments)
+    } else {
+      AssignmentUtils.alignUpdateAssignments(attrs, assignments)
+    })
   }
 
   override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {

@@ -21,7 +21,7 @@ package org.apache.spark.sql
 import org.apache.spark.sql.catalyst.analysis.AnalysisErrorAt
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, LogicalPlan, MergeIntoTable}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 
@@ -38,6 +38,22 @@ abstract class HoodieSpark4CatalystPlanUtils extends BaseHoodieCatalystPlanUtils
       case _ => None
     }
   }
+
+  override protected def alignRowLevelAssignments(attrs: Seq[Attribute],
+                                                  assignments: Seq[Assignment],
+                                                  isInsert: Boolean): Option[Seq[Assignment]] = {
+    Some(if (isInsert) alignInsertAssignments(attrs, assignments) else alignUpdateAssignments(attrs, assignments))
+  }
+
+  /**
+   * Calls Spark's `AssignmentUtils.alignUpdateAssignments`, whose signature changed in Spark 4.1.
+   */
+  protected def alignUpdateAssignments(attrs: Seq[Attribute], assignments: Seq[Assignment]): Seq[Assignment]
+
+  /**
+   * Calls Spark's `AssignmentUtils.alignInsertAssignments`, whose signature changed in Spark 4.1.
+   */
+  protected def alignInsertAssignments(attrs: Seq[Attribute], assignments: Seq[Assignment]): Seq[Assignment]
 
   override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
     plan match {

@@ -18,11 +18,18 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.analysis.AssignmentUtils
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, LogicalPlan, UnresolvedWith, UpdateAction}
 import org.apache.spark.sql.execution.streaming.runtime.SerializedOffset
 
 object HoodieSpark42CatalystPlanUtils extends HoodieSpark4CatalystPlanUtils {
+
+  override protected def alignUpdateAssignments(attrs: Seq[Attribute], assignments: Seq[Assignment]): Seq[Assignment] =
+    AssignmentUtils.alignUpdateAssignments(attrs, assignments, false, false)
+
+  override protected def alignInsertAssignments(attrs: Seq[Attribute], assignments: Seq[Assignment]): Seq[Assignment] =
+    AssignmentUtils.alignInsertAssignments(attrs, assignments, false)
 
   override def unapplyUpdateAction(mergeAction: Any): Option[(Option[Expression], Seq[Assignment])] = {
     mergeAction match {

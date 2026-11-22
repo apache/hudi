@@ -22,13 +22,14 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, TableOutputResolver}
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{CreateIndex, DropIndex, HoodieShowIndexes, InsertIntoStatement, Join, JoinHint, LogicalPlan, RefreshIndex}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, CreateIndex, DropIndex, HoodieShowIndexes, InsertIntoStatement, Join, JoinHint, LogicalPlan, RefreshIndex}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand, RepairTableCommand}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.internal.SQLConf
 
 trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
@@ -132,6 +133,38 @@ trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
         None
     }
   }
+
+  override def resolveRowLevelAssignments(attrs: Seq[Attribute],
+                                          assignments: Seq[Assignment],
+                                          isInsert: Boolean): Seq[Assignment] = {
+    val nested = assignments.find(!_.key.isInstanceOf[Attribute])
+    // A key that references none of the attributes, as in a MERGE INTO of a table into itself, would
+    // be dropped by the alignment, so such assignments are left to the command as they are
+    val alignable = assignments.forall(_.key.references.exists(ref => attrs.exists(_.semanticEquals(ref))))
+    if (nested.isEmpty || !alignable) {
+      assignments
+    } else {
+      alignRowLevelAssignments(attrs, assignments.map(a => a.copy(key = trimAliases(a.key))), isInsert) match {
+        case Some(aligned) =>
+          aligned
+            .filter(assignment => assignments.exists(_.key.references.exists(_.semanticEquals(assignment.key))))
+            .map(assignment => assignment.copy(value = trimAliases(assignment.value)))
+        case None =>
+          throw new HoodieAnalysisException(
+            s"Assigning a nested field requires Spark 3.5 or later (provided: `${nested.get.sql}`)")
+      }
+    }
+  }
+
+  private def trimAliases(expr: Expression): Expression = expr.transformUp { case alias: Alias => alias.child }
+
+  /**
+   * Aligns the assignments with the table attributes through Spark's own alignment, one assignment
+   * per attribute; [[None]] for a Spark version without it.
+   */
+  protected def alignRowLevelAssignments(attrs: Seq[Attribute],
+                                         assignments: Seq[Assignment],
+                                         isInsert: Boolean): Option[Seq[Assignment]] = None
 
   override def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan] = {
     plan match {
