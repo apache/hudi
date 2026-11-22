@@ -523,6 +523,20 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testEachInsertBucketGetsAFile(): Unit = {
+    val path = tempDir.resolve("test_table_insert_buckets").toString
+    val rows = (1 to 40).map(i => (s"b$i", "p1", 1L, s"v$i"))
+    // One write task takes every bucket, and each bucket still gets a file of its own.
+    writeHudi(rows, "insert", path, Map(
+      "hoodie.datasource.write.dataframe.insert.buckets" -> "4",
+      "hoodie.datasource.write.dataframe.write.tasks" -> "1"))
+    val baseFiles = java.nio.file.Files.list(java.nio.file.Paths.get(path, "p1")).iterator().asScala
+      .map(_.getFileName.toString).filter(_.endsWith(".parquet")).toSeq
+    Assertions.assertEquals(4, baseFiles.size, s"base files: $baseFiles")
+    Assertions.assertEquals(40L, spark.read.format("hudi").load(path).count())
+  }
+
+  @Test
   def testRecordIndexConfigFallsBackToGlobalTaggingWhenNotReady(): Unit = {
     val path = tempDir.resolve("test_table_rli_not_ready").toString
     writeHudi(Seq(("f1", "pA", 1L, "orig")), "insert", path)

@@ -64,9 +64,9 @@ case class AvroRecordSpec(sourceSchema: String,
  * Executor-side write task of the DataFrame write path: consumes one Spark partition of routed
  * rows (sorted by the routing-bucket column) and drives one write handle per bucket run.
  *
- * <p>Insert buckets go through {@link BulkInsertDataInternalWriterHelper}, which rotates
- * {@code HoodieRowCreateHandle}s on partition-path change and file-size limits, or with
- * {@code recordBasedInserts} through the record-based create handle. Update buckets
+ * <p>Each insert bucket goes through a {@link BulkInsertDataInternalWriterHelper}, which rotates
+ * {@code HoodieRowCreateHandle}s on file-size limits, or with {@code recordBasedInserts} through
+ * the record-based create handle. Update buckets
  * feed a streaming iterator of records into the merge handle resolved by
  * {@link HoodieMergeHandleFactory} ({@code FileGroupReaderBasedMergeHandle} by default), or into
  * the append handle on merge-on-read tables. Records are engine-native rows unless
@@ -127,7 +127,6 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     val taskContextSupplier = table.getTaskContextSupplier
     val statuses = new ListBuffer[WriteStatus]()
     val buffered = iter.buffered
-    var insertHelper: BulkInsertDataInternalWriterHelper = null
 
     while (buffered.hasNext) {
       val head = buffered.head
@@ -142,21 +141,30 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
       } else if (recordBasedInserts || handlesTrackSecondaryIndexes) {
         statuses ++= insertBucket(buffered, bucket, recordFactory, taskContextSupplier)
       } else {
-        if (insertHelper == null) {
-          val partitionId = taskContextSupplier.getPartitionIdSupplier.get
-          val taskId = taskContextSupplier.getStageIdSupplier.get.toLong
-          val taskEpochId = taskContextSupplier.getAttemptIdSupplier.get
-          insertHelper = new BulkInsertDataInternalWriterHelper(
-            table, writeConfig, instantTime, partitionId, taskId, taskEpochId, writeSchema,
-            writeConfig.populateMetaFields(), true)
-        }
-        insertHelper.write(writeProjection(buffered.next()))
+        statuses ++= insertRowBucket(buffered, writeSchema, writeProjection, taskContextSupplier)
       }
     }
-    if (insertHelper != null) {
-      statuses ++= insertHelper.getWriteStatuses.asScala
-    }
     statuses.iterator
+  }
+
+  /**
+   * Insert run through the row-based create handle. A bucket gets file groups of its own, so the
+   * files of a write follow from its routing plan and not from which buckets share a task.
+   */
+  private def insertRowBucket(buffered: BufferedIterator[InternalRow],
+                              writeSchema: StructType,
+                              writeProjection: InternalRow => InternalRow,
+                              taskContextSupplier: TaskContextSupplier): Seq[WriteStatus] = {
+    // The row buffer behind the head is reused, so the bucket to compare with is copied.
+    val bucket = buffered.head.getUTF8String(bucketOrdinal).clone()
+    val helper = new BulkInsertDataInternalWriterHelper(
+      table, writeConfig, instantTime, taskContextSupplier.getPartitionIdSupplier.get,
+      taskContextSupplier.getStageIdSupplier.get.toLong, taskContextSupplier.getAttemptIdSupplier.get,
+      writeSchema, writeConfig.populateMetaFields(), true)
+    while (buffered.hasNext && buffered.head.getUTF8String(bucketOrdinal) == bucket) {
+      helper.write(writeProjection(buffered.next()))
+    }
+    helper.getWriteStatuses.asScala.toSeq
   }
 
   /**
