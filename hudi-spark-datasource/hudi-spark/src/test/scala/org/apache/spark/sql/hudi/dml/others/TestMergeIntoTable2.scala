@@ -287,18 +287,21 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         // NOTE: When using star update/insert clauses (ie `insert *` or `update *`) order of the
         //       columns in the source and target table _have to_ match (Spark won't be applying any column
         //       column resolution logic)
-        spark.sql(
-          s"""
-             |merge into $tableName as t0
-             |using (
-             |  select 1 as id, 'a1' as name, 97 as price, 1002 as ts, '2021-05-05' as dt union all
-             |  select 1 as id, 'a2' as name, 98 as price, 1003 as ts, '2021-05-05' as dt union all
-             |  select 2 as id, 'a3' as name, 99 as price, 1001 as ts, '2021-05-05' as dt
-             | ) as s0
-             |on t0.id = s0.id
-             |when matched then update set *
-             |when not matched then insert *
-             |""".stripMargin)
+        // Two source rows match target row 1, which only passes with the cardinality check off
+        withSQLConf(DataSourceWriteOptions.MERGE_INTO_CARDINALITY_CHECK.key -> "false") {
+          spark.sql(
+            s"""
+               |merge into $tableName as t0
+               |using (
+               |  select 1 as id, 'a1' as name, 97 as price, 1002 as ts, '2021-05-05' as dt union all
+               |  select 1 as id, 'a2' as name, 98 as price, 1003 as ts, '2021-05-05' as dt union all
+               |  select 2 as id, 'a3' as name, 99 as price, 1001 as ts, '2021-05-05' as dt
+               | ) as s0
+               |on t0.id = s0.id
+               |when matched then update set *
+               |when not matched then insert *
+               |""".stripMargin)
+        }
 
         checkAnswer(s"select id, name, price, ts, dt from $tableName")(
           Seq(1, "a2", 98.0, 1003, "2021-05-05"),

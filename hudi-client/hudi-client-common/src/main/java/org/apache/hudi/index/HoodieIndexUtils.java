@@ -78,6 +78,7 @@ import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
+import org.apache.hudi.exception.HoodieMultipleMatchesException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -85,6 +86,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.BaseWriteHelper;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.IndexedRecord;
@@ -620,6 +622,37 @@ public class HoodieIndexUtils {
   }
 
   /**
+   * Keeps one located incoming record per record key, as {@link HoodieData#distinctWithKey} does, and fails with a
+   * {@link HoodieMultipleMatchesException} when more than one incoming record has the key. The index can locate one
+   * record at several file groups, so more than one incoming record shows as more pairs for the key than distinct
+   * locations. See {@link HoodieWriteConfig#UPSERT_FAIL_ON_MULTIPLE_MATCHES}.
+   */
+  private static <R> HoodieData<HoodieRecord<R>> distinctLocatedRecordsFailingOnMultipleMatches(
+      HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations, int parallelism) {
+    return incomingRecordsAndLocations
+        .filter(p -> p.getRight().isPresent())
+        .mapToPair(p -> {
+          HoodieRecordGlobalLocation location = p.getRight().get();
+          Set<Pair<String, String>> locations = new HashSet<>();
+          locations.add(Pair.of(location.getPartitionPath(), location.getFileId()));
+          return Pair.of(p.getLeft().getRecordKey(), Pair.of(p.getLeft(), Pair.of(1L, locations)));
+        })
+        .reduceByKey((left, right) -> {
+          Set<Pair<String, String>> locations = new HashSet<>(left.getRight().getRight());
+          locations.addAll(right.getRight().getRight());
+          return Pair.of(left.getLeft(), Pair.of(left.getRight().getLeft() + right.getRight().getLeft(), locations));
+        }, parallelism)
+        .map(p -> {
+          Pair<Long, Set<Pair<String, String>>> counts = p.getRight().getRight();
+          if (counts.getLeft() > counts.getRight().size()) {
+            Pair<String, String> location = counts.getRight().iterator().next();
+            throw BaseWriteHelper.multipleMatchesException(p.getLeft(), location.getLeft(), location.getRight());
+          }
+          return p.getRight().getLeft();
+        });
+  }
+
+  /**
    * Merge tagged incoming records with existing records in case of partition path updated.
    */
   public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesAndDeletionsIfNeeded(HoodieData<Pair<HoodieRecord<R>,
@@ -634,8 +667,10 @@ public class HoodieIndexUtils {
     // completely new records
     HoodieData<HoodieRecord<R>> taggedNewRecords = incomingRecordsAndLocations.filter(p -> !p.getRight().isPresent()).map(Pair::getLeft);
     // the records found in existing base files
-    HoodieData<HoodieRecord<R>> untaggedUpdatingRecords = incomingRecordsAndLocations.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
-        .distinctWithKey(HoodieRecord::getRecordKey, updatedConfig.getGlobalIndexReconcileParallelism());
+    HoodieData<HoodieRecord<R>> untaggedUpdatingRecords = updatedConfig.shouldFailUpsertOnMultipleMatches()
+        ? distinctLocatedRecordsFailingOnMultipleMatches(incomingRecordsAndLocations, updatedConfig.getGlobalIndexReconcileParallelism())
+        : incomingRecordsAndLocations.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
+            .distinctWithKey(HoodieRecord::getRecordKey, updatedConfig.getGlobalIndexReconcileParallelism());
     // the tagging partitions and locations
     // NOTE: The incoming records may only differ in record position, however, for the purpose of
     //       merging in case of partition updates, it is safe to ignore the record positions.

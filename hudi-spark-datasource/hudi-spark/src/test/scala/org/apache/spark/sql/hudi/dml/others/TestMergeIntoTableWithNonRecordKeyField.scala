@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
-import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
+import org.apache.hudi.DataSourceWriteOptions.{MERGE_INTO_CARDINALITY_CHECK, SPARK_SQL_OPTIMIZED_WRITES}
 import org.apache.hudi.ScalaAssertionSupport
 import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -278,7 +278,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
                |""".stripMargin)
 
           val updateStr = if (withPrecombine) "price = s0.price, ts = s0.ts" else "price = s0.price"
-          spark.sql(
+          val mergeStatement =
             s"""
                | merge into $tableName
                | using (
@@ -289,7 +289,14 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
                | on $tableName.name = s0.name
                | when matched then update set $updateStr
                | when not matched then insert *
-         """.stripMargin)
+         """.stripMargin
+          // Both source rows match the target row
+          checkExceptionContain(mergeStatement)(
+            "MERGE statement matched a single row from the target table with multiple rows of the source table")
+          checkAnswer(s"select id, name, price, ts from $tableName")(Seq(1, "a1", 10.0, 100))
+          withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "false") {
+            spark.sql(mergeStatement)
+          }
           if (withPrecombine) {
             checkAnswer(s"select id, name, price, ts from $tableName")(
               Seq(1, "a1", 20.0, 200)

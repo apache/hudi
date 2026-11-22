@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
-import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
+import org.apache.hudi.exception.{HoodieException, HoodieMultipleMatchesException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.index.{HoodieIndex, SparkMetadataTableGlobalRecordLevelIndex, SparkMetadataTableRecordLevelIndex}
 import org.apache.hudi.metadata.MetadataPartitionType
@@ -595,16 +595,40 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_ORIGINAL_AVRO_PAYLOAD -> hoodieCatalogTable.tableConfig.getPayloadClass
     )
 
+    writeParams += HoodieWriteConfig.UPSERT_FAIL_ON_MULTIPLE_MATCHES.key -> shouldCheckCardinality(parameters).toString
+
     val (structName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(hoodieCatalogTable.tableName)
     val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(hoodieCatalogTable.tableSchema, structName, namespace)
-    val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, enrichedSourceDF,
-      schemaFromCatalog = Option.apply(schema))
+    val (success, commitInstantTime, _, _, _, _) = try {
+      HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, enrichedSourceDF,
+        schemaFromCatalog = Option.apply(schema))
+    } catch {
+      case e: Exception => throw findMultipleMatchesException(e).map { multipleMatches =>
+        sparkAdapter.mergeCardinalityViolation(new HoodieMultipleMatchesException(multipleMatches.getRecordKey,
+          "MERGE statement matched a single row from the target table with multiple rows of the source table, "
+            + s"for record key ${multipleMatches.getRecordKey}. Set ${MERGE_INTO_CARDINALITY_CHECK.key} "
+            + "to false to combine those source rows into one update instead.", e))
+      }.getOrElse(e)
+    }
     if (!success) {
       throw new HoodieException("Merge into Hoodie table command failed")
     }
     if (commitInstantTime.isPresent) {
       updateCommitMetrics(metrics, hoodieCatalogTable.metaClient, commitInstantTime.get())
     }
+  }
+
+  /**
+   * Whether more than one source row matching the same target row fails the statement. As in Spark, that applies
+   * when a matched clause other than a single unconditional delete can act on the target row.
+   */
+  private def shouldCheckCardinality(parameters: Map[String, String]): Boolean = {
+    parameters.getOrElse(MERGE_INTO_CARDINALITY_CHECK.key, MERGE_INTO_CARDINALITY_CHECK.defaultValue.toString).toBoolean &&
+      (mergeInto.matchedActions match {
+        case Seq() => false
+        case Seq(DeleteAction(None)) => false
+        case _ => true
+      })
   }
 
   private def isPartialUpdateActionForMOR(parameters: Map[String, String]) = {
@@ -1155,6 +1179,9 @@ object MergeIntoHoodieTableCommand {
       }
     }
   }
+
+  private def findMultipleMatchesException(e: Throwable): Option[HoodieMultipleMatchesException] =
+    Iterator.iterate(e)(_.getCause).takeWhile(_ != null).collectFirst { case m: HoodieMultipleMatchesException => m }
 
   def stripCasting(expr: Expression): Expression = expr match {
     case EqualTo(MatchCast(leftExpr, leftTargetType, _, _), MatchCast(rightExpr, rightTargetType, _, _))
