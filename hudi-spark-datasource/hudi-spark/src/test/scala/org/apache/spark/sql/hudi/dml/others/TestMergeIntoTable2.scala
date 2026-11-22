@@ -847,6 +847,25 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
               Seq(1, "a1_new", 10.1, 1003, "2021-03-21"),
               Seq(3, "a3", 10.3, 1003, "2021-03-21")
             )
+
+            // Insert data with insert condition: the source record of id 4 with the larger ts fails the condition
+            spark.sql(
+              s"""
+                 | merge into $tableName as t0
+                 | using (
+                 |  select 4 as id, 'a4' as name, 10.4 as price, 1004 as ts, '2021-03-21' as dt
+                 |  union all
+                 |  select 4 as id, 'a4_skip' as name, 1.4 as price, 1005 as ts, '2021-03-21' as dt
+                 | ) as s0
+                 | on t0.id = s0.id
+                 | when not matched and s0.price > 5 then insert *
+         """.stripMargin
+            )
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a1_new", 10.1, 1003, "2021-03-21"),
+              Seq(3, "a3", 10.3, 1003, "2021-03-21"),
+              Seq(4, "a4", 10.4, 1004, "2021-03-21")
+            )
           }
         }
       }
