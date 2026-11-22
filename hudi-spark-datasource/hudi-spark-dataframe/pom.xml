@@ -81,18 +81,14 @@
       <version>${scala.version}</version>
     </dependency>
 
-    <!-- Spark. Declared ahead of the Hudi modules so that Spark's own classes come first on the
-         classpath: hudi-spark-common carries a copy of org.apache.spark.sql.avro.AvroUtils that
-         must not shadow the one the Spark 4 Avro serializer calls into. -->
+    <!-- Hudi. The Spark-version module comes first, as in hudi-spark: its copies of the
+         org.apache.spark.sql.avro classes have to be found ahead of Spark's own. -->
     <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-core_${scala.binary.version}</artifactId>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
     </dependency>
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-sql_${scala.binary.version}</artifactId>
-    </dependency>
-    <!-- Hudi -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
@@ -119,14 +115,17 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!-- Spark -->
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-core_${scala.binary.version}</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-sql_${scala.binary.version}</artifactId>
+    </dependency>
 
     <!-- Test -->
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-      <scope>test</scope>
-    </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-tests-common</artifactId>

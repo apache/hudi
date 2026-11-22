@@ -491,7 +491,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       }).asNondeterministic()
       dimensions.foldLeft(rows) { case (checked, (field, dimension)) =>
         val mismatched = col(quoted(field)).isNotNull && size(col(quoted(field))) =!= dimension
-        checked.filter(requireDimension(when(mismatched, lit(field)), lit(dimension), size(col(quoted(field)))))
+        // A null vector has no size to report, and a null argument would null the check itself.
+        val actual = when(mismatched, size(col(quoted(field)))).otherwise(lit(dimension))
+        checked.filter(requireDimension(when(mismatched, lit(field)), lit(dimension), actual))
       }
     }
   }

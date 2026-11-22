@@ -754,6 +754,32 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testNullVectorIsWritten(): Unit = {
+    val vectorSchema = StructType(Seq(
+      StructField("key", StringType, nullable = false),
+      StructField("embedding", org.apache.spark.sql.types.ArrayType(org.apache.spark.sql.types.FloatType, containsNull = false),
+        nullable = true, new org.apache.spark.sql.types.MetadataBuilder().putString("hudi_type", "VECTOR(2)").build())))
+    // The size of a null array is null, as it is by default with ANSI mode on.
+    spark.conf.set("spark.sql.legacy.sizeOfNull", "false")
+    try {
+      Seq("true", "false").foreach { enabled =>
+        val path = tempDir.resolve(s"test_table_null_vector_$enabled").toString
+        spark.createDataFrame(Seq(Row("y1", Seq(1.0f, 2.0f)), Row("y2", null)).asJava, vectorSchema)
+          .write.format("hudi")
+          .option("hoodie.table.name", "test_vector_table")
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "key")
+          .option("hoodie.datasource.write.precombine.field", "key")
+          .option(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key, enabled)
+          .mode(SaveMode.Append).save(path)
+        val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+        Assertions.assertEquals(Set("y1", "y2"), keys, s"path enabled = $enabled")
+      }
+    } finally {
+      spark.conf.unset("spark.sql.legacy.sizeOfNull")
+    }
+  }
+
+  @Test
   def testMissingRecordKeyFieldFailsWithTheSameError(): Unit = {
     Seq("missing", "key,missing").foreach { recordKeyFields =>
       val messages = Seq("true", "false").map { enabled =>
