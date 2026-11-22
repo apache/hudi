@@ -899,11 +899,11 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
                                table: HoodieTable[_, _, _, _],
                                globalIndex: Boolean,
                                withPositions: Boolean): Dataset[Row] = {
-    // The view only serves partitions already loaded into it; load them all on the same view
-    // instance before asking for the latest base files across the table.
+    // Asked partition by partition, so the view loads what it serves: a view behind the timeline
+    // server drops the partitions it had loaded when another writer's commit makes it refresh.
     val fsView = table.getHoodieView
-    fsView.loadAllPartitions()
-    val latestBaseFiles = fsView.getLatestBaseFiles.iterator().asScala.map(_.getPath).toSeq
+    val latestBaseFiles = table.getTableMetadata.getAllPartitionPaths.asScala.toSeq
+      .flatMap(partition => fsView.getLatestBaseFiles(partition).iterator().asScala.map(_.getPath))
     if (latestBaseFiles.isEmpty) {
       log.info("Tagging skipped: no latest base files in the table")
       val untagged = prepared.withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))

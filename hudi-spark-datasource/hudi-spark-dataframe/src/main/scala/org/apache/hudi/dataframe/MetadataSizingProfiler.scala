@@ -17,12 +17,10 @@
 
 package org.apache.hudi.dataframe
 
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.util.CollectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.execution.estimator.RecordSizeEstimatorFactory
-import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.HoodieTable
 
 import org.apache.spark.internal.Logging
@@ -62,7 +60,6 @@ object MetadataSizingProfiler extends Logging {
     } else {
       val avgRecordSize = averageRecordSize(table, writeConfig)
       val fsView = table.getHoodieView
-      fsView.loadAllPartitions()
       // (partition, file id) of the small file groups with room for at least one more record.
       val candidates: Iterator[(String, String)] = if (mergeOnRead) {
         // Slice-based sizing, and never pad a slice that has log files: the write-path merge
@@ -82,13 +79,13 @@ object MetadataSizingProfiler extends Logging {
             .map(slice => (partition, slice.getFileId))
         }
       } else {
-        val basePath = new StoragePath(writeConfig.getBasePath)
-        fsView.getLatestBaseFiles.iterator().asScala
-          .filter(baseFile => baseFile.getFileSize > 0
-            && baseFile.getFileSize < smallFileLimit
-            && (maxFileSize - baseFile.getFileSize) / avgRecordSize > 0)
-          .map(baseFile => (
-            FSUtils.getRelativePartitionPath(basePath, baseFile.getStoragePath.getParent), baseFile.getFileId))
+        table.getTableMetadata.getAllPartitionPaths.asScala.iterator.flatMap { partition =>
+          fsView.getLatestBaseFiles(partition).iterator().asScala
+            .filter(baseFile => baseFile.getFileSize > 0
+              && baseFile.getFileSize < smallFileLimit
+              && (maxFileSize - baseFile.getFileSize) / avgRecordSize > 0)
+            .map(baseFile => (partition, baseFile.getFileId))
+        }
       }
       // A file group that a pending clustering is rewriting takes no new records.
       val pendingClustering = fsView.getFileGroupsInPendingClustering.iterator().asScala
