@@ -1323,4 +1323,47 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test MergeInto Refuses Conditions The Write Cannot Evaluate Per Record") {
+    withTempDir { tmp =>
+      Seq("primaryKey = 'id',", "").foreach { keyProp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 10), (2, 20)")
+        val source = "(select 1 as id, -1 as v union all select 3, -3)"
+
+        checkExceptionContain(
+          s"merge into $tableName t using $source s on t.id = s.id and rand() > 0.5 when matched then delete")(
+          "deterministic expression")
+        checkExceptionContain(
+          s"merge into $tableName t using $source s on t.id = s.id when matched and rand() > 0.5 then delete")(
+          "deterministic expression")
+        checkExceptionContain(
+          s"merge into $tableName t using $source s on t.id = s.id when not matched and rand() > 0.5 then insert *")(
+          "deterministic expression")
+        checkExceptionContain(
+          s"""
+             |merge into $tableName t using $source s on t.id = s.id
+             |when matched and t.id < (select max(id) from $source) then update set v = s.v
+           """.stripMargin)("MERGE operation contains unsupported UPDATE condition. Subqueries are not allowed")
+        checkExceptionContain(
+          s"""
+             |merge into $tableName t using $source s on t.id = s.id
+             |when not matched and s.id in (select id from $source) then insert *
+           """.stripMargin)("MERGE operation contains unsupported INSERT condition. Subqueries are not allowed")
+        checkExceptionContain(
+          s"merge into $tableName t using $source s on t.id = s.id when matched and sum(t.id) < 1 then delete")(
+          "MERGE operation contains unsupported DELETE condition. Aggregates are not allowed")
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 10), Seq(2, 20))
+      }
+    }
+  }
 }
