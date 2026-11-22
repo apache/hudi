@@ -47,6 +47,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -262,6 +263,47 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     assertEquals(0, readStats.getNumInserts());
     assertEquals(1, readStats.getNumDeletes());
     assertEquals(2, readStats.getNumUpdates());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
+  void deleteAppliesToEveryBaseRecordWithTheKey(RecordMergeMode mergeMode) throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
+    StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
+    List<String> orderingFields = mergeMode == RecordMergeMode.EVENT_TIME_ORDERING ? Collections.singletonList("ts") : Collections.emptyList();
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
+        mergeMode, orderingFields, Option.of(Pair.of("counter", "3")));
+
+    // Three base records share key 2, one of them ordered after the delete, and two share key 3
+    IndexedRecord testRecord2Later = createTestRecord("2", 5, 5L);
+    IndexedRecord testRecord2Copy = createTestRecord("2", 4, 1L);
+    IndexedRecord testRecord3Copy = createTestRecord("3", 4, 1L);
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(
+        Arrays.asList(testRecord2, testRecord1, testRecord3, testRecord2Later, testRecord2Copy, testRecord3Copy).iterator()));
+
+    HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("2", "", 3L));
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Collections.singletonList(testRecord3Update).iterator()));
+    fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
+    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+
+    // Under event-time ordering the base record ordered after the delete is kept, and the delete still applies to
+    // the next copy. An update of a duplicate key still replaces only the first base record with the key
+    boolean eventTime = mergeMode == RecordMergeMode.EVENT_TIME_ORDERING;
+    List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
+    assertEquals(eventTime
+        ? Arrays.asList(testRecord1, testRecord3Update, testRecord2Later, testRecord3Copy)
+        : Arrays.asList(testRecord1, testRecord3Update, testRecord3Copy), actualRecords);
+    assertEquals(0, readStats.getNumInserts());
+    assertEquals(eventTime ? 2 : 3, readStats.getNumDeletes());
+    assertEquals(1, readStats.getNumUpdates());
   }
 
   @Test
