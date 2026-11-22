@@ -80,6 +80,12 @@ trait HoodieCatalystPlansUtils {
   def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
 
   /**
+   * Whether the [[MergeIntoTable]] carries {@code WHEN NOT MATCHED BY SOURCE} actions, which it can
+   * since Spark 3.4.0 (see [[unapplyMergeIntoTable]]).
+   */
+  def hasNotMatchedBySourceActions(plan: LogicalPlan): Boolean
+
+  /**
    * Decomposes [[MatchCreateIndex]] into its arguments with accommodation.
    */
   def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])]

@@ -514,6 +514,12 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
       plan match {
         // Convert to MergeIntoHoodieTableCommand
         case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
+          if (sparkAdapter.getCatalystPlanUtils.hasNotMatchedBySourceActions(mit)) {
+            // The clause acts on the target records no source record matches, which the write of the
+            // source records never reads
+            throw new HoodieAnalysisException(
+              "WHEN NOT MATCHED BY SOURCE clause is not supported in MERGE INTO statement on a Hudi table")
+          }
           MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable])
 
         // Convert to UpdateHoodieTableCommand

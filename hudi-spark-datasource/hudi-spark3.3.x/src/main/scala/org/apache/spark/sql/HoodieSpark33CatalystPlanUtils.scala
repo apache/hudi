@@ -35,6 +35,9 @@ object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     }
   }
 
+  // MergeIntoTable has no such actions before Spark 3.4.0
+  override def hasNotMatchedBySourceActions(plan: LogicalPlan): Boolean = false
+
   override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case s@ScanOperation(_, _,
