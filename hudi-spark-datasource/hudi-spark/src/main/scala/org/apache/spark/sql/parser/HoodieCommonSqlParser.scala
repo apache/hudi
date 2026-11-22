@@ -51,11 +51,12 @@ class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
   /**
    * Rewrites Spark's native time-travel node into Hudi's [[TimeTravelRelation]] so that
    * `TIMESTAMP/VERSION AS OF` on Hudi tables resolves through the Hudi resolution rule.
+   * The analyzer turns it back into Spark's node when the relation is not a Hudi table.
    */
   private def convertNativeTimeTravel(plan: LogicalPlan): LogicalPlan = {
     plan.transformDownWithSubqueries {
       case RelationTimeTravel(relation: UnresolvedRelation, timestamp, version) =>
-        TimeTravelRelation(relation, timestamp, version)
+        TimeTravelRelation(relation, timestamp, version, relation)
       // The CTE definitions of a WITH clause are not children of UnresolvedWith, so the transform does
       // not reach them; rewrite them separately.
       case withClause: UnresolvedWith =>
