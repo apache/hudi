@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -117,6 +118,22 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 22, "2021-03-21")
         )
 
+        // Update data from a field of the target table
+        spark.sql(
+          s"""
+             | merge into $tableName as t0
+             | using (
+             |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
+             | ) as s0
+             | on t0.id = s0.id
+             | when matched and s0.id % 2 = 1 then update set id = s0.id, name = s0.name,
+             |  price = s0.price + t0.price, ts = s0.ts, dt = s0.dt
+         """.stripMargin
+        )
+        checkAnswer(s"select id,name,price,dt from $tableName")(
+          Seq(1, "a1", 32, "2021-03-21")
+        )
+
         // Delete data which matched update-condition
         spark.sql(
           s"""
@@ -134,25 +151,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         checkAnswer(s"select count(1) from $tableName")(
           Seq(0)
         )
-
-        val errorMsg = if (HoodieSparkUtils.gteqSpark4_2)
-          "[INTERNAL_ERROR] Executed command failed. You hit a bug in Spark or the Spark plugins you use. Please, report this bug to the corresponding communities or vendors, and provide the full stack trace. SQLSTATE: XX000"
-        else if (HoodieSparkUtils.gteqSpark4_0)
-          "[INTERNAL_ERROR] Eagerly executed command failed. You hit a bug in Spark or the Spark plugins you use. Please, report this bug to the corresponding communities or vendors, and provide the full stack trace. SQLSTATE: XX000"
-        else
-          "assertion failed: Target table's field(price) cannot be the right-value of the update clause for MOR table."
-
-        checkException(
-          s"""
-             | merge into $tableName as t0
-             | using (
-             |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
-             | ) as s0
-             | on t0.id = s0.id
-             | when matched and s0.id % 2 = 1 then update set id = s0.id, name = s0.name,
-             |  price = s0.price + t0.price, ts = s0.ts, dt = s0.dt
-         """.stripMargin
-        )(errorMsg)
       }
     })
   }
@@ -921,6 +919,144 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
           }
         }
       }
+    }
+  }
+
+  /**
+   * Matched clauses that refer to fields of the target table, each with the rows it leaves in a table that holds
+   * ids 1 to 3 with dt p1 and ids 4 and 5 with dt p2. The source of the first two statements has a record
+   * without a match in p1 and only matched records in p2.
+   */
+  private val targetFieldCases: Seq[(String, String, Seq[Seq[Any]])] = Seq(
+    // id 2 fails the condition, and id 4 passes it on another field than id 1
+    ("an update condition",
+      """using (select 1 as id, 'a1m' as name, 11.0 as price, 'p1' as dt union all select 2, 'a2m', 21.0, 'p1'
+        |  union all select 4, 'a4m', 41.0, 'p2' union all select 9, 'a9', 90.0, 'p1') s
+        |on t.id = s.id
+        |when matched and (t.price < 15 or t.name = 'a4') then update set *""".stripMargin,
+      Seq(Seq(1, "a1m", 11.0, "p1"), Seq(2, "a2", 20.0, "p1"), Seq(3, "a3", 30.0, "p1"), Seq(4, "a4m", 41.0, "p2"),
+        Seq(5, "a5", 50.0, "p2"))),
+    // id 2 fails both conditions
+    ("update and delete conditions with an insert",
+      """using (select 1 as id, 'a1m' as name, 11.0 as price, 'p1' as dt union all select 2, 'a2m', 21.0, 'p1'
+        |  union all select 3, 'a3m', 31.0, 'p1' union all select 5, 'a5m', 51.0, 'p2' union all select 6, 'a6', 60.0, 'p1') s
+        |on t.id = s.id
+        |when matched and t.price < 20 then update set *
+        |when matched and t.price >= 30 then delete
+        |when not matched then insert *""".stripMargin,
+      Seq(Seq(1, "a1m", 11.0, "p1"), Seq(2, "a2", 20.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(6, "a6", 60.0, "p1"))),
+    ("assigned values",
+      """using (select 3 as id, 1.5 as price, 'p1' as dt union all select 4, 2.5, 'p2') s
+        |on t.id = s.id
+        |when matched then update set price = t.price + s.price, name = concat(t.name, '-', t.dt)""".stripMargin,
+      Seq(Seq(1, "a1", 10.0, "p1"), Seq(2, "a2", 20.0, "p1"), Seq(3, "a3-p1", 31.5, "p1"), Seq(4, "a4-p2", 42.5, "p2"),
+        Seq(5, "a5", 50.0, "p2"))))
+
+  Seq(("SIMPLE", true, targetFieldCases), ("SIMPLE", false, targetFieldCases.slice(1, 2)),
+    ("GLOBAL_SIMPLE", true, targetFieldCases), ("RECORD_INDEX", true, targetFieldCases),
+    ("BUCKET", true, targetFieldCases.slice(1, 2))).foreach { case (indexType, partitioned, cases) =>
+    cases.foreach { case (name, clauses, rows) =>
+      test(s"Test MergeInto with target fields in $name on mor table with $indexType index"
+        + s" on a ${if (partitioned) "partitioned" else "non-partitioned"} table") {
+        withTempDir { tmp =>
+          withSQLConf("hoodie.index.type" -> indexType, "hoodie.bucket.index.num.buckets" -> "2",
+            "hoodie.metadata.global.record.level.index.enable" -> (indexType == "RECORD_INDEX").toString) {
+            val tableName = generateTableName
+            spark.sql(
+              s"""
+                 | create table $tableName (
+                 |  id int,
+                 |  name string,
+                 |  price double,
+                 |  dt string
+                 | ) using hudi
+                 | tblproperties (
+                 |  type = 'mor',
+                 |  primaryKey = 'id'
+                 | )
+                 | ${if (partitioned) "partitioned by(dt)" else ""}
+                 | location '${tmp.getCanonicalPath}'
+               """.stripMargin)
+            spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 'p1'), (2, 'a2', 20.0, 'p1'), (3, 'a3', 30.0, 'p1'),"
+              + " (4, 'a4', 40.0, 'p2'), (5, 'a5', 50.0, 'p2')")
+
+            spark.sql(s"merge into $tableName t $clauses")
+            checkAnswer(s"select id, name, price, dt from $tableName order by id")(rows: _*)
+
+            withSQLConf(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1") {
+              spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
+            }
+            assertResult(1)(createMetaClient(spark, tmp.getCanonicalPath).getActiveTimeline.getCommitTimeline
+              .filterCompletedInstants.countInstants)
+            checkAnswer(s"select id, name, price, dt from $tableName order by id")(rows: _*)
+          }
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto with target fields in a condition on mor table after a delete in the log") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double
+           | ) using hudi
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id'
+           | )
+           | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10.0), (2, 'a2', 20.0)")
+      // The delete goes to a log file, so the index still locates id 1 through the base file
+      spark.sql(s"delete from $tableName where id = 1")
+      spark.sql(
+        s"""
+           | merge into $tableName t
+           | using (select 1 as id, 'a1n' as name, 11.0 as price union all select 2, 'a2n', 21.0) s
+           | on t.id = s.id
+           | when matched and t.price < 25 then update set *
+           | when not matched then insert *
+         """.stripMargin)
+      checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1n", 11.0), Seq(2, "a2n", 21.0))
+    }
+  }
+
+  test("Test MergeInto with a matched condition on a target field refused on mor table without record key") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double
+           | ) using hudi
+           | tblproperties (
+           |  type = 'mor'
+           | )
+           | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10.0), (2, 'a2', 20.0)")
+      // The source records are written with the locations the join with the table gives them, and their matched
+      // clauses are evaluated without the records they match, so the statements are refused before a commit starts
+      val instants = createMetaClient(spark, tmp.getCanonicalPath).getActiveTimeline.getInstants
+      Seq("update set *", "delete").foreach { action =>
+        checkExceptionContain(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1m' as name, 11.0 as price union all select 2, 'a2m', 21.0) s
+             | on t.id = s.id
+             | when matched and t.price < 15 then $action
+           """.stripMargin)(
+          "Target table's field(price) cannot be used in the condition of a WHEN MATCHED clause for MOR table without a record key")
+      }
+      assertResult(instants)(createMetaClient(spark, tmp.getCanonicalPath).getActiveTimeline.getInstants)
+      checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1", 10.0), Seq(2, "a2", 20.0))
     }
   }
 

@@ -54,6 +54,11 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
 
   @Override
   protected List<SmallFile> getSmallFiles(String partitionPath) {
+    if (config.isSparkSqlMergeIntoReadingTarget()) {
+      // The located records of the statement are already merged with the records they match, and the merge that
+      // packs inserts into a small base file would evaluate them as source records of the statement once more
+      return Collections.emptyList();
+    }
     // Init here since this class (and member variables) might not have been initialized
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
 
