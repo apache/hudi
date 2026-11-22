@@ -53,6 +53,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
 import org.apache.hudi.metadata.EmptyHoodieRecordPayloadWithPartition;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -656,7 +657,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       fail("Should not have reached here");
     } catch (Exception e) {
       // expected. no-op
-      assertTrue(e.getCause() instanceof HoodieIOException);
+      assertTrue(e.getCause() instanceof HoodieMetadataException);
+      assertTrue(e.getCause().getMessage().contains("appears more than once in this write"), e.getCause().getMessage());
     }
   }
 

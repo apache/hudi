@@ -20,7 +20,10 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -29,9 +32,11 @@ import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
@@ -39,6 +44,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMetadataIndexMapper extends HoodieCommonTestHarness {
@@ -114,5 +120,63 @@ public class TestMetadataIndexMapper extends HoodieCommonTestHarness {
     });
     // RLI is only updated for inserts
     assertEquals(10, totalRLIRecords.get());
+  }
+
+  @Test
+  void testRLIIndexMapperRejectsKeyInsertedTwice() throws Exception {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("random").build();
+    RecordIndexMapper recordIndexMapper = new RecordIndexMapper(writeConfig);
+    String instantTime = InProcessTimeGenerator.createNewInstantTime();
+    List<HoodieRecord> rliRecords = new ArrayList<>();
+    rliRecords.addAll(generateRecords(recordIndexMapper, insertStatus(instantTime, "key1", "key2")));
+    rliRecords.addAll(generateRecords(recordIndexMapper, insertStatus(instantTime, "key2", "key3")));
+    assertEquals(4, rliRecords.size());
+
+    HoodieMetadataException e = assertThrows(HoodieMetadataException.class,
+        () -> recordIndexMapper.postProcess(HoodieListData.lazy(rliRecords)).collectAsList());
+    assertTrue(e.getMessage().startsWith("Key key2 appears more than once in this write for metadata partition record_index"),
+        e.getMessage());
+    assertTrue(e.getMessage().contains("hoodie.combine.before.insert=true"), e.getMessage());
+  }
+
+  @Test
+  void testRLIIndexMapperKeepsInsertOverDeleteOfSameKey() throws Exception {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("random").build();
+    RecordIndexMapper recordIndexMapper = new RecordIndexMapper(writeConfig);
+    String instantTime = InProcessTimeGenerator.createNewInstantTime();
+    // a delete of key1 from a p1 file group and an insert of key1 into a p2 file group in the same write
+    WriteStatus deleteStatus = new WriteStatus(true, 0.0d);
+    HoodieRecord deleted = new HoodieAvroRecord(new HoodieKey("key1", "p1"), new EmptyHoodieRecordPayload());
+    deleted.setCurrentLocation(new HoodieRecordLocation(instantTime, UUID.randomUUID().toString()));
+    deleteStatus.markSuccess(deleted, Option.empty());
+    List<HoodieRecord> rliRecords = new ArrayList<>();
+    rliRecords.addAll(generateRecords(recordIndexMapper, deleteStatus));
+    rliRecords.addAll(generateRecords(recordIndexMapper, insertStatus(instantTime, "key1", "key2")));
+    assertEquals(3, rliRecords.size());
+
+    List<HoodieRecord> reduced = recordIndexMapper.postProcess(HoodieListData.lazy(rliRecords)).collectAsList();
+    assertEquals(2, reduced.size());
+    for (HoodieRecord record : reduced) {
+      HoodieRecordIndexInfo recordIndexInfo = ((HoodieMetadataPayload) record.getData()).recordIndexMetadata;
+      assertNotNull(recordIndexInfo, "the insert, not the delete, is kept for " + record.getRecordKey());
+      assertEquals("p2", recordIndexInfo.getPartitionName());
+    }
+  }
+
+  private static WriteStatus insertStatus(String instantTime, String... recordKeys) {
+    WriteStatus writeStatus = new WriteStatus(true, 0.0d);
+    String fileId = UUID.randomUUID().toString();
+    for (String recordKey : recordKeys) {
+      HoodieRecord record = new HoodieAvroRecord(new HoodieKey(recordKey, "p2"), new EmptyHoodieRecordPayload());
+      record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+      writeStatus.markSuccess(record, Option.empty());
+    }
+    return writeStatus;
+  }
+
+  private static List<HoodieRecord> generateRecords(RecordIndexMapper recordIndexMapper, WriteStatus writeStatus) throws Exception {
+    List<HoodieRecord> records = new ArrayList<>();
+    recordIndexMapper.apply(writeStatus).forEachRemaining(records::add);
+    return records;
   }
 }
