@@ -134,41 +134,58 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
                |    (3, 'u3', 20, 100)
                |""".stripMargin)
 
-          if (sparkSqlOptimizedWrites) {
-            val errorMessage2 = "Hudi tables with record key are required to match on all record key columns. Column: 'name' not found"
-            checkException(
-              s"""
-                 | merge into $tableName3 as t0
-                 | using (
-                 |  select * from $tableName2
-                 | ) as s0
-                 | on t0.id = s0.id
-                 | when matched then update set id = t0.id, name = t0.name,
-                 |  price = t0.price, ts = s0.ts
-                 | when not matched then insert (id,name,price,ts) values(s0.id, s0.name, s0.price, s0.ts)
-           """.stripMargin)(errorMessage2)
-          } else {
-            spark.sql(
-              s"""
-                 | merge into $tableName3 as t0
-                 | using (
-                 |  select * from $tableName2
-                 | ) as s0
-                 | on t0.id = s0.id
-                 | when matched then update set id = t0.id, name = t0.name,
-                 |  price = t0.price, ts = s0.ts
-                 | when not matched then insert (id,name,price,ts) values(s0.id, s0.name, s0.price, s0.ts)
-           """.stripMargin
-            )
-            checkAnswer(s"select id, name, price, ts from $tableName3")(
-              Seq(1, "a1", 10.0, 100),
-              Seq(1, "u1", 10.0, 999),
-              Seq(2, "a2", 20.0, 200),
-              Seq(3, "u3", 20.0, 9999),
-              Seq(4, "u4", 40.0, 99999)
-            )
-          }
+          val errorMessage2 = "Hudi tables with record key are required to match on all record key columns. Column: 'name' not found"
+          checkException(
+            s"""
+               | merge into $tableName3 as t0
+               | using (
+               |  select * from $tableName2
+               | ) as s0
+               | on t0.id = s0.id
+               | when matched then update set id = t0.id, name = t0.name,
+               |  price = t0.price, ts = s0.ts
+               | when not matched then insert (id,name,price,ts) values(s0.id, s0.name, s0.price, s0.ts)
+         """.stripMargin)(errorMessage2)
         }
+      }
+    }
+  }
+
+  test("Test MergeInto on a table with record key must match on every record key column") {
+    // None leaves the optimized writes config unset, so it takes its default
+    Seq(None, Some("true"), Some("false")).foreach { sparkSqlOptimizedWrites =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000), (2, 'a2', 20, 1000)")
+
+        withSQLConf(sparkSqlOptimizedWrites.map(SPARK_SQL_OPTIMIZED_WRITES.key() -> _).toSeq: _*) {
+          // The source row matches target row 1 on name, while its id points at target row 2
+          checkException(
+            s"""
+               |merge into $tableName t
+               |using (select 2 as id, 'a1' as name, 11.0 as price, 1001L as ts) s
+               |on t.name = s.name
+               |when matched then update set price = s.price, ts = s.ts
+               |""".stripMargin)(
+            "Hudi tables with record key are required to match on all record key columns. Column: 'id' not found")
+        }
+        checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 20.0, 1000))
       }
     }
   }
