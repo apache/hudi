@@ -391,4 +391,35 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
       }
     }
   }
+
+  Seq("cow", "mor").foreach { tableType =>
+    test(s"Test MergeInto deletes a matched record of a pkless $tableType table with an ordering field") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, ts long, dep string) using hudi
+             | tblproperties (type = '$tableType', preCombineField = 'ts')
+             | partitioned by (dep)
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1'), (3, 'a3', 10, 'd1')")
+
+        // id 1 takes the delete clause and id 2 the update clause
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1m' as name, 20L as ts, 'd1' as dep union all select 2, 'a2m', 20L, 'd1') s
+             | on t.id = s.id
+             | when matched and s.id = 2 then update set *
+             | when matched then delete
+           """.stripMargin)
+        checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(2, "a2m", 20L, "d1"), Seq(3, "a3", 10L, "d1"))
+
+        // A statement with a delete clause only
+        spark.sql(s"merge into $tableName t using (select 3 as id, 20L as ts) s on t.id = s.id when matched then delete")
+        checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(2, "a2m", 20L, "d1"))
+      }
+    }
+  }
 }
