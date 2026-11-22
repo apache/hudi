@@ -19,8 +19,7 @@ package org.apache.hudi.dataframe
 
 import org.apache.hudi.{AvroConversionUtils, HoodieCreateRecordUtils}
 import org.apache.hudi.client.WriteStatus
-import org.apache.hudi.common.avro.{AvroRecordContext, HoodieAvroUtils}
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.engine.{ReaderContextFactory, TaskContextSupplier}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieEmptyRecord, HoodieFileGroupId, HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieRecordMerger, HoodieSparkRecord, WriteOperationType}
@@ -58,8 +57,7 @@ case class AvroRecordSpec(sourceSchema: String,
                           orderingFields: java.util.List[String],
                           attachOrderingValue: Boolean,
                           requiresOrderingValue: Boolean,
-                          consistentLogicalTimestamp: Boolean,
-                          mergeProps: TypedProperties)
+                          consistentLogicalTimestamp: Boolean)
 
 /**
  * Executor-side write task of the DataFrame write path: consumes one Spark partition of routed
@@ -187,12 +185,13 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     val toAvro = AvroConversionUtils.createInternalRowToAvroConverter(sourceStructType, sourceSchema, sourceSchema.isNullable)
     val sameSchema = sourceSchema == targetSchema
     val targetAvroSchema = targetSchema.toAvroSchema
-    val deleteContext = new DeleteContext(spec.mergeProps, targetSchema).withReaderSchema(targetSchema)
     (row, key, isDeleteOperation) => {
       val converted = toAvro(dataProjection(row))
       val avroRecord = if (sameSchema) converted else HoodieAvroUtils.rewriteRecordDeep(converted, targetAvroSchema)
-      val isDelete = isDeleteOperation ||
-        AvroRecordContext.getFieldAccessorInstance.isDeleteRecord(avroRecord, deleteContext)
+      // Whether the record deletes is left for the handle to find out from the record and its
+      // payload, which may depend on how the handle writes it; only a row that deletes by
+      // operation says so up front.
+      val isDelete: java.lang.Boolean = if (isDeleteOperation) java.lang.Boolean.TRUE else null
       val record = if (spec.attachOrderingValue) {
         val orderingValue = HoodieCreateRecordUtils.getOrderingValue(spec.orderingFields, avroRecord,
           key.getRecordKey, spec.consistentLogicalTimestamp, spec.requiresOrderingValue)

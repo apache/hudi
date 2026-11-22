@@ -375,8 +375,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
           || classOf[OverwriteWithLatestAvroPayload].getName == payloadClass),
         consistentLogicalTimestamp = spec.parameters.getOrElse(
           DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
-          DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean,
-        mergeProps = mergeProps(writeConfig, tableConfig)))
+          DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean))
     }
   }
 
@@ -700,11 +699,14 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       val moved = col(TAGGED_FILE_ID_COL).isNotNull && col(LOCATED_PARTITION_COL).isNotNull &&
         col(LOCATED_PARTITION_COL) =!= col(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
       val staying = base.filter(!moved).drop(LOCATED_PARTITION_COL)
+      // A table without a completed commit reads back without columns and has no stored rows.
+      lazy val storedTable = joined.sparkSession.read.format("hudi").load(basePath)
       val comparedFields = orderingFields.filter(resolves(base, _))
+        .filter(field => resolves(storedTable, HoodieRecord.RECORD_KEY_METADATA_FIELD) && resolves(storedTable, field))
       val moving = if (comparedFields.isEmpty) {
         base.filter(moved)
       } else {
-        val stored = joined.sparkSession.read.format("hudi").load(basePath).select(
+        val stored = storedTable.select(
           (Seq(col(HoodieRecord.RECORD_KEY_METADATA_FIELD).as(STORED_KEY_COL),
             col(HoodieRecord.PARTITION_PATH_METADATA_FIELD).as(STORED_PARTITION_COL))
             ++ comparedFields.zipWithIndex.map { case (field, i) => col(field).as(STORED_ORDERING_COL_PREFIX + i) }): _*)
