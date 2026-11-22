@@ -27,21 +27,22 @@ import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieFileGroupId, HoodieRecord, HoodieRecordLocation, HoodieTableType, MetaFieldsMode, OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieFileGroupId, HoodieRecord, HoodieRecordGlobalLocation, HoodieRecordLocation, HoodieTableType, MetaFieldsMode, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, HoodieDataUtils, HoodieRecordUtils, HoodieTimer, Option => HOption, StringUtils}
+import org.apache.hudi.common.util.collection.{Pair => HoodiePair}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.{HoodieClusteringUpdateException, HoodieDuplicateKeyException, HoodieUpsertException}
-import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
+import org.apache.hudi.index.{HoodieIndex, PartitionedRecordIndexFileGroupLookupFunction, SparkHoodieIndexFactory}
 import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.metadata.{HoodieIndexVersion, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.{BucketizedMetadataTableFileGroupIndexParser, HoodieIndexVersion, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metrics.RecordIndexLookupMetrics
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.HoodieTable
@@ -51,6 +52,7 @@ import org.apache.hudi.util.CommonClientUtils
 import org.apache.spark.Partitioner
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.internal.Logging
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Column, DataFrame, Dataset, HoodieInternalRowUtils, Row}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.expressions.Window
@@ -623,7 +625,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     val indexType = writeConfig.getIndexType
     val recordIndexConfigured = indexType == HoodieIndex.IndexType.RECORD_INDEX ||
       indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
-    val recordIndexReady = recordIndexConfigured &&
+    // The record index of a table is either global or kept per data partition.
+    val partitionedRecordIndex = indexType == HoodieIndex.IndexType.RECORD_LEVEL_INDEX
+    val recordIndexReady = (recordIndexConfigured || partitionedRecordIndex) &&
       table.getMetaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)
     val globalIndex = recordIndexConfigured || indexType == HoodieIndex.IndexType.GLOBAL_SIMPLE ||
       indexType == HoodieIndex.IndexType.GLOBAL_BLOOM
@@ -640,10 +644,10 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       writeConfig.shouldWriteRecordPositions && HoodieSparkUtils.gteqSpark3_5
     def located: Dataset[Row] = if (recordIndexReady) {
       log.info("Tagging incoming records via the record-level index")
-      tagViaRecordIndex(spark, prepared, table, engineContext, writeConfig)
+      tagViaRecordIndex(spark, prepared, table, engineContext, writeConfig, partitionedRecordIndex)
     } else {
-      // A configured-but-uninitialized record index keeps global semantics through the
-      // base-file join, mirroring the legacy fallback to the global simple index.
+      // A record index that is configured but not built yet tags through the base-file join,
+      // with the semantics of the index: across the table for a global one.
       tagViaSimpleJoin(spark, prepared, table, globalIndex, withPositions)
     }
     val duplicatePolicy = insertDuplicatePolicy(spec)
@@ -822,71 +826,102 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
   }
 
   /**
-   * Record-level-index tagging: only thin record keys shuffle, partitioned with the same hash
-   * that shards the record index across its N file groups, so each Spark partition does point
-   * lookups against exactly one index shard. Located keys join back to the input rows; the index
-   * never shuffles. Located rows keep their original table partition (the update-partition-path
-   * semantics of the global record index with the default config).
+   * Record-level-index tagging: only thin record keys shuffle, partitioned the way the record
+   * index is sharded across its file groups, so each Spark partition does point lookups against
+   * exactly one index shard. Located keys join back to the input rows; the index never
+   * shuffles. A global index locates a key wherever it is stored and the row keeps that
+   * partition (the update-partition-path semantics of the global record index with the default
+   * config); an index kept per data partition locates a key in the partition the row comes with.
    */
   private def tagViaRecordIndex(spark: org.apache.spark.sql.SparkSession,
                                 prepared: Dataset[Row],
                                 table: HoodieTable[_, _, _, _],
                                 engineContext: HoodieEngineContext,
-                                writeConfig: HoodieWriteConfig): Dataset[Row] = {
-    val numFileGroups = table.getTableMetadata.getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX)
-    val indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(
-      MetadataPartitionType.RECORD_INDEX.getPartitionPath, table.getMetaClient)
-    val mappingFunction = MetadataPartitionType
-      .fromPartitionPath(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
-      .getFileGroupMappingFunction(indexVersion)
-    val serTable = table
+                                writeConfig: HoodieWriteConfig,
+                                partitioned: Boolean): Dataset[Row] = {
+    val tableMetadata = table.getTableMetadata
     // Resolved on the driver, from the context of the client that commits, so the closure
     // carries the counters to executors and the commit publishes them.
     val lookupMetrics = RecordIndexLookupMetrics.resolveRegistry(engineContext, writeConfig)
 
-    val locationRows = prepared.select(col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
-      .queryExecution.toRdd
-      .map(row => row.getString(0))
-      .map(key => (mappingFunction.apply(key, numFileGroups).intValue(), key))
-      .partitionBy(new ShardPartitioner(numFileGroups))
-      .map(_._2)
-      .mapPartitions { keys =>
-        val keyList = new java.util.ArrayList[String]()
-        keys.foreach(keyList.add)
-        if (keyList.isEmpty) {
-          Iterator.empty
-        } else {
-          val shardTimer = HoodieTimer.start()
-          val locations = serTable.getTableMetadata
-            .readRecordIndexLocationsWithKeys(HoodieListData.eager[String](keyList))
-          try {
-            val found = HoodieDataUtils.dedupeAndCollectAsList(locations).asScala
-            if (lookupMetrics.isPresent) {
-              RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get, keyList,
-                found.map(_.getKey).toSet.asJava, shardTimer.endTimer())
+    val located: RDD[(String, HoodieRecordGlobalLocation)] = if (partitioned) {
+      val fileGroupCounts = new java.util.HashMap[String, Integer]()
+      tableMetadata.getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType.RECORD_INDEX).asScala
+        .foreach { case (partition, fileGroups) => fileGroupCounts.put(partition, fileGroups.size()) }
+      val shardOffsets = new java.util.HashMap[String, Integer](
+        BucketizedMetadataTableFileGroupIndexParser.generatePartitionToBaseIndexOffsets(fileGroupCounts))
+      val numShards = BucketizedMetadataTableFileGroupIndexParser.calculateNumberOfFileGroups(fileGroupCounts)
+      val keysByShard = prepared
+        .select(col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+        .queryExecution.toRdd
+        .map(row => (row.getString(0), row.getString(1)))
+        // A partition the index has no file groups for holds no located key.
+        .filter { case (partition, _) => shardOffsets.containsKey(partition) }
+        .map { case (partition, key) =>
+          val shard = shardOffsets.get(partition) +
+            HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, fileGroupCounts.get(partition))
+          (shard, HoodiePair.of(partition, key))
+        }
+        .partitionBy(new ShardPartitioner(math.max(1, numShards)))
+        .map(_._2)
+      keysByShard.toJavaRDD()
+        .mapPartitionsToPair(new PartitionedRecordIndexFileGroupLookupFunction(tableMetadata, lookupMetrics))
+        .rdd
+    } else {
+      val numFileGroups = tableMetadata.getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX)
+      val indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(
+        MetadataPartitionType.RECORD_INDEX.getPartitionPath, table.getMetaClient)
+      val mappingFunction = MetadataPartitionType
+        .fromPartitionPath(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+        .getFileGroupMappingFunction(indexVersion)
+      prepared.select(col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+        .queryExecution.toRdd
+        .map(row => row.getString(0))
+        .map(key => (mappingFunction.apply(key, numFileGroups).intValue(), key))
+        .partitionBy(new ShardPartitioner(numFileGroups))
+        .map(_._2)
+        .mapPartitions { keys =>
+          val keyList = new java.util.ArrayList[String]()
+          keys.foreach(keyList.add)
+          if (keyList.isEmpty) {
+            Iterator.empty
+          } else {
+            val shardTimer = HoodieTimer.start()
+            val locations = tableMetadata.readRecordIndexLocationsWithKeys(HoodieListData.eager[String](keyList))
+            try {
+              val found = HoodieDataUtils.dedupeAndCollectAsList(locations).asScala
+              if (lookupMetrics.isPresent) {
+                RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get, keyList,
+                  found.map(_.getKey).toSet.asJava, shardTimer.endTimer())
+              }
+              found.map(pair => (pair.getKey, pair.getValue)).iterator
+            } finally {
+              locations.unpersistWithDependencies()
             }
-            found.map { pair =>
-              val location = pair.getValue
-              val position: java.lang.Long =
-                if (HoodieRecordLocation.isPositionValid(location.getPosition)) location.getPosition else null
-              Row(pair.getKey, location.getPartitionPath, location.getFileId, location.getInstantTime, position)
-            }.iterator
-          } finally {
-            locations.unpersistWithDependencies()
           }
         }
-      }
+    }
+    val locationRows = located.map { case (key, location) =>
+      val position: java.lang.Long =
+        if (HoodieRecordLocation.isPositionValid(location.getPosition)) location.getPosition else null
+      Row(key, location.getPartitionPath, location.getFileId, location.getInstantTime, position)
+    }
     val locationSchema = StructType(Seq(
       StructField("_hoodie_lookup_key", StringType),
-      StructField("_hoodie_located_partition", StringType),
+      StructField(LOCATED_PARTITION_COL, StringType),
       StructField(TAGGED_FILE_ID_COL, StringType),
       StructField(TAGGED_INSTANT_COL, StringType),
       StructField(TAGGED_POSITION_COL, LongType)))
     val locations = spark.createDataFrame(locationRows, locationSchema)
-    prepared.join(locations,
-        prepared(HoodieRecord.RECORD_KEY_METADATA_FIELD) === locations("_hoodie_lookup_key"),
-        "left_outer")
-      .drop("_hoodie_lookup_key")
+    val keyMatches = prepared(HoodieRecord.RECORD_KEY_METADATA_FIELD) === locations("_hoodie_lookup_key")
+    if (partitioned) {
+      prepared.join(locations,
+          keyMatches && prepared(HoodieRecord.PARTITION_PATH_METADATA_FIELD) === locations(LOCATED_PARTITION_COL),
+          "left_outer")
+        .drop("_hoodie_lookup_key", LOCATED_PARTITION_COL)
+    } else {
+      prepared.join(locations, keyMatches, "left_outer").drop("_hoodie_lookup_key")
+    }
   }
 
   /**

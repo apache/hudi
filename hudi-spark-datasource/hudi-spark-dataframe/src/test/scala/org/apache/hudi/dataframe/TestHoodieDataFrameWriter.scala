@@ -472,9 +472,16 @@ class TestHoodieDataFrameWriter {
 
       val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
       Assertions.assertEquals(Set("e1", "e3"), keys, s"rows with $options")
-      val indexed = spark.read.format("hudi").load(path + "/.hoodie/metadata")
+      def indexed: Long = spark.read.format("hudi").load(path + "/.hoodie/metadata")
         .where("recordIndexMetadata is not null").count()
       Assertions.assertEquals(2L, indexed, s"record index entries with $options")
+
+      // A key that was deleted is written again, and gets its index entry back.
+      df(Seq(("e2", "p1", 20L, "again", false)))
+        .write.format("hudi").options(writeOptions("upsert", options)).mode(SaveMode.Append).save(path)
+      Assertions.assertEquals(Set("e1", "e2", "e3"),
+        spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet, s"rows with $options")
+      Assertions.assertEquals(3L, indexed, s"record index entries with $options")
     }
   }
 
