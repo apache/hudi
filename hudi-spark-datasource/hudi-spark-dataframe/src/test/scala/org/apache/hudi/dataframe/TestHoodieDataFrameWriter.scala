@@ -734,6 +734,37 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testPartialUpdatePayloadMergesFieldsAcrossTheRowsOfABatch(): Unit = {
+    val partialSchema = StructType(Seq(
+      StructField("key", StringType), StructField("partition", StringType), StructField("ts", LongType),
+      StructField("rider", StringType), StructField("driver", StringType)))
+    def frame(rows: Row*) = spark.createDataFrame(rows.asJava, partialSchema)
+    for (tableType <- Seq("COPY_ON_WRITE", "MERGE_ON_READ")) {
+      val snapshots = Seq("true", "false").map { enabled =>
+        val path = tempDir.resolve(s"test_table_partial_fields_${tableType}_$enabled").toString
+        val opts = writeOptions("insert", Map(
+          DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.compact.inline" -> "false"))
+        // The payload class and merge mode are given when the table is created and come from
+        // the table afterwards.
+        frame(Row("r1", "p1", 1L, "rider-0", "driver-0")).write.format("hudi")
+          .options(opts ++ Map(
+            "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.PartialUpdateAvroPayload",
+            "hoodie.write.record.merge.mode" -> "CUSTOM"))
+          .mode(SaveMode.Append).save(path)
+        frame(Row("r1", "p1", 4L, "rider-4", null), Row("r1", "p1", 6L, null, "driver-6"), Row("r1", "p1", 3L, null, null))
+          .write.format("hudi")
+          .options(opts + (DataSourceWriteOptions.OPERATION.key -> "upsert")).mode(SaveMode.Append).save(path)
+        spark.read.format("hudi").load(path).select("key", "ts", "rider", "driver").collect()
+          .map(r => (r.getString(0), r.getLong(1), r.getString(2), r.getString(3))).toSeq
+      }
+      Assertions.assertEquals(Seq(("r1", 6L, "rider-4", "driver-6")), snapshots.head)
+      Assertions.assertEquals(snapshots(1), snapshots.head)
+    }
+  }
+
+  @Test
   def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
     val path = tempDir.resolve("test_table_upsert_first").toString
     writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)

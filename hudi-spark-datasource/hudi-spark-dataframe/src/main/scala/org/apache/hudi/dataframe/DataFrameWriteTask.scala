@@ -94,6 +94,8 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          bucketOrdinal: Int,
                          rowOpOrdinal: Int,
                          taggedOrdinal: Int,
+                         taggedInstantOrdinal: Int,
+                         taggedPositionOrdinal: Int,
                          mergeOnRead: Boolean,
                          pendingClusteringFileGroups: Set[HoodieFileGroupId],
                          avroRecords: Option[AvroRecordSpec],
@@ -202,12 +204,16 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     }
   }
 
-  /** The records of one contiguous bucket run, combined per key when the write combines records. */
+  /**
+   * The records of one contiguous bucket run, combined per key when the write combines records.
+   * With {@code located}, each record carries the location its row was tagged with, which is how
+   * the append handle books it as an update and learns its position in the base file.
+   */
   private def bucketRecordIterator(buffered: BufferedIterator[InternalRow],
                                    bucket: String,
                                    recordFactory: RecordFactory,
-                                   location: Option[HoodieRecordLocation]): java.util.Iterator[HoodieRecord[InternalRow]] = {
-    val records = bucketRowRecords(buffered, bucket, recordFactory)
+                                   located: Boolean): java.util.Iterator[HoodieRecord[InternalRow]] = {
+    val records = bucketRowRecords(buffered, bucket, recordFactory, located)
     val combined = recordReducer match {
       case None => records
       case Some(combine) =>
@@ -217,18 +223,18 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
           override def hasNext: Boolean = source.hasNext
           override def next(): HoodieRecord[InternalRow] = {
             var record = source.next()
+            val location = record.getCurrentLocation
             while (source.hasNext && source.head.getKey == record.getKey) {
               record = combine(record, source.next())
+            }
+            if (location != null && record.getCurrentLocation == null) {
+              record.setCurrentLocation(location)
             }
             record
           }
         }
     }
-    combined.map { record =>
-      // Append handles book records with a current location as updates in the delta stats.
-      location.foreach(record.setCurrentLocation)
-      record
-    }.asJava
+    combined.asJava
   }
 
   /**
@@ -262,7 +268,9 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
   /** The records of one contiguous bucket run, read off the shared row iterator. */
   private def bucketRowRecords(rows: BufferedIterator[InternalRow],
                                bucket: String,
-                               recordFactory: RecordFactory): Iterator[HoodieRecord[InternalRow]] = {
+                               recordFactory: RecordFactory,
+                               located: Boolean): Iterator[HoodieRecord[InternalRow]] = {
+    val fileId = bucket.substring(2)
     new Iterator[HoodieRecord[InternalRow]] {
       override def hasNext: Boolean =
         rows.hasNext && rows.head.getString(bucketOrdinal) == bucket
@@ -278,6 +286,12 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
           new HoodieEmptyRecord(key, recordType)
         } else {
           recordFactory(row, key, isDelete)
+        }
+        if (located) {
+          val taggedInstant = if (row.isNullAt(taggedInstantOrdinal)) instantTime else row.getString(taggedInstantOrdinal)
+          val position =
+            if (row.isNullAt(taggedPositionOrdinal)) HoodieRecordLocation.INVALID_POSITION else row.getLong(taggedPositionOrdinal)
+          record.setCurrentLocation(new HoodieRecordLocation(taggedInstant, fileId, position))
         }
         record.asInstanceOf[HoodieRecord[InternalRow]]
       }
@@ -295,7 +309,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     val fileId = bucket.substring(2)
     val partitionPath = buffered.head.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
     rejectUpdateToPendingClustering(partitionPath, fileId)
-    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, None)
+    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, located = false)
 
     val mergeHandle = HoodieMergeHandleFactory.create(
       operation, writeConfig, instantTime,
@@ -319,8 +333,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     val fileId = bucket.substring(2)
     val partitionPath = buffered.head.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
     rejectUpdateToPendingClustering(partitionPath, fileId)
-    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory,
-      Some(new HoodieRecordLocation(instantTime, fileId)))
+    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, located = true)
     val appendHandle = new AppendHandleFactory[InternalRow, AnyRef, AnyRef, AnyRef]().create(
       writeConfig, instantTime,
       table.asInstanceOf[HoodieTable[InternalRow, AnyRef, AnyRef, AnyRef]],
@@ -334,7 +347,7 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                            bucket: String,
                            recordFactory: RecordFactory,
                            taskContextSupplier: TaskContextSupplier): Seq[WriteStatus] = {
-    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, None)
+    val recordItr = bucketRecordIterator(buffered, bucket, recordFactory, located = false)
     val writeStatuses: java.util.Iterator[java.util.List[WriteStatus]] =
       new SparkLazyInsertIterable[InternalRow](recordItr, true, writeConfig, instantTime, table,
         FSUtils.createNewFileIdPfx(), taskContextSupplier,

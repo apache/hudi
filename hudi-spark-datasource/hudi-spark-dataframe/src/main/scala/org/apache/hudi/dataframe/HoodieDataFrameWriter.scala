@@ -27,7 +27,7 @@ import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieFileGroupId, HoodieRecord, HoodieTableType, MetaFieldsMode, OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieFileGroupId, HoodieRecord, HoodieRecordLocation, HoodieTableType, MetaFieldsMode, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -56,7 +56,7 @@ import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{coalesce, col, hash, lit, monotonically_increasing_id, row_number, struct, udf, when}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 
 import java.util.concurrent.atomic.AtomicLong
 
@@ -97,6 +97,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         && params.getOrElse(PROFILER, PROFILER_METADATA) == PROFILER_SHUFFLE_STATS,
         "custom merging that combines records with the shuffle-stats profiler"),
       (() => writeConfig.allowOperationMetadataField, "the operation meta field"),
+      (() => tableConfig.getTableType == HoodieTableType.MERGE_ON_READ && writeConfig.shouldWriteRecordPositions
+        && !HoodieSparkUtils.gteqSpark3_5, "record positions in log blocks before Spark 3.5"),
       (() => writeConfig.isRollbackPendingClustering
         || writeConfig.getClusteringUpdatesStrategyClass != classOf[SparkRejectUpdateStrategy[_]].getName,
         "clustering update strategies other than rejecting the update"),
@@ -241,7 +243,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     val task = new DataFrameWriteTask(
       writeConfig, sparkTable, readerContextFactory, instantTime, operation, withBucket.schema,
       prepared.dataSchema.length, HoodieInternalRowUtils.getCachedSchema(writerSchema), bucketOrdinal,
-      withBucket.schema.fieldIndex(ROW_OP_COL), withBucket.schema.fieldIndex(TAGGED_FILE_ID_COL), mergeOnRead,
+      withBucket.schema.fieldIndex(ROW_OP_COL), withBucket.schema.fieldIndex(TAGGED_FILE_ID_COL),
+      withBucket.schema.fieldIndex(TAGGED_INSTANT_COL), withBucket.schema.fieldIndex(TAGGED_POSITION_COL), mergeOnRead,
       pendingClusteringFileGroups,
       avroRecordSpec(spec, prepared.dataSchema, writerSchema, writeConfig, tableConfig),
       // The row-based create handle takes rows in the writer schema and neither consults a
@@ -388,8 +391,13 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     }
   }
 
+  /**
+   * Whether merging two records of a key is more than picking one by ordering: a custom merge
+   * mode, or a partial update mode, under which the fields of both records make up the result.
+   */
   private def isCustomMerge(writeConfig: HoodieWriteConfig, tableConfig: HoodieTableConfig): Boolean =
-    writeConfig.getRecordMergeMode == RecordMergeMode.CUSTOM || tableConfig.getRecordMergeMode == RecordMergeMode.CUSTOM
+    writeConfig.getRecordMergeMode == RecordMergeMode.CUSTOM || tableConfig.getRecordMergeMode == RecordMergeMode.CUSTOM ||
+      tableConfig.getPartialUpdateMode.isPresent
 
   /** Whether the write's payload class has behavior of its own, beyond what the merge mode expresses. */
   private def payloadDecides(writeConfig: HoodieWriteConfig): Boolean = {
@@ -495,7 +503,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     val location = if (spec.locationFromMetaColumns) {
       val fileIdFromName = udf((fileName: String) => FSUtils.getFileId(fileName))
       Seq(when(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isNotNull && col(HoodieRecord.FILENAME_METADATA_FIELD).isNotNull,
-        fileIdFromName(col(HoodieRecord.FILENAME_METADATA_FIELD))).as(TAGGED_FILE_ID_COL))
+        fileIdFromName(col(HoodieRecord.FILENAME_METADATA_FIELD))).as(TAGGED_FILE_ID_COL),
+        col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).as(TAGGED_INSTANT_COL))
     } else {
       Seq.empty
     }
@@ -510,7 +519,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         col(KEYS_COL).getField(HoodieKeyGeneratorExpression.PARTITION_PATH_FIELD)
           .as(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         lit(null).cast(StringType).as(HoodieRecord.FILENAME_METADATA_FIELD))
-        ++ dataColumns ++ location.map(_ => col(TAGGED_FILE_ID_COL)) ++ inputOrder.map(_ => col(INPUT_ORDER_COL))): _*)
+        ++ dataColumns
+        ++ (if (spec.locationFromMetaColumns) Seq(col(TAGGED_FILE_ID_COL), col(TAGGED_INSTANT_COL)) else Seq.empty)
+        ++ inputOrder.map(_ => col(INPUT_ORDER_COL))): _*)
 
     val rows = if (!combineByWindow) {
       withMeta
@@ -587,17 +598,20 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       lit(false)
     }
 
+    // Log blocks record the positions of the rows they update in the base file.
+    val withPositions = table.getMetaClient.getTableConfig.getTableType == HoodieTableType.MERGE_ON_READ &&
+      writeConfig.shouldWriteRecordPositions && HoodieSparkUtils.gteqSpark3_5
     def located: Dataset[Row] = if (recordIndexReady) {
       log.info("Tagging incoming records via the record-level index")
       tagViaRecordIndex(spark, prepared, table, engineContext, writeConfig)
     } else {
       // A configured-but-uninitialized record index keeps global semantics through the
       // base-file join, mirroring the legacy fallback to the global simple index.
-      tagViaSimpleJoin(spark, prepared, table, globalIndex)
+      tagViaSimpleJoin(spark, prepared, table, globalIndex, withPositions)
     }
     val duplicatePolicy = insertDuplicatePolicy(spec)
 
-    if (spec.locationFromMetaColumns) {
+    withLocationDetail(if (spec.locationFromMetaColumns) {
       resolveTagged(prepared, globalIndex = false, updatePartitionPath = false, deleteMarker)
     } else if (operation == WriteOperationType.INSERT && duplicatePolicy != DataSourceWriteOptions.NONE_INSERT_DUP_POLICY) {
       val candidates = located.filter(!deleteMarker)
@@ -639,6 +653,23 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         Seq.empty
       }
       resolveTagged(joined, globalIndex, updatePartitionPath, deleteMarker, writeConfig.getBasePath, moveOrderingFields)
+    })
+  }
+
+  /**
+   * Makes sure the tagged frame carries the instant of the file slice a row is located in and
+   * the row's position in its base file, null where the tagging does not know them.
+   */
+  private def withLocationDetail(tagged: Dataset[Row]): Dataset[Row] = {
+    val withInstant = if (tagged.columns.contains(TAGGED_INSTANT_COL)) {
+      tagged
+    } else {
+      tagged.withColumn(TAGGED_INSTANT_COL, lit(null).cast(StringType))
+    }
+    if (withInstant.columns.contains(TAGGED_POSITION_COL)) {
+      withInstant
+    } else {
+      withInstant.withColumn(TAGGED_POSITION_COL, lit(null).cast(LongType))
     }
   }
 
@@ -744,8 +775,12 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
               RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get, keyList,
                 found.map(_.getKey).toSet.asJava, shardTimer.endTimer())
             }
-            found.map(pair => Row(pair.getKey, pair.getValue.getPartitionPath, pair.getValue.getFileId))
-              .iterator
+            found.map { pair =>
+              val location = pair.getValue
+              val position: java.lang.Long =
+                if (HoodieRecordLocation.isPositionValid(location.getPosition)) location.getPosition else null
+              Row(pair.getKey, location.getPartitionPath, location.getFileId, location.getInstantTime, position)
+            }.iterator
           } finally {
             locations.unpersistWithDependencies()
           }
@@ -754,7 +789,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     val locationSchema = StructType(Seq(
       StructField("_hoodie_lookup_key", StringType),
       StructField("_hoodie_located_partition", StringType),
-      StructField(TAGGED_FILE_ID_COL, StringType)))
+      StructField(TAGGED_FILE_ID_COL, StringType),
+      StructField(TAGGED_INSTANT_COL, StringType),
+      StructField(TAGGED_POSITION_COL, LongType)))
     val locations = spark.createDataFrame(locationRows, locationSchema)
     prepared.join(locations,
         prepared(HoodieRecord.RECORD_KEY_METADATA_FIELD) === locations("_hoodie_lookup_key"),
@@ -770,7 +807,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
   private def tagViaSimpleJoin(spark: org.apache.spark.sql.SparkSession,
                                prepared: Dataset[Row],
                                table: HoodieTable[_, _, _, _],
-                               globalIndex: Boolean): Dataset[Row] = {
+                               globalIndex: Boolean,
+                               withPositions: Boolean): Dataset[Row] = {
     // The view only serves partitions already loaded into it; load them all on the same view
     // instance before asking for the latest base files across the table.
     val fsView = table.getHoodieView
@@ -788,11 +826,15 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       log.info(s"Tagging incoming records against ${latestBaseFiles.size} latest base files"
         + s" (${if (globalIndex) "global" else "partition-local"} key matching)")
       val fileIdFromName = udf((fileName: String) => FSUtils.getFileId(fileName))
+      val instantFromName = udf((fileName: String) => FSUtils.getCommitTime(fileName))
+      val position = if (withPositions) col("_metadata.row_index") else lit(null).cast(LongType)
       val existing = spark.read.parquet(latestBaseFiles: _*)
         .select(
           col(HoodieRecord.RECORD_KEY_METADATA_FIELD).as("_hoodie_existing_key"),
           col(HoodieRecord.PARTITION_PATH_METADATA_FIELD).as(LOCATED_PARTITION_COL),
-          fileIdFromName(col(HoodieRecord.FILENAME_METADATA_FIELD)).as(TAGGED_FILE_ID_COL))
+          fileIdFromName(col(HoodieRecord.FILENAME_METADATA_FIELD)).as(TAGGED_FILE_ID_COL),
+          instantFromName(col("_metadata.file_name")).as(TAGGED_INSTANT_COL),
+          position.as(TAGGED_POSITION_COL))
       val keyMatches = prepared(HoodieRecord.RECORD_KEY_METADATA_FIELD) === existing("_hoodie_existing_key")
       val condition = if (globalIndex) {
         keyMatches
@@ -885,6 +927,8 @@ object HoodieDataFrameWriter {
   private val STORED_PARTITION_COL = "_hoodie_stored_partition"
   private val STORED_ORDERING_COL_PREFIX = "_hoodie_stored_ordering_"
   private val TAGGED_FILE_ID_COL = "_hoodie_tagged_file_id"
+  private val TAGGED_INSTANT_COL = "_hoodie_tagged_instant"
+  private val TAGGED_POSITION_COL = "_hoodie_tagged_position"
   private val LOCATED_PARTITION_COL = "_hoodie_located_partition"
   private val ROUTING_BUCKET_COL = "_hoodie_routing_bucket"
   val ROW_OP_COL = "_hoodie_row_op"
