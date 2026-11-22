@@ -21,7 +21,7 @@ import org.apache.hudi.{DataFrameWriteResult, DataFrameWriteSpec, DataSourceUtil
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient, WriteStatus}
 import org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy
 import org.apache.hudi.client.utils.SparkValidatorUtils
-import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey
 import org.apache.hudi.common.data.HoodieListData
@@ -59,7 +59,7 @@ import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{coalesce, col, hash, input_file_name, lit, monotonically_increasing_id, row_number, size, struct, udf, when}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, LongType, MapType, StringType, StructField, StructType}
 
 import java.util.concurrent.atomic.AtomicLong
 
@@ -132,8 +132,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
   /**
    * Whether engine-native records write the table the way Avro records do. They do not where the
    * merging goes through a payload class or a custom merger, where log blocks are Avro, where the
-   * column stats index predates the version that covers every type for them, and where rows
-   * cannot be rewritten to the writer schema as rows.
+   * column stats index predates the version that covers every type for them, where rows cannot
+   * be rewritten to the writer schema as rows, and where a merge would read a variant column of
+   * a base file with schema-on-read, which the row-based reader does not serve.
    */
   private def canWriteSparkRecords(spec: DataFrameWriteSpec, writeConfig: HoodieWriteConfig): Boolean = {
     val tableConfig = spec.metaClient.getTableConfig
@@ -141,8 +142,18 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       CommonClientUtils.getLogBlockType(writeConfig, tableConfig) != HoodieLogBlockType.PARQUET_DATA_BLOCK
     val columnStatsByRecordType = HoodieTableMetadataUtil.existingIndexVersionOrDefault(
       MetadataPartitionType.COLUMN_STATS.getPartitionPath, spec.metaClient).lowerThan(HoodieIndexVersion.V2)
+    val variantUnderSchemaOnRead =
+      spec.parameters.getOrElse(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key, "false").toBoolean &&
+        containsVariant(spec.writerSchema.map(HoodieInternalRowUtils.getCachedSchema).getOrElse(spec.inputSchema))
     !isCustomMerge(writeConfig, tableConfig) && !payloadDecides(writeConfig) && !avroLogBlocks &&
-      !columnStatsByRecordType && rowsConformToWriterSchema(spec)
+      !columnStatsByRecordType && !variantUnderSchemaOnRead && rowsConformToWriterSchema(spec)
+  }
+
+  private def containsVariant(dataType: DataType): Boolean = dataType match {
+    case struct: StructType => struct.fields.exists(field => containsVariant(field.dataType))
+    case array: ArrayType => containsVariant(array.elementType)
+    case map: MapType => containsVariant(map.keyType) || containsVariant(map.valueType)
+    case other => other.typeName == "variant"
   }
 
   /** Whether the input rows can be rewritten to the writer schema without leaving InternalRow. */
