@@ -118,7 +118,8 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
 
   private def executeNonEmpty(iter: Iterator[InternalRow]): Iterator[WriteStatus] = {
     val metaFieldCount = HoodieRecord.HOODIE_META_COLUMNS.size()
-    val writeSchema = StructType(routedSchema.fields.take(metaFieldCount) ++ writerSchema.fields)
+    // Meta columns are nullable in a base file, whichever handle writes it.
+    val writeSchema = StructType(routedSchema.fields.take(metaFieldCount).map(_.copy(nullable = true)) ++ writerSchema.fields)
     val writeProjection = DataFrameWriteTask.conformingProjection(routedSchema, 0, metaFieldCount + dataFieldCount, writeSchema)
     val recordFactory = avroRecords.map(avroRecordFactory).getOrElse(sparkRecordFactory)
     recordReducer = if (combineRecords) Some(createRecordReducer()) else None

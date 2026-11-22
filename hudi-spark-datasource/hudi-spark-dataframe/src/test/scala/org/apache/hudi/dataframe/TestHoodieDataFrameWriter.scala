@@ -501,6 +501,21 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testInsertedBaseFilesHaveTheParquetSchemaOfTheOtherWritePath(): Unit = {
+    val fileInfos = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_parquet_schema_$enabled").toString
+      writeHudi(Seq(("q1", "p1", 1L, "a1"), ("q2", "p1", 1L, "a2")), "insert", path,
+        Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled))
+      val baseFile = java.nio.file.Files.walk(java.nio.file.Paths.get(path, "p1")).iterator().asScala
+        .map(_.toString).filter(_.endsWith(".parquet")).toSeq.head
+      org.apache.hudi.parquet.io.ParquetBinaryCopyChecker.collectFileInfo(spark.sparkContext.hadoopConfiguration, baseFile)
+    }
+    // Same bloom filter type, and every field as optional or required in one file as in the other.
+    Assertions.assertTrue(org.apache.hudi.parquet.io.ParquetBinaryCopyChecker.verifyFiles(fileInfos.asJava),
+      s"parquet schemas differ: ${fileInfos.map(_.getSchema)}")
+  }
+
+  @Test
   def testRecordIndexConfigFallsBackToGlobalTaggingWhenNotReady(): Unit = {
     val path = tempDir.resolve("test_table_rli_not_ready").toString
     writeHudi(Seq(("f1", "pA", 1L, "orig")), "insert", path)
