@@ -736,6 +736,42 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test rename and drop column with default schema validation") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+          val tableName = generateTableName
+          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  orderingFields = 'ts'
+               | )
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+          spark.sql(s"alter table $tableName add columns (extra string)")
+          spark.sql(s"insert into $tableName values (2, 'a2', 1000, 'e2')")
+          spark.sql(s"alter table $tableName rename column extra to renamed")
+          spark.sql(s"insert into $tableName values (3, 'a3', 1000, 'e3')")
+          checkAnswer(s"select id, name, ts, renamed from $tableName order by id")(
+            Seq(1, "a1", 1000, null), Seq(2, "a2", 1000, "e2"), Seq(3, "a3", 1000, "e3"))
+          spark.sql(s"alter table $tableName drop column renamed")
+          spark.sql(s"insert into $tableName values (4, 'a4', 1000)")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "a1", 1000), Seq(2, "a2", 1000), Seq(3, "a3", 1000), Seq(4, "a4", 1000))
+        }
+      }
+    }
+  }
+
   test("Test alter column with complex schema") {
     withTempDir { tmp =>
       withSQLConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert",

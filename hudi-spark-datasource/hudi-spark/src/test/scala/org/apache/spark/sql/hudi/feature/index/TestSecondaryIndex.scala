@@ -1177,6 +1177,11 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           spark.sql(s"ALTER TABLE $tableName ALTER COLUMN quantity2 TYPE double")
         }
         validateSchemaEvolutionException(caughtAlterException, "quantity2", "secondary_index_idx_quantity2")
+        Seq(s"ALTER TABLE $tableName RENAME COLUMN quantity2 TO quantity3", s"ALTER TABLE $tableName DROP COLUMN quantity2").foreach { ddl =>
+          val caught = intercept[Exception](spark.sql(ddl))
+          assertTrue(caught.getMessage.contains("Column 'quantity2' has secondary index 'secondary_index_idx_quantity2' and cannot be renamed or dropped"),
+            s"Got unexpected exception message: ${caught.getMessage}")
+        }
 
         // Try data source write evolution on quantity1 - should fail because of secondary index
         val caughtDSWriteException = intercept[Exception] {
