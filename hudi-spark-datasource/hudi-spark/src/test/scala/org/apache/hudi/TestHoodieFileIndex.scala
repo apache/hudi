@@ -779,6 +779,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .options(opts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 100 * 1024)
+      // The rows are far smaller than the size estimate of a table without commits, so the
+      // number of files the insert makes is stated here.
+      .option("hoodie.datasource.write.dataframe.insert.buckets", "10")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 

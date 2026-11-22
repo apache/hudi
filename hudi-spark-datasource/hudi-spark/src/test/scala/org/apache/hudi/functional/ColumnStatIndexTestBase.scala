@@ -118,6 +118,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .format("hudi")
       .options(writeOptions)
       .option(DataSourceWriteOptions.OPERATION.key, params.operation)
+      // The fixtures hold one row per file, so the number of files an insert makes is stated here.
+      .option("hoodie.datasource.write.dataframe.insert.buckets", String.valueOf(params.numPartitions))
       .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(params.parquetMaxFileSize))
       .option(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), String.valueOf(params.smallFileLimit))
       .option(HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key, "10")
