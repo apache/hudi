@@ -25,6 +25,8 @@ import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getMetaClientAndFileSystemView
+import org.junit.jupiter.api.Assertions.assertFalse
 
 class TestDeleteTable extends HoodieSparkSqlTestBase {
 
@@ -320,6 +322,45 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select count(1) from $tableName")(
           Seq(0)
         )
+      }
+    }
+  }
+
+  test("Test a cached view of a table reads the rows that a later DML statement writes") {
+    withTempDir { tmp =>
+      val statements = Seq(
+        ("delete", (t: String) => s"delete from $t where id = 1", Seq.empty[Seq[Any]]),
+        ("update", (t: String) => s"update $t set name = 'a1u', ts = 1001 where id = 1", Seq(Seq(1, "a1u"))),
+        ("merge", (t: String) =>
+          s"""merge into $t t using (select 1 as id, 'a1m' as name, 10.0 as price, 1001L as ts) s
+             |on t.id = s.id when matched then update set *""".stripMargin, Seq(Seq(1, "a1m"))))
+      Seq("cow", "mor").foreach { tableType =>
+        statements.foreach { case (operation, statement, expectedRows) =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          val viewName = s"${tableName}_view"
+          spark.sql(
+            s"""
+               |create table $tableName (id int, name string, price double, ts long) using hudi
+               | location '$tablePath'
+               | tblproperties (type = '$tableType', primaryKey = 'id', preCombineField = 'ts')
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000), (2, 'a2', 10.0, 1000)")
+          spark.sql(s"select id, name from $tableName where id = 1").createOrReplaceTempView(viewName)
+          spark.sql(s"cache table $viewName")
+          checkAnswer(s"select id, name from $viewName")(Seq(1, "a1"))
+
+          spark.sql(statement(tableName))
+          if (tableType == "mor") {
+            val (_, fsView) = getMetaClientAndFileSystemView(tablePath)
+            assertFalse(fsView.getLatestFileSlices("").findFirst().get().getLogFiles.findAny().isEmpty,
+              s"the $operation must write a log file")
+          }
+          withClue(s"$tableType table, $operation: ") {
+            checkAnswer(s"select id, name from $viewName")(expectedRows: _*)
+          }
+          spark.sql(s"uncache table $viewName")
+        }
       }
     }
   }

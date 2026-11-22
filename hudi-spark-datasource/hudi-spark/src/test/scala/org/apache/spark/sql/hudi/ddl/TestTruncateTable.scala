@@ -89,6 +89,28 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test a cached view of a table reads no rows after the table is truncated") {
+    Seq("cow", "mor").foreach { tableType =>
+      val tableName = generateTableName
+      val viewName = s"${tableName}_view"
+      spark.sql(
+        s"""
+           |create table $tableName (id int, name string, price double, ts long) using hudi
+           | tblproperties (type = '$tableType', primaryKey = 'id', orderingFields = 'ts')
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000)")
+      spark.sql(s"select id, name from $tableName").createOrReplaceTempView(viewName)
+      spark.sql(s"cache table $viewName")
+      checkAnswer(s"select id, name from $viewName")(Seq(1, "a1"))
+
+      spark.sql(s"truncate table $tableName")
+      withClue(s"$tableType table: ") {
+        checkAnswer(s"select id, name from $viewName")()
+      }
+      spark.sql(s"uncache table $viewName")
+    }
+  }
+
   Seq(false, true).foreach { urlencode =>
     test(s"Test Truncate single-partition table' partitions, urlencode: $urlencode") {
       withTempDir { tmp =>

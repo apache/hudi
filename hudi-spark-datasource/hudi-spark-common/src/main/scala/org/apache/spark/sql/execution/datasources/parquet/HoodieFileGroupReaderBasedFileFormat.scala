@@ -18,6 +18,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.{HoodieFileIndex, HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
@@ -29,6 +30,7 @@ import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.{HoodieFileGroupReader, TableState}
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.io.MergeUtils
@@ -69,6 +71,8 @@ trait HoodieFormatTrait {
  * This class utilizes {@link HoodieFileGroupReader} and its related classes to support reading
  * from Parquet or ORC formatted base files and their log files.
  *
+ * @param specifiedQueryTimestamp the instant of a time travel query; without one, each scan reads up to the latest
+ *                        completed instant of the relation's timeline, which a refresh of its file index reloads
  * @param instantRangeOpt optional requested-time range applied before file-group record merging;
  *                        unlike Spark's required filters, this prevents a later out-of-range log
  *                        record from masking an earlier in-range version of the same key
@@ -78,7 +82,7 @@ trait HoodieFormatTrait {
 class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            tableSchema: HoodieTableSchema,
                                            tableName: String,
-                                           queryTimestamp: String,
+                                           specifiedQueryTimestamp: Option[String],
                                            mandatoryFields: Seq[String],
                                            isMOR: Boolean,
                                            isBootstrap: Boolean,
@@ -385,6 +389,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     // Only a MOR scan is given log files, the only files checked against the committed instants or resolved
     // through schema versions; base files resolve their schema-on-read versions in the parquet reader.
     val tableState = TableState.snapshotOf(metaClient, isMOR, isMOR && internalSchemaOpt.isPresent)
+    val queryTimestamp = specifiedQueryTimestamp.getOrElse(
+      toScalaOption(metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants.lastInstant)
+        .map(_.requestedTime).getOrElse(HoodieTimeline.INIT_INSTANT_TS))
     val readerProps = TypedProperties.copy(metaClient.getTableConfig.getProps)
     options.foreach(kv => readerProps.setProperty(kv._1, kv._2))
     readerProps.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
