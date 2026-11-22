@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.common.config.{ConfigProperty, RecordMergeMode}
-import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord, HoodieRecordMerger}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, PartialUpdateMode}
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
@@ -41,7 +41,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, Matc
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, IsNull, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -401,9 +401,17 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       // Then we want to project the output so that we have the meta columns from the target table
       // followed by the data columns of the source table
       val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
+      val recordKeyCol = tableMetaCols.find(_.name == HoodieRecord.RECORD_KEY_METADATA_FIELD).get
       val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
       val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
-      Project(tableMetaCols ++ incomingDataCols, joinData)
+      val joined = Project(tableMetaCols ++ incomingDataCols, joinData)
+      // Written as an insert, a source record that matches the table would be inserted again; with
+      // no matched clause there is nothing it could do, so it is dropped here.
+      if (mergeInto.matchedActions.isEmpty) {
+        Filter(IsNull(recordKeyCol), joined)
+      } else {
+        joined
+      }
     } else {
       // For a target table with record key(s) configure, the source table is used
       mergeInto.sourceTable
@@ -600,8 +608,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       && getPartialUpdateMode(parameters).isEmpty)
   }
 
+  /**
+   * A table with record key(s) is upserted, since only the index lookup tells the source records that
+   * match the table from the rest: written as inserts, all of them take the not-matched clauses. A
+   * table without one is upserted when the statement has a matched clause: a source record matching
+   * the table carries the location of its target record, and only the upsert applies the clause there.
+   */
   private def getOperationType(parameters: Map[String, String]) = {
-    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava)) && updatingActions.isEmpty) {
+    if (!hasPrimaryKey()
+      && StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava))
+      && mergeInto.matchedActions.isEmpty) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL

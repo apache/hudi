@@ -391,4 +391,88 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
       }
     }
   }
+
+  Seq("cow", "mor").foreach { tableType =>
+    test(s"Test MergeInto without update clause on pkless $tableType table without ordering field") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  dt string
+             | ) using hudi
+             | tblproperties (type = '$tableType')
+             | partitioned by(dt)
+             | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 'p1'), (2, 'a2', 20.0, 'p1'), (3, 'a3', 30.0, 'p1'),"
+          + " (4, 'a4', 40.0, 'p2'), (5, 'a5', 50.0, 'p2')")
+
+        // Delete only with a condition: id 2 fails the condition and id 9 has no match
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'del' as op union all select 2, 'keep' union all select 9, 'del') s
+             | on t.id = s.id
+             | when matched and s.op = 'del' then delete
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(2, "a2", 20.0, "p1"), Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"))
+
+        // Delete only without a condition: id 8 has no match
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 2 as id union all select 8) s
+             | on t.id = s.id
+             | when matched then delete
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"))
+
+        // Insert only without a condition: the matched id 3 is not inserted again, both unmatched id 6 are
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 3 as id, 'a3n' as name, 31.0 as price, 'p1' as dt
+             |  union all select 6, 'a6', 60.0, 'p2' union all select 6, 'a6b', 61.0, 'p2') s
+             | on t.id = s.id
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"), Seq(6, "a6", 60.0, "p2"),
+          Seq(6, "a6b", 61.0, "p2"))
+
+        // Insert only with a condition: id 4 is matched and the unmatched id 10 fails the condition
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 4 as id, 'a4n' as name, 71.0 as price, 'p2' as dt
+             |  union all select 7, 'a7', 70.0, 'p1' union all select 10, 'a10', 5.0, 'p1') s
+             | on t.id = s.id
+             | when not matched and s.price > 50 then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"), Seq(6, "a6", 60.0, "p2"),
+          Seq(6, "a6b", 61.0, "p2"), Seq(7, "a7", 70.0, "p1"))
+
+        // Delete and insert: the matched id 3 fails the delete condition and is not inserted again
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 3 as id, 'a3n' as name, 32.0 as price, 'p1' as dt
+             |  union all select 5, 'a5n', 52.0, 'p2' union all select 11, 'a11', 110.0, 'p1') s
+             | on t.id = s.id
+             | when matched and s.id = 5 then delete
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(6, "a6", 60.0, "p2"), Seq(6, "a6b", 61.0, "p2"),
+          Seq(7, "a7", 70.0, "p1"), Seq(11, "a11", 110.0, "p1"))
+      }
+    }
+  }
 }
