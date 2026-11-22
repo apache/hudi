@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, isEqualityWithDefaultPartitionValue, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, TypedProperties}
 import org.apache.hudi.common.engine.HoodieEngineContext
@@ -30,7 +30,7 @@ import org.apache.hudi.common.schema.internal.Types.RecordType
 import org.apache.hudi.common.schema.internal.utils.Conversions
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.ReflectionUtils
+import org.apache.hudi.common.util.{PartitionPathEncodeUtils, ReflectionUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex
@@ -434,6 +434,16 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   // We can deduce full partition-path w/o doing a single listing: `us/2022-01-01`, and then push down
   // these filters when listing `us/2022-01-01` to get the directory 'us/2022-01-01/06'
   private def tryPushDownPartitionPredicates(partitionColumnNames: Seq[String], partitionColumnPredicates: Seq[Expression]): Seq[PartitionPath] = {
+    // An empty value is written to the default partition, whose value reads back as null, so an equality with an
+    // empty or default partition literal matches no partition
+    if (partitionColumnPredicates.exists(isEqualityWithDefaultPartitionValue)) {
+      Seq.empty
+    } else {
+      pushDownPartitionPredicates(partitionColumnNames, partitionColumnPredicates)
+    }
+  }
+
+  private def pushDownPartitionPredicates(partitionColumnNames: Seq[String], partitionColumnPredicates: Seq[Expression]): Seq[PartitionPath] = {
     // Static partition-path prefix is defined as a prefix of the full partition-path where only
     // first N partition columns (in-order) have proper (static) values bound in equality predicates,
     // allowing in turn to build such prefix to be used in subsequent filtering
@@ -646,6 +656,16 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
       }
 
       toStructType(root)
+    }
+  }
+
+  private def isEqualityWithDefaultPartitionValue(predicate: Expression): Boolean = {
+    def isDefaultPartitionValue(value: Any): Boolean = value != null &&
+      (value.toString.isEmpty || value.toString == PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH)
+    predicate match {
+      case EqualTo(_: AttributeReference, Literal(value, StringType)) => isDefaultPartitionValue(value)
+      case EqualTo(Literal(value, StringType), _: AttributeReference) => isDefaultPartitionValue(value)
+      case _ => false
     }
   }
 

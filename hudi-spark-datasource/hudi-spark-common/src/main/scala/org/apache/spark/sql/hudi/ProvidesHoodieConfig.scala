@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonCo
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
-import org.apache.hudi.common.util.{ConfigUtils, HoodieTableConfigUtils, ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{ConfigUtils, HoodieTableConfigUtils, PartitionPathEncodeUtils, ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, NonPartitionedExtractor}
@@ -39,7 +39,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, IsNull, Literal}
 import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
@@ -368,8 +368,12 @@ trait ProvidesHoodieConfig extends Logging {
       val staticPartitionValues = partitionSpec.filter(p => p._2.isDefined).mapValues(_.get)
       val predicates = staticPartitionValues.map { case (k, v) =>
         val partition = AttributeReference(k, partitionNameToType(k))()
-        val value = HoodieSqlCommonUtils.castIfNeeded(Literal.create(v), partitionNameToType(k))
-        EqualTo(partition, value)
+        if (v.isEmpty || v == PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH) {
+          // the default partition, whose value reads back as null
+          IsNull(partition)
+        } else {
+          EqualTo(partition, HoodieSqlCommonUtils.castIfNeeded(Literal.create(v), partitionNameToType(k)))
+        }
       }.toSeq
       Option(fileIndex.getPartitionPaths(predicates).map(_.getPath).mkString(","))
     } else {
