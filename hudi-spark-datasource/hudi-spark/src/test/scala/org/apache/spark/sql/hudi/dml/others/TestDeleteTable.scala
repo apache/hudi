@@ -22,6 +22,7 @@ package org.apache.spark.sql.hudi.dml.others
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -74,6 +75,54 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
             checkAnswer(s"select count(1) from $tableName")(
               Seq(0)
             )
+          }
+        }
+      }
+    }
+  }
+
+  test("Test Delete Table With A Condition That Is Always False") {
+    withTempDir { tmp =>
+      Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+       """.stripMargin)
+
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+            spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000), (2, null, 20, 1000)")
+            def completedCommits(): Int =
+              createMetaClient(spark, tablePath).getActiveTimeline.getCommitsTimeline.filterCompletedInstants().countInstants()
+            val commitsAfterInsert = completedCommits()
+
+            // Conditions that fold to false or null delete nothing and write no commit.
+            Seq("false", "50 <> 50", "1 > null", "name = null").foreach { condition =>
+              spark.sql(s"delete from $tableName where $condition")
+              assertResult(commitsAfterInsert, condition)(completedCommits())
+            }
+            checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+              Seq(1, "a1", 10.0, 1000),
+              Seq(2, null, 20.0, 1000)
+            )
+
+            // A condition that folds to true still deletes through a commit.
+            spark.sql(s"delete from $tableName where 21 = 21")
+            assertResult(commitsAfterInsert + 1)(completedCommits())
+            checkAnswer(s"select count(1) from $tableName")(Seq(0))
           }
         }
       }
