@@ -594,6 +594,7 @@ class TestHoodieDataFrameWriter {
         cause = cause.getCause
       }
       Assertions.assertNotNull(cause, s"expected a duplicate key failure, got $failure")
+      Assertions.assertTrue(failure.isInstanceOf[org.apache.hudi.exception.HoodieUpsertException], failure.toString)
       Assertions.assertEquals(1L, spark.read.format("hudi").load(path).count())
     }
   }
@@ -674,9 +675,11 @@ class TestHoodieDataFrameWriter {
       val path = tempDir.resolve(s"test_table_no_columns_$enabled").toString
       val opts = Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
       writeHudi(Seq(("g1", "p1", 1L, "a1")), "insert", path, opts)
+      // A second commit, so the table has stored keys the upsert below could be checked against.
+      writeHudi(Seq(("g1", "p1", 2L, "a1b")), "upsert", path, opts)
       spark.emptyDataFrame.write.format("hudi")
         .options(writeOptions("upsert", opts)).mode(SaveMode.Append).save(path)
-      Assertions.assertEquals(2, completedCommits(path))
+      Assertions.assertEquals(3, completedCommits(path))
       Assertions.assertEquals(1L, spark.read.format("hudi").load(path).count())
     }
   }

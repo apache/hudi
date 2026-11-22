@@ -36,7 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, HoodieDataUtils, HoodieRecordUtils, HoodieTimer, Option => HOption, StringUtils}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.exception.{HoodieClusteringUpdateException, HoodieDuplicateKeyException}
+import org.apache.hudi.exception.{HoodieClusteringUpdateException, HoodieDuplicateKeyException, HoodieUpsertException}
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
 import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
@@ -153,6 +153,20 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
                      client: SparkRDDWriteClient[_],
                      instantTime: String,
                      df: DataFrame): DataFrameWriteResult = {
+    try {
+      writeRows(spec, client, instantTime, df)
+    } catch {
+      case e: HoodieUpsertException => throw e
+      // What fails before the write statuses are handed over fails the way the write client's
+      // own write does.
+      case e: Throwable => throw new HoodieUpsertException(s"Failed to upsert for commit time $instantTime", e)
+    }
+  }
+
+  private def writeRows(spec: DataFrameWriteSpec,
+                        client: SparkRDDWriteClient[_],
+                        instantTime: String,
+                        df: DataFrame): DataFrameWriteResult = {
     val spark = df.sparkSession
     val operation = spec.operation
     val params = spec.parameters
@@ -517,7 +531,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       val (presentOrderingFields, missingOrderingFields) = orderingFields.partition(f => resolves(withMeta, f))
       val ordering = presentOrderingFields.map(f => col(f).desc) :+ col(INPUT_ORDER_COL).desc
       val window = Window.partitionBy(dedupKeys: _*).orderBy(ordering: _*)
-      // A record that is combined on its ordering value has to have one.
+      // A record that is combined on its ordering value has to have one. The check is not
+      // deterministic to the optimizer, which would otherwise infer it for the other side of
+      // the tagging join.
       val requireOrderingValue = udf((field: String, recordKey: String) => {
         if (field != null) {
           throw new IllegalArgumentException(
@@ -526,7 +542,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
               + "or use a payload class that doesn't require ordering (e.g., OverwriteWithLatestAvroPayload).")
         }
         true
-      })
+      }).asNondeterministic()
       val nullOrderingField = missingOrderingFields.headOption.map(lit(_)).getOrElse(
         presentOrderingFields.foldRight(lit(null).cast(StringType)) { (field, otherwise) =>
           when(col(field).isNull, lit(field)).otherwise(otherwise)
@@ -584,19 +600,21 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     if (spec.locationFromMetaColumns) {
       resolveTagged(prepared, globalIndex = false, updatePartitionPath = false, deleteMarker)
     } else if (operation == WriteOperationType.INSERT && duplicatePolicy != DataSourceWriteOptions.NONE_INSERT_DUP_POLICY) {
-      // Keys the table already has are dropped from the insert, or fail it.
-      val isNew: Column = if (duplicatePolicy == DataSourceWriteOptions.FAIL_INSERT_DUP_POLICY) {
+      val candidates = located.filter(!deleteMarker)
+      if (duplicatePolicy == DataSourceWriteOptions.FAIL_INSERT_DUP_POLICY) {
+        // A key the table already has fails the insert, before anything is written. The check is
+        // not deterministic to the optimizer, which would otherwise move it across the join.
         val failOnDuplicate = udf((recordKey: String) => {
           if (recordKey != null) {
             throw new HoodieDuplicateKeyException(recordKey)
           }
           true
-        })
-        failOnDuplicate(when(col(TAGGED_FILE_ID_COL).isNotNull, col(HoodieRecord.RECORD_KEY_METADATA_FIELD)))
-      } else {
-        col(TAGGED_FILE_ID_COL).isNull
+        }).asNondeterministic()
+        candidates.filter(failOnDuplicate(when(col(TAGGED_FILE_ID_COL).isNotNull, col(HoodieRecord.RECORD_KEY_METADATA_FIELD))))
+          .foreach(_ => ())
       }
-      val kept = located.filter(!deleteMarker).filter(isNew)
+      // Keys the table already has are dropped from the insert.
+      val kept = candidates.filter(col(TAGGED_FILE_ID_COL).isNull)
       (if (globalIndex) kept.drop(LOCATED_PARTITION_COL) else kept)
         .withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))
         .withColumn(ROW_OP_COL, lit(ROW_OP_UPSERT))
