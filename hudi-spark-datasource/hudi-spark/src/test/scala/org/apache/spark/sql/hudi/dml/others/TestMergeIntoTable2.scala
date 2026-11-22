@@ -1323,4 +1323,38 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  Seq(("cow", true), ("cow", false), ("mor", true), ("mor", false)).foreach {
+    case (tableType, keyed) =>
+      test(s"Test MergeInto with the target table as source on $tableType table with record key $keyed") {
+        withTempDir { tmp =>
+          Seq(false, true).foreach { cached =>
+            val tableName = generateTableName
+            val keyProp = if (keyed) ", primaryKey = 'id'" else ""
+            spark.sql(
+              s"""
+                 | create table $tableName (id int, v string) using hudi
+                 | tblproperties (type = '$tableType' $keyProp)
+                 | location '${tmp.getCanonicalPath}/$tableName'
+               """.stripMargin)
+            spark.sql(s"insert into $tableName values (1, 'v1'), (2, 'v2')")
+            if (cached) {
+              spark.sql(s"cache table $tableName")
+            }
+            spark.sql(
+              s"""
+                 | merge into $tableName t
+                 | using $tableName s
+                 | on t.id = s.id
+                 | when matched and s.id = 1 then update set id = s.id, v = 'x'
+                 | when not matched then insert *
+               """.stripMargin)
+            checkAnswer(s"select id, v from $tableName order by id")(Seq(1, "x"), Seq(2, "v2"))
+            if (cached) {
+              spark.sql(s"uncache table $tableName")
+            }
+          }
+        }
+      }
+  }
 }

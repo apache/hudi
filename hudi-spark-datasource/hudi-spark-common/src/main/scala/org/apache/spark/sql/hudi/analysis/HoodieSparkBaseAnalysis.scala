@@ -22,7 +22,7 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
 import org.apache.spark.sql.BaseHoodieCatalystPlanUtils.MatchResolvedTable
-import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.analysis.{DeduplicateRelations, EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
@@ -186,7 +186,10 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       }
 
       val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
-      val m = mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable)
+      // Resolved apart, a source reading the target table shares its attributes, so `t.id = s.id`
+      // would compare the target with itself: give the source its own, as Spark does.
+      val m = DeduplicateRelations(mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable))
+        .asInstanceOf[MergeIntoTable]
       // END: custom Hudi change
       // If the source table still has unresolved references (e.g. a non-existent
       // column in the source query, or a missing source table), return the
