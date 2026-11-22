@@ -43,6 +43,7 @@ import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.metadata.{HoodieIndexVersion, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metrics.RecordIndexLookupMetrics
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.HoodieWriteMetadata
 import org.apache.hudi.util.CommonClientUtils
@@ -53,7 +54,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Column, DataFrame, Dataset, HoodieInternalRowUtils, Row}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.expressions.Window
-import org.apache.spark.sql.functions.{coalesce, col, hash, lit, monotonically_increasing_id, row_number, struct, udf, when}
+import org.apache.spark.sql.functions.{coalesce, col, hash, input_file_name, lit, monotonically_increasing_id, row_number, size, struct, udf, when}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
@@ -452,12 +453,47 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     }
     val userProvided = keyGeneratorClass != null &&
       KeyGeneratorType.fromClassName(keyGeneratorClass) == KeyGeneratorType.USER_PROVIDED
-    val avroRecordsWithoutThisPath = !spec.parameters.contains(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY) ||
-      writeConfig.getRecordMerger.getRecordType == HoodieRecordType.AVRO
     val keyFields = (props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, "").split(",") ++
       props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key, "").split(",").map(_.split(":")(0)))
       .map(_.trim).filter(_.nonEmpty)
-    (userProvided && avroRecordsWithoutThisPath) || !keyFields.forall(resolves(input, _))
+    (userProvided && avroRecordsWithoutThisPath(spec, writeConfig)) || !keyFields.forall(resolves(input, _))
+  }
+
+  /**
+   * Whether the write is one of Avro records unless this path picks the record type, which it
+   * does when the write names no record merger. Checks that a write of Avro records makes on
+   * its input, and that a write of Spark records does not make, follow this.
+   */
+  private def avroRecordsWithoutThisPath(spec: DataFrameWriteSpec, writeConfig: HoodieWriteConfig): Boolean =
+    !spec.parameters.contains(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY) ||
+      writeConfig.getRecordMerger.getRecordType == HoodieRecordType.AVRO
+
+  /**
+   * Fails the write on a vector that does not have the dimension of its column. The file writer
+   * checks this too, but there a mismatch is a failed record of the write status.
+   */
+  private def requireVectorDimensions(rows: DataFrame, spec: DataFrameWriteSpec): DataFrame = {
+    val dimensions: Seq[(String, Int)] = spec.writerSchema.toSeq.flatMap(_.getFields.asScala).flatMap { field =>
+      field.schema.getNonNullType match {
+        case vector: HoodieSchema.Vector if resolves(rows, quoted(field.name)) => Some(field.name -> vector.getDimension)
+        case _ => None
+      }
+    }
+    if (dimensions.isEmpty) {
+      rows
+    } else {
+      val requireDimension = udf((field: String, expected: Int, actual: Int) => {
+        if (field != null) {
+          throw new IllegalArgumentException(
+            s"Vector dimension mismatch at $field: schema expects $expected elements but got $actual")
+        }
+        true
+      }).asNondeterministic()
+      dimensions.foldLeft(rows) { case (checked, (field, dimension)) =>
+        val mismatched = col(quoted(field)).isNotNull && size(col(quoted(field))) =!= dimension
+        checked.filter(requireDimension(when(mismatched, lit(field)), lit(dimension), size(col(quoted(field)))))
+      }
+    }
   }
 
   private def resolves(frame: DataFrame, field: String): Boolean =
@@ -510,7 +546,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     val combineByWindow = shouldCombine(spec, writeConfig, tableConfig) && !combinesInTask(spec, writeConfig, tableConfig)
     val inputOrder = if (combineByWindow) Seq(monotonically_increasing_id().as(INPUT_ORDER_COL)) else Seq.empty
     val keyed = input.select((keys.as(KEYS_COL) +: (dataColumns ++ location ++ inputOrder)): _*)
-    val withMeta = keyed.select(
+    val withMeta = requireVectorDimensions(keyed, spec).select(
       (Seq(
         lit(null).cast(StringType).as(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
         lit(null).cast(StringType).as(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD),
@@ -541,7 +577,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       val (presentOrderingFields, missingOrderingFields) = orderingFields.partition(f => resolves(withMeta, f))
       val ordering = presentOrderingFields.map(f => col(f).desc) :+ col(INPUT_ORDER_COL).desc
       val window = Window.partitionBy(dedupKeys: _*).orderBy(ordering: _*)
-      // A record that is combined on its ordering value has to have one. The check is not
+      // An Avro record that is combined on its ordering value has to have one. The check is not
       // deterministic to the optimizer, which would otherwise infer it for the other side of
       // the tagging join.
       val requireOrderingValue = udf((field: String, recordKey: String) => {
@@ -557,7 +593,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         presentOrderingFields.foldRight(lit(null).cast(StringType)) { (field, otherwise) =>
           when(col(field).isNull, lit(field)).otherwise(otherwise)
         })
-      val checked = if (orderingFields.isEmpty) {
+      val checked = if (orderingFields.isEmpty || !avroRecordsWithoutThisPath(spec, writeConfig)) {
         withMeta
       } else {
         withMeta.filter(requireOrderingValue(nullOrderingField, col(HoodieRecord.RECORD_KEY_METADATA_FIELD)))
@@ -611,7 +647,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     val duplicatePolicy = insertDuplicatePolicy(spec)
 
     withLocationDetail(if (spec.locationFromMetaColumns) {
-      resolveTagged(prepared, globalIndex = false, updatePartitionPath = false, deleteMarker)
+      resolveTagged(prepared, globalIndex = false, updatePartitionPath = false, deleteMarker,
+        deletesByOperation = operation == WriteOperationType.DELETE)
     } else if (operation == WriteOperationType.INSERT && duplicatePolicy != DataSourceWriteOptions.NONE_INSERT_DUP_POLICY) {
       val candidates = located.filter(!deleteMarker)
       if (duplicatePolicy == DataSourceWriteOptions.FAIL_INSERT_DUP_POLICY) {
@@ -646,12 +683,17 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       } else {
         writeConfig.getGlobalSimpleIndexUpdatePartitionPath
       })
-      val moveOrderingFields = if (writeConfig.getRecordMergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
+      val storedOrderingFields = if (writeConfig.getRecordMergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
         table.getMetaClient.getTableConfig.getOrderingFields.asScala.toSeq
       } else {
         Seq.empty
       }
-      resolveTagged(joined, globalIndex, updatePartitionPath, deleteMarker, writeConfig.getBasePath, moveOrderingFields)
+      // These indexes keep an entry per stored key, which a delete in a log file takes away.
+      val settleDeletes = operation == WriteOperationType.UPSERT &&
+        table.getMetaClient.getTableConfig.getTableType == HoodieTableType.MERGE_ON_READ &&
+        (globalIndex || indexType == HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
+      resolveTagged(joined, globalIndex, updatePartitionPath, deleteMarker,
+        deletesByOperation = operation == WriteOperationType.DELETE, settleDeletes, writeConfig.getBasePath, storedOrderingFields)
     })
   }
 
@@ -673,22 +715,89 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
   }
 
   /**
-   * Applies global-index semantics and the row-operation column on the tagged frame: no-op
-   * deletes are dropped; with update-partition-path off, located rows route to their original
-   * partition; with it on, a key that moved partitions fans out into a delete against the old
-   * file group plus an insert into the new partition. Under event-time ordering the move only
-   * happens when the incoming row's ordering value is not behind the stored row's, which is
-   * read from the table for the moved keys; otherwise the stored row stays where it is.
+   * Applies global-index semantics and the row-operation column on the tagged frame: deletes
+   * of keys that are not located are dropped; with update-partition-path off, located rows route
+   * to their original partition; with it on, a key that moved partitions fans out into a delete
+   * against the old file group plus an insert into the new partition.
+   *
+   * <p>Under event-time ordering two kinds of rows are settled here against the stored row of
+   * their key, which is read from the table, and are dropped when their ordering value is behind
+   * it: a row that moves its key to another partition, and, with `settleDeletes`, a located row
+   * that deletes by its content. A delete appended to a log is taken as one by the indexes that
+   * are kept from the write, so it must not get there when the stored row outlives it.
    */
   private def resolveTagged(joined: Dataset[Row],
                             globalIndex: Boolean,
                             updatePartitionPath: Boolean,
                             deleteMarker: Column,
+                            deletesByOperation: Boolean,
+                            settleDeletes: Boolean = false,
                             basePath: String = null,
                             orderingFields: Seq[String] = Seq.empty): Dataset[Row] = {
+    val located = col(TAGGED_FILE_ID_COL).isNotNull
+    // A row that deletes by its content keeps the upsert operation: whether it deletes is for the
+    // write handle to find out from the record.
     val base = joined
-      .withColumn(ROW_OP_COL, when(deleteMarker, lit(ROW_OP_DELETE)).otherwise(lit(ROW_OP_UPSERT)))
-      .filter(col(ROW_OP_COL) === ROW_OP_UPSERT || col(TAGGED_FILE_ID_COL).isNotNull)
+      .withColumn(DELETES_COL, deleteMarker)
+      .withColumn(ROW_OP_COL, lit(if (deletesByOperation) ROW_OP_DELETE else ROW_OP_UPSERT))
+      .filter(!col(DELETES_COL) || located)
+    val movesPartitions = globalIndex && updatePartitionPath
+    val settled = if (orderingFields.isEmpty || !(movesPartitions || settleDeletes)) {
+      base
+    } else {
+      val moving = if (movesPartitions) located && movedPartitions else lit(false)
+      val deleting = if (settleDeletes) located && col(DELETES_COL) else lit(false)
+      val storedPartition = if (globalIndex) {
+        coalesce(col(LOCATED_PARTITION_COL), col(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
+      } else {
+        col(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+      }
+      base.filter(!(moving || deleting))
+        .unionByName(notBehindStored(base.filter(moving || deleting), storedPartition, basePath, orderingFields))
+    }
+    resolveLocated(settled, globalIndex, updatePartitionPath).drop(DELETES_COL)
+  }
+
+  /** Whether a row is located in a partition other than the one it comes with. */
+  private def movedPartitions: Column =
+    col(LOCATED_PARTITION_COL).isNotNull && col(LOCATED_PARTITION_COL) =!= col(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+
+  /**
+   * The rows whose ordering value is not behind that of the stored row of their key in
+   * `storedPartition`. A row without a stored row stays, an equal ordering value lets the
+   * incoming row win, and so does a delete that carries no ordering value.
+   */
+  private def notBehindStored(rows: Dataset[Row],
+                              storedPartition: Column,
+                              basePath: String,
+                              orderingFields: Seq[String]): Dataset[Row] = {
+    // A table without a completed commit reads back without columns and has no stored rows.
+    lazy val storedTable = rows.sparkSession.read.format("hudi").load(basePath)
+    val comparedFields = orderingFields.filter(resolves(rows, _))
+      .filter(field => resolves(storedTable, HoodieRecord.RECORD_KEY_METADATA_FIELD) && resolves(storedTable, field))
+    if (comparedFields.isEmpty) {
+      rows
+    } else {
+      val stored = storedTable.select(
+        (Seq(col(HoodieRecord.RECORD_KEY_METADATA_FIELD).as(STORED_KEY_COL),
+          col(HoodieRecord.PARTITION_PATH_METADATA_FIELD).as(STORED_PARTITION_COL))
+          ++ comparedFields.zipWithIndex.map { case (field, i) => col(field).as(STORED_ORDERING_COL_PREFIX + i) }): _*)
+      // Lexicographic over the ordering fields.
+      val notBehind = comparedFields.zipWithIndex.foldRight(lit(true)) { case ((field, i), rest) =>
+        val storedValue = col(STORED_ORDERING_COL_PREFIX + i)
+        col(field) > storedValue || (col(field) <=> storedValue && rest)
+      }
+      val deletesWithoutOrdering = col(DELETES_COL) && comparedFields.map(col(_).isNull).reduce(_ && _)
+      rows
+        .join(stored, col(HoodieRecord.RECORD_KEY_METADATA_FIELD) === col(STORED_KEY_COL)
+          && storedPartition === col(STORED_PARTITION_COL), "left_outer")
+        .filter(col(STORED_KEY_COL).isNull || deletesWithoutOrdering || notBehind)
+        .drop((Seq(STORED_KEY_COL, STORED_PARTITION_COL)
+          ++ comparedFields.indices.map(STORED_ORDERING_COL_PREFIX + _)): _*)
+    }
+  }
+
+  private def resolveLocated(base: Dataset[Row], globalIndex: Boolean, updatePartitionPath: Boolean): Dataset[Row] = {
     if (!globalIndex) {
       base
     } else if (!updatePartitionPath) {
@@ -696,37 +805,14 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
           coalesce(col(LOCATED_PARTITION_COL), col(HoodieRecord.PARTITION_PATH_METADATA_FIELD)))
         .drop(LOCATED_PARTITION_COL)
     } else {
-      val moved = col(TAGGED_FILE_ID_COL).isNotNull && col(LOCATED_PARTITION_COL).isNotNull &&
-        col(LOCATED_PARTITION_COL) =!= col(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+      val moved = col(TAGGED_FILE_ID_COL).isNotNull && movedPartitions
       val staying = base.filter(!moved).drop(LOCATED_PARTITION_COL)
-      // A table without a completed commit reads back without columns and has no stored rows.
-      lazy val storedTable = joined.sparkSession.read.format("hudi").load(basePath)
-      val comparedFields = orderingFields.filter(resolves(base, _))
-        .filter(field => resolves(storedTable, HoodieRecord.RECORD_KEY_METADATA_FIELD) && resolves(storedTable, field))
-      val moving = if (comparedFields.isEmpty) {
-        base.filter(moved)
-      } else {
-        val stored = storedTable.select(
-          (Seq(col(HoodieRecord.RECORD_KEY_METADATA_FIELD).as(STORED_KEY_COL),
-            col(HoodieRecord.PARTITION_PATH_METADATA_FIELD).as(STORED_PARTITION_COL))
-            ++ comparedFields.zipWithIndex.map { case (field, i) => col(field).as(STORED_ORDERING_COL_PREFIX + i) }): _*)
-        // Lexicographic over the ordering fields; an equal ordering value lets the incoming row win.
-        val notBehind = comparedFields.zipWithIndex.foldRight(lit(true)) { case ((field, i), rest) =>
-          val storedValue = col(STORED_ORDERING_COL_PREFIX + i)
-          col(field) > storedValue || (col(field) <=> storedValue && rest)
-        }
-        base.filter(moved)
-          .join(stored, col(HoodieRecord.RECORD_KEY_METADATA_FIELD) === col(STORED_KEY_COL)
-            && col(LOCATED_PARTITION_COL) === col(STORED_PARTITION_COL), "left_outer")
-          .filter(col(STORED_KEY_COL).isNull || notBehind)
-          .drop((Seq(STORED_KEY_COL, STORED_PARTITION_COL)
-            ++ comparedFields.indices.map(STORED_ORDERING_COL_PREFIX + _)): _*)
-      }
+      val moving = base.filter(moved)
       val oldCopyDeletes = moving
         .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, col(LOCATED_PARTITION_COL))
         .withColumn(ROW_OP_COL, lit(ROW_OP_DELETE))
         .drop(LOCATED_PARTITION_COL)
-      val newPartitionInserts = moving.filter(col(ROW_OP_COL) === ROW_OP_UPSERT)
+      val newPartitionInserts = moving.filter(!col(DELETES_COL))
         .withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))
         .drop(LOCATED_PARTITION_COL)
       staying.unionByName(oldCopyDeletes).unionByName(newPartitionInserts)
@@ -828,14 +914,20 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       log.info(s"Tagging incoming records against ${latestBaseFiles.size} latest base files"
         + s" (${if (globalIndex) "global" else "partition-local"} key matching)")
       val fileIdFromName = udf((fileName: String) => FSUtils.getFileId(fileName))
-      val instantFromName = udf((fileName: String) => FSUtils.getCommitTime(fileName))
-      val position = if (withPositions) col("_metadata.row_index") else lit(null).cast(LongType)
-      val existing = spark.read.parquet(latestBaseFiles: _*)
+      val instantFromPath = udf((filePath: String) => FSUtils.getCommitTime(new StoragePath(filePath).getName))
+      val baseFiles = spark.read.parquet(latestBaseFiles: _*)
+      // The row index is a hidden column of the file source, which not every read exposes.
+      val position = if (withPositions && resolves(baseFiles, "_metadata.row_index")) {
+        col("_metadata.row_index")
+      } else {
+        lit(null).cast(LongType)
+      }
+      val existing = baseFiles
         .select(
           col(HoodieRecord.RECORD_KEY_METADATA_FIELD).as("_hoodie_existing_key"),
           col(HoodieRecord.PARTITION_PATH_METADATA_FIELD).as(LOCATED_PARTITION_COL),
           fileIdFromName(col(HoodieRecord.FILENAME_METADATA_FIELD)).as(TAGGED_FILE_ID_COL),
-          instantFromName(col("_metadata.file_name")).as(TAGGED_INSTANT_COL),
+          instantFromPath(input_file_name()).as(TAGGED_INSTANT_COL),
           position.as(TAGGED_POSITION_COL))
       val keyMatches = prepared(HoodieRecord.RECORD_KEY_METADATA_FIELD) === existing("_hoodie_existing_key")
       val condition = if (globalIndex) {
@@ -925,6 +1017,7 @@ object HoodieDataFrameWriter {
   private val KEYS_COL = "_hoodie_keys"
   private val DEDUP_RANK_COL = "_hoodie_dedup_rank"
   private val INPUT_ORDER_COL = "_hoodie_input_order"
+  private val DELETES_COL = "_hoodie_deletes"
   private val STORED_KEY_COL = "_hoodie_stored_key"
   private val STORED_PARTITION_COL = "_hoodie_stored_partition"
   private val STORED_ORDERING_COL_PREFIX = "_hoodie_stored_ordering_"

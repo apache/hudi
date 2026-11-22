@@ -447,6 +447,38 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testDeleteBehindTheStoredRowLeavesItsRecordIndexEntry(): Unit = {
+    val deleteSchema = StructType(schema.fields :+ StructField("_hoodie_is_deleted", org.apache.spark.sql.types.BooleanType, nullable = false))
+    def df(rows: Seq[(String, String, Long, String, Boolean)]) = spark.createDataFrame(
+      rows.map(r => Row(r._1, r._2, r._3, r._4, r._5)).asJava, deleteSchema)
+    val indexOpts = Seq(
+      Map("hoodie.index.type" -> "RECORD_LEVEL_INDEX",
+        "hoodie.metadata.global.record.level.index.enable" -> "false",
+        "hoodie.metadata.record.level.index.enable" -> "true"),
+      Map("hoodie.index.type" -> "RECORD_INDEX",
+        "hoodie.metadata.record.index.enable" -> "true"))
+    for (opts <- indexOpts; enabled <- Seq("true", "false")) {
+      val path = tempDir.resolve(s"test_table_delete_behind_${opts("hoodie.index.type")}_$enabled").toString
+      val options = opts ++ Map(
+        "hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+        "hoodie.compact.inline" -> "false",
+        "hoodie.embed.timeline.server" -> "true",
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      df(Seq(("e1", "p1", 5L, "one", false), ("e2", "p1", 5L, "two", false), ("e3", "p1", 5L, "three", false)))
+        .write.format("hudi").options(writeOptions("insert", options)).mode(SaveMode.Append).save(path)
+      // The delete of e1 is behind the stored row, the one of e2 is ahead of it.
+      df(Seq(("e1", "p1", 1L, "behind", true), ("e2", "p1", 9L, "ahead", true)))
+        .write.format("hudi").options(writeOptions("upsert", options)).mode(SaveMode.Append).save(path)
+
+      val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+      Assertions.assertEquals(Set("e1", "e3"), keys, s"rows with $options")
+      val indexed = spark.read.format("hudi").load(path + "/.hoodie/metadata")
+        .where("recordIndexMetadata is not null").count()
+      Assertions.assertEquals(2L, indexed, s"record index entries with $options")
+    }
+  }
+
+  @Test
   def testRecordIndexConfigFallsBackToGlobalTaggingWhenNotReady(): Unit = {
     val path = tempDir.resolve("test_table_rli_not_ready").toString
     writeHudi(Seq(("f1", "pA", 1L, "orig")), "insert", path)
@@ -644,6 +676,43 @@ class TestHoodieDataFrameWriter {
       Assertions.assertTrue(cause.isInstanceOf[IllegalArgumentException], s"unexpected failure: $cause")
       Assertions.assertTrue(cause.getMessage.contains("Ordering field 'ts' has null value for record key 'u1'"),
         cause.getMessage)
+    }
+  }
+
+  @Test
+  def testNullOrderingValueIsWrittenWithASparkRecordMerger(): Unit = {
+    val nullableSchema = StructType(schema.map(_.copy(nullable = true)))
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_null_ordering_spark_$enabled").toString
+      val options = writeOptions("upsert", Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        "hoodie.write.record.merge.custom.implementation.classes" -> "org.apache.hudi.DefaultSparkRecordMerger",
+        "hoodie.logfile.data.block.format" -> "parquet"))
+      spark.createDataFrame(Seq(Row("n1", "p1", null, "a1"), Row("n2", "p1", 2L, "a2")).asJava, nullableSchema)
+        .write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+      val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+      Assertions.assertEquals(Set("n1", "n2"), keys)
+    }
+  }
+
+  @Test
+  def testVectorOfAnotherDimensionFailsTheWrite(): Unit = {
+    val vectorSchema = StructType(Seq(
+      StructField("key", StringType, nullable = false),
+      StructField("embedding", org.apache.spark.sql.types.ArrayType(org.apache.spark.sql.types.FloatType, containsNull = false),
+        nullable = false, new org.apache.spark.sql.types.MetadataBuilder().putString("hudi_type", "VECTOR(4)").build())))
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_vector_dimension_$enabled").toString
+      val df = spark.createDataFrame(Seq(Row("x1", Seq(1.0f, 2.0f))).asJava, vectorSchema)
+      val failure = Assertions.assertThrows(classOf[Exception], () =>
+        df.write.format("hudi")
+          .option("hoodie.table.name", "test_vector_table")
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "key")
+          .option("hoodie.datasource.write.precombine.field", "key")
+          .option(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key, enabled)
+          .mode(SaveMode.Append).save(path))
+      val messages = Iterator.iterate[Throwable](failure)(_.getCause).takeWhile(_ != null).map(t => String.valueOf(t.getMessage)).toSeq
+      Assertions.assertTrue(messages.exists(_.contains("dimension mismatch")), s"unexpected failure: $messages")
     }
   }
 
