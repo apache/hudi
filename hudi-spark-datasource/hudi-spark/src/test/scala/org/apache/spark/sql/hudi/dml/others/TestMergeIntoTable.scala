@@ -474,6 +474,69 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
+  test("Test MergeInto with global index into a small file group of a MOR table") {
+    withTempDir { tmp =>
+      for (indexType <- Seq("GLOBAL_SIMPLE", "GLOBAL_BLOOM"); mergeMode <- Seq("COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING")) {
+        withSQLConf("hoodie.index.type" -> indexType) {
+          val targetTable = generateTableName
+          spark.sql(
+            s"""
+               | create table $targetTable (id int, name string, price double, ts long) using hudi
+               | tblproperties (type = 'mor', primaryKey = 'id', orderingFields = 'ts', 'hoodie.record.merge.mode' = '$mergeMode')
+               | location '${tmp.getCanonicalPath}/$targetTable'
+             """.stripMargin)
+          spark.sql(s"insert into $targetTable values (1, 'a1', 10.0, 1000), (2, 'a2', 20.0, 1000), (3, 'a3', 30.0, 1000)")
+          // The updates and the insert share the small file group, so they go through the merge handle
+          spark.sql(
+            s"""
+               | merge into $targetTable t using (
+               |   select 1 as id, 'a1m' as name, 5.0D as price, 2000L as ts
+               |   union all select 2, 'a2m', 6.0D, 2000L
+               |   union all select 3, 'a3m', 7.0D, 500L
+               |   union all select 4, 'a4', 40.0D, 2000L) s
+               | on t.id = s.id
+               | when matched then update set id = s.id, name = s.name, price = s.price + 1, ts = s.ts
+               | when not matched then insert *
+             """.stripMargin)
+          // Event-time ordering keeps the current version of id 3, whose ordering value is higher
+          val expectedId3 = if (mergeMode == "EVENT_TIME_ORDERING") Seq(3, "a3", 30.0, 1000) else Seq(3, "a3m", 8.0, 500)
+          checkAnswer(s"select id, name, price, ts from $targetTable order by id")(
+            Seq(1, "a1m", 6.0, 2000), Seq(2, "a2m", 7.0, 2000), expectedId3, Seq(4, "a4", 40.0, 2000))
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto with global index moving a record into a small file group") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE") {
+          val targetTable = generateTableName
+          spark.sql(
+            s"""
+               | create table $targetTable (id int, name string, price double, ts long, dt string) using hudi
+               | tblproperties (type = '$tableType', primaryKey = 'id', orderingFields = 'ts')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}/$targetTable'
+             """.stripMargin)
+          spark.sql(s"insert into $targetTable values (1, 'a1', 10.0, 1000, 'p1'), (2, 'a2', 20.0, 1000, 'p2')")
+          // The moved record and the new one are inserted into the small file group of partition p2
+          spark.sql(
+            s"""
+               | merge into $targetTable t using (
+               |   select 1 as id, 'a1m' as name, 5.0D as price, 2000L as ts, 'p2' as dt
+               |   union all select 3, 'a3', 30.0D, 2000L, 'p2') s
+               | on t.id = s.id
+               | when matched then update set id = s.id, name = s.name, price = s.price + 1, ts = s.ts, dt = s.dt
+               | when not matched then insert *
+             """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $targetTable order by id")(
+            Seq(1, "a1m", 6.0, 2000, "p2"), Seq(2, "a2", 20.0, 1000, "p2"), Seq(3, "a3", 30.0, 2000, "p2"))
+        }
+      }
+    }
+  }
+
   test("Test MergeInto for MOR table") {
     withTempDir { tmp =>
       withSQLConf("hoodie.payload.combined.schema.validate" -> "true", MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key() -> "0") {

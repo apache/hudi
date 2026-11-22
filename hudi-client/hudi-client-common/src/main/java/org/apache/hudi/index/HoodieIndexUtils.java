@@ -385,6 +385,8 @@ public class HoodieIndexUtils {
       String[] orderingFieldNames,
       TypedProperties properties,
       DeleteContext deleteContext) throws IOException {
+    // The incoming record must not be buffered in writeSchema: the ExpressionPayload merger keeps a newer record in
+    // that schema as already merged, without evaluating the MERGE clauses
     BufferedRecord<R> incomingBufferedRecord = BufferedRecords.fromHoodieRecord(incoming, writeSchemaWithMetaFields, incomingRecordContext, properties, orderingFieldNames, deleteContext);
     BufferedRecord<R> existingBufferedRecord = BufferedRecords.fromHoodieRecord(existing, writeSchemaWithMetaFields, existingRecordContext, properties, orderingFieldNames, false);
     BufferedRecord<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);

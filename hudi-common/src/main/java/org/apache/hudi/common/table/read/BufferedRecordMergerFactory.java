@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -384,11 +386,24 @@ public class BufferedRecordMergerFactory {
    */
   private static class ExpressionPayloadRecordMerger<T> extends CustomPayloadRecordMerger<T> {
     private final HoodieRecordMerger deltaMerger;
+    private Integer mergedRecordSchemaId;
 
     public ExpressionPayloadRecordMerger(RecordContext<T> recordContext, Option<HoodieRecordMerger> recordMerger, String incomingPayloadClass,
                                          HoodieSchema readerSchema, TypedProperties props) {
       super(recordContext, recordMerger, incomingPayloadClass, readerSchema, props);
       this.deltaMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger.get());
+    }
+
+    @Override
+    public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+      if (mergedRecordSchemaId == null) {
+        mergedRecordSchemaId = recordContext.encodeSchema(HoodieSchemaCache.intern(HoodieSchemaUtils.removeMetadataFields(readerSchema)));
+      }
+      // A record in the table schema was already merged with its current version by a global index
+      if (newerRecord.getSchemaId() != null && newerRecord.getSchemaId().equals(mergedRecordSchemaId)) {
+        return newerRecord;
+      }
+      return super.finalMerge(olderRecord, newerRecord);
     }
 
     @Override
