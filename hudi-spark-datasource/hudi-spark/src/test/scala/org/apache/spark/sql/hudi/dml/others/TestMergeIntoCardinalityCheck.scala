@@ -91,16 +91,19 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
               spark.sql(s"merge into $tableName t using ($source) s on t.id = s.id when not matched then insert *")
               spark.sql(s"merge into $tableName t using ($source) s on t.id = s.id when matched then delete")
 
-              // Source rows of a key the table does not hold are combined into one insert, by the ordering field if any
-              spark.sql(
-                s"""
-                   |merge into $tableName t
-                   |using (select 6 as id, 'b6' as name, 1001 as ts union all select 7, 'a7', 1001
-                   |  union all select 7, 'b7', 1000) s
-                   |on t.id = s.id
-                   |when matched then update set *
-                   |when not matched then insert *
-                 """.stripMargin)
+              // Source rows of a key the table does not hold are combined into one insert, by the ordering field if any.
+              // Without small file packing the insert goes to a new file group, whose write keeps every record of a key.
+              withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+                spark.sql(
+                  s"""
+                     |merge into $tableName t
+                     |using (select 6 as id, 'b6' as name, 1001 as ts union all select 7, 'a7', 1001
+                     |  union all select 7, 'b7', 1000) s
+                     |on t.id = s.id
+                     |when matched then update set *
+                     |when not matched then insert *
+                   """.stripMargin)
+              }
               checkAnswer(s"select id, name, ts from $tableName where id = 6")(Seq(6, "b6", 1001))
               checkAnswer(s"select count(1) from $tableName where id = 7")(Seq(1))
               if (ordered) {
