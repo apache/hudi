@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.parquet.io.api.Binary;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Types;
 import org.junit.jupiter.api.Test;
@@ -250,6 +251,47 @@ public class TestValueType {
     assertEquals(ValueType.BYTES, valueTypeFor(PrimitiveType.PrimitiveTypeName.BINARY));
     assertEquals(ValueType.FLOAT, valueTypeFor(PrimitiveType.PrimitiveTypeName.FLOAT));
     assertEquals(ValueType.DOUBLE, valueTypeFor(PrimitiveType.PrimitiveTypeName.DOUBLE));
+  }
+
+  @Test
+  public void testFromParquetIntegerAnnotations() {
+    // Spark writes byte / short columns as INT32 annotated INT(8) / INT(16) (#20503)
+    assertEquals(ValueType.INT, valueTypeFor(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(8, true)));
+    assertEquals(ValueType.INT, valueTypeFor(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(16, true)));
+    assertEquals(ValueType.INT, valueTypeFor(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(32, true)));
+    assertEquals(ValueType.LONG, valueTypeFor(PrimitiveType.PrimitiveTypeName.INT64, LogicalTypeAnnotation.intType(64, true)));
+    // Unsigned 8 / 16-bit values fit an int and order as signed; unsigned 32 / 64-bit ones do not
+    assertEquals(ValueType.INT, valueTypeFor(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(8, false)));
+    assertEquals(ValueType.INT, valueTypeFor(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(16, false)));
+    assertThrows(IllegalArgumentException.class,
+        () -> valueTypeFor(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(32, false)));
+    assertThrows(IllegalArgumentException.class,
+        () -> valueTypeFor(PrimitiveType.PrimitiveTypeName.INT64, LogicalTypeAnnotation.intType(64, false)));
+  }
+
+  @Test
+  public void testOriginalTypeAdapterIntegerAnnotations() {
+    // ValueType picks LogicalTypeParquetAdapter with the current Parquet, so exercise the pre-1.11
+    // OriginalType path directly; it must map the integer annotations the same way
+    ParquetAdapter adapter = new OriginalTypeParquetAdapter();
+    assertEquals(ValueType.INT, adapter.getValueTypeFromAnnotation(primitiveType(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(8, true))));
+    assertEquals(ValueType.INT, adapter.getValueTypeFromAnnotation(primitiveType(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(16, true))));
+    assertEquals(ValueType.INT, adapter.getValueTypeFromAnnotation(primitiveType(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(32, true))));
+    assertEquals(ValueType.LONG, adapter.getValueTypeFromAnnotation(primitiveType(PrimitiveType.PrimitiveTypeName.INT64, LogicalTypeAnnotation.intType(64, true))));
+    assertEquals(ValueType.INT, adapter.getValueTypeFromAnnotation(primitiveType(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(8, false))));
+    assertEquals(ValueType.INT, adapter.getValueTypeFromAnnotation(primitiveType(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(16, false))));
+    assertThrows(IllegalArgumentException.class,
+        () -> adapter.getValueTypeFromAnnotation(primitiveType(PrimitiveType.PrimitiveTypeName.INT32, LogicalTypeAnnotation.intType(32, false))));
+    assertThrows(IllegalArgumentException.class,
+        () -> adapter.getValueTypeFromAnnotation(primitiveType(PrimitiveType.PrimitiveTypeName.INT64, LogicalTypeAnnotation.intType(64, false))));
+  }
+
+  private static ValueType valueTypeFor(PrimitiveType.PrimitiveTypeName name, LogicalTypeAnnotation annotation) {
+    return ValueType.fromParquetPrimitiveType(primitiveType(name, annotation));
+  }
+
+  private static PrimitiveType primitiveType(PrimitiveType.PrimitiveTypeName name, LogicalTypeAnnotation annotation) {
+    return Types.required(name).as(annotation).named("f");
   }
 
   private static ValueType valueTypeFor(PrimitiveType.PrimitiveTypeName name) {
