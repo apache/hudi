@@ -19,7 +19,7 @@ package org.apache.hudi.dataframe
 
 import org.apache.hudi.{DataFrameWriteResult, DataFrameWriteSpec, DataSourceUtils, DataSourceWriteOptions, HoodieDataFrameWritePath, HoodieSchemaConversionUtils, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient, WriteStatus}
-import org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy
+import org.apache.hudi.client.clustering.update.strategy.{SparkAllowUpdateStrategy, SparkRejectUpdateStrategy}
 import org.apache.hudi.client.utils.SparkValidatorUtils
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.data.HoodieData
@@ -87,7 +87,6 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       (() => !SUPPORTED_INDEX_TYPES.contains(writeConfig.getIndexType), s"index type ${writeConfig.getIndexType}"),
       (() => tableConfig.getMetaFieldsMode != MetaFieldsMode.ALL || writeConfig.getMetaFieldsMode != MetaFieldsMode.ALL,
         "tables that do not populate all meta fields"),
-      (() => tableConfig.isCDCEnabled, "CDC tables"),
       (() => tableConfig.isLSMTreeStorageLayout, "the LSM tree storage layout"),
       (() => tableConfig.getBaseFileFormat != HoodieFileFormat.PARQUET || tableConfig.isMultipleBaseFileFormatsEnabled,
         s"base file format ${tableConfig.getBaseFileFormat}"),
@@ -98,9 +97,10 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         && params.getOrElse(PROFILER, PROFILER_METADATA) == PROFILER_SHUFFLE_STATS,
         "custom merging that combines records with the shuffle-stats profiler"),
       (() => writeConfig.allowOperationMetadataField, "the operation meta field"),
-      (() => writeConfig.isRollbackPendingClustering
-        || writeConfig.getClusteringUpdatesStrategyClass != classOf[SparkRejectUpdateStrategy[_]].getName,
-        "clustering update strategies other than rejecting the update"),
+      // Rejecting comes before any rollback of the clustering, so only allowing combines with one.
+      (() => writeConfig.getClusteringUpdatesStrategyClass != classOf[SparkRejectUpdateStrategy[_]].getName
+        && (writeConfig.isRollbackPendingClustering || !allowsUpdatesOfPendingClustering(writeConfig)),
+        "clustering update strategies other than rejecting the update or leaving it to conflict resolution"),
       (() => writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK
         && mergeProps(writeConfig, tableConfig).containsKey(DefaultHoodieRecordPayload.DELETE_KEY),
         "custom delete markers on engine-native records"))
@@ -273,7 +273,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     // one handle writes the file group, when the write task can rely on the order of rows
     // within a bucket.
     val colocateUpdatesWithPadding = profilerMode != PROFILER_SHUFFLE_STATS
-    rejectUpdatesOfPendingClustering(tagged, pendingClusteringFileGroups)
+    // The file groups a write may not update or replace; none where that is left to conflict resolution.
+    val protectedFileGroups = if (allowsUpdatesOfPendingClustering(writeConfig)) Set.empty[HoodieFileGroupId] else pendingClusteringFileGroups
+    rejectUpdatesOfPendingClustering(tagged, protectedFileGroups)
     val routedToBuckets = withRoutingBucket(tagged, insertPlan, colocateUpdatesWithPadding)
     // A delete-marker row that opens a new file has no record to remove.
     val withBucket = if (tagged.columns.contains(DELETE_MARKER_COL)) {
@@ -299,7 +301,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       prepared.dataSchema.length, HoodieInternalRowUtils.getCachedSchema(writerSchema), bucketOrdinal,
       withBucket.schema.fieldIndex(ROW_OP_COL), withBucket.schema.fieldIndex(TAGGED_FILE_ID_COL),
       withBucket.schema.fieldIndex(TAGGED_INSTANT_COL), withBucket.schema.fieldIndex(TAGGED_POSITION_COL), mergeOnRead,
-      pendingClusteringFileGroups,
+      protectedFileGroups,
       avroRecordSpec(spec, prepared.dataSchema, writerSchema, writeConfig, tableConfig),
       // The row-based create handle takes rows in the writer schema and neither consults a
       // payload class nor tracks the event-time watermark.
@@ -357,7 +359,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     HoodieJavaRDD.of(javaRdd).persist(
       writeConfig.getString(HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE),
       engineContext, HoodieDataCacheKey.of(writeConfig.getBasePath, instantTime))
-    val replacedFileIds = partitionToReplacedFileIds(operation, javaRdd, table, writeConfig, pendingClusteringFileGroups)
+    val replacedFileIds = partitionToReplacedFileIds(operation, javaRdd, table, writeConfig, protectedFileGroups)
     if (StringUtils.nonEmpty(writeConfig.getPreCommitValidators)) {
       val writeMetadata = new HoodieWriteMetadata[HoodieData[WriteStatus]]()
       writeMetadata.setWriteStatuses(HoodieJavaRDD.of(javaRdd))
@@ -429,6 +431,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     }
     replaced
   }
+
+  private def allowsUpdatesOfPendingClustering(writeConfig: HoodieWriteConfig): Boolean =
+    writeConfig.getClusteringUpdatesStrategyClass == classOf[SparkAllowUpdateStrategy[_]].getName
 
   private def resolveWriteConfig(spec: DataFrameWriteSpec): HoodieWriteConfig = {
     val params = spec.parameters ++ clientOptions(spec)

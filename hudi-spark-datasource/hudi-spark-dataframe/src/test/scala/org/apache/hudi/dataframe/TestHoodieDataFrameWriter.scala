@@ -544,6 +544,39 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testChangeDataOfACdcTableIsTheOneOfTheOtherWritePath(): Unit = {
+    for (tableType <- Seq("COPY_ON_WRITE", "MERGE_ON_READ"); loggingMode <- Seq("OP_KEY_ONLY", "DATA_BEFORE_AFTER")) {
+      val changes = Seq("true", "false").map { enabled =>
+        val path = tempDir.resolve(s"test_table_cdc_${tableType}_${loggingMode}_$enabled").toString
+        val opts = Map(
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.table.cdc.enabled" -> "true",
+          "hoodie.table.cdc.supplemental.logging.mode" -> loggingMode,
+          "hoodie.compact.inline" -> "false",
+          DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+        writeHudi(Seq(("c1", "p1", 1L, "a1"), ("c2", "p1", 1L, "a2"), ("c3", "p2", 1L, "a3")), "insert", path, opts)
+        writeHudi(Seq(("c1", "p1", 2L, "b1"), ("c4", "p1", 2L, "a4")), "upsert", path, opts)
+        writeHudi(Seq(("c2", "p1", 3L, "x")), "delete", path, opts)
+        spark.read.format("hudi")
+          .option("hoodie.datasource.query.type", "incremental")
+          .option("hoodie.datasource.query.incremental.format", "cdc")
+          .option("hoodie.datasource.read.begin.instanttime", "0")
+          .load(path).select("op", "before", "after").collect()
+          .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSeq
+      }
+      def normalized(rows: Seq[(String, String, String)]): Seq[(String, String, String)] = {
+        // The images carry the commit time and file name of the write that made them.
+        def image(json: String): String = if (json == null) "" else {
+          json.replaceAll("\"_hoodie_(commit_time|commit_seqno|file_name)\":\"[^\"]*\",?", "")
+        }
+        rows.map(r => (r._1, image(r._2), image(r._3))).sorted
+      }
+      Assertions.assertEquals(normalized(changes(1)), normalized(changes.head), s"$tableType, $loggingMode")
+      Assertions.assertEquals(Seq("d", "i", "i", "i", "i", "u"), changes.head.map(_._1).sorted, s"$tableType, $loggingMode")
+    }
+  }
+
+  @Test
   def testEachInsertBucketGetsAFile(): Unit = {
     val path = tempDir.resolve("test_table_insert_buckets").toString
     val rows = (1 to 40).map(i => (s"b$i", "p1", 1L, s"v$i"))
@@ -607,6 +640,12 @@ class TestHoodieDataFrameWriter {
       Assertions.assertTrue(chain.exists(t => t.isInstanceOf[org.apache.hudi.exception.HoodieUpsertException]
         && t.getCause.isInstanceOf[org.apache.hudi.exception.HoodieClusteringUpdateException]),
         s"path enabled = $enabled, unexpected failure: ${chain.map(_.getClass.getSimpleName)}")
+
+      // A strategy that leaves the overlap to conflict resolution lets the update through, and the plan stays pending.
+      writeHudi(Seq(("h1", "p1", 2L, "a2")), "upsert", path, options + (
+        "hoodie.clustering.updates.strategy" -> "org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy"))
+      Assertions.assertEquals(1, HoodieTableMetaClient.reload(metaClient).getActiveTimeline.filterPendingClusteringTimeline().countInstants(),
+        s"path enabled = $enabled")
     }
   }
 
