@@ -577,6 +577,47 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testCustomDeleteMarkerDeletesWithASparkRecordMerger(): Unit = {
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val rows = writeOnBothPaths(s"test_table_custom_delete_marker_$tableType", Map(
+        "hoodie.datasource.write.table.type" -> tableType,
+        "hoodie.compact.inline" -> "false",
+        "hoodie.write.record.merge.custom.implementation.classes" -> "org.apache.hudi.DefaultSparkRecordMerger",
+        "hoodie.logfile.data.block.format" -> "parquet",
+        "hoodie.payload.delete.field" -> "value",
+        "hoodie.payload.delete.marker" -> "gone"),
+        Seq(
+          "insert" -> Seq(("m1", "p1", 1L, "a1"), ("m2", "p1", 1L, "a2")),
+          // m1 is deleted, m9 has no record to delete, and m3 is new.
+          "upsert" -> Seq(("m1", "p1", 2L, "gone"), ("m9", "p2", 2L, "gone"), ("m3", "p1", 2L, "a3"))))
+      Assertions.assertEquals(Seq(("m2", "p1", 1L, "a2"), ("m3", "p1", 2L, "a3")), rows, tableType)
+    }
+  }
+
+  @Test
+  def testDeleteRowOfAPayloadWithItsOwnMarkerIsNotInserted(): Unit = {
+    val dmsSchema = StructType(schema.fields :+ StructField("Op", StringType, nullable = false))
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val keys = Seq("true", "false").map { enabled =>
+        val path = tempDir.resolve(s"test_table_dms_first_write_${tableType}_$enabled").toString
+        val options = writeOptions("upsert", Map(
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.AWSDmsAvroPayload",
+          DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled))
+        val expectedWrites = HoodieDataFrameWriter.writeCount.get() + (if (enabled.toBoolean) 1 else 0)
+        // The latest row of w2 deletes it, and the table has no record of w2 to delete.
+        spark.createDataFrame(Seq(
+          Row("w1", "p1", 1L, "a1", "I"), Row("w2", "p1", 1L, "a2", "I"), Row("w2", "p1", 2L, "a2", "D")).asJava, dmsSchema)
+          .write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+        Assertions.assertEquals(expectedWrites, HoodieDataFrameWriter.writeCount.get(), "the write did not take the expected write path")
+        spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSeq
+      }
+      Assertions.assertEquals(keys(1), keys.head, tableType)
+      Assertions.assertEquals(Seq("w1"), keys.head, tableType)
+    }
+  }
+
+  @Test
   def testEachInsertBucketGetsAFile(): Unit = {
     val path = tempDir.resolve("test_table_insert_buckets").toString
     val rows = (1 to 40).map(i => (s"b$i", "p1", 1L, s"v$i"))

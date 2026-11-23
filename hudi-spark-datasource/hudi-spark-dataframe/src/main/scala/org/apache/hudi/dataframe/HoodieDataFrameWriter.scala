@@ -100,10 +100,7 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       // Rejecting comes before any rollback of the clustering, so only allowing combines with one.
       (() => writeConfig.getClusteringUpdatesStrategyClass != classOf[SparkRejectUpdateStrategy[_]].getName
         && (writeConfig.isRollbackPendingClustering || !allowsUpdatesOfPendingClustering(writeConfig)),
-        "clustering update strategies other than rejecting the update or leaving it to conflict resolution"),
-      (() => writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK
-        && mergeProps(writeConfig, tableConfig).containsKey(DefaultHoodieRecordPayload.DELETE_KEY),
-        "custom delete markers on engine-native records"))
+        "clustering update strategies other than rejecting the update or leaving it to conflict resolution"))
     if (spec.operation == WriteOperationType.DELETE_PARTITION) {
       // Only the partition paths of the rows are derived, whatever the table is.
       None
@@ -278,12 +275,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     rejectUpdatesOfPendingClustering(tagged, protectedFileGroups)
     val routedToBuckets = withRoutingBucket(tagged, insertPlan, colocateUpdatesWithPadding)
     // A delete-marker row that opens a new file has no record to remove.
-    val withBucket = if (tagged.columns.contains(DELETE_MARKER_COL)) {
-      routedToBuckets.filter(!(col(ROUTING_BUCKET_COL).startsWith(INSERT_BUCKET_PREFIX)
-        && coalesce(col(DELETE_MARKER_COL), lit(false))))
-    } else {
-      routedToBuckets
-    }
+    val withBucket = deleteMarkerOf(tagged, writeConfig, tableConfig)
+      .map(marker => routedToBuckets.filter(!(col(ROUTING_BUCKET_COL).startsWith(INSERT_BUCKET_PREFIX) && marker)))
+      .getOrElse(routedToBuckets)
     val bucketOrdinal = withBucket.schema.fieldIndex(ROUTING_BUCKET_COL)
 
     val actionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
@@ -430,6 +424,26 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       replaced.put(partition, fileIds.asJava)
     }
     replaced
+  }
+
+  /**
+   * Whether a row is a delete by what it carries: the built-in marker column, or the field and
+   * value the merge properties name for deletes, which the merging reads off the row where no
+   * payload class decides.
+   */
+  private def deleteMarkerOf(rows: DataFrame, writeConfig: HoodieWriteConfig, tableConfig: HoodieTableConfig): Option[Column] = {
+    val builtIn = if (rows.columns.contains(DELETE_MARKER_COL)) {
+      Some(coalesce(col(DELETE_MARKER_COL), lit(false)))
+    } else {
+      None
+    }
+    val props = mergeProps(writeConfig, tableConfig)
+    val custom = for {
+      field <- Option(props.getProperty(DefaultHoodieRecordPayload.DELETE_KEY)).filter(_.nonEmpty)
+      marker <- Option(props.getProperty(DefaultHoodieRecordPayload.DELETE_MARKER)).filter(_.nonEmpty)
+      if !payloadDecides(writeConfig) && resolves(rows, field)
+    } yield coalesce(col(field).cast(StringType) === lit(marker), lit(false))
+    (builtIn ++ custom).reduceOption(_ || _)
   }
 
   private def allowsUpdatesOfPendingClustering(writeConfig: HoodieWriteConfig): Boolean =
@@ -730,10 +744,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       indexType == HoodieIndex.IndexType.GLOBAL_BLOOM
     val deleteMarker: Column = if (operation == WriteOperationType.DELETE) {
       lit(true)
-    } else if (prepared.columns.contains(DELETE_MARKER_COL)) {
-      coalesce(col(DELETE_MARKER_COL), lit(false))
     } else {
-      lit(false)
+      deleteMarkerOf(prepared, writeConfig, table.getMetaClient.getTableConfig).getOrElse(lit(false))
     }
 
     // Log blocks record the positions of the rows they update in the base file.
