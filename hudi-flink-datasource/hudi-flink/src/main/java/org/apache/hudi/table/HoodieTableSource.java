@@ -344,7 +344,7 @@ public class HoodieTableSource extends FileIndexReader implements
         .skipCompaction(conf.get(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
         .skipClustering(conf.get(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
         .skipInsertOverwrite(conf.get(FlinkOptions.READ_STREAMING_SKIP_INSERT_OVERWRITE))
-        .maxCompactionMemoryInBytes(conf.get(FlinkOptions.COMPACTION_MAX_MEMORY))
+        .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
         .maxPendingSplits(conf.get(FlinkOptions.READ_SPLITS_LIMIT))
         .partitionPruner(partitionPruner)
         .columnStatsProbe(columnStatsProbe)
