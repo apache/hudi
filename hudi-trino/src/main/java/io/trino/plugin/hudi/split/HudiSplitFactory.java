@@ -82,6 +82,7 @@ public class HudiSplitFactory
         if (isCopyOnWriteOrReadOptimized(hudiTableHandle, fileSlice)) {
             // Handle MERGE_ON_READ tables to be read in read_optimized mode
             // IMPORTANT: These tables will have a COPY_ON_WRITE table type due to how `HudiTableTypeUtils#fromInputFormat`
+            // Read-optimized reads ignore log files, so a log-only file group has nothing to read
             if (fileSlice.getBaseFile().isEmpty()) {
                 return ImmutableList.of();
             }
