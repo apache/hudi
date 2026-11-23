@@ -1084,7 +1084,9 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
                                          withPositions: Boolean): Dataset[Row] = {
     val fileIdFromName = udf((fileName: String) => FSUtils.getFileId(fileName))
     val instantFromPath = udf((filePath: String) => FSUtils.getCommitTime(new StoragePath(filePath).getName))
-    val baseFiles = spark.read.parquet(baseFilePaths: _*)
+    // Only the meta columns are read, with their schema given: the other columns of a file need
+    // not be ones the file source of every Spark version can infer.
+    val baseFiles = spark.read.schema(KEY_LOCATION_SCHEMA).parquet(baseFilePaths: _*)
     // The row index is a hidden column of the file source, which not every read exposes.
     val position = if (withPositions && resolves(baseFiles, "_metadata.row_index")) {
       col("_metadata.row_index")
@@ -1237,6 +1239,9 @@ object HoodieDataFrameWriter {
   val ROW_OP_UPSERT = "U"
   val ROW_OP_DELETE = "D"
   private val DELETE_MARKER_COL = HoodieRecord.HOODIE_IS_DELETED_FIELD
+  private val KEY_LOCATION_SCHEMA = StructType(Seq(
+    HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.FILENAME_METADATA_FIELD)
+    .map(StructField(_, StringType)))
   val UPDATE_BUCKET_PREFIX = "u:"
   val MERGE_BUCKET_PREFIX = "s:"
   val INSERT_BUCKET_PREFIX = "i:"
