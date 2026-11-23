@@ -90,7 +90,6 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       (() => tableConfig.isLSMTreeStorageLayout, "the LSM tree storage layout"),
       (() => tableConfig.getBaseFileFormat != HoodieFileFormat.PARQUET || tableConfig.isMultipleBaseFileFormatsEnabled,
         s"base file format ${tableConfig.getBaseFileFormat}"),
-      (() => tableConfig.getBootstrapBasePath.isPresent, "bootstrapped tables"),
       (() => (isCustomMerge(writeConfig, tableConfig) || payloadDecides(writeConfig))
         && SparkHoodieIndexFactory.isGlobalIndex(writeConfig), "custom merging under a global index"),
       (() => combinesInTask(spec, writeConfig, tableConfig)
@@ -132,8 +131,10 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
    * Whether engine-native records write the table the way Avro records do. They do not where the
    * merging goes through a payload class or a custom merger, where log blocks are Avro, where the
    * column stats index predates the version that covers every type for them, where rows cannot
-   * be rewritten to the writer schema as rows, and where a merge would read a variant column of
-   * a base file with schema-on-read, which the row-based reader does not serve.
+   * be rewritten to the writer schema as rows, where a merge would read a variant column of a
+   * base file with schema-on-read, which the row-based reader does not serve, and where a merge
+   * would read a bootstrapped base file, whose rows it cannot rewrite to the writer schema in
+   * every partitioning.
    */
   private def canWriteSparkRecords(spec: DataFrameWriteSpec, writeConfig: HoodieWriteConfig): Boolean = {
     val tableConfig = spec.metaClient.getTableConfig
@@ -145,7 +146,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       spec.parameters.getOrElse(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key, "false").toBoolean &&
         containsVariant(spec.writerSchema.map(HoodieInternalRowUtils.getCachedSchema).getOrElse(spec.inputSchema))
     !isCustomMerge(writeConfig, tableConfig) && !payloadDecides(writeConfig) && !avroLogBlocks &&
-      !columnStatsByRecordType && !variantUnderSchemaOnRead && rowsConformToWriterSchema(spec)
+      !columnStatsByRecordType && !variantUnderSchemaOnRead && !tableConfig.getBootstrapBasePath.isPresent &&
+      rowsConformToWriterSchema(spec)
   }
 
   private def containsVariant(dataType: DataType): Boolean = dataType match {

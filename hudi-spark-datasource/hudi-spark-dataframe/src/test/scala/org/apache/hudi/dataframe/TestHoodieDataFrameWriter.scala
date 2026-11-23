@@ -618,6 +618,34 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testUpsertIntoABootstrappedTableWritesWhatTheOtherWritePathDoes(): Unit = {
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val snapshots = Seq("true", "false").map { enabled =>
+        val source = tempDir.resolve(s"test_bootstrap_source_${tableType}_$enabled").toString
+        val path = tempDir.resolve(s"test_table_bootstrap_${tableType}_$enabled").toString
+        makeDf(Seq(("t1", "p1", 1L, "a1"), ("t2", "p1", 1L, "a2"), ("t3", "p2", 1L, "a3")))
+          .write.partitionBy("partition").parquet(source)
+        val opts = Map(
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.compact.inline" -> "false",
+          "hoodie.datasource.write.hive_style_partitioning" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "false",
+          DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+        spark.emptyDataFrame.write.format("hudi")
+          .options(writeOptions("bootstrap", opts + ("hoodie.bootstrap.base.path" -> source)))
+          .mode(SaveMode.Overwrite).save(path)
+        // t1 is updated in its bootstrapped file group, and t4 is new.
+        writeHudi(Seq(("t1", "p1", 2L, "b1"), ("t4", "p2", 2L, "a4")), "upsert", path, opts)
+        spark.read.format("hudi").load(path).select("key", "partition", "ts", "value").collect()
+          .map(r => (r.getString(0), r.getString(1), r.getLong(2), r.getString(3))).sorted.toSeq
+      }
+      Assertions.assertEquals(snapshots(1), snapshots.head, tableType)
+      Assertions.assertEquals(
+        Seq(("t1", "p1", 2L, "b1"), ("t2", "p1", 1L, "a2"), ("t3", "p2", 1L, "a3"), ("t4", "p2", 2L, "a4")), snapshots.head, tableType)
+    }
+  }
+
+  @Test
   def testEachInsertBucketGetsAFile(): Unit = {
     val path = tempDir.resolve("test_table_insert_buckets").toString
     val rows = (1 to 40).map(i => (s"b$i", "p1", 1L, s"v$i"))
