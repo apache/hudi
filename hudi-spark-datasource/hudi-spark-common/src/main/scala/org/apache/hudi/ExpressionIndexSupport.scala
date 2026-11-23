@@ -50,6 +50,8 @@ import org.apache.spark.sql.hudi.dataskipping.{ExpressionIndexSource, IndexedExp
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel
 
+import java.time.{LocalDate, ZoneId}
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
@@ -437,11 +439,14 @@ class ExpressionIndexSupport(spark: SparkSession,
   /**
    * The writer's keys for an internal literal value. A DATE is epoch days here, and the writer prints a `java.sql.Date`,
    * or a `LocalDate` with `spark.sql.datetime.java8API.enabled`; both are probed, as they differ for edge years.
+   * A `java.sql.Date` prints in the writer's JVM time zone, which is not known here, and a day that zone skipped prints
+   * as the next one (2011-12-30 is `2011-12-31` in Pacific/Apia). So a day some zone skipped also probes the next day.
    */
   private def writerKeys(value: Any, dataType: DataType): Seq[String] = dataType match {
     case DateType =>
       val days = value.asInstanceOf[Int]
-      Seq(DateTimeUtils.toJavaDate(days).toString, DateTimeUtils.daysToLocalDate(days).toString).distinct
+      val probedDays = if (isSkippedInSomeZone(days)) Seq(days, days + 1) else Seq(days)
+      probedDays.flatMap(day => Seq(DateTimeUtils.toJavaDate(day).toString, DateTimeUtils.daysToLocalDate(day).toString)).distinct
     case _ => Seq(value.toString)
   }
 
@@ -585,6 +590,14 @@ object ExpressionIndexSupport {
   }
 
   val INDEX_NAME = "EXPRESSION"
+
+  private lazy val allZones: Seq[ZoneId] = ZoneId.getAvailableZoneIds.asScala.toSeq.map(id => ZoneId.of(id))
+
+  /** Whether some time zone skipped this whole day: its earliest local time is then on a later day. */
+  private def isSkippedInSomeZone(days: Int): Boolean = {
+    val date = LocalDate.ofEpochDay(days)
+    allZones.exists(zone => date.atStartOfDay(zone).toLocalDate != date)
+  }
 
   /** One expression index, and the query conjuncts that read it. */
   private case class IndexUse(definition: HoodieIndexDefinition, indexed: IndexedExpression, conjuncts: Seq[Expression]) {
