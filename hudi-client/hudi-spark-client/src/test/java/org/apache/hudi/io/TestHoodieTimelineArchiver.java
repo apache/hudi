@@ -931,6 +931,10 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, HoodieSparkTable.create(writeConfig, context, metaClient));
     assertThrows(HoodieIOException.class, () -> archiver.archiveIfRequired(context));
 
+    // The newer actions were in the failed batch: they reached the archive before the delete step.
+    HoodieArchivedTimeline archivedTimeline = TIMELINE_FACTORY.createArchivedTimeline(metaClient);
+    assertTrue(archivedTimeline.containsInstant("00000002"));
+    assertTrue(archivedTimeline.containsInstant("00000003"));
     List<State> allStates = Arrays.asList(State.REQUESTED, State.INFLIGHT, State.COMPLETED);
     assertEquals(allStates, statesOnTimeline("00000002"));
     assertEquals(allStates, statesOnTimeline("00000003"));

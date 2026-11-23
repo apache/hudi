@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
+import org.apache.hudi.common.table.timeline.versioning.v1.ArchivedTimelineV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -58,6 +59,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -145,6 +147,10 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
     TimelineArchiverV1 archiver = new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig));
     assertThrows(HoodieIOException.class, () -> archiver.archiveIfRequired(context));
 
+    // The newer actions were in the failed batch: they reached the archive before the delete step.
+    ArchivedTimelineV1 archivedTimeline = new ArchivedTimelineV1(metaClient);
+    assertTrue(archivedTimeline.containsInstant(newerCommit));
+    assertTrue(archivedTimeline.containsInstant(replaceCommit));
     List<State> allStates = Arrays.asList(State.REQUESTED, State.INFLIGHT, State.COMPLETED);
     assertEquals(allStates, statesOnTimeline(newerCommit));
     assertEquals(allStates, statesOnTimeline(replaceCommit));
