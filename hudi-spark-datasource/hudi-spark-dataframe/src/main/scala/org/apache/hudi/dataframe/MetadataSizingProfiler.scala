@@ -17,6 +17,7 @@
 
 package org.apache.hudi.dataframe
 
+import org.apache.hudi.common.model.HoodieFileGroupId
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.util.CollectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -48,7 +49,8 @@ object MetadataSizingProfiler extends Logging {
            writeConfig: HoodieWriteConfig,
            newFileBuckets: Int,
            mergeOnRead: Boolean,
-           paddingBucketPrefix: String): InsertRoutingPlan = {
+           paddingBucketPrefix: String,
+           pendingClusteringFileGroups: Set[HoodieFileGroupId]): InsertRoutingPlan = {
     val smallFileLimit = writeConfig.getParquetSmallFileLimit
     val maxFileSize = writeConfig.getParquetMaxFileSize
     val completedCommits = table.getMetaClient.getActiveTimeline
@@ -88,9 +90,8 @@ object MetadataSizingProfiler extends Logging {
         }
       }
       // A file group that a pending clustering is rewriting takes no new records.
-      val pendingClustering = fsView.getFileGroupsInPendingClustering.iterator().asScala
-        .map(_.getKey).map(fileGroup => (fileGroup.getPartitionPath, fileGroup.getFileId)).toSet
-      val smallFileSlots = candidates.filterNot(pendingClustering.contains).toSeq
+      val smallFileSlots = candidates
+        .filterNot { case (partition, fileId) => pendingClusteringFileGroups.contains(new HoodieFileGroupId(partition, fileId)) }.toSeq
         .groupBy(_._1)
         .map { case (partition, slots) => (partition, slots.map(paddingBucketPrefix + _._2).toArray) }
       log.info(s"Insert routing plan: ${smallFileSlots.values.map(_.length).sum} small-file "

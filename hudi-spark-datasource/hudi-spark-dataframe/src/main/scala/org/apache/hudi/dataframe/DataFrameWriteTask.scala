@@ -39,6 +39,7 @@ import org.apache.hudi.table.action.commit.{BaseWriteHelper, BulkInsertDataInter
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{BoundReference, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 
 import scala.collection.JavaConverters._
@@ -99,7 +100,8 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
                          pendingClusteringFileGroups: Set[HoodieFileGroupId],
                          avroRecords: Option[AvroRecordSpec],
                          recordBasedInserts: Boolean,
-                         combineRecords: Boolean) extends Serializable {
+                         combineRecords: Boolean,
+                         sqlConfOverrides: Map[String, String]) extends Serializable {
 
   import DataFrameWriteTask.RecordFactory
 
@@ -111,8 +113,16 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
   def execute(iter: Iterator[InternalRow]): Iterator[WriteStatus] = {
     if (!iter.hasNext) {
       Iterator.empty
-    } else {
+    } else if (sqlConfOverrides.isEmpty) {
       executeNonEmpty(iter)
+    } else {
+      // The handles read the conf when they open their file writers, all within this call.
+      val conf = new SQLConf()
+      SQLConf.get.getAllConfs.foreach { case (key, value) => conf.setConfString(key, value) }
+      sqlConfOverrides.foreach { case (key, value) => conf.setConfString(key, value) }
+      SQLConf.withExistingConf(conf) {
+        executeNonEmpty(iter)
+      }
     }
   }
 
@@ -408,10 +418,27 @@ object DataFrameWriteTask {
     }
   }
 
-  /** Whether rows of `source` can be rewritten by field name into rows of `target`. */
+  /**
+   * Whether rows of `source` can be rewritten by field name into rows of `target`. A field the
+   * target requires a value for has to be in the source: the rewrite fills a missing field with
+   * null.
+   */
   def canConform(source: StructType, target: StructType): Boolean =
     sameIgnoringNullability(source, target) ||
-      scala.util.Try(HoodieInternalRowUtils.getCachedUnsafeRowWriter(source, target)).isSuccess
+      (coversRequiredFields(source, target) &&
+        scala.util.Try(HoodieInternalRowUtils.getCachedUnsafeRowWriter(source, target)).isSuccess)
+
+  private def coversRequiredFields(source: DataType, target: DataType): Boolean = (source, target) match {
+    case (s: StructType, t: StructType) => t.fields.forall { targetField =>
+      s.fields.find(_.name == targetField.name) match {
+        case Some(sourceField) => coversRequiredFields(sourceField.dataType, targetField.dataType)
+        case None => targetField.nullable
+      }
+    }
+    case (s: ArrayType, t: ArrayType) => coversRequiredFields(s.elementType, t.elementType)
+    case (s: MapType, t: MapType) => coversRequiredFields(s.valueType, t.valueType)
+    case _ => true
+  }
 
   private def sameIgnoringNullability(left: DataType, right: DataType): Boolean = (left, right) match {
     case (l: StructType, r: StructType) =>

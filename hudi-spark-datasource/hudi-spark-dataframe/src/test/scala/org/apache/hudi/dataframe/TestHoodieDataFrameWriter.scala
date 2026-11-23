@@ -801,6 +801,43 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testDatesBeforeTheCalendarSwitchAreWritten(): Unit = {
+    val datedSchema = StructType(schema.fields ++ Seq(
+      StructField("day", org.apache.spark.sql.types.DateType, nullable = true),
+      StructField("moment", org.apache.spark.sql.types.TimestampType, nullable = true)))
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_ancient_dates_$enabled").toString
+      val rows = Seq(
+        Row("c1", "p1", 1L, "old", java.sql.Date.valueOf("1500-01-01"), java.sql.Timestamp.valueOf("1000-01-01 00:00:00")),
+        Row("c2", "p1", 1L, "new", java.sql.Date.valueOf("2020-01-01"), java.sql.Timestamp.valueOf("2020-01-01 00:00:00")))
+      val options = writeOptions("upsert", Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled))
+      spark.createDataFrame(rows.asJava, datedSchema).write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+      // The second write merges into the file that holds the old dates.
+      spark.createDataFrame(rows.take(1).asJava, datedSchema).write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+      val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+      Assertions.assertEquals(Set("c1", "c2"), keys, s"path enabled = $enabled")
+    }
+  }
+
+  @Test
+  def testInputWithoutARequiredColumnFailsAsRecordsDo(): Unit = {
+    val withoutValue = StructType(schema.fields.filterNot(_.name == "value"))
+    val failures = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_missing_required_$enabled").toString
+      val options = Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        "hoodie.datasource.write.reconcile.schema" -> "true")
+      writeHudi(Seq(("m1", "p1", 1L, "a1")), "upsert", path, options)
+      val failure = Assertions.assertThrows(classOf[Exception], () =>
+        spark.createDataFrame(Seq(Row("m1", "p1", 2L)).asJava, withoutValue)
+          .write.format("hudi").options(writeOptions("upsert", options)).mode(SaveMode.Append).save(path))
+      Iterator.iterate[Throwable](failure)(_.getCause).takeWhile(_ != null).map(t => String.valueOf(t.getMessage)).toSeq
+    }
+    Assertions.assertTrue(failures.head.exists(_.contains("non-nullable")), s"unexpected failure: ${failures.head}")
+    Assertions.assertTrue(failures(1).exists(_.contains("non-nullable")), s"unexpected failure of the other path: ${failures(1)}")
+  }
+
+  @Test
   def testMissingRecordKeyFieldFailsWithTheSameError(): Unit = {
     Seq("missing", "key,missing").foreach { recordKeyFields =>
       val messages = Seq("true", "false").map { enabled =>

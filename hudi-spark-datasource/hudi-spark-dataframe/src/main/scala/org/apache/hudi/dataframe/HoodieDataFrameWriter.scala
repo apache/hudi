@@ -228,11 +228,15 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     // across small-file padding slots and new-file buckets planned from table metadata. An
     // overwrite replaces the file groups it would pad, so it only opens new ones.
     val newFileBuckets = params.get(INSERT_BUCKETS_PER_PARTITION).map(_.toInt).getOrElse(1)
+    // Read from the timeline by a view of its own: the plan and the write tasks have to agree on
+    // the file groups a pending clustering is rewriting.
+    val pendingClusteringFileGroups: Set[HoodieFileGroupId] =
+      table.getFileSystemView.getFileGroupsInPendingClustering.iterator().asScala.map(_.getKey).toSet
     val insertPlan = if (overwrite) {
       InsertRoutingPlan(Map.empty, newFileBuckets)
     } else {
       MetadataSizingProfiler.plan(table, writeConfig, newFileBuckets, mergeOnRead,
-        if (mergeOnRead) MERGE_BUCKET_PREFIX else UPDATE_BUCKET_PREFIX)
+        if (mergeOnRead) MERGE_BUCKET_PREFIX else UPDATE_BUCKET_PREFIX, pendingClusteringFileGroups)
     }
     val profilerMode = params.getOrElse(PROFILER, PROFILER_METADATA)
     // The tagged updates of a small file group that takes inserts join them in one bucket, so
@@ -252,8 +256,6 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     // with the task.
     val sparkTable = table.asInstanceOf[HoodieTable[InternalRow, _, _, _]]
     val readerContextFactory = sparkTable.getReaderContextFactoryForWrite
-    val pendingClusteringFileGroups: Set[HoodieFileGroupId] =
-      table.getFileSystemView.getFileGroupsInPendingClustering.iterator().asScala.map(_.getKey).toSet
     val task = new DataFrameWriteTask(
       writeConfig, sparkTable, readerContextFactory, instantTime, operation, withBucket.schema,
       prepared.dataSchema.length, HoodieInternalRowUtils.getCachedSchema(writerSchema), bucketOrdinal,
@@ -265,7 +267,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       // payload class nor tracks the event-time watermark.
       recordBasedInserts = payloadDecides(writeConfig) || !rowsConformToWriterSchema(spec) ||
         (ConfigUtils.isTrackingEventTimeWatermark(writeConfig.getProps) && ConfigUtils.getEventTimeFieldName(writeConfig.getProps) != null),
-      combineRecords = combinesInTask(spec, writeConfig, tableConfig))
+      combineRecords = combinesInTask(spec, writeConfig, tableConfig),
+      sqlConfOverrides = writeTaskConfOverrides(spec, writeConfig))
 
     val (statusRdd, extraMetadata) = if (profilerMode == PROFILER_SHUFFLE_STATS) {
       // The routing shuffle doubles as the profiling pass and lives inside a physical-plan
@@ -324,6 +327,20 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       SparkValidatorUtils.runValidators(writeConfig, writeMetadata, engineContext, table, instantTime)
     }
     DataFrameWriteResult(new HoodieWriteResult(javaRdd, replacedFileIds), extraMetadata)
+  }
+
+  /**
+   * SQL conf entries the write tasks set over the session's. Where the write is one of Avro
+   * records without this path, dates and timestamps are written in the calendar they come in,
+   * as an Avro record's are, unless the session says how to rebase them.
+   */
+  private def writeTaskConfOverrides(spec: DataFrameWriteSpec, writeConfig: HoodieWriteConfig): Map[String, String] = {
+    if (avroRecordsWithoutThisPath(spec, writeConfig)) {
+      Seq(PARQUET_REBASE_MODE_IN_WRITE, PARQUET_INT96_REBASE_MODE_IN_WRITE)
+        .filterNot(SQLConf.get.contains).map(_ -> "CORRECTED").toMap
+    } else {
+      Map.empty
+    }
   }
 
   /**
@@ -1052,6 +1069,8 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
 
 object HoodieDataFrameWriter {
 
+  private val PARQUET_REBASE_MODE_IN_WRITE = "spark.sql.parquet.datetimeRebaseModeInWrite"
+  private val PARQUET_INT96_REBASE_MODE_IN_WRITE = "spark.sql.parquet.int96RebaseModeInWrite"
   val INSERT_BUCKETS_PER_PARTITION = "hoodie.datasource.write.dataframe.insert.buckets"
   val WRITE_TASKS = "hoodie.datasource.write.dataframe.write.tasks"
   val PROFILER = "hoodie.datasource.write.dataframe.profiler"
