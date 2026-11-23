@@ -22,16 +22,22 @@ package org.apache.hudi.client.timeline;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
@@ -39,11 +45,19 @@ import org.apache.hudi.testutils.HoodieWriteableTestTable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -99,6 +113,46 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
   }
 
   /**
+   * A completed instant file that cannot be deleted must stop archival without touching the newer
+   * archived actions: each keeps its requested, inflight and completed files, so readers of a completed
+   * replacecommit's requested file keep working.
+   */
+  @Test
+  void archiveIfRequired_failedDeleteLeavesNewerActionsIntact() throws Exception {
+    initMetaClient(true);
+    TypedProperties props = new TypedProperties();
+    // Reading the stray directory fails during archive(); keep going so the delete step runs.
+    props.put(HoodieWriteConfig.FAIL_ON_TIMELINE_ARCHIVING_ENABLE.key(), "false");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withMarkersType("DIRECT")
+        .withProperties(props)
+        .build();
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String oldestCommit = InProcessTimeGenerator.createNewInstantTime();
+    String newerCommit = InProcessTimeGenerator.createNewInstantTime();
+    String replaceCommit = InProcessTimeGenerator.createNewInstantTime();
+    testTable.addCommit(oldestCommit)
+        .addCommit(newerCommit)
+        .addReplaceCommit(replaceCommit, Option.empty(), Option.empty(), new HoodieReplaceCommitMetadata())
+        .addClean(InProcessTimeGenerator.createNewInstantTime())
+        .addCommit(InProcessTimeGenerator.createNewInstantTime())
+        .addCommit(InProcessTimeGenerator.createNewInstantTime());
+    replaceWithNonEmptyDirectory(metaClient.getActiveTimeline().getCommitsTimeline().firstInstant().get());
+
+    TimelineArchiverV1 archiver = new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig));
+    assertThrows(HoodieIOException.class, () -> archiver.archiveIfRequired(context));
+
+    List<State> allStates = Arrays.asList(State.REQUESTED, State.INFLIGHT, State.COMPLETED);
+    assertEquals(allStates, statesOnTimeline(newerCommit));
+    assertEquals(allStates, statesOnTimeline(replaceCommit));
+    HoodieInstant completedReplace = metaClient.reloadActiveTimeline().getCompletedReplaceTimeline().firstInstant().get();
+    assertFalse(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), completedReplace, metaClient.getInstantGenerator()));
+  }
+
+  /**
    * The LSM writer must build its config on a table upgraded to version 10.
    *
    * <p>{@code LSMTimelineWriter#getOrCreateWriterConfig} inherits the parent config's props and then
@@ -134,6 +188,22 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
     assertEquals(MetaFieldsMode.NONE, lsmConfig.getMetaFieldsMode(),
         "the LSM writer's explicit NONE mode must win over the table's inherited ALL");
     assertFalse(lsmConfig.populateMetaFields());
+  }
+
+  private List<State> statesOnTimeline(String instantTime) {
+    return new ActiveTimelineV1(metaClient, false).getInstantsAsStream()
+        .filter(instant -> instant.requestedTime().equals(instantTime))
+        .map(HoodieInstant::getState)
+        .sorted()
+        .collect(Collectors.toList());
+  }
+
+  private void replaceWithNonEmptyDirectory(HoodieInstant instant) throws IOException {
+    Path instantPath = Paths.get(metaClient.getTimelinePath().toUri().getPath(), metaClient.getInstantFileNameGenerator().getFileName(instant));
+    byte[] content = Files.readAllBytes(instantPath);
+    Files.delete(instantPath);
+    Files.createDirectory(instantPath);
+    Files.write(instantPath.resolve(instantPath.getFileName()), content);
   }
 
   private HoodieTable setupMockHoodieTable(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
