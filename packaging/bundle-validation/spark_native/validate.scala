@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 25
+  val expectedChecks = 34
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -205,8 +205,9 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
     }
   }
   spark.read.format("hudi").load(nativeCow).createOrReplaceTempView("native_cow")
-  // Spark applies a partition filter holding a subquery at execution time, after the listing.
-  compare("scalar subquery partition filter", expectNative = false)(
+  // Spark applies a partition filter holding a subquery at execution time, after the listing;
+  // the native scan plans its tasks again over the partitions the filter keeps.
+  compare("scalar subquery partition filter", expectNative = true)(
     spark.sql("select uuid, fare from native_cow where partitionpath = (select max(partitionpath) from native_cow)"))
   compare("skip_merge read", expectNative = false)(
     spark.read.format("hudi").option("hoodie.datasource.merge.type", "skip_merge").load(nativeMor)
@@ -242,6 +243,65 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   writeV8("native_scan_many_files_v8", "MERGE_ON_READ", Append, updatedRows(0, 15000), "upsert")
   compare("many small file slices", expectNative = true)(
     spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts"))
+
+  // Dynamic partition pruning: a filtered dimension joined on the partition column prunes the
+  // fact scan once the broadcast subquery resolves. The native scan must read only the slices of
+  // the partitions it keeps, with and without adaptive execution.
+  object PlanWalk extends org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
+  def sliceCount(partitions: Array[Array[Byte]]): Int = partitions.map(b =>
+    org.apache.comet.serde.OperatorOuterClass.HudiScan.parseFrom(b).getFileSlicesCount).sum
+  spark.range(0, 3).selectExpr("cast(id as string) as p",
+    "case when id = 1 then 'keep' else 'drop' end as flag").createOrReplaceTempView("dpp_dim")
+  val dppQuery = "select f.uuid, f.fare from native_cow f join dpp_dim d " +
+    "on f.partitionpath = d.p where d.flag = 'keep'"
+  for (adaptive <- Seq(true, false)) {
+    val label = s"dynamic partition pruning (adaptive=$adaptive)"
+    spark.conf.set("spark.sql.adaptive.enabled", adaptive.toString)
+    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "10485760")
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    val jvmRows = spark.sql(dppQuery).collect().map(_.toString).sorted
+    spark.conf.set("spark.comet.scan.hudi.enabled", "true")
+    val nativeDf = spark.sql(dppQuery)
+    val nativeRows = nativeDf.collect().map(_.toString).sorted
+    val plan = nativeDf.queryExecution.executedPlan
+    val factScans = PlanWalk.collect(plan) {
+      case scan: org.apache.spark.sql.comet.CometHudiNativeScanExec
+          if scan.tableBaseUri.contains("native_scan_cow_v8") => scan
+    }
+    val fullScans = PlanWalk.collect(spark.read.format("hudi").load(nativeCow)
+        .selectExpr("uuid", "fare").queryExecution.executedPlan) {
+      case scan: org.apache.spark.sql.comet.CometHudiNativeScanExec => scan
+    }
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
+    spark.conf.unset("spark.sql.adaptive.enabled")
+    check(s"$label rows match the JVM read (n=${jvmRows.length})",
+      jvmRows.length == 100 && jvmRows.sameElements(nativeRows),
+      s"jvm n=${jvmRows.length} native n=${nativeRows.length}")
+    check(s"$label fact scan is native with a runtime filter",
+      factScans.exists(_.toString.toLowerCase.contains("dynamicpruning")), plan.toString)
+    val listed = fullScans.map(scan => sliceCount(scan.perPartitionData)).sum
+    val read = factScans.map(scan => sliceCount(scan.perPartitionData))
+    check(s"$label native scan reads only the kept partitions",
+      read.nonEmpty && read.forall(n => n > 0 && n < listed),
+      s"file slices read per fact scan: ${read.mkString(", ")}, listed for the table: $listed")
+  }
+
+  // The same native scan read twice in one query shares one exchange, as the JVM scan does.
+  val reuseQuery = "select partitionpath, sum(fare) as s from native_cow group by partitionpath " +
+    "union all select partitionpath, sum(fare) as s from native_cow group by partitionpath"
+  spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+  val reuseJvmRows = spark.sql(reuseQuery).collect().map(_.toString).sorted
+  spark.conf.set("spark.comet.scan.hudi.enabled", "true")
+  val reuseDf = spark.sql(reuseQuery)
+  val reuseRows = reuseDf.collect().map(_.toString).sorted
+  val reusePlan = reuseDf.queryExecution.executedPlan.toString
+  spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+  check(s"repeated scan rows match the JVM read (n=${reuseJvmRows.length})",
+    reuseJvmRows.length == 6 && reuseJvmRows.sameElements(reuseRows),
+    s"jvm n=${reuseJvmRows.length} native n=${reuseRows.length}")
+  check("repeated native scan reuses its exchange",
+    reusePlan.contains("CometHudiNativeScan") && reusePlan.contains("ReusedExchange"), reusePlan)
 
   if (failures > 0 || checksRun != expectedChecks) {
     println(s"::error::native hudi scan probes: failures=$failures checksRun=$checksRun expected=$expectedChecks")

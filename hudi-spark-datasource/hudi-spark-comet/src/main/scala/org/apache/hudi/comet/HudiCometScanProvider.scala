@@ -37,7 +37,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.PlanExpression
 import org.apache.spark.sql.comet.{CometHudiNativeScanExec, SerializedPlan}
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
-import org.apache.spark.sql.execution.datasources.{FileFormat, FilePartition, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{FileFormat, FilePartition, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
 import org.apache.spark.sql.types.{ArrayType, BooleanType, ByteType, DataType, DateType, IntegerType, LongType, MapType, ShortType, StringType, StructType, TimestampNTZType}
 
@@ -54,7 +54,7 @@ import scala.collection.mutable.ArrayBuffer
  * tables whose partition columns are stored in the data files, with primitive output types)
  * returns None, which leaves the plan on Hudi's JVM scan.
  */
-class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapterSupport with Logging {
+class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
 
   override def supportsFormat(fileFormat: FileFormat): Boolean =
     fileFormat.isInstanceOf[HoodieFileGroupReaderBasedFileFormat]
@@ -78,11 +78,11 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
     }
     // Spark lists the partitions without the filters that hold a subquery (a
     // scalar subquery, or a dynamic partition pruning filter) and applies
-    // those at execution time; the listing read below has not been pruned by
-    // them.
-    if (scanExec.partitionFilters.exists(_.exists(_.isInstanceOf[PlanExpression[_]]))) {
-      return None
-    }
+    // those once the subqueries resolve at execution. The checks below run on
+    // that unpruned listing, a superset of what the scan reads, and the exec
+    // node plans its tasks again after pruning.
+    val runtimeFilters =
+      scanExec.partitionFilters.filter(_.exists(_.isInstanceOf[PlanExpression[_]]))
     if (scanExec.output.exists(attr =>
         attr.dataType.isInstanceOf[StructType] || attr.dataType.isInstanceOf[ArrayType] ||
           attr.dataType.isInstanceOf[MapType])) {
@@ -218,10 +218,21 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
       }
     }
 
-    val tasks = planTasks(session, scanExec, baseUri, format.isMORTable) match {
-      case Some(t) => t
-      case None => return None
-    }
+    // With runtime filters the tasks are planned at execution over the partitions the filters
+    // keep, so the full listing is only checked here, not serialized.
+    val staticPartitionBytes =
+      if (runtimeFilters.isEmpty) {
+        HudiCometScanProvider.planPartitions(
+          session, scanExec.selectedPartitions.toSeq, baseUri, format.isMORTable) match {
+          case Some(p) => p
+          case None => return None
+        }
+      } else if (HudiCometScanProvider.canPlan(
+          session, scanExec.selectedPartitions.toSeq, baseUri, format.isMORTable)) {
+        Array.empty[Array[Byte]]
+      } else {
+        return None
+      }
 
     val scanHashCode = scanExec.canonicalized.hashCode()
     val commonBuilder = OperatorOuterClass.HudiScanCommon
@@ -249,18 +260,6 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
     }
     val commonBytes = commonBuilder.build().toByteArray
 
-    val perPartitionBytes = tasks.map { slices =>
-      val builder = OperatorOuterClass.HudiScan.newBuilder()
-      for (slice <- slices) {
-        builder.addFileSlices(
-          OperatorOuterClass.HudiFileSlice
-            .newBuilder()
-            .setBaseFilePath(slice._1)
-            .addAllLogFilePaths(slice._2.asJava))
-      }
-      builder.build().toByteArray
-    }.toArray
-
     // The plan carries only the identity of the scan; the full common block and each
     // partition's slices are injected from the byte arrays above at execution time.
     val placeholder = OperatorOuterClass.Operator
@@ -278,7 +277,8 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
 
     logInfo(
       s"Converting Hudi scan of $baseUri to a Comet native scan " +
-        s"(${tasks.map(_.size).sum} file slices in ${tasks.size} tasks)")
+        (if (runtimeFilters.isEmpty) s"(${staticPartitionBytes.length} tasks)"
+         else "(tasks planned at execution after runtime partition pruning)"))
     Some(
       CometHudiNativeScanExec(
         placeholder,
@@ -288,8 +288,61 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
         baseUri,
         scanHashCode,
         commonBytes,
-        perPartitionBytes))
+        format.isMORTable,
+        runtimeFilters,
+        staticPartitionBytes))
   }
+}
+
+object HudiCometScanProvider extends SparkAdapterSupport {
+
+  /** Session config gating the native Hudi scan; off unless set to true. */
+  val SCAN_ENABLED_KEY = "spark.comet.scan.hudi.enabled"
+
+  val SUPPORTED_TABLE_VERSIONS: Set[Int] = Set(6, 8, 9)
+
+  /** Key generators that write partition values into the path unchanged. */
+  val IDENTITY_KEY_GENERATORS: Set[String] = Set(
+    "org.apache.hudi.keygen.SimpleKeyGenerator",
+    "org.apache.hudi.keygen.ComplexKeyGenerator",
+    "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+
+  /** Partition column types whose value survives the path rendering and parse the JVM read does. */
+  val PATH_ROUND_TRIP_PARTITION_TYPES: Set[DataType] =
+    Set(StringType, IntegerType, LongType, ShortType, ByteType, DateType, BooleanType)
+
+  /** URI schemes the object_store crate behind the native scan resolves. */
+  val SUPPORTED_SCHEMES: Set[String] =
+    Set("file", "s3", "s3a", "gs", "abfs", "abfss", "az", "adl", "azure")
+
+  /**
+   * The serialized file slices of each task over `partitions`, or None when a partition holds a
+   * shape the native reader does not take (see [[planTasks]]).
+   */
+  /** Whether every slice in `partitions` is one the native reader takes. */
+  def canPlan(
+      session: SparkSession,
+      partitions: Seq[PartitionDirectory],
+      baseUri: String,
+      isMor: Boolean): Boolean =
+    planTasks(session, partitions, baseUri, isMor).isDefined
+
+  def planPartitions(
+      session: SparkSession,
+      partitions: Seq[PartitionDirectory],
+      baseUri: String,
+      isMor: Boolean): Option[Array[Array[Byte]]] =
+    planTasks(session, partitions, baseUri, isMor).map(_.map { slices =>
+      val builder = OperatorOuterClass.HudiScan.newBuilder()
+      for (slice <- slices) {
+        builder.addFileSlices(
+          OperatorOuterClass.HudiFileSlice
+            .newBuilder()
+            .setBaseFilePath(slice._1)
+            .addAllLogFilePaths(slice._2.asJava))
+      }
+      builder.build().toByteArray
+    }.toArray)
 
   /**
    * The file slices of each task, as (base file path, log file paths) pairs with every path
@@ -303,7 +356,7 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
    */
   private def planTasks(
       session: SparkSession,
-      scanExec: FileSourceScanExec,
+      partitions: Seq[PartitionDirectory],
       baseUri: String,
       isMor: Boolean): Option[Seq[Seq[(String, Seq[String])]]] = {
     val basePrefix =
@@ -319,7 +372,7 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
     val partitionedFileUtils = sparkAdapter.getSparkPartitionedFileUtils
     val files = new ArrayBuffer[PartitionedFile]()
     val slicesByFile = new IdentityHashMap[PartitionedFile, (String, Seq[String])]()
-    for (partition <- scanExec.selectedPartitions) {
+    for (partition <- partitions) {
       for (file <- partition.files) {
         val filePath = file.getPath.toString
         val slice: (String, Seq[String]) = partition.values match {
@@ -371,30 +424,9 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
     }
     // Largest first, as Spark orders its splits before packing them.
     val sortedFiles = files.sortBy(_.length)(Ordering[Long].reverse).toSeq
-    val maxSplitBytes = FilePartition.maxSplitBytes(session, scanExec.selectedPartitions)
+    val maxSplitBytes = FilePartition.maxSplitBytes(session, partitions)
     Some(sparkAdapter.getFilePartitions(session, sortedFiles, maxSplitBytes)
       .map(_.files.map(slicesByFile.get).toSeq))
   }
 }
 
-object HudiCometScanProvider {
-
-  /** Session config gating the native Hudi scan; off unless set to true. */
-  val SCAN_ENABLED_KEY = "spark.comet.scan.hudi.enabled"
-
-  val SUPPORTED_TABLE_VERSIONS: Set[Int] = Set(6, 8, 9)
-
-  /** Key generators that write partition values into the path unchanged. */
-  val IDENTITY_KEY_GENERATORS: Set[String] = Set(
-    "org.apache.hudi.keygen.SimpleKeyGenerator",
-    "org.apache.hudi.keygen.ComplexKeyGenerator",
-    "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
-
-  /** Partition column types whose value survives the path rendering and parse the JVM read does. */
-  val PATH_ROUND_TRIP_PARTITION_TYPES: Set[DataType] =
-    Set(StringType, IntegerType, LongType, ShortType, ByteType, DateType, BooleanType)
-
-  /** URI schemes the object_store crate behind the native scan resolves. */
-  val SUPPORTED_SCHEMES: Set[String] =
-    Set("file", "s3", "s3a", "gs", "abfs", "abfss", "az", "adl", "azure")
-}

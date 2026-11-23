@@ -19,14 +19,17 @@
 
 package org.apache.spark.sql.comet
 
+import org.apache.hudi.comet.HudiCometScanProvider
+
 import org.apache.comet.serde.OperatorOuterClass
 import org.apache.comet.serde.OperatorOuterClass.Operator
 
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeReference, BoundReference, Expression, PlanExpression, Predicate}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.physical.{Partitioning, UnknownPartitioning}
-import org.apache.spark.sql.execution.FileSourceScanExec
+import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
+import org.apache.spark.sql.execution.datasources.PartitionDirectory
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 /**
@@ -36,6 +39,11 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  * grouping); this node carries the per-partition file slices as serialized planning data. The
  * native operator opens the table from hoodie.properties under the table base URI and reads each
  * slice (Parquet decode plus log-file merge) off the JVM.
+ *
+ * `runtimeFilters` are the partition filters that hold a subquery (dynamic partition pruning, or
+ * a scalar subquery). Spark resolves them when this node executes; the tasks are then planned
+ * again over the partitions they keep. `staticPartitionBytes` holds the tasks over every listed
+ * partition when there are no runtime filters, and is empty otherwise.
  */
 case class CometHudiNativeScanExec(
     override val nativeOp: Operator,
@@ -45,7 +53,9 @@ case class CometHudiNativeScanExec(
     tableBaseUri: String,
     scanHashCode: Int,
     commonBytes: Array[Byte],
-    perPartitionBytes: Array[Array[Byte]])
+    isMor: Boolean,
+    runtimeFilters: Seq[Expression],
+    staticPartitionBytes: Array[Array[Byte]])
     extends CometLeafExec
     with CometScanWithPlanData {
 
@@ -53,17 +63,58 @@ case class CometHudiNativeScanExec(
 
   override val nodeName: String = "CometHudiNativeScan"
 
-  // One partition per slice group, the count Comet sizes the native RDD with
-  // from perPartitionData.
+  // The task count is only known once the runtime filters resolve, and AQE reads the
+  // partitioning while it still holds unconverted pruning placeholders. The native RDD is sized
+  // from perPartitionData at execution, not from this.
   override lazy val outputPartitioning: Partitioning =
-    UnknownPartitioning(perPartitionBytes.length)
+    if (runtimeFilters.isEmpty) UnknownPartitioning(staticPartitionBytes.length)
+    else UnknownPartitioning(0)
 
   override def sourceKey: String =
     HudiScanDataKey.key(tableBaseUri, scanHashCode, nativeOp.getPlanId)
 
   override def commonData: Array[Byte] = commonBytes
 
-  override def perPartitionData: Array[Array[Byte]] = perPartitionBytes
+  override def perPartitionData: Array[Array[Byte]] = prunedPartitionBytes
+
+  override def dynamicPruningFilters: Seq[Expression] = runtimeFilters
+
+  override def withDynamicPruningFilters(filters: Seq[Expression]): SparkPlan =
+    copy(runtimeFilters = filters)
+
+  @transient private lazy val prunedPartitionBytes: Array[Array[Byte]] = {
+    if (runtimeFilters.isEmpty) {
+      staticPartitionBytes
+    } else {
+      ensureSubqueriesResolved()
+      HudiCometScanProvider
+        .planPartitions(session, prunedPartitions, tableBaseUri, isMor)
+        .getOrElse(throw new IllegalStateException(
+          s"Hudi scan of $tableBaseUri could not plan the partitions its runtime filters keep"))
+    }
+  }
+
+  /** The listed partitions the resolved runtime filters keep, as Spark's own file scan prunes. */
+  private def prunedPartitions: Seq[PartitionDirectory] = {
+    val partitionSchema = originalPlan.relation.partitionSchema
+    val predicate = Predicate.create(
+      runtimeFilters.reduce(And).transform { case a: AttributeReference =>
+        val index = partitionSchema.indexWhere(a.name == _.name)
+        BoundReference(index, partitionSchema(index).dataType, nullable = true)
+      },
+      Nil)
+    originalPlan.selectedPartitions.toSeq.filter(p => predicate.eval(p.values))
+  }
+
+  override def sparkFallback(newChildren: Seq[SparkPlan]): SparkPlan = {
+    // AQE converts the pruning placeholders in runtimeFilters, not in originalPlan, so restore
+    // the scan with the live filters.
+    val staticFilters =
+      originalPlan.partitionFilters.filterNot(_.exists(_.isInstanceOf[PlanExpression[_]]))
+    val restored = originalPlan.copy(partitionFilters = staticFilters ++ runtimeFilters)
+    originalPlan.logicalLink.foreach(restored.setLogicalLink)
+    restored
+  }
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
     val nativeMetrics = CometMetricNode.fromCometPlan(this)
@@ -81,30 +132,40 @@ case class CometHudiNativeScanExec(
       subqueries = Seq.empty)
   }
 
+  // The plan id in nativeOp only keys this node's planning data, so it is left out of equality
+  // and the canonical form, which lets Spark reuse an exchange or stage over the same scan.
   override protected def doCanonicalize(): CometHudiNativeScanExec = {
     copy(
+      nativeOp = nativeOp.toBuilder.setPlanId(0).build(),
       output = output.map(QueryPlan.normalizeExpressions(_, output)),
       originalPlan = null,
-      serializedPlanOpt = SerializedPlan(None))
+      serializedPlanOpt = SerializedPlan(None),
+      runtimeFilters = QueryPlan.normalizePredicates(
+        CometScanUtils.filterUnusedDynamicPruningExpressions(runtimeFilters),
+        output))
   }
 
   override def stringArgs: Iterator[Any] =
-    Iterator(output, tableBaseUri, perPartitionBytes.length)
+    Iterator(output, tableBaseUri, runtimeFilters, staticPartitionBytes.length)
 
   override def equals(obj: Any): Boolean = {
     obj match {
       case other: CometHudiNativeScanExec =>
-        this.nativeOp == other.nativeOp &&
         this.output == other.output &&
         this.tableBaseUri == other.tableBaseUri &&
         this.scanHashCode == other.scanHashCode &&
+        this.runtimeFilters == other.runtimeFilters &&
         this.serializedPlanOpt == other.serializedPlanOpt
       case _ => false
     }
   }
 
   override def hashCode(): Int =
-    java.util.Objects.hash(nativeOp, output, tableBaseUri, Integer.valueOf(scanHashCode))
+    java.util.Objects.hash(
+      output,
+      tableBaseUri,
+      Integer.valueOf(scanHashCode),
+      runtimeFilters)
 }
 
 /**
