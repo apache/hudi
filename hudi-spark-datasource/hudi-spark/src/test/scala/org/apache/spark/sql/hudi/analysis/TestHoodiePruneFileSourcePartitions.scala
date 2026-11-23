@@ -35,6 +35,7 @@ import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
 class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with ScalaAssertionSupport {
@@ -47,6 +48,17 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
+  }
+
+  /**
+   * Bytes of the table's base files, of one partition when its value is given. Their size depends
+   * on what wrote them, so the statistics of a plan are compared with what is on storage.
+   */
+  private def baseFileBytes(partitionValue: String = ""): Long = {
+    java.nio.file.Files.walk(java.nio.file.Paths.get(basePath, tableName)).iterator().asScala
+      .filter(path => path.toString.endsWith(".parquet") && !path.toString.contains("/.hoodie/")
+        && path.toString.contains(partitionValue))
+      .map(path => java.nio.file.Files.size(path)).sum
   }
 
   override def getSparkSessionExtensionsInjector: org.apache.hudi.common.util.Option[Consumer[SparkSessionExtensions]] =
@@ -110,12 +122,12 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
             case "eager" =>
               // NOTE: In case of partitioned table 3 files will be created, while in case of non-partitioned just 1
               if (partitioned) {
-                assertEquals(1272, f.stats.sizeInBytes.longValue / 1024)
-                assertEquals(1272, lr.stats.sizeInBytes.longValue / 1024)
+                assertEquals(baseFileBytes() / 1024, f.stats.sizeInBytes.longValue / 1024)
+                assertEquals(baseFileBytes() / 1024, lr.stats.sizeInBytes.longValue / 1024)
               } else {
                 // NOTE: We're adding 512 to make sure we always round to the next integer value
-                assertEquals(424, (f.stats.sizeInBytes.longValue + 512) / 1024)
-                assertEquals(424, (lr.stats.sizeInBytes.longValue + 512) / 1024)
+                assertEquals((baseFileBytes() + 512) / 1024, (f.stats.sizeInBytes.longValue + 512) / 1024)
+                assertEquals((baseFileBytes() + 512) / 1024, (lr.stats.sizeInBytes.longValue + 512) / 1024)
               }
 
             // Case #2: Lazy listing (default mode).
@@ -124,8 +136,9 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
             //          list the whole table
             case "lazy" =>
               // NOTE: We're adding 512 to make sure we always round to the next integer value
-              assertEquals(424, (f.stats.sizeInBytes.longValue + 512) / 1024)
-              assertEquals(424, (lr.stats.sizeInBytes.longValue + 512) / 1024)
+              val listedBytes = if (partitioned) baseFileBytes("2021-01-05") else baseFileBytes()
+              assertEquals((listedBytes + 512) / 1024, (f.stats.sizeInBytes.longValue + 512) / 1024)
+              assertEquals((listedBytes + 512) / 1024, (lr.stats.sizeInBytes.longValue + 512) / 1024)
 
             case _ => throw new UnsupportedOperationException()
           }
@@ -203,7 +216,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
           // table have to be listed
           listingModeOverride match {
             case "eager" | "lazy" =>
-              assertEquals(1272, lr.stats.sizeInBytes.longValue / 1024)
+              assertEquals(baseFileBytes() / 1024, lr.stats.sizeInBytes.longValue / 1024)
 
             case _ => throw new UnsupportedOperationException()
           }
