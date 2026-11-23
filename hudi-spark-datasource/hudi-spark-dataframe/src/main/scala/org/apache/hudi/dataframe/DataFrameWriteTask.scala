@@ -390,14 +390,17 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
   private def rejectUpdateToPendingClustering(partitionPath: String, fileId: String): Unit = {
     val fileGroup = new HoodieFileGroupId(partitionPath, fileId)
     if (pendingClusteringFileGroups.contains(fileGroup)) {
-      throw new HoodieClusteringUpdateException(
-        s"Not allowed to update the clustering file group $fileGroup. "
-          + "For pending clustering operations, we are not going to support update for now.")
+      throw DataFrameWriteTask.pendingClusteringUpdateError(fileGroup)
     }
   }
 }
 
 object DataFrameWriteTask {
+
+  def pendingClusteringUpdateError(fileGroup: HoodieFileGroupId): HoodieClusteringUpdateException =
+    new HoodieClusteringUpdateException(
+      s"Not allowed to update the clustering file group $fileGroup. "
+        + "For pending clustering operations, we are not going to support update for now.")
 
   /** Builds the record a handle takes from a routed row, its key, and whether it is a delete. */
   private[dataframe] type RecordFactory = (InternalRow, HoodieKey, Boolean) => HoodieRecord[_]

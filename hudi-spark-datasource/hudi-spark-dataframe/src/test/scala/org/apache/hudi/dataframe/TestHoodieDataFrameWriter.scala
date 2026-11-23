@@ -537,6 +537,59 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testInsertMergedByKeyAppliesDeleteMarkers(): Unit = {
+    val deleteSchema = StructType(schema.fields :+ StructField("_hoodie_is_deleted", org.apache.spark.sql.types.BooleanType, nullable = false))
+    def df(rows: Seq[(String, String, Long, String, Boolean)]) = spark.createDataFrame(
+      rows.map(r => Row(r._1, r._2, r._3, r._4, r._5)).asJava, deleteSchema)
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_insert_delete_marker_$enabled").toString
+      val options = writeOptions("insert", Map(
+        "hoodie.merge.allow.duplicate.on.inserts" -> "false",
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled))
+      df(Seq(("g1", "p1", 1L, "one", false), ("g2", "p1", 1L, "two", false)))
+        .write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+      // The insert pads the small file of p1, where g1 is; in p2 the marker row has nothing to remove.
+      df(Seq(("g1", "p1", 2L, "gone", true), ("g3", "p1", 2L, "three", false), ("g9", "p2", 2L, "ghost", true)))
+        .write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+      val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+      Assertions.assertEquals(Set("g2", "g3"), keys, s"path enabled = $enabled")
+    }
+  }
+
+  @Test
+  def testUpdateOfAFileGroupUnderPendingClusteringFailsTheWrite(): Unit = {
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_pending_clustering_$enabled").toString
+      val options = Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writeHudi(Seq(("h1", "p1", 1L, "a1"), ("h2", "p1", 1L, "a2")), "upsert", path, options)
+      val metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+        .setBasePath(path)
+        .build()
+      val client = org.apache.hudi.DataSourceUtils.createHoodieClient(
+        new org.apache.spark.api.java.JavaSparkContext(spark.sparkContext),
+        new org.apache.hudi.common.table.TableSchemaResolver(metaClient).getTableSchema(false).toString,
+        path, "test_dataframe_table", Map(
+          "hoodie.embed.timeline.server" -> "false",
+          DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE").asJava)
+      try {
+        Assertions.assertTrue(client.scheduleClustering(org.apache.hudi.common.util.Option.empty()).isPresent,
+          "no clustering was scheduled")
+      } finally {
+        client.close()
+      }
+      val failure = Assertions.assertThrows(classOf[Exception], () =>
+        makeDf(Seq(("h1", "p1", 2L, "a2"))).write.format("hudi")
+          .options(writeOptions("upsert", options)).mode(SaveMode.Append).save(path))
+      // The write itself fails, with the clustering conflict as the cause of the upsert failure.
+      val chain = Iterator.iterate[Throwable](failure)(_.getCause).takeWhile(_ != null).toSeq
+      Assertions.assertTrue(chain.exists(t => t.isInstanceOf[org.apache.hudi.exception.HoodieUpsertException]
+        && t.getCause.isInstanceOf[org.apache.hudi.exception.HoodieClusteringUpdateException]),
+        s"path enabled = $enabled, unexpected failure: ${chain.map(_.getClass.getSimpleName)}")
+    }
+  }
+
+  @Test
   def testRecordIndexConfigFallsBackToGlobalTaggingWhenNotReady(): Unit = {
     val path = tempDir.resolve("test_table_rli_not_ready").toString
     writeHudi(Seq(("f1", "pA", 1L, "orig")), "insert", path)

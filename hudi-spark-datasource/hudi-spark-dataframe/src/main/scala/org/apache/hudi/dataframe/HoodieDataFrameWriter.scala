@@ -243,7 +243,15 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     // one handle writes the file group, when the write task can rely on the order of rows
     // within a bucket.
     val colocateUpdatesWithPadding = profilerMode != PROFILER_SHUFFLE_STATS
-    val withBucket = withRoutingBucket(tagged, insertPlan, colocateUpdatesWithPadding)
+    rejectUpdatesOfPendingClustering(tagged, pendingClusteringFileGroups)
+    val routedToBuckets = withRoutingBucket(tagged, insertPlan, colocateUpdatesWithPadding)
+    // A delete-marker row that opens a new file has no record to remove.
+    val withBucket = if (tagged.columns.contains(DELETE_MARKER_COL)) {
+      routedToBuckets.filter(!(col(ROUTING_BUCKET_COL).startsWith(INSERT_BUCKET_PREFIX)
+        && coalesce(col(DELETE_MARKER_COL), lit(false))))
+    } else {
+      routedToBuckets
+    }
     val bucketOrdinal = withBucket.schema.fieldIndex(ROUTING_BUCKET_COL)
 
     val actionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
@@ -327,6 +335,21 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       SparkValidatorUtils.runValidators(writeConfig, writeMetadata, engineContext, table, instantTime)
     }
     DataFrameWriteResult(new HoodieWriteResult(javaRdd, replacedFileIds), extraMetadata)
+  }
+
+  /**
+   * Fails the write, before anything is written, when it updates a file group that a pending
+   * clustering is rewriting. The write tasks refuse such an update as well, but only once they
+   * run, which is when the write is committed.
+   */
+  private def rejectUpdatesOfPendingClustering(tagged: Dataset[Row], pendingClusteringFileGroups: Set[HoodieFileGroupId]): Unit = {
+    if (pendingClusteringFileGroups.nonEmpty) {
+      val pendingFileIds = pendingClusteringFileGroups.map(_.getFileId).toSeq
+      tagged.filter(col(TAGGED_FILE_ID_COL).isin(pendingFileIds: _*))
+        .select(col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), col(TAGGED_FILE_ID_COL))
+        .head(1)
+        .foreach(row => throw DataFrameWriteTask.pendingClusteringUpdateError(new HoodieFileGroupId(row.getString(0), row.getString(1))))
+    }
   }
 
   /**
@@ -703,8 +726,10 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
         .withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))
         .withColumn(ROW_OP_COL, lit(ROW_OP_UPSERT))
     } else if (operation != WriteOperationType.UPSERT && operation != WriteOperationType.DELETE) {
-      // Inserts never tag, and a delete-marker row has nothing to delete.
-      prepared.filter(!deleteMarker)
+      // Inserts never tag. Where the handles merge the inserts of a small file group by key, a
+      // delete-marker row removes the record of its key there; anywhere else it has nothing to
+      // delete.
+      (if (writeConfig.allowDuplicateInserts) prepared.filter(!deleteMarker) else prepared)
         .withColumn(TAGGED_FILE_ID_COL, lit(null).cast(StringType))
         .withColumn(ROW_OP_COL, lit(ROW_OP_UPSERT))
     } else {
