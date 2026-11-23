@@ -30,10 +30,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +44,9 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
@@ -128,6 +133,50 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
     archivedTimeline.loadCompletedInstantDetailsInMemory(instantTime, instantTime);
 
     assertArrayEquals(commitMetadata, archivedTimeline.getInstantDetails(archivedInstant).get());
+  }
+
+  @Test
+  void testTrimBeforePreservesBoundaryAndHistoricalSnapshot() throws Exception {
+    long cutoff = 1700000000000L;
+    List<ActiveAction> actions = new ArrayList<>();
+    List<String> times = new ArrayList<>();
+    String completion = HoodieInstantTimeGenerator.formatDateBasedOnTimeZone(new Date(cutoff + 10));
+    for (int i = -2; i <= 2; i++) {
+      String time = HoodieInstantTimeGenerator.formatDateBasedOnTimeZone(new Date(cutoff + i));
+      times.add(time);
+      HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, time, completion);
+      actions.add(new DummyActiveAction(instant, new byte[] {(byte) i}));
+    }
+    LSMTimelineWriter writer = createTimelineWriter();
+    // One fully expired file, one straddling the cutoff and one wholly retained file.
+    writer.write(actions.subList(0, 1), Option.empty(), Option.empty());
+    writer.write(actions.subList(1, 4), Option.empty(), Option.empty());
+    writer.write(actions.subList(4, 5), Option.empty(), Option.empty());
+    StoragePath archive = metaClient.getArchivePath();
+    int original = LSMTimeline.latestSnapshotVersion(metaClient, archive);
+    List<GenericRecord> before = readSnapshotRecords(original);
+    assertThat(before.stream().map(r -> r.get("instantTime").toString()).collect(Collectors.toList()), is(times));
+
+    writer.trimBefore(cutoff);
+    int trimmed = LSMTimeline.latestSnapshotVersion(metaClient, archive);
+    assertThat(trimmed, is(original + 1));
+    List<GenericRecord> retained = before.subList(2, 5);
+    assertThat(readSnapshotRecords(trimmed), is(retained));
+    assertThat(readSnapshotRecords(original), is(before));
+
+    writer.trimBefore(cutoff);
+    assertThat(LSMTimeline.latestSnapshotVersion(metaClient, archive), is(trimmed));
+    assertThat(readSnapshotRecords(trimmed), is(retained));
+  }
+
+  private List<GenericRecord> readSnapshotRecords(int version) throws Exception {
+    StoragePath archive = metaClient.getArchivePath();
+    List<GenericRecord> records = new ArrayList<>();
+    for (String name : LSMTimeline.latestSnapshotManifest(metaClient, version, archive).getFileNames()) {
+      records.addAll(new ParquetUtils().readAvroRecords(metaClient.getStorage(), new StoragePath(archive, name)));
+    }
+    records.sort(java.util.Comparator.comparing(r -> r.get("instantTime").toString()));
+    return records;
   }
 
   @Test

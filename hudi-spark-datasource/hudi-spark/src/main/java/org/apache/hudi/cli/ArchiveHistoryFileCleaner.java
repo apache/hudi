@@ -17,11 +17,14 @@
 
 package org.apache.hudi.cli;
 
+import org.apache.hudi.client.timeline.LSMTimelineWriter;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -32,7 +35,6 @@ import org.apache.hudi.storage.StoragePathInfo;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -73,16 +75,26 @@ public final class ArchiveHistoryFileCleaner {
   private static final long MILLIS_PER_DAY = 24L * 60L * 60L * 1000L;
 
   /** Metadata of a single deleted archive file. */
-  @Getter
   @AllArgsConstructor
   public static class DeletedFileInfo {
     private final String path;
     private final long sizeBytes;
     private final long modificationTime;
+
+    public String getPath() {
+      return path;
+    }
+
+    public long getSizeBytes() {
+      return sizeBytes;
+    }
+
+    public long getModificationTime() {
+      return modificationTime;
+    }
   }
 
   /** Aggregate result of a clean run. */
-  @Getter
   @AllArgsConstructor
   public static class CleanResult {
     private final String archivePath;
@@ -90,6 +102,22 @@ public final class ArchiveHistoryFileCleaner {
     private final Long cutoffTime;
     private final long archiveSizeBytes;
     private final List<DeletedFileInfo> deletedFiles;
+
+    public String getArchivePath() {
+      return archivePath;
+    }
+
+    public Long getCutoffTime() {
+      return cutoffTime;
+    }
+
+    public long getArchiveSizeBytes() {
+      return archiveSizeBytes;
+    }
+
+    public List<DeletedFileInfo> getDeletedFiles() {
+      return deletedFiles;
+    }
   }
 
   /**
@@ -113,6 +141,22 @@ public final class ArchiveHistoryFileCleaner {
     TransactionManager txnManager = new TransactionManager(config, storage);
     try {
       txnManager.beginStateChange(Option.empty(), Option.empty());
+      if (TimelineLayoutVersion.LAYOUT_VERSION_2.equals(metaClient.getTimelineLayoutVersion())) {
+        StoragePath archive = metaClient.getArchivePath();
+        Long cutoff = computeCutoffTime(metaClient, retainDays);
+        try {
+          if (!storage.exists(archive)) {
+            return new CleanResult(archive.toString(), cutoff, 0L, java.util.Collections.emptyList());
+          }
+          if (cutoff != null) {
+            LSMTimelineWriter.getInstance(config, new LocalTaskContextSupplier(), metaClient).trimBefore(cutoff);
+          }
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to trim archive snapshot at " + archive, e);
+        }
+        // Old snapshots retain their files until the normal archive cleaner reclaims them.
+        return new CleanResult(archive.toString(), cutoff, computeDirectorySize(storage, archive), java.util.Collections.emptyList());
+      }
       return doClean(metaClient, storage, retainDays);
     } finally {
       txnManager.endStateChange(Option.empty());

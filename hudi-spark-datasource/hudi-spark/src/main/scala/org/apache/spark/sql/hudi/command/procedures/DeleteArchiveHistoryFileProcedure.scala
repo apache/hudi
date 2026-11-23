@@ -30,8 +30,10 @@ import java.util.function.Supplier
 import scala.collection.JavaConverters._
 
 /**
- * Spark CALL procedure that deletes expired V1 archive history files
- * (`.commits_.archive.<version>[_<write-token>]`) under `.hoodie/archived`.
+ * Trims archived timeline history. For layout V2 the cutoff applies to instant requested times:
+ * records at the cutoff are retained. Old snapshots keep their Parquet files until archive GC,
+ * so deleted_files is empty. Run with archiving stopped or with the same effective shared lock.
+ * For V1 the file-based rules below apply.
  *
  * <p>Usage:
  * <pre>
