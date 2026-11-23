@@ -20,8 +20,8 @@
 COMET_REPO=https://github.com/apache/datafusion-comet.git
 COMET_COMMIT=ab46419fcc99bcd34aa4d89f7b545d5d51694a88
 COMET_VERSION=1.2.0-hudi-1
-# The hudi-rs release is pinned in overlay/native/Cargo.toml (crates.io
-# dependency) and locked with its full transitive graph in
-# overlay/native/Cargo.lock. This line documents it for humans; the Cargo files
-# are the source of truth.
-HUDI_RS_VERSION=0.6.0
+# hudi-rs is pinned in overlay/native/Cargo.toml and locked with its full
+# transitive graph in overlay/native/Cargo.lock. This line documents it for
+# humans; the Cargo files are the source of truth. The pin is a git revision
+# until TableBuilder::with_object_store is in a hudi-rs release.
+HUDI_RS_VERSION=0.7.0-dev (git 2fa7fc4107e9)

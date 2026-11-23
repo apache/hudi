@@ -3614,9 +3614,9 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "fsst"
-version = "13.0.0"
+version = "14.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de52c5e8a41983a44223740e4322122b5a9111909215ebdb4abd9b3b4cf04a67"
+checksum = "9fd609c1983fc6edb1875561f1b39166d58bf5187a72765f705cf5759e8d84ba"
 dependencies = [
  "arrow-array 58.4.2",
  "rand 0.9.5",
@@ -4005,9 +4005,8 @@ checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
 name = "hudi"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c8608d21b20736de0292d8d9376fe99a0aa8d1187972592a77f8fae28f70376"
+version = "0.7.0-dev"
+source = "git+https://github.com/yihua/hudi-rs.git?rev=2fa7fc4107e95d998f81ae33920e21c56e4db5da#2fa7fc4107e95d998f81ae33920e21c56e4db5da"
 dependencies = [
  "hudi-core",
  "hudi-datafusion",
@@ -4015,9 +4014,8 @@ dependencies = [
 
 [[package]]
 name = "hudi-core"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "494df37e6b3aec6d7f06f0006d3990637c774304b6635d806f02d8ab76a29466"
+version = "0.7.0-dev"
+source = "git+https://github.com/yihua/hudi-rs.git?rev=2fa7fc4107e95d998f81ae33920e21c56e4db5da#2fa7fc4107e95d998f81ae33920e21c56e4db5da"
 dependencies = [
  "apache-avro 0.21.0",
  "apache-avro-derive",
@@ -4081,9 +4079,8 @@ dependencies = [
 
 [[package]]
 name = "hudi-datafusion"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43f78b10e718096ca7ddcc9572261154b676138acbb1d916116018e7f0a3b3b3"
+version = "0.7.0-dev"
+source = "git+https://github.com/yihua/hudi-rs.git?rev=2fa7fc4107e95d998f81ae33920e21c56e4db5da#2fa7fc4107e95d998f81ae33920e21c56e4db5da"
 dependencies = [
  "arrow 59.3.0",
  "arrow-arith 59.3.0",
@@ -4678,26 +4675,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonb"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb98fb29636087c40ad0d1274d9a30c0c1e83e03ae93f6e7e89247b37fcc6953"
-dependencies = [
- "byteorder",
- "ethnum",
- "fast-float2",
- "itoa",
- "jiff",
- "nom 8.0.0",
- "num-traits",
- "ordered-float 5.5.1",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "zmij",
-]
-
-[[package]]
 name = "kv-log-macro"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4708,9 +4685,9 @@ dependencies = [
 
 [[package]]
 name = "lance-arrow"
-version = "13.0.0"
+version = "14.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bab6e64549f9ad9a6380a35b56d7dca612555a6272c07b3abca84e59ded6f463"
+checksum = "f7c2ac36400ae791c7bf7728c802df91b444101e60600e866ae809172fa9a4b1"
 dependencies = [
  "arrow-array 58.4.2",
  "arrow-buffer 58.4.2",
@@ -4724,16 +4701,16 @@ dependencies = [
  "futures",
  "getrandom 0.2.17",
  "half",
- "jsonb",
+ "lance-jsonb",
  "num-traits",
  "rand 0.9.5",
 ]
 
 [[package]]
 name = "lance-bitpacking"
-version = "13.0.0"
+version = "14.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38984429670b348e62eda38315a6d01a930c5c5e8b85bbfd8b998e7d1fe6a257"
+checksum = "69e2148a7eb856ccff32834b3c4a241515aa0d958e37020d0634d40f7b55fce3"
 dependencies = [
  "arrayref",
  "crunchy",
@@ -4743,9 +4720,9 @@ dependencies = [
 
 [[package]]
 name = "lance-core"
-version = "13.0.0"
+version = "14.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3e377ee5bc5118efe5c321ecff0a07ac8f56db6bed16e31304e7d876ddcd96c"
+checksum = "3ddcb680ecedb6b6d89d84ba1d272d0b43f64392b693f37d8bf49f25d130bd3d"
 dependencies = [
  "arrow-array 58.4.2",
  "arrow-buffer 58.4.2",
@@ -4780,9 +4757,9 @@ dependencies = [
 
 [[package]]
 name = "lance-derive"
-version = "13.0.0"
+version = "14.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e847c0e4bf23d21967fe79473d8001309c7351895afb347e1a997d5fadca59fd"
+checksum = "286f6c3edd6f22a6309439b71b0bad441e7da7e23b19ff920b6caf3bc13e6883"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4791,9 +4768,9 @@ dependencies = [
 
 [[package]]
 name = "lance-encoding"
-version = "13.0.0"
+version = "14.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c04a91e545b505b5e6ec98854c7eadc56689cbc072f138dd26805ef0095e81a"
+checksum = "4d569708f3ccb1a0aae3d236c92a79086a7e7ffc5c705dcf7871d4e3971625d0"
 dependencies = [
  "arrow-arith 58.4.2",
  "arrow-array 58.4.2",
@@ -4821,14 +4798,14 @@ dependencies = [
  "tokio",
  "tracing",
  "xxhash-rust",
- "zstd 0.13.3",
+ "zstd 0.14.0",
 ]
 
 [[package]]
 name = "lance-file"
-version = "13.0.0"
+version = "14.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0393605ef4f2bdd9894950de6c68fd2ca99a1de76d743e52e001177ccd9994f"
+checksum = "988cf3d43b2001061904f0da16419e5891f9ff8befdd282b3281c8c279ee0734"
 dependencies = [
  "arrow-arith 58.4.2",
  "arrow-array 58.4.2",
@@ -4860,9 +4837,9 @@ dependencies = [
 
 [[package]]
 name = "lance-io"
-version = "13.0.0"
+version = "14.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "224730479e781d24b81a0afecfe230b5b21a86a4f767ba7655b974402d0c67c5"
+checksum = "6a2ca7e47930a87fecba7b6ddfaa3c3d9caa20e06be44a5cfe0558fbb5c25927"
 dependencies = [
  "arrow 58.4.2",
  "arrow-array 58.4.2",
@@ -4886,6 +4863,7 @@ dependencies = [
  "path_abs",
  "pin-project",
  "prost",
+ "quick-xml 0.41.0",
  "rand 0.9.5",
  "reqsign-core",
  "reqsign-file-read-tokio",
@@ -4900,10 +4878,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "lance-namespace"
-version = "13.0.0"
+name = "lance-jsonb"
+version = "14.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eedb0930505992009d9a1b9aefc2e9fde6026fcc1b345211e2a609dace5be022"
+checksum = "d5505df8bebc102502a006b0f9815c0a5608649ead263d237e43063e454cacfe"
+dependencies = [
+ "byteorder",
+ "ethnum",
+ "fast-float2",
+ "itoa",
+ "jiff",
+ "nom 8.0.0",
+ "num-traits",
+ "ordered-float 5.5.1",
+ "serde",
+ "serde_json",
+ "zmij",
+]
+
+[[package]]
+name = "lance-namespace"
+version = "14.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be53f1c7b3af66fa97e7d7d955187955388fcfc5caf46a1f5171f0c0da42aea2"
 dependencies = [
  "arrow 58.4.2",
  "async-trait",
@@ -6659,7 +6656,7 @@ version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03da047801ff44bb6a4d407d4860c05fd70bb81714e6b2f3812603d5b145b042"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -7870,7 +7867,7 @@ version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "287f59010008f0d7cf5e3b03196d666c1acc46c8d3e9cf34c28a1a7157601e72"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",

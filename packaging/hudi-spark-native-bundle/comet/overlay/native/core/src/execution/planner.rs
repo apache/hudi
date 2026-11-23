@@ -1962,6 +1962,33 @@ impl PhysicalPlanner {
                     .iter()
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect();
+                // Comet builds S3 and ABFS stores from the Hadoop settings its own native scan
+                // receives; those tables are read through that store. Any other scheme keeps the
+                // store hudi-rs builds from its storage options and environment.
+                let scheme = common
+                    .table_base_uri
+                    .split_once(':')
+                    .map(|(scheme, _)| scheme.to_ascii_lowercase());
+                let object_store = match scheme.as_deref() {
+                    Some("s3" | "s3a" | "abfs" | "abfss") => {
+                        let object_store_options: HashMap<String, String> = common
+                            .object_store_options
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
+                        let (object_store_url, _, _) = prepare_object_store_with_configs(
+                            self.session_ctx.runtime_env(),
+                            common.table_base_uri.clone(),
+                            &object_store_options,
+                        )?;
+                        Some(
+                            self.session_ctx
+                                .runtime_env()
+                                .object_store(&object_store_url)?,
+                        )
+                    }
+                    _ => None,
+                };
                 let file_slices = scan
                     .file_slices
                     .iter()
@@ -1973,6 +2000,7 @@ impl PhysicalPlanner {
                 let hudi_scan = HudiScanExec::new(
                     common.table_base_uri.clone(),
                     options,
+                    object_store,
                     required_schema,
                     file_slices,
                 );

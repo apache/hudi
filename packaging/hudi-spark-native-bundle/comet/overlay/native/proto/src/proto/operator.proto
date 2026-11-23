@@ -305,8 +305,7 @@ message HudiFileSlice {
 // reader/storage options and the projected schema travel in the plan.
 message HudiScanCommon {
   string table_base_uri = 1;
-  // Storage options (credentials, endpoints) and hoodie.* read options for the
-  // hudi-rs reader.
+  // hoodie.* options for the hudi-rs reader.
   map<string, string> options = 2;
   // Columns the scan must produce, in output order. Drives the reader's
   // column projection.
@@ -317,6 +316,10 @@ message HudiScanCommon {
   // is injected into the right scan node. Derived from the canonicalized Spark
   // plan node.
   int32 scan_hash_code = 5;
+  // Hadoop object store settings, as Comet's native Parquet scan receives
+  // them. An S3 or ABFS table is read through the store Comet builds from
+  // them.
+  map<string, string> object_store_options = 6;
 }
 
 message HudiScan {

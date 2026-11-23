@@ -42,7 +42,9 @@ use datafusion::physical_plan::{
     DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties,
 };
 use futures::{StreamExt, TryStreamExt};
-use hudi::table::{ReadOptions, Table};
+use hudi::table::builder::TableBuilder;
+use hudi::table::ReadOptions;
+use object_store::ObjectStore;
 
 /// One file slice assigned to this partition: a base file and the log files
 /// whose records amend it.
@@ -56,6 +58,7 @@ pub struct HudiFileSliceSpec {
 pub struct HudiScanExec {
     table_base_uri: String,
     options: HashMap<String, String>,
+    object_store: Option<Arc<dyn ObjectStore>>,
     output_schema: SchemaRef,
     file_slices: Vec<HudiFileSliceSpec>,
     plan_properties: Arc<PlanProperties>,
@@ -66,6 +69,7 @@ impl HudiScanExec {
     pub fn new(
         table_base_uri: String,
         options: HashMap<String, String>,
+        object_store: Option<Arc<dyn ObjectStore>>,
         output_schema: SchemaRef,
         file_slices: Vec<HudiFileSliceSpec>,
     ) -> Self {
@@ -78,6 +82,7 @@ impl HudiScanExec {
         Self {
             table_base_uri,
             options,
+            object_store,
             output_schema,
             file_slices,
             plan_properties,
@@ -171,6 +176,7 @@ impl ExecutionPlan for HudiScanExec {
     ) -> DFResult<SendableRecordBatchStream> {
         let base_uri = self.table_base_uri.clone();
         let options = self.options.clone();
+        let object_store = self.object_store.clone();
         let schema = Arc::clone(&self.output_schema);
         let slices = self.file_slices.clone();
         let projection: Vec<String> = schema.fields().iter().map(|f| f.name().clone()).collect();
@@ -189,7 +195,12 @@ impl ExecutionPlan for HudiScanExec {
                 .iter()
                 .map(|(k, v)| (k.as_str(), v.as_str()))
                 .partition(|(k, _)| k.starts_with("hoodie.read."));
-            let table = Table::new_with_options(&base_uri, table_opts)
+            let mut builder = TableBuilder::from_base_uri(&base_uri).with_options(table_opts);
+            if let Some(store) = object_store {
+                builder = builder.with_object_store(store);
+            }
+            let table = builder
+                .build()
                 .await
                 .map_err(|e| {
                     DataFusionError::Execution(format!("failed to open Hudi table {base_uri}: {e}"))

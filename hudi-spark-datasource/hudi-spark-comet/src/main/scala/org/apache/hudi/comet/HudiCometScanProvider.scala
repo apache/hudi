@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.{HoodieFileFormat, HoodieLogFile}
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.comet.CometConf
+import org.apache.comet.objectstore.NativeConfig
 import org.apache.comet.parquet.CometParquetUtils
 import org.apache.comet.rules.CometExternalV1ScanProvider
 import org.apache.comet.serde.OperatorOuterClass
@@ -108,8 +109,8 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
       !CometConf.COMET_SCAN_ALLOW_DISABLED_PARQUET_VECTORIZED_READER.get(conf)) {
       return None
     }
-    if (CometParquetUtils.encryptionEnabled(
-        session.sessionState.newHadoopConfWithOptions(relation.options))) {
+    val hadoopConf = session.sessionState.newHadoopConfWithOptions(relation.options)
+    if (CometParquetUtils.encryptionEnabled(hadoopConf)) {
       return None
     }
 
@@ -166,11 +167,21 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
       }
     }
     val baseUri = fileIndex.metaClient.getBasePath.toString
-    // hudi-rs opens the table through object_store, which resolves only these
+    // The native scan reads through object_store, which resolves only these
     // schemes; any other would fail at task time instead of falling back.
     val scheme = Option(new StoragePath(baseUri).toUri.getScheme).getOrElse("file")
     if (!HudiCometScanProvider.SUPPORTED_SCHEMES.contains(scheme.toLowerCase)) {
       return None
+    }
+    // An S3 or ABFS table is read through the object store Comet's own native
+    // scan would build for these files, so the same Hadoop settings (fs.s3a.*
+    // keys, per-bucket overrides, credential providers) apply. Every table
+    // file lives under the base path.
+    val objectStoreOptions = NativeConfig.extractScanObjectStoreOptions(
+      hadoopConf,
+      Seq(new StoragePath(baseUri).toUri)) match {
+      case Right(options) => options
+      case Left(_) => return None
     }
     // Every output column must come out of the data files: the native reader
     // has no partition-value append path. Partition columns are stored in the
@@ -224,6 +235,7 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
       // the requested one. Base files need no bound: the driver's listing only
       // names base files from admitted commits.
       .putOptions("hoodie.read.as.of.timestamp", format.getQueryTimestamp)
+      .putAllObjectStoreOptions(objectStoreOptions.asJava)
     for (attr <- scanExec.output) {
       val field = OperatorOuterClass.SparkStructField
         .newBuilder()
@@ -382,7 +394,7 @@ object HudiCometScanProvider {
   val PATH_ROUND_TRIP_PARTITION_TYPES: Set[DataType] =
     Set(StringType, IntegerType, LongType, ShortType, ByteType, DateType, BooleanType)
 
-  /** URI schemes the object_store crate behind hudi-rs resolves. */
+  /** URI schemes the object_store crate behind the native scan resolves. */
   val SUPPORTED_SCHEMES: Set[String] =
     Set("file", "s3", "s3a", "gs", "abfs", "abfss", "az", "adl", "azure")
 }
