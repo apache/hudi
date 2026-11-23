@@ -523,6 +523,27 @@ class TestHoodieDataFrameWriter {
   }
 
   @Test
+  def testDroppedPartitionColumnsStayOutOfTheDataFiles(): Unit = {
+    val tables = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_drop_partition_columns_$enabled").toString
+      val opts = Map(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key -> "true",
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writeHudi(Seq(("d1", "p1", 1L, "a1"), ("d2", "p2", 1L, "a2")), "insert", path, opts)
+      writeHudi(Seq(("d1", "p1", 2L, "b1"), ("d3", "p1", 2L, "a3")), "upsert", path, opts)
+      val rows = spark.read.format("hudi").load(path).select("key", "partition", "ts", "value").collect()
+        .map(r => (r.getString(0), r.getString(1), r.getLong(2), r.getString(3))).sorted.toSeq
+      val fileColumns = java.nio.file.Files.walk(java.nio.file.Paths.get(path)).iterator().asScala
+        .map(_.toString).filter(file => file.endsWith(".parquet") && !file.contains("/.hoodie/"))
+        .map(file => spark.read.parquet(file).columns.toSeq).toSet
+      (rows, fileColumns)
+    }
+    Assertions.assertEquals(tables(1), tables.head)
+    Assertions.assertEquals(Seq(("d1", "p1", 2L, "b1"), ("d2", "p2", 1L, "a2"), ("d3", "p1", 2L, "a3")), tables.head._1)
+    Assertions.assertTrue(tables.head._2.nonEmpty && tables.head._2.forall(!_.contains("partition")),
+      s"data file columns: ${tables.head._2}")
+  }
+
+  @Test
   def testEachInsertBucketGetsAFile(): Unit = {
     val path = tempDir.resolve("test_table_insert_buckets").toString
     val rows = (1 to 40).map(i => (s"b$i", "p1", 1L, s"v$i"))
@@ -690,6 +711,15 @@ class TestHoodieDataFrameWriter {
           "upsert" -> Seq(("k1", "p1", 5L, "back"))))
       Assertions.assertEquals(Seq(("k1", "p1", 5L, "back"), ("k2", "p1", 1L, "a2")), rows)
     }
+  }
+
+  @Test
+  def testDeletePartitionDeletesThePartitionsOfTheRows(): Unit = {
+    val rows = writeOnBothPaths("test_table_delete_partition", Map.empty, Seq(
+      "insert" -> Seq(("k1", "p1", 1L, "a1"), ("k2", "p2", 1L, "a2"), ("k3", "p3", 1L, "a3")),
+      // The rows only name partitions: their keys need not be in the table.
+      "delete_partition" -> Seq(("x1", "p1", 2L, "x"), ("x2", "p3", 2L, "x"), ("x3", "p3", 2L, "x"))))
+    Assertions.assertEquals(Seq(("k2", "p2", 1L, "a2")), rows)
   }
 
   @Test

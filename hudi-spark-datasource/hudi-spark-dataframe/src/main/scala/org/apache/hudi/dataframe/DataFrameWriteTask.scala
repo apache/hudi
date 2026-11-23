@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieEmptyRecord, HoodieFileGroupId, HoodieKey, HoodieRecord, HoodieRecordLocation, HoodieRecordMerger, HoodieSparkRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCache}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.{BufferedRecordMergerFactory, DeleteContext}
 import org.apache.hudi.common.util.{HoodieRecordUtils, Option => HOption, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -168,13 +169,23 @@ class DataFrameWriteTask(writeConfig: HoodieWriteConfig,
     // The row buffer behind the head is reused, so the bucket to compare with is copied.
     val bucket = buffered.head.getUTF8String(bucketOrdinal).clone()
     val helper = new BulkInsertDataInternalWriterHelper(
-      table, writeConfig, instantTime, taskContextSupplier.getPartitionIdSupplier.get,
+      table, rowInsertConfig, instantTime, taskContextSupplier.getPartitionIdSupplier.get,
       taskContextSupplier.getStageIdSupplier.get.toLong, taskContextSupplier.getAttemptIdSupplier.get,
       writeSchema, writeConfig.populateMetaFields(), true)
     while (buffered.hasNext && buffered.head.getUTF8String(bucketOrdinal) == bucket) {
       helper.write(writeProjection(buffered.next()))
     }
     helper.getWriteStatuses.asScala.toSeq
+  }
+
+  /** The rows of the task come without the partition columns the write drops, so the row writer has none to drop. */
+  @transient private lazy val rowInsertConfig: HoodieWriteConfig = {
+    if (writeConfig.shouldDropPartitionColumns) {
+      HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps)
+        .withProps(java.util.Collections.singletonMap(HoodieTableConfig.DROP_PARTITION_COLUMNS.key, "false")).build()
+    } else {
+      writeConfig
+    }
   }
 
   /**

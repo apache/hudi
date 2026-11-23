@@ -520,14 +520,21 @@ class HoodieSparkSqlWriterInternal {
               .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
               .setBasePath(basePath.toString)
               .build()
-            // Get list of partitions to delete
-            val partitionsToDelete = if (parameters.contains(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
+            // Partitions the options name need no rows. Otherwise the rows name them, by their partition paths.
+            val partitionsFromOptions = parameters.contains(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())
+            val dataFrameWriteSpec = DataFrameWriteSpec(operation, parameters, tableMetaClient, df.schema, None,
+              keysFromMetaColumns = false, locationFromMetaColumns = false, streamingWritesParamsOpt.isDefined)
+            val dataFrameWritePath = if (partitionsFromOptions) None else HoodieDataFrameWritePath.select(dataFrameWriteSpec)
+            // Get list of partitions to delete, unless the DataFrame write path derives it from the rows
+            val partitionsToDelete: Option[java.util.List[String]] = if (partitionsFromOptions) {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
-              java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).asScala.toList, jsc,
-                tableMetaClient.getStorage, hoodieConfig, basePath.toString, tableMetaClient): _*)
+              Some(java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).asScala.toList, jsc,
+                tableMetaClient.getStorage, hoodieConfig, basePath.toString, tableMetaClient): _*))
+            } else if (dataFrameWritePath.isDefined) {
+              None
             } else {
               val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
-              genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
+              Some(genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect())
             }
 
             // Issue the delete.
@@ -537,7 +544,10 @@ class HoodieSparkSqlWriterInternal {
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
             instantTime = recordStartedInstant(client, client.startDeletePartitionCommit(tableMetaClient))
-            val writeResult =  DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
+            val writeResult = partitionsToDelete match {
+              case Some(partitions) => DataSourceUtils.doDeletePartitionsOperation(client, partitions, instantTime)
+              case None => dataFrameWritePath.get.write(dataFrameWriteSpec, client, instantTime, df).writeResult
+            }
             (writeResult, client)
 
           // Here all other (than DELETE, DELETE_PARTITION) write operations are handled

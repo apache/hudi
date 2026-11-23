@@ -48,7 +48,7 @@ import org.apache.hudi.metrics.RecordIndexLookupMetrics
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.HoodieWriteMetadata
-import org.apache.hudi.util.CommonClientUtils
+import org.apache.hudi.util.{CommonClientUtils, SparkKeyGenUtils}
 
 import org.apache.spark.Partitioner
 import org.apache.spark.api.java.JavaRDD
@@ -81,15 +81,12 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     val params = spec.parameters
     val tableConfig = spec.metaClient.getTableConfig
     val writeConfig = resolveWriteConfig(spec)
-    def enabled(key: String): Boolean = params.getOrElse(key, "false").toBoolean
     val checks: Seq[(() => Boolean, String)] = Seq(
       (() => !SUPPORTED_OPERATIONS.contains(spec.operation), s"operation ${spec.operation.value}"),
       (() => StringUtils.nonEmpty(writeConfig.getIndexClass), "custom index classes"),
       (() => !SUPPORTED_INDEX_TYPES.contains(writeConfig.getIndexType), s"index type ${writeConfig.getIndexType}"),
       (() => tableConfig.getMetaFieldsMode != MetaFieldsMode.ALL || writeConfig.getMetaFieldsMode != MetaFieldsMode.ALL,
         "tables that do not populate all meta fields"),
-      (() => tableConfig.shouldDropPartitionColumns() || enabled(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key),
-        "dropped partition columns"),
       (() => tableConfig.isCDCEnabled, "CDC tables"),
       (() => tableConfig.isLSMTreeStorageLayout, "the LSM tree storage layout"),
       (() => tableConfig.getBaseFileFormat != HoodieFileFormat.PARQUET || tableConfig.isMultipleBaseFileFormatsEnabled,
@@ -107,13 +104,19 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
       (() => writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK
         && mergeProps(writeConfig, tableConfig).containsKey(DefaultHoodieRecordPayload.DELETE_KEY),
         "custom delete markers on engine-native records"))
-    checks.collectFirst { case (applies, what) if applies() => s"$what are not supported by it yet" }
+    if (spec.operation == WriteOperationType.DELETE_PARTITION) {
+      // Only the partition paths of the rows are derived, whatever the table is.
+      None
+    } else {
+      checks.collectFirst { case (applies, what) if applies() => s"$what are not supported by it yet" }
+    }
   }
 
   override def clientOptions(spec: DataFrameWriteSpec): Map[String, String] = {
     val params = spec.parameters
-    if (params.contains(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY)) {
-      // A merger the user set decides the record type.
+    if (params.contains(HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY)
+      || spec.operation == WriteOperationType.DELETE_PARTITION) {
+      // A merger the user set decides the record type, and deleting partitions writes no record.
       Map.empty
     } else {
       val writeConfig = DataSourceUtils.createHoodieConfig(spec.writerSchema.map(_.toString).orNull,
@@ -168,13 +171,45 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
                      client: SparkRDDWriteClient[_],
                      instantTime: String,
                      df: DataFrame): DataFrameWriteResult = {
-    try {
-      writeRows(spec, client, instantTime, df)
-    } catch {
-      case e: HoodieUpsertException => throw e
-      // What fails before the write statuses are handed over fails the way the write client's
-      // own write does.
-      case e: Throwable => throw new HoodieUpsertException(s"Failed to upsert for commit time $instantTime", e)
+    if (spec.operation == WriteOperationType.DELETE_PARTITION) {
+      deletePartitions(spec, client, instantTime, df)
+    } else {
+      try {
+        writeRows(spec, client, instantTime, df)
+      } catch {
+        case e: HoodieUpsertException => throw e
+        // What fails before the write statuses are handed over fails the way the write client's
+        // own write does.
+        case e: Throwable => throw new HoodieUpsertException(s"Failed to upsert for commit time $instantTime", e)
+      }
+    }
+  }
+
+  /** Deletes the partitions the rows of `df` are in, by the partition paths the key generator derives for them. */
+  private def deletePartitions(spec: DataFrameWriteSpec,
+                               client: SparkRDDWriteClient[_],
+                               instantTime: String,
+                               df: DataFrame): DataFrameWriteResult = {
+    val writeConfig = client.getConfig
+    val metaClient = spec.metaClient
+    val input = executable(df)
+    val keys = HoodieKeyGeneratorExpression.column(input, keyGeneratorProps(writeConfig, metaClient), instantTime,
+      !metaClient.getTableConfig.getRecordKeyFields.isPresent, generatesKeysFromAvro(input, spec, writeConfig, metaClient))
+    val partitions = input.select(keys.getField(HoodieKeyGeneratorExpression.PARTITION_PATH_FIELD))
+      .distinct().collect().map(_.getString(0)).toSeq
+    writeCount.incrementAndGet()
+    DataFrameWriteResult(client.deletePartitions(partitions.asJava, instantTime))
+  }
+
+  /**
+   * A micro-batch of the streaming sink only allows its physical plan to be executed, so a plan
+   * over its rows is built from that.
+   */
+  private def executable(df: DataFrame): DataFrame = {
+    if (df.isStreaming) {
+      sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(df.sparkSession, df.queryExecution.toRdd, df.schema)
+    } else {
+      df
     }
   }
 
@@ -205,16 +240,12 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     val mergeOnRead = tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
     val overwrite = operation == WriteOperationType.INSERT_OVERWRITE || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
     // A delete writes no rows, so its schema is the table's, which the client sets for deletes.
-    val writerSchema = org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(
-      spec.writerSchema.getOrElse(HoodieSchema.parse(writeConfig.getSchema)))
+    val droppedColumns = droppedPartitionColumns(spec)
+    val writerSchema = org.apache.hudi.common.schema.HoodieSchemaUtils.removeFields(
+      org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(
+        spec.writerSchema.getOrElse(HoodieSchema.parse(writeConfig.getSchema))), droppedColumns.asJava)
 
-    // A micro-batch of the streaming sink only allows its physical plan to be executed, so the
-    // plan below is built over its rows.
-    val input = if (df.isStreaming) {
-      sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, df.queryExecution.toRdd, df.schema)
-    } else {
-      df
-    }
+    val input = executable(df)
 
     // Stage 1 + 2: key generation, meta columns, and upfront precombine as pure projections.
     val prepared = prepareInput(input, spec, writeConfig, table.getMetaClient, instantTime)
@@ -553,6 +584,16 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
   private def resolves(frame: DataFrame, field: String): Boolean =
     scala.util.Try(frame.select(col(field))).isSuccess
 
+  /** The partition columns the write keeps in the partition path only, as the write options name them. */
+  private def droppedPartitionColumns(spec: DataFrameWriteSpec): Set[String] = {
+    if (spec.parameters.getOrElse(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key, "false").toBoolean) {
+      SparkKeyGenUtils.getPartitionColumns(TypedProperties.fromMap(spec.parameters.asJava))
+        .split(",").map(_.trim).filter(_.nonEmpty).toSet
+    } else {
+      Set.empty
+    }
+  }
+
   private def keyGeneratorProps(writeConfig: HoodieWriteConfig, metaClient: HoodieTableMetaClient): TypedProperties =
     KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(writeConfig.getProps), metaClient.getTableConfig)
 
@@ -572,12 +613,13 @@ class HoodieDataFrameWriter extends HoodieDataFrameWritePath with SparkAdapterSu
     val isDelete = spec.operation == WriteOperationType.DELETE
     val metaColumns = HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.asScala.toSet
     val carriesMetaColumns = spec.keysFromMetaColumns || spec.locationFromMetaColumns
+    // The keys are generated from every column of the input; the data files leave out the
+    // partition columns the write drops.
+    val leftOut = (if (carriesMetaColumns) metaColumns else Set.empty[String]) ++ droppedPartitionColumns(spec)
     val dataFields = if (isDelete) {
       Array.empty[StructField]
-    } else if (carriesMetaColumns) {
-      input.schema.fields.filterNot(field => metaColumns.contains(field.name))
     } else {
-      input.schema.fields
+      input.schema.fields.filterNot(field => leftOut.contains(field.name))
     }
     val dataColumns = dataFields.toSeq.map(field => col(quoted(field.name)))
 
@@ -1195,6 +1237,7 @@ object HoodieDataFrameWriter {
     WriteOperationType.INSERT,
     WriteOperationType.UPSERT,
     WriteOperationType.DELETE,
+    WriteOperationType.DELETE_PARTITION,
     WriteOperationType.INSERT_OVERWRITE,
     WriteOperationType.INSERT_OVERWRITE_TABLE)
 
