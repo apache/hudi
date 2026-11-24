@@ -407,25 +407,51 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   @ValueSource(booleans = {true, false})
   void testUpsertPartitionerWithSmallFileHandlingSkipsFilesWithPartialUpdates(boolean partialUpdates) throws Exception {
     final String partitionPath = DEFAULT_PARTITION_PATHS[0];
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-1", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-2", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-3", 1024);
+    FileCreateUtilsLegacy.createCommit(basePath, "002");
+
+    // The small file that takes the partial update takes no inserts, the others still do
+    Set<String> expected = partialUpdates ? new HashSet<>(Arrays.asList("fg-1", "fg-3"))
+        : new HashSet<>(Arrays.asList("fg-1", "fg-2", "fg-3"));
+    assertEquals(expected, getSmallFileIdsWithUpdateIn(partitionPath, "fg-2", 3, partialUpdates));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testUpsertPartitionerWithSmallFileHandlingSkipsFilesWithPartialUpdatesBeforeCandidatesLimit(boolean partialUpdates)
+      throws Exception {
+    final String partitionPath = DEFAULT_PARTITION_PATHS[0];
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-1", 512);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-2", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-3", 1536);
+    FileCreateUtilsLegacy.createCommit(basePath, "002");
+
+    // With a limit of one candidate, the next smallest file takes the inserts when the smallest takes the partial update
+    Set<String> expected = Collections.singleton(partialUpdates ? "fg-2" : "fg-1");
+    assertEquals(expected, getSmallFileIdsWithUpdateIn(partitionPath, "fg-1", 1, partialUpdates));
+  }
+
+  /**
+   * Returns the small files of a delta commit partitioner for three inserts and an update of a record in the given
+   * file group.
+   */
+  private Set<String> getSmallFileIdsWithUpdateIn(String partitionPath, String updatedFileId, int candidatesLimit,
+                                                  boolean partialUpdates) throws Exception {
     HoodieWriteConfig.Builder configBuilder = makeHoodieClientConfigBuilder()
-        .withMergeSmallFileGroupCandidatesLimit(3)
+        .withMergeSmallFileGroupCandidatesLimit(candidatesLimit)
         .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(2048).build());
     if (partialUpdates) {
       configBuilder.withProps(Collections.singletonMap(HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key(), SCHEMA.toString()));
     }
     HoodieWriteConfig config = configBuilder.build();
 
-    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-1", 1024);
-    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-2", 1024);
-    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-3", 1024);
-    FileCreateUtilsLegacy.createCommit(basePath, "002");
-
-    // Three inserts, and an update of a record in fg-2
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     List<HoodieRecord> records = new ArrayList<>(dataGenerator.generateInserts("003", 3));
     HoodieRecord update = dataGenerator.generateInserts("003", 1).get(0);
     update.unseal();
-    update.setCurrentLocation(new HoodieRecordLocation("002", "fg-2"));
+    update.setCurrentLocation(new HoodieRecordLocation("002", updatedFileId));
     update.seal();
     records.add(update);
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(records)));
@@ -433,11 +459,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     SparkUpsertDeltaCommitPartitioner<?> partitioner =
         new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config, WriteOperationType.UPSERT);
-
-    // The small file that takes the partial update takes no inserts, the others still do
-    Set<String> expected = partialUpdates ? new HashSet<>(Arrays.asList("fg-1", "fg-3"))
-        : new HashSet<>(Arrays.asList("fg-1", "fg-2", "fg-3"));
-    assertEquals(expected, new HashSet<>(partitioner.getSmallFileIds()));
+    return new HashSet<>(partitioner.getSmallFileIds());
   }
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
