@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 52
+  val expectedChecks = 54
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -243,6 +243,31 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   writeV8("native_scan_many_files_v8", "MERGE_ON_READ", Append, updatedRows(0, 15000), "upsert")
   compare("many small file slices", expectNative = true)(
     spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts"))
+  // A LIMIT stops reading mid-partition, with later slices (some merging logs) never consumed.
+  {
+    val all = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts")
+      .collect().map(_.toString).toSet
+    spark.conf.set("spark.comet.scan.hudi.enabled", "true")
+    val limited = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts")
+      .limit(50).collect().map(_.toString)
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    check("limit over many merge-on-read slices returns rows of the full read",
+      limited.length == 50 && limited.forall(all.contains),
+      s"n=${limited.length} not-in-full=${limited.filterNot(all.contains).take(5).mkString(";")}")
+  }
+  // Executors keep opened tables across queries; a commit after a native read must show up in
+  // the next native read.
+  {
+    val path = writeV8("native_scan_cache_v8", "MERGE_ON_READ", Overwrite, rows(0, 300), "upsert")
+    readSorted(path, native = true)
+    writeV8("native_scan_cache_v8", "MERGE_ON_READ", Append, updatedRows(0, 50), "upsert")
+    val (jvmRows, _) = readSorted(path, native = false)
+    val (nativeRows, _) = readSorted(path, native = true)
+    check("native read after a new commit matches the JVM read",
+      jvmRows.sameElements(nativeRows) && nativeRows.exists(_.contains("100000.0")),
+      s"only-jvm=${jvmRows.diff(nativeRows).take(5).mkString(";")}\n" +
+        s"only-native=${nativeRows.diff(jvmRows).take(5).mkString(";")}")
+  }
 
   // Dynamic partition pruning: a filtered dimension joined on the partition column prunes the
   // fact scan once the broadcast subquery resolves. The native scan must read only the slices of
