@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -118,8 +119,8 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
   /**
    * Index types that tag a record with its row position in the base file and write merge-on-read
    * inserts to base files, which the update-as-delete-insert write mode needs to keep log files to
-   * positional deletes. The global variants and the record index tag through a global location, which
-   * takes the position from the base file of the located file group.
+   * positional deletes. The write reads the position of a record the index locates without one from
+   * the base file of the located file group, see {@link HoodieIndexUtils#tagMissingRecordPositionsIfNeeded}.
    */
   private static final EnumSet<HoodieIndex.IndexType> POSITION_PRODUCING_INDEX_TYPES = EnumSet.of(
       HoodieIndex.IndexType.BLOOM, HoodieIndex.IndexType.SIMPLE,
@@ -191,6 +192,13 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       throw new HoodieNotSupportedException(
           HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
               + " requires " + HoodieWriteConfig.WRITE_RECORD_POSITIONS.key() + " to be enabled");
+    }
+    HoodieFileFormat baseFileFormat = metaClient.getTableConfig().getBaseFileFormat();
+    if (baseFileFormat == HoodieFileFormat.HFILE) {
+      // A positional delete needs the row position of each record in its base file, which HFile does not provide
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " does not support the base file format "
+              + baseFileFormat);
     }
     if (config.shouldWritePartialUpdates()) {
       // The new version of an updated record is inserted into a base file, so it has to carry every column

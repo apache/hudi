@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -862,12 +863,26 @@ public class HoodieIndexUtils {
             return Pair.of(incomingRecord, Option.empty());
           }
         });
-    HoodieData<HoodieRecord<R>> taggedRecords = requiresMergingWithOlderRecordVersion
+    return requiresMergingWithOlderRecordVersion
         ? mergeForPartitionUpdatesAndDeletionsIfNeeded(incomingRecordsAndLocations, shouldUpdatePartitionPath, config, table, readerContext, writerSchema)
         : incomingRecordsAndLocations.map(Pair::getLeft);
-    return config.shouldWriteUpdatesAsDeletesAndInserts() && table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
-        ? tagMissingRecordPositions(taggedRecords, config, table)
-        : taggedRecords;
+  }
+
+  /**
+   * Sets the row position of each located record of an update or delete that has none, for a merge-on-read write in
+   * the update-as-delete-insert write mode, which writes the delete of a located record as a positional delete. Only
+   * the indexes that read the keys of base files to locate records tag their positions, so this reads them for the
+   * records a global index or the record index located.
+   */
+  public static <R> HoodieData<HoodieRecord<R>> tagMissingRecordPositionsIfNeeded(HoodieData<HoodieRecord<R>> taggedRecords,
+                                                                                  WriteOperationType operationType,
+                                                                                  HoodieWriteConfig config,
+                                                                                  HoodieTable table) {
+    boolean updatesOrDeletes = operationType == WriteOperationType.UPSERT || operationType == WriteOperationType.UPSERT_PREPPED
+        || operationType == WriteOperationType.DELETE || operationType == WriteOperationType.DELETE_PREPPED;
+    return updatesOrDeletes && config.shouldWriteUpdatesAsDeletesAndInserts() && !table.isMetadataTable()
+        && table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
+        ? tagMissingRecordPositions(taggedRecords, config, table) : taggedRecords;
   }
 
   /**
@@ -903,7 +918,9 @@ public class HoodieIndexUtils {
           return Pair.of(Pair.of(keyAndLocation.getLeft(), keyAndLocation.getRight().getFileId()), keyAndLocation.getRight().getPosition());
         });
     HoodieData<HoodieRecord<R>> positionedRecords = taggedRecords.filter(HoodieIndexUtils::isLocatedWithoutPosition)
-        .mapToPair(record -> Pair.of(Pair.of(record.getKey(), record.getCurrentLocation().getFileId()), record))
+        // NOTE: the record may hold an instance of [[InternalRow]] pointing into a shared, mutable buffer,
+        //       so it has to be copied before the shuffle
+        .mapToPair(record -> Pair.of(Pair.of(record.getKey(), record.getCurrentLocation().getFileId()), record.copy()))
         .leftOuterJoin(positions)
         .values()
         .map(recordAndPosition -> {

@@ -30,10 +30,12 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -52,6 +54,7 @@ import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -62,6 +65,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -237,6 +241,59 @@ public class TestSparkUpdatesAsDeletesAndInserts extends SparkClientFunctionalTe
     }
   }
 
+  private static Stream<Arguments> indexAndWriteMode() {
+    Stream<Arguments> deleteInsertMode = Stream.of("SIMPLE", "BLOOM", "GLOBAL_SIMPLE", "GLOBAL_BLOOM", "RECORD_INDEX")
+        .map(index -> Arguments.of(index, true));
+    // Outside the mode only the bloom and simple indexes tag the position of every record they locate, since a
+    // global index drops it in the merged lookup of a delete
+    Stream<Arguments> updateMode = Stream.of("SIMPLE", "BLOOM")
+        .map(index -> Arguments.of(index, false));
+    return Stream.concat(deleteInsertMode, updateMode);
+  }
+
+  /**
+   * Each index type the update-as-delete-insert write mode allows writes the base file position of each record an
+   * upsert updates or deletes, and of each key a delete removes, to the log of a merge-on-read table, and so do the
+   * bloom and simple indexes outside the mode.
+   */
+  @ParameterizedTest
+  @MethodSource("indexAndWriteMode")
+  void testUpdatesAndDeletesCarryRecordPositions(String index, boolean updatesAsDeletesAndInserts) throws IOException {
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, tableProperties);
+    HoodieIndex.IndexType indexType = HoodieIndex.IndexType.valueOf(index);
+    HoodieWriteConfig config = getConfigBuilder(true, HoodieIndex.IndexType.SIMPLE)
+        .withProperties(keyGenProps())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(keyGenProps()).withIndexType(indexType).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withEnableGlobalRecordLevelIndex(indexType == HoodieIndex.IndexType.RECORD_INDEX).build())
+        .withWriteUpdatesAsDeletesAndInserts(updatesAsDeletesAndInserts)
+        .build();
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String insertTime = client.startCommit();
+      List<HoodieRecord> inserts = dataGen.generateInserts(insertTime, 100);
+      writeAndCommit(client, insertTime, client.insert(jsc().parallelize(inserts, 1), insertTime));
+
+      // Each key is updated or deleted once, so each write locates a single copy of it
+      String upsertTime = client.startCommit();
+      List<HoodieRecord> upserts = new ArrayList<>(dataGen.generateDeletesFromExistingRecords(inserts.subList(0, 10)));
+      upserts.addAll(dataGen.generateUpdates(upsertTime, inserts.subList(10, 40)));
+      writeAndCommit(client, upsertTime, client.upsert(jsc().parallelize(upserts, 1), upsertTime));
+
+      String deleteTime = client.startCommit();
+      List<HoodieKey> deletes = inserts.subList(40, 50).stream().map(HoodieRecord::getKey).collect(Collectors.toList());
+      writeAndCommit(client, deleteTime, client.delete(jsc().parallelize(deletes, 1), deleteTime));
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      long[] deletesAndDataRecords = assertLogRecordsCarryPositions(config, metaClient);
+      assertEquals(updatesAsDeletesAndInserts ? 50 : 20, deletesAndDataRecords[0]);
+      assertEquals(updatesAsDeletesAndInserts ? 0 : 30, deletesAndDataRecords[1]);
+      assertEquals(80, GenericRecordValidationTestUtils.getRecordsMap(config, storageConf(), dataGen).size());
+    }
+  }
+
   private List<WriteStatus> writeAndCommit(SparkRDDWriteClient client, String instantTime, JavaRDD<WriteStatus> writeStatuses) {
     List<WriteStatus> statuses = writeStatuses.collect();
     client.commit(instantTime, jsc().parallelize(statuses, 1));
@@ -345,6 +402,56 @@ public class TestSparkUpdatesAsDeletesAndInserts extends SparkClientFunctionalTe
       fsView.close();
     }
     return deleteRecords;
+  }
+
+  /**
+   * Asserts that every log block of the latest file slices carries the position of each of its records in the base
+   * file of its slice, and returns the number of records the delete blocks and the data blocks hold.
+   */
+  private long[] assertLogRecordsCarryPositions(HoodieWriteConfig config, HoodieTableMetaClient metaClient) throws IOException {
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(config.getSchema()));
+    long[] deletesAndDataRecords = new long[2];
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(
+        context(), metaClient, metaClient.getActiveTimeline().filterCompletedInstants());
+    try {
+      List<FileSlice> slicesWithLogs = Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS)
+          .flatMap(fsView::getLatestFileSlices)
+          .filter(FileSlice::hasLogFiles)
+          .collect(Collectors.toList());
+      assertFalse(slicesWithLogs.isEmpty(), "the updates and deletes must land in log files");
+      for (FileSlice slice : slicesWithLogs) {
+        assertTrue(slice.getBaseFile().isPresent(), "a file group with logs must have a base file");
+        List<String> baseFileKeys = readRecordKeys(config, slice.getBaseFile().get());
+        for (HoodieLogFile logFile : slice.getLogFiles().collect(Collectors.toList())) {
+          try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient, logFile, schema)) {
+            while (reader.hasNext()) {
+              HoodieLogBlock block = reader.next();
+              List<String> keys = new ArrayList<>();
+              if (block instanceof HoodieDeleteBlock) {
+                Arrays.stream(((HoodieDeleteBlock) block).getRecordsToDelete()).forEach(delete -> keys.add(delete.getRecordKey()));
+                deletesAndDataRecords[0] += keys.size();
+              } else {
+                assertTrue(block instanceof HoodieDataBlock, "unexpected block " + block.getBlockType() + " in " + logFile.getFileName());
+                try (ClosableIterator<HoodieRecord<IndexedRecord>> records = ((HoodieDataBlock) block).getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
+                  records.forEachRemaining(record -> keys.add(((GenericRecord) record.getData()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString()));
+                }
+                deletesAndDataRecords[1] += keys.size();
+              }
+              List<Long> positions = block.getRecordPositionList();
+              assertEquals(keys.size(), positions.size(),
+                  "every record of a " + block.getBlockType() + " must carry a position: " + logFile.getFileName());
+              assertEquals(slice.getBaseFile().get().getCommitTime(), block.getBaseFileInstantTimeOfPositions(),
+                  "positions must reference the file slice's base file");
+              assertEquals(new HashSet<>(keys), positions.stream().map(position -> baseFileKeys.get(position.intValue())).collect(Collectors.toSet()),
+                  "the base file rows at the positions of a block must hold its record keys");
+            }
+          }
+        }
+      }
+    } finally {
+      fsView.close();
+    }
+    return deletesAndDataRecords;
   }
 
   /**
