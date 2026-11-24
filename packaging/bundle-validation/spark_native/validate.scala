@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 59
+  val expectedChecks = 74
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -529,6 +529,99 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
         plan.toString)
     }
   }
+
+  // A file slice with no log files is its base file, which Comet's own native Parquet scan reads
+  // instead of the Hudi reader. The scan node counts the slices each reader read. Rows are
+  // compared with Spark's own read, with Comet off.
+  case class SliceReads(scans: Int, asParquet: Long, byHudiReader: Long, pruned: Long)
+  def sliceReads(plan: org.apache.spark.sql.execution.SparkPlan): SliceReads = {
+    val scans = PlanWalk.collect(plan) {
+      case scan: org.apache.spark.sql.comet.CometHudiNativeScanExec => scan
+    }
+    def total(name: String): Long = scans.map(_.metrics.get(name).map(_.value).getOrElse(0L)).sum
+    SliceReads(scans.size, total("hudi_slices_read_as_parquet"), total("hudi_slices_read_by_hudi_reader"),
+      Seq("row_groups_pruned_statistics", "page_index_rows_pruned", "pushdown_rows_pruned").map(total).sum)
+  }
+  def routed(label: String, expectedRows: Int, routing: String)(expected: SliceReads => Boolean)(
+      q: => org.apache.spark.sql.DataFrame): Unit = {
+    spark.conf.set("spark.comet.enabled", "false")
+    val sparkRows = q.collect().map(_.toString).sorted
+    spark.conf.set("spark.comet.enabled", "true")
+    spark.conf.set("spark.comet.scan.hudi.enabled", "true")
+    val nativeDf = q
+    val nativeRows = nativeDf.collect().map(_.toString).sorted
+    val plan = nativeDf.queryExecution.executedPlan
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    val reads = sliceReads(plan)
+    check(s"$label rows match Spark with Comet off (n=${sparkRows.length})",
+      sparkRows.length == expectedRows && sparkRows.sameElements(nativeRows),
+      s"expected n=$expectedRows spark n=${sparkRows.length} native n=${nativeRows.length}\n" +
+        s"only-spark=${sparkRows.diff(nativeRows).take(5).mkString(";")}\n" +
+        s"only-native=${nativeRows.diff(sparkRows).take(5).mkString(";")}")
+    check(s"$label $routing ($reads)", expected(reads), plan.toString)
+  }
+  def hudi(path: String) = spark.read.format("hudi").load(path)
+
+  routed("copy-on-write partition and data filter", 33, "reads its slices through the native Parquet scan")(
+    r => r.scans == 1 && r.asParquet > 0 && r.byHudiReader == 0)(
+    hudi(nativeCow).where("partitionpath = '1' and fare >= 100000").selectExpr("uuid", "partitionpath", "fare", "ts"))
+  // Data skipping off, so the file index lists the files and the scan itself prunes them.
+  spark.conf.set("spark.comet.scan.hudi.enabled", "true")
+  val prunedDf = spark.read.format("hudi").option("hoodie.enable.data.skipping", "false").load(nativeCow).
+    where("partitionpath = '1' and fare < 0").selectExpr("uuid", "fare")
+  val prunedRows = prunedDf.collect()
+  val prunedReads = sliceReads(prunedDf.queryExecution.executedPlan)
+  spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+  check(s"copy-on-write data filter prunes inside the native Parquet scan ($prunedReads)",
+    prunedRows.isEmpty && prunedReads.asParquet > 0 && prunedReads.pruned > 0,
+    s"rows=${prunedRows.length}\n${prunedDf.queryExecution.executedPlan}")
+
+  // A base file written before a column was added lacks the column, which reads as null.
+  val addedColumn = writeV8("native_scan_cow_added_column_v8", "COPY_ON_WRITE", Overwrite, rows(0, 300), "upsert")
+  writeV8("native_scan_cow_added_column_v8", "COPY_ON_WRITE", Append,
+    updatedRows(0, 300).where("partitionpath = '0'").withColumn("extra", org.apache.spark.sql.functions.lit("new")),
+    "upsert")
+  routed("added column over older base files", 300, "reads its slices through the native Parquet scan")(
+    r => r.scans == 1 && r.asParquet > 1 && r.byHudiReader == 0)(
+    hudi(addedColumn).selectExpr("uuid", "fare", "extra"))
+  // A base file written before a column widened stores the narrower type. The JVM read casts it
+  // with Hudi's own rules, so such a file stays on the Hudi reader while the others do not.
+  val widened = writeV8("native_scan_cow_widened_v8", "COPY_ON_WRITE", Overwrite,
+    rows(0, 300).withColumn("cnt", org.apache.spark.sql.functions.expr("cast(ts as int)")), "upsert")
+  writeV8("native_scan_cow_widened_v8", "COPY_ON_WRITE", Append,
+    updatedRows(0, 300).where("partitionpath = '0'").
+      withColumn("cnt", org.apache.spark.sql.functions.expr("ts * 100000")), "upsert")
+  routed("int column widened to long", 300, "keeps only the older base files on the Hudi reader")(
+    r => r.scans == 1 && r.asParquet > 0 && r.byHudiReader > 0)(
+    hudi(widened).selectExpr("uuid", "fare", "cnt"))
+
+  // Merge-on-read with a compacted file slice, a file slice with a log file, and a file slice
+  // never updated, in one scan: only the slice with the log file is merged by the Hudi reader.
+  val mixedMor = writeV8("native_scan_mor_mixed_v8", "MERGE_ON_READ", Overwrite, rows(0, 300), "upsert")
+  writeV8("native_scan_mor_mixed_v8", "MERGE_ON_READ", Append,
+    updatedRows(0, 300).where("partitionpath in ('0', '1')"), "upsert",
+    Map("hoodie.compact.inline" -> "true", "hoodie.compact.inline.max.delta.commits" -> "1"))
+  writeV8("native_scan_mor_mixed_v8", "MERGE_ON_READ", Append,
+    rows(0, 300, 200000).where("partitionpath = '0'"), "upsert")
+  val compactedBaseFiles = Option(new java.io.File("/tmp/hudi-bundles/tests/native_scan_mor_mixed_v8/1").listFiles).
+    map(_.count(_.getName.endsWith(".parquet"))).getOrElse(0)
+  routed("merge-on-read compacted slice and slice with a log file", 300,
+      s"reads the slices without log files through the native Parquet scan (base files in the compacted group: $compactedBaseFiles)")(
+    r => compactedBaseFiles == 2 && r.scans == 1 && r.asParquet > 1 && r.byHudiReader == 1)(
+    hudi(mixedMor).selectExpr("uuid", "partitionpath", "fare", "ts"))
+
+  // Meta columns are columns of the base file. Over a slice with log files they stay on the JVM.
+  routed("meta columns", 300, "reads its slices through the native Parquet scan")(
+    r => r.scans == 1 && r.asParquet > 0 && r.byHudiReader == 0)(
+    hudi(nativeCow).selectExpr("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",
+      "_hoodie_partition_path", "_hoodie_file_name", "uuid", "fare"))
+  routed("meta columns over log files", 280, "scan is left on the JVM")(_.scans == 0)(
+    hudi(nativeMor).selectExpr("_hoodie_commit_time", "_hoodie_record_key", "uuid", "fare"))
+  // A time-travel read stays on the Hudi reader.
+  val firstInstant = hudi(nativeCow).selectExpr("min(_hoodie_commit_time)").head.getString(0)
+  routed("time travel", 300, "keeps every slice on the Hudi reader")(
+    r => r.scans == 1 && r.asParquet == 0)(
+    spark.read.format("hudi").option("as.of.instant", firstInstant).load(nativeCow).selectExpr("uuid", "fare", "ts"))
 
   if (failures > 0 || checksRun != expectedChecks) {
     println(s"::error::native hudi scan probes: failures=$failures checksRun=$checksRun expected=$expectedChecks")

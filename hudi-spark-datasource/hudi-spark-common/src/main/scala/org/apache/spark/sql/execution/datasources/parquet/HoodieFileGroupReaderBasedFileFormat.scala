@@ -128,6 +128,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   def isMultipleBaseFileFormats: Boolean = isMultipleBaseFileFormatsEnabled
 
+  def hasTimestampMillisField: Boolean = hasTimestampMillisFieldInTableSchema
+
   private val sanitizedTableName = HoodieSchemaUtils.getRecordQualifiedName(tableName)
 
   private def evaluateRequiredFiltersPerRow: Boolean = requiredFilters.nonEmpty && !requiredFiltersAppliedInPlan

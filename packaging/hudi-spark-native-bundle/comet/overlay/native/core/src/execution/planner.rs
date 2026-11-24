@@ -43,7 +43,10 @@ mod delta_spark_scan;
 mod lance_scan;
 
 use crate::execution::operators::init_csv_datasource_exec;
-use crate::execution::operators::{HudiFileSliceSpec, HudiScanExec};
+use crate::execution::operators::{
+    HudiBaseFileRouteExec, HudiBaseFileSlices, HudiFileSliceSpec, HudiScanExec, HudiScanFactory,
+    HUDI_BASE_FILE_METADATA_SIZE_HINT,
+};
 use crate::execution::operators::IcebergScanExec;
 use crate::execution::operators::SortedInputExec;
 use crate::execution::operators::TopKReaderFilterExec;
@@ -1989,30 +1992,129 @@ impl PhysicalPlanner {
                     }
                     _ => None,
                 };
-                let file_slices = scan
-                    .file_slices
-                    .iter()
-                    .map(|s| HudiFileSliceSpec {
-                        base_file_path: s.base_file_path.clone(),
-                        log_file_paths: s.log_file_paths.clone(),
-                    })
-                    .collect();
-                let hudi_scan = HudiScanExec::new(
-                    common.table_base_uri.clone(),
-                    common.timeline_snapshot.clone(),
-                    options,
-                    object_store,
-                    object_store_options,
-                    required_schema,
-                    file_slices,
+                let table_base_uri = common.table_base_uri.clone();
+                let timeline_snapshot = common.timeline_snapshot.clone();
+                let output_schema = Arc::clone(&required_schema);
+                let hudi_scan: HudiScanFactory =
+                    Arc::new(move |file_slices: Vec<HudiFileSliceSpec>| {
+                        Arc::new(HudiScanExec::new(
+                            table_base_uri.clone(),
+                            timeline_snapshot.clone(),
+                            options.clone(),
+                            object_store.clone(),
+                            object_store_options.clone(),
+                            Arc::clone(&required_schema),
+                            file_slices,
+                        )) as Arc<dyn ExecutionPlan>
+                    });
+                // A slice the driver gave a base file URI holds no log files, and the JVM
+                // scan reads it as a plain Parquet file; Comet's Parquet scan reads those.
+                let mut base_files = Vec::new();
+                let mut base_file_slices = Vec::new();
+                let mut merged_slices = Vec::new();
+                for slice in &scan.file_slices {
+                    let spec = HudiFileSliceSpec {
+                        base_file_path: slice.base_file_path.clone(),
+                        log_file_paths: slice.log_file_paths.clone(),
+                    };
+                    if common.parquet_scan.is_some()
+                        && slice.log_file_paths.is_empty()
+                        && !slice.base_file_uri.is_empty()
+                        && slice.base_file_size > 0
+                    {
+                        base_files.push(spark_operator::SparkPartitionedFile {
+                            file_path: slice.base_file_uri.clone(),
+                            start: 0,
+                            length: slice.base_file_size,
+                            file_size: slice.base_file_size,
+                            partition_values: vec![],
+                        });
+                        base_file_slices.push(spec);
+                    } else {
+                        merged_slices.push(spec);
+                    }
+                }
+                let parquet_common = match common.parquet_scan.as_ref() {
+                    Some(parquet_common) if !base_files.is_empty() => parquet_common,
+                    Some(_) => {
+                        // Every slice of this partition has log files.
+                        let route = HudiBaseFileRouteExec::new(
+                            output_schema,
+                            None,
+                            merged_slices,
+                            hudi_scan,
+                        );
+                        return Ok((
+                            vec![],
+                            vec![],
+                            Arc::new(SparkPlan::new(
+                                spark_plan.plan_id,
+                                Arc::new(route),
+                                vec![],
+                            )),
+                        ));
+                    }
+                    None => {
+                        return Ok((
+                            vec![],
+                            vec![],
+                            Arc::new(SparkPlan::new(
+                                spark_plan.plan_id,
+                                hudi_scan(merged_slices),
+                                vec![],
+                            )),
+                        ));
+                    }
+                };
+                let (object_store_url, object_store_backend, mut files) = self
+                    .prepare_scan_store_and_files(
+                        parquet_common,
+                        &SparkFilePartition {
+                            partitioned_file: base_files,
+                        },
+                    )?;
+                for file in &mut files {
+                    file.metadata_size_hint = Some(HUDI_BASE_FILE_METADATA_SIZE_HINT);
+                }
+                let runtime_env = self.session_ctx.runtime_env();
+                let base_file_store = runtime_env.object_store(&object_store_url)?;
+                let metadata_cache = runtime_env.cache_manager.get_file_metadata_cache();
+                let parquet_scan = Arc::clone(
+                    &self
+                        .build_parquet_scan_plan(
+                            spark_plan.plan_id,
+                            parquet_common,
+                            object_store_url,
+                            object_store_backend,
+                            files.clone(),
+                            false,
+                            "",
+                            "",
+                        )?
+                        .native_plan,
                 );
+                let route = HudiBaseFileRouteExec::new(
+                    output_schema,
+                    Some(HudiBaseFileSlices {
+                        slices: base_file_slices.into_iter().zip(files).collect(),
+                        parquet_scan: Arc::clone(&parquet_scan),
+                        object_store: base_file_store,
+                        metadata_cache,
+                        case_sensitive: parquet_common.case_sensitive,
+                    }),
+                    merged_slices,
+                    hudi_scan,
+                );
+                // The Parquet scan runs inside the route, so its metrics are collected
+                // alongside the route's.
                 Ok((
                     vec![],
                     vec![],
-                    Arc::new(SparkPlan::new(
+                    Arc::new(SparkPlan::new_with_additional(
                         spark_plan.plan_id,
-                        Arc::new(hudi_scan),
+                        Arc::new(route),
                         vec![],
+                        vec![parquet_scan],
                     )),
                 ))
             }

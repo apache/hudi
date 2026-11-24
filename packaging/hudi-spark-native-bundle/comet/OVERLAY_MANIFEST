@@ -24,6 +24,7 @@ c80a40a290cf1e03795d09782688d493cd69bfbe native/core/src/execution/planner/opera
 11472de837dd33fd95c0425a16c6122de80ff8de spark/src/main/scala/org/apache/comet/CometSparkSessionExtensions.scala
 37323e3dce755bcf47e78d794101e8b5569f1857 spark/src/main/scala/org/apache/comet/rules/CometExecRule.scala
 349a9dae3800930b6b2fc2c28cbbceb546b982eb spark/src/main/scala/org/apache/comet/rules/CometScanRule.scala
+new native/core/src/execution/operators/hudi_base_file_scan.rs
 new native/core/src/execution/operators/hudi_scan.rs
 new spark/src/main/scala/org/apache/comet/rules/CometExternalV1ScanProvider.scala
 new spark/src/main/scala/org/apache/comet/rules/CometPropagateEmptyRelation.scala

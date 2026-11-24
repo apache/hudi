@@ -81,10 +81,17 @@ case class CometHudiNativeScanExec(
   override def withDynamicPruningFilters(filters: Seq[Expression]): SparkPlan =
     copy(runtimeFilters = filters)
 
+  // The native Parquet scan's metrics cover the file slices read through it, which the two slice
+  // counts tell apart from the slices the Hudi reader read.
   override lazy val metrics: Map[String, SQLMetric] =
-    CometMetricNode.baselineMetrics(sparkContext) ++ Map(
-      "numPartitions" -> SQLMetrics.createMetric(sparkContext, "number of partitions read"),
-      "numFiles" -> SQLMetrics.createMetric(sparkContext, "number of files read"))
+    CometMetricNode.nativeScanMetrics(sparkContext) ++
+      CometMetricNode.baselineMetrics(sparkContext) ++ Map(
+        "numPartitions" -> SQLMetrics.createMetric(sparkContext, "number of partitions read"),
+        "numFiles" -> SQLMetrics.createMetric(sparkContext, "number of files read"),
+        CometHudiNativeScanExec.PARQUET_SLICES_METRIC -> SQLMetrics.createMetric(
+          sparkContext, "number of file slices read by the native Parquet scan"),
+        CometHudiNativeScanExec.HUDI_READER_SLICES_METRIC -> SQLMetrics.createMetric(
+          sparkContext, "number of file slices read by the Hudi reader"))
 
   // The execution these driver metrics were last posted under, so a scan reached both through
   // its own execution and through a fused parent posts once.
@@ -106,7 +113,8 @@ case class CometHudiNativeScanExec(
       unsupported("a null partition value")
     }
     val bytes = HudiCometScanProvider
-      .planPartitions(session, partitions, tableBaseUri, isMor)
+      .planPartitions(
+        session, partitions, tableBaseUri, isMor, HudiCometScanProvider.projectsMetaColumns(output))
       .getOrElse(unsupported("a file slice"))
     metrics("numPartitions").set(partitions.size.toLong)
     metrics("numFiles").set(partitions.map(_.files.size.toLong).sum)
@@ -204,6 +212,13 @@ case class CometHudiNativeScanExec(
       tableBaseUri,
       Integer.valueOf(scanHashCode),
       runtimeFilters)
+}
+
+object CometHudiNativeScanExec {
+
+  /** Names of the native operator's counts of the file slices each reader read. */
+  val PARQUET_SLICES_METRIC = "hudi_slices_read_as_parquet"
+  val HUDI_READER_SLICES_METRIC = "hudi_slices_read_by_hudi_reader"
 }
 
 /**

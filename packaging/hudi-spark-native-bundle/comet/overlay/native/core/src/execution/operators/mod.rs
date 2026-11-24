@@ -19,6 +19,7 @@
 
 pub use crate::errors::ExecutionError;
 
+pub use hudi_base_file_scan::*;
 pub use hudi_scan::*;
 pub use iceberg_scan::*;
 pub use scan::*;
@@ -29,6 +30,7 @@ mod arrow_python_udf;
 pub use arrow_python_udf::{ArrowPythonUdfExec, ArrowPythonUdfSpec};
 mod dynamic_filter;
 pub(crate) use dynamic_filter::{DynamicFilterJoinExec, TopKReaderFilterExec};
+mod hudi_base_file_scan;
 mod hudi_scan;
 pub(crate) mod iceberg_common;
 pub use iceberg_common::clear_file_io_cache;

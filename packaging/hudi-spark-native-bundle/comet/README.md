@@ -23,7 +23,10 @@ Hudi-maintained source changes, producing the artifact
 changes add a native Hudi table scan to Comet: the Spark side hands each task
 its file slices, and the native side reads them (Parquet decode plus
 merge-on-read log merging) through [hudi-rs](https://github.com/apache/hudi-rs),
-statically linked into `libcomet`.
+statically linked into `libcomet`. A file slice with no log files is its base
+file, which Comet's own native Parquet scan reads with the scan's data filters;
+`spark.comet.scan.hudi.baseFilesAsParquet.enabled=false` keeps those slices on
+hudi-rs.
 
 ## Layout
 
