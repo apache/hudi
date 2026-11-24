@@ -52,6 +52,11 @@ public class JavaSortAndSizeExecutionStrategy<T>
   }
 
   @Override
+  protected boolean writesFormatMetaColumns() {
+    return true;
+  }
+
+  @Override
   public List<WriteStatus> performClusteringWithRecordList(
       final List<HoodieRecord<T>> inputRecords, final int numOutputGroups,
       final String instantTime, final Map<String, String> strategyParams, final HoodieSchema schema,
