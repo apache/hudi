@@ -37,7 +37,6 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerator {
   private final SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext;
-  private final HoodieSplitProvider splitProvider;
   private final HoodieContinuousSplitDiscover splitDiscover;
   private final HoodieScanContext scanContext;
 
@@ -56,7 +55,6 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
       Option<HoodieSplitEnumeratorState> enumStateOpt) {
     super(tableName, enumeratorContext, splitProvider);
     this.enumeratorContext = enumeratorContext;
-    this.splitProvider = splitProvider;
     this.splitDiscover = splitDiscover;
     this.scanContext = scanContext;
     this.position = new AtomicReference<>();
