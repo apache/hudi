@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 55
+  val expectedChecks = 59
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -243,36 +243,70 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   writeV8("native_scan_many_files_v8", "MERGE_ON_READ", Append, updatedRows(0, 15000), "upsert")
   compare("many small file slices", expectNative = true)(
     spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts"))
-  // A LIMIT stops reading mid-partition, with later slices (some merging logs) never consumed.
+  object PlanWalk extends org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
+  // A LIMIT stops reading mid-partition, in tasks that mix slices with and without log files, with
+  // later slices never consumed.
   locally {
     val all = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts")
       .collect().map(_.toString).toSet
     spark.conf.set("spark.comet.scan.hudi.enabled", "true")
-    val limited = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts")
-      .limit(50).collect().map(_.toString)
+    val limitedDf = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts").limit(50)
+    val limited = limitedDf.collect().map(_.toString)
+    val limitedScans = PlanWalk.collect(limitedDf.queryExecution.executedPlan) {
+      case scan: org.apache.spark.sql.comet.CometHudiNativeScanExec => scan
+    }
+    val ordered = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts")
+      .orderBy("uuid").limit(50).collect().map(_.toString)
     spark.conf.set("spark.comet.scan.hudi.enabled", "false")
-    check("limit over many merge-on-read slices returns rows of the full read",
-      limited.length == 50 && limited.forall(all.contains),
-      s"n=${limited.length} not-in-full=${limited.filterNot(all.contains).take(5).mkString(";")}")
+    val orderedJvm = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts")
+      .orderBy("uuid").limit(50).collect().map(_.toString)
+    // Tasks whose slices include both a slice with log files and one without.
+    val mixedTasks = limitedScans.flatMap(_.perPartitionData).count { bytes =>
+      val slices = org.apache.comet.serde.OperatorOuterClass.HudiScan.parseFrom(bytes).getFileSlicesList
+      val withLogs = (0 until slices.size).count(i => slices.get(i).getLogFilePathsCount > 0)
+      withLogs > 0 && withLogs < slices.size
+    }
+    check("limit over mixed merge-on-read slices is native and returns rows of the full read",
+      limitedScans.nonEmpty && mixedTasks > 0 && limited.length == 50 && limited.forall(all.contains),
+      s"native scans=${limitedScans.size} mixed tasks=$mixedTasks n=${limited.length} " +
+        s"not-in-full=${limited.filterNot(all.contains).take(5).mkString(";")}")
+    check("ordered limit over mixed merge-on-read slices matches the JVM read",
+      ordered.length == 50 && ordered.sameElements(orderedJvm),
+      s"native=${ordered.take(5).mkString(";")} jvm=${orderedJvm.take(5).mkString(";")}")
   }
-  // Executors keep opened tables across queries; a commit after a native read must show up in
-  // the next native read.
+  // Executors keep opened tables across queries. A commit after a native read, one that also adds a
+  // column, must show up in the next native read: a table kept from before the commit would not
+  // know the new column.
   locally {
     val path = writeV8("native_scan_cache_v8", "MERGE_ON_READ", Overwrite, rows(0, 300), "upsert")
     readSorted(path, native = true)
-    writeV8("native_scan_cache_v8", "MERGE_ON_READ", Append, updatedRows(0, 50), "upsert")
+    writeV8("native_scan_cache_v8", "MERGE_ON_READ", Append,
+      updatedRows(0, 50).withColumn("extra", org.apache.spark.sql.functions.lit("new")), "upsert")
     val (jvmRows, _) = readSorted(path, native = false)
     val (nativeRows, _) = readSorted(path, native = true)
     check("native read after a new commit matches the JVM read",
       jvmRows.sameElements(nativeRows) && nativeRows.exists(_.contains("100000.0")),
       s"only-jvm=${jvmRows.diff(nativeRows).take(5).mkString(";")}\n" +
         s"only-native=${nativeRows.diff(jvmRows).take(5).mkString(";")}")
+    def readExtra(native: Boolean): (Array[String], String) = {
+      spark.conf.set("spark.comet.scan.hudi.enabled", native.toString)
+      val df = spark.read.format("hudi").load(path).selectExpr("uuid", "fare", "extra").orderBy("uuid")
+      val result = (df.collect().map(_.toString), df.queryExecution.executedPlan.toString)
+      spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+      result
+    }
+    val (jvmExtra, _) = readExtra(native = false)
+    val (nativeExtra, extraPlan) = readExtra(native = true)
+    check("native read of a column added after a native read matches the JVM read",
+      extraPlan.contains("CometHudiNativeScan") && jvmExtra.sameElements(nativeExtra) &&
+        nativeExtra.exists(_.contains("new")),
+      s"only-jvm=${jvmExtra.diff(nativeExtra).take(5).mkString(";")}\n" +
+        s"only-native=${nativeExtra.diff(jvmExtra).take(5).mkString(";")}\n$extraPlan")
   }
 
   // Dynamic partition pruning: a filtered dimension joined on the partition column prunes the
   // fact scan once the broadcast subquery resolves. The native scan must read only the slices of
   // the partitions it keeps, with and without adaptive execution.
-  object PlanWalk extends org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
   def sliceCount(partitions: Array[Array[Byte]]): Int = partitions.map(b =>
     org.apache.comet.serde.OperatorOuterClass.HudiScan.parseFrom(b).getFileSlicesCount).sum
   // The dimension is a Hudi table too, as in TPC-DS, so Comet takes over the broadcast join.
@@ -458,24 +492,35 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
       PlanWalk.collect(oneRowPlan) { case node if isGroupedCometAggregate(node) => node }.nonEmpty,
       oneRowPlan.toString)
   }
-  // A global aggregate over an empty stage still returns its one row (SPARK-44040).
+  // A global aggregate over a grouped aggregate whose stage finishes with no rows: the grouped
+  // aggregate becomes an empty relation, and the global aggregate above it still returns its one
+  // row (SPARK-44040).
   locally {
-    def globalAggregate(comet: Boolean, nativeScan: Boolean): Array[String] = {
+    val query = "select count(*), sum(s) from (select partitionpath, sum(fare) as s from native_cow " +
+      "where fare = 150.5 group by partitionpath) grouped"
+    def globalAggregate(comet: Boolean, nativeScan: Boolean): (Array[String], SparkPlan) = {
       spark.conf.set("spark.comet.enabled", comet.toString)
       spark.conf.set("spark.comet.scan.hudi.enabled", nativeScan.toString)
-      val rows = spark.sql("select count(*), sum(fare) from native_cow where fare = 150.5")
-        .collect().map(_.toString)
+      val df = spark.sql(query)
+      val result = (df.collect().map(_.toString), df.queryExecution.executedPlan)
       spark.conf.set("spark.comet.enabled", "true")
       spark.conf.set("spark.comet.scan.hudi.enabled", "false")
-      rows
+      result
     }
-    val sparkRows = globalAggregate(comet = false, nativeScan = false)
-    val jvmRows = globalAggregate(comet = true, nativeScan = false)
-    val nativeRows = globalAggregate(comet = true, nativeScan = true)
-    check("global aggregate over an empty stage returns one row on the JVM and native scans",
+    val (sparkRows, _) = globalAggregate(comet = false, nativeScan = false)
+    val (jvmRows, jvmPlan) = globalAggregate(comet = true, nativeScan = false)
+    val (nativeRows, nativePlan) = globalAggregate(comet = true, nativeScan = true)
+    check("global aggregate over an empty grouped stage returns one row on the JVM and native scans",
       sparkRows.sameElements(Array("[0,null]")) && jvmRows.sameElements(sparkRows) &&
         nativeRows.sameElements(sparkRows),
       s"spark=${sparkRows.mkString(";")} jvm=${jvmRows.mkString(";")} native=${nativeRows.mkString(";")}")
+    for ((label, plan) <- Seq(("JVM scan under Comet", jvmPlan), ("native scan", nativePlan))) {
+      val finalNodes = PlanWalk.collect(plan) { case node => node }
+      check(s"empty grouped stage under a global aggregate ($label) becomes an empty relation",
+        plannedWithGroupedCometAggregate(plan) && !finalNodes.exists(isGroupedCometAggregate) &&
+          finalNodes.exists(_.nodeName.contains("LocalTableScan")),
+        plan.toString)
+    }
   }
 
   if (failures > 0 || checksRun != expectedChecks) {
