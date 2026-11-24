@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
+import org.apache.hudi.AutoRecordKeyGenerationUtils.{mayBeValidateParamsForAutoGenerationOfRecordKeys, shouldAutoGenerateRecordKeys}
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
 import org.apache.hudi.DataSourceUtils.SparkDataSourceWriteStatusValidator
 import org.apache.hudi.DataSourceWriteOptions._
@@ -29,6 +29,7 @@ import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.commit.{DatasetBucketRescaleCommitActionExecutor, DatasetBulkInsertCommitActionExecutor, DatasetBulkInsertOverwriteCommitActionExecutor, DatasetBulkInsertOverwriteTableCommitActionExecutor}
+import org.apache.hudi.common.NativeTableFormat
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
@@ -608,9 +609,9 @@ class HoodieSparkSqlWriterInternal {
               case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
             }
 
-            // Remove duplicates from incoming records based on existing keys from storage.
-            val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, operation, client)
             try {
+              // Remove duplicates from incoming records based on existing keys from storage.
+              val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, tableConfig, operation, client, instantTime)
               val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
                 preppedSparkSqlWrites || preppedWriteOperation)
               (writeResult, client)
@@ -1357,6 +1358,14 @@ object HoodieSparkSqlWriterInternal {
       shouldDropDuplicatesForInserts(hoodieConfig)
   }
 
+  // An insert into a table of a non-native table format with a record key that sets no duplicate policy fails on
+  // duplicate record keys. A native table keeps them unless a policy says otherwise.
+  def failsOnDuplicatesByDefault(hoodieConfig: HoodieConfig, tableConfig: HoodieTableConfig): Boolean = {
+    !hoodieConfig.contains(INSERT_DUP_POLICY) &&
+      !NativeTableFormat.TABLE_FORMAT.equals(tableConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)) &&
+      !shouldAutoGenerateRecordKeys(hoodieConfig.getProps.asScala.toMap)
+  }
+
   // Check if deduplication is needed.
   def isDeduplicationNeeded(operation: WriteOperationType): Boolean = {
     operation == WriteOperationType.INSERT
@@ -1364,19 +1373,27 @@ object HoodieSparkSqlWriterInternal {
 
   def handleInsertDuplicates(incomingRecords: JavaRDD[HoodieRecord[_]],
                              hoodieConfig: HoodieConfig,
+                             tableConfig: HoodieTableConfig,
                              operation: WriteOperationType,
-                             client: SparkRDDWriteClient[_]): JavaRDD[HoodieRecord[_]] = {
-    // If no deduplication is needed, return the incoming records as is
-    if (!isDeduplicationRequired(hoodieConfig) || !isDeduplicationNeeded(operation)) {
+                             client: SparkRDDWriteClient[_],
+                             instantTime: String): JavaRDD[HoodieRecord[_]] = {
+    // Resolve duplicates on the committing client's engine context and config rather than a throwaway
+    // context. The record index lookup this triggers collects its counters into a registry owned by the
+    // context that ran the lookup, and postCommit drains the client's context; a separate context would
+    // strand those counters and the INSERT would publish none. See RecordIndexLookupMetrics.
+    lazy val engineContext = client.getEngineContext.asInstanceOf[HoodieSparkEngineContext]
+    if (!isDeduplicationNeeded(operation)) {
+      incomingRecords
+    } else if (shouldFailWhenDuplicatesFound(hoodieConfig)) {
+      DataSourceUtils.failOnDuplicates(engineContext, incomingRecords, client.getConfig, instantTime, true)
+      incomingRecords
+    } else if (isDeduplicationRequired(hoodieConfig)) {
+      DataSourceUtils.handleDuplicates(engineContext, incomingRecords, client.getConfig, false)
+    } else if (failsOnDuplicatesByDefault(hoodieConfig, tableConfig)) {
+      DataSourceUtils.failOnDuplicatesByDefault(engineContext, incomingRecords, client.getConfig, instantTime)
       incomingRecords
     } else {
-      // Resolve duplicates on the committing client's engine context and config rather than a throwaway
-      // context. The record index lookup this triggers collects its counters into a registry owned by the
-      // context that ran the lookup, and postCommit drains the client's context; a separate context would
-      // strand those counters and the INSERT would publish none. See RecordIndexLookupMetrics.
-      DataSourceUtils.handleDuplicates(
-        client.getEngineContext.asInstanceOf[HoodieSparkEngineContext], incomingRecords,
-        client.getConfig, shouldFailWhenDuplicatesFound(hoodieConfig))
+      incomingRecords
     }
   }
 }
