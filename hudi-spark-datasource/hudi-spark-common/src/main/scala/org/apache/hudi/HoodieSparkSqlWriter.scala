@@ -611,7 +611,7 @@ class HoodieSparkSqlWriterInternal {
 
             try {
               // Remove duplicates from incoming records based on existing keys from storage.
-              val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, tableConfig, operation, client, instantTime)
+              val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, tableMetaClient, operation, client, instantTime)
               val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
                 preppedSparkSqlWrites || preppedWriteOperation)
               (writeResult, client)
@@ -1359,10 +1359,11 @@ object HoodieSparkSqlWriterInternal {
   }
 
   // An insert into a table of a non-native table format with a record key that sets no duplicate policy fails on
-  // duplicate record keys. A native table keeps them unless a policy says otherwise.
-  def failsOnDuplicatesByDefault(hoodieConfig: HoodieConfig, tableConfig: HoodieTableConfig): Boolean = {
+  // duplicate record keys. A native table keeps them unless a policy says otherwise. This is the format the table
+  // loads, which is native for a name that no table format implementation answers to, such as NATIVE.
+  def failsOnDuplicatesByDefault(hoodieConfig: HoodieConfig, tableMetaClient: HoodieTableMetaClient): Boolean = {
     !hoodieConfig.contains(INSERT_DUP_POLICY) &&
-      !NativeTableFormat.TABLE_FORMAT.equals(tableConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)) &&
+      !NativeTableFormat.TABLE_FORMAT.equals(tableMetaClient.getTableFormat.getName) &&
       !shouldAutoGenerateRecordKeys(hoodieConfig.getProps.asScala.toMap)
   }
 
@@ -1373,7 +1374,7 @@ object HoodieSparkSqlWriterInternal {
 
   def handleInsertDuplicates(incomingRecords: JavaRDD[HoodieRecord[_]],
                              hoodieConfig: HoodieConfig,
-                             tableConfig: HoodieTableConfig,
+                             tableMetaClient: HoodieTableMetaClient,
                              operation: WriteOperationType,
                              client: SparkRDDWriteClient[_],
                              instantTime: String): JavaRDD[HoodieRecord[_]] = {
@@ -1389,7 +1390,7 @@ object HoodieSparkSqlWriterInternal {
       incomingRecords
     } else if (isDeduplicationRequired(hoodieConfig)) {
       DataSourceUtils.handleDuplicates(engineContext, incomingRecords, client.getConfig, false)
-    } else if (failsOnDuplicatesByDefault(hoodieConfig, tableConfig)) {
+    } else if (failsOnDuplicatesByDefault(hoodieConfig, tableMetaClient)) {
       DataSourceUtils.failOnDuplicatesByDefault(engineContext, incomingRecords, client.getConfig, instantTime)
       incomingRecords
     } else {

@@ -48,6 +48,7 @@ import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -380,11 +381,11 @@ public class DataSourceUtils {
 
   /**
    * Fails on the first two incoming records with the same key, in a shuffle of the keys of the records alone.
-   * The records are keyed as the index of the table keys a record: by record key for a global index, and by
+   * The records are keyed as the index of the write keys a record: by record key for a global index, and by
    * record key and partition path otherwise.
    */
   private static void failOnIncomingDuplicates(JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig) {
-    boolean isIndexingGlobal = SparkHoodieIndexFactory.isGlobalIndex(writeConfig);
+    boolean isIndexingGlobal = isGlobalIndex(writeConfig);
     records
         .mapToPair(record -> new Tuple2<Object, String>(
             isIndexingGlobal ? record.getRecordKey() : record.getKey(), record.getRecordKey()))
@@ -392,6 +393,16 @@ public class DataSourceUtils {
           throw new HoodieDuplicateKeyException(first, DUPLICATE_INCOMING_KEY_DETAIL);
         }, records.getNumPartitions())
         .count();
+  }
+
+  /**
+   * Whether the index the write uses is global. As in {@link SparkHoodieIndexFactory#createIndex}, an index class
+   * takes precedence over the index type.
+   */
+  private static boolean isGlobalIndex(HoodieWriteConfig writeConfig) {
+    return StringUtils.isNullOrEmpty(writeConfig.getIndexClass())
+        ? SparkHoodieIndexFactory.isGlobalIndex(writeConfig)
+        : HoodieIndexUtils.createUserDefinedIndex(writeConfig).isGlobal();
   }
 
   /**

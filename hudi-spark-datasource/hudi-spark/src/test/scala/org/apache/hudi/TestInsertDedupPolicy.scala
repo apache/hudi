@@ -25,6 +25,8 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieInsertException}
+import org.apache.hudi.index.HoodieGlobalSimpleIndex
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
@@ -186,6 +188,42 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
     write(native, key, Seq((1, "a1", 10L), (1, "a2", 11L)), nativeOpts)
     write(native, key, Seq((1, "a3", 12L)), nativeOpts)
     Assertions.assertEquals(keptDuplicates, rows(native))
+
+    // The format name is matched as the table loads it, so a table configured as NATIVE is native too
+    val nativeByName = s"$basePath/native_by_name"
+    val nativeByNameOpts = indexOpts + (HoodieTableConfig.TABLE_FORMAT.key -> "NATIVE")
+    write(nativeByName, key, Seq((1, "a1", 10L), (1, "a2", 11L)), nativeByNameOpts)
+    write(nativeByName, key, Seq((1, "a3", 12L)), nativeByNameOpts)
+    Assertions.assertEquals(keptDuplicates, rows(nativeByName))
+  }
+
+  /**
+   * The inserted records are keyed as the index of the write keys them, and an index class takes precedence over
+   * the index type, so with a global index class a record key repeated across partitions fails the insert.
+   */
+  @Test
+  def testDuplicateKeysAcrossPartitionsFailInsertWithGlobalIndexClass(): Unit = {
+    val path = s"$basePath/global_index_class"
+    def write(rows: Seq[(Int, String, Long, String)]): Unit =
+      spark.createDataFrame(rows).toDF("id", "name", "ts", "part").write.format("hudi")
+        .option(TABLE_NAME.key, "test_table")
+        .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(PARTITIONPATH_FIELD.key, "part")
+        .option(HoodieTableConfig.TABLE_FORMAT.key, TEST_TABLE_FORMAT)
+        .option(HoodieIndexConfig.INDEX_TYPE.key, "SIMPLE")
+        .option(HoodieIndexConfig.INDEX_CLASS_NAME.key, classOf[GlobalSimpleIndexClass].getName)
+        .mode(SaveMode.Append)
+        .save(path)
+
+    write(Seq((1, "a1", 10L, "p1"), (2, "b1", 20L, "p2")))
+    val root = HoodieTestUtils.getRootCause(Assertions.assertThrows(classOf[Throwable],
+      () => write(Seq((3, "c1", 30L, "p1"), (3, "c2", 31L, "p2")))))
+    assertTrue(root.isInstanceOf[HoodieDuplicateKeyException], s"Expected a duplicate key failure, got: $root")
+    assertTrue(root.getMessage.startsWith(s"Duplicate key found for insert statement, key is: 3. $DUPLICATE_INCOMING_KEY"),
+      root.getMessage)
+    Assertions.assertEquals(Seq((1, "a1", 10L), (2, "b1", 20L)), spark.read.format("hudi").load(path)
+      .select("id", "name", "ts").collect().map(r => (r.getInt(0), r.getString(1), r.getLong(2))).sorted.toSeq)
   }
 
   /**
@@ -287,4 +325,8 @@ object TestInsertDedupPolicy {
   }
 }
 
-
+/**
+ * A global index set through hoodie.index.class.
+ */
+class GlobalSimpleIndexClass(config: HoodieWriteConfig)
+  extends HoodieGlobalSimpleIndex(config, HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config))
