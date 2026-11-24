@@ -121,11 +121,23 @@ echo "Building $NAME"
 mvn $MVN_ARGS -f "$HUDI_ROOT/pom.xml" -Phudi-trino -pl hudi-trino install \
   -Dmaven.test.skip=true -Dtrino.version="$TRINO_VERSION"
 
+WORK_DIR=$(mktemp -d)
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+# The installed hudi-trino pom imports trino-root:${trino.version}. A consumer such as the shim
+# reads that property from the root pom's default (the pinned -SNAPSHOT), not from
+# -Dtrino.version: Maven does not apply command-line properties to a dependency's pom. Reinstall
+# the jar with a pom that sets trino.version to the version it was built against, or a release
+# build fails on a -SNAPSHOT trino-root it does not have.
+awk -v v="$TRINO_VERSION" '!done && /<properties>/ { print; print "        <trino.version>" v "</trino.version>"; done = 1; next } { print }' \
+  "$HUDI_ROOT/hudi-trino/pom.xml" > "$WORK_DIR/hudi-trino.pom"
+# shellcheck disable=SC2086
+mvn $MVN_ARGS -q -N -f "$HUDI_ROOT/pom.xml" install:install-file \
+  -Dfile="$HUDI_ROOT/hudi-trino/target/hudi-trino-${HUDI_VERSION}.jar" -DpomFile="$WORK_DIR/hudi-trino.pom"
+
 # 2. The shim, on a copy whose parent is trino-root at the requested version: Maven does not
 #    interpolate a parent version, so the copy carries it literally. The copy sits outside
 #    git, so Trino's git-commit-id plugin is skipped.
-WORK_DIR=$(mktemp -d)
-trap 'rm -rf "$WORK_DIR"' EXIT
 mkdir -p "$WORK_DIR/shim"
 cp -R "$SHIM_DIR/src" "$WORK_DIR/shim/src"
 sed "/<parent>/,/<\/parent>/ s|<version>.*</version>|<version>${TRINO_VERSION}</version>|" \
