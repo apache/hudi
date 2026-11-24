@@ -48,7 +48,7 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
       + s"primary key $keyed, ordering field $ordered, $indexType index)") {
       withTempDir { tmp =>
         val tableName = generateTableName
-        withSQLConf("hoodie.index.type" -> indexType) {
+        withSQLConf("hoodie.index.type" -> indexType, MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
           val keyProperties = (if (keyed) Seq("primaryKey = 'id'") else Seq.empty) ++
             (if (ordered) Seq("preCombineField = 'ts'") else Seq("'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'"))
           spark.sql(
@@ -126,6 +126,64 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
         }
       }
     }
+  }
+
+  test("Test MERGE INTO cardinality check default on a native table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      createTable(tableName, tmp.getCanonicalPath, "cow", "primaryKey = 'id'", "preCombineField = 'ts'")
+      spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+      val mergeStatement =
+        s"""
+           |merge into $tableName t
+           |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1002) s on t.id = s.id
+           |when matched then update set *
+         """.stripMargin
+      withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+        assertCardinalityViolation(mergeStatement)
+      }
+      // Off unless set: the source rows are combined by the ordering field
+      spark.sql(mergeStatement)
+      checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "c1", 1002))
+    }
+  }
+
+  test("Test MERGE INTO cardinality check default on a table of a non-native table format") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      createTable(tableName, tmp.getCanonicalPath, "cow", "primaryKey = 'id'", "preCombineField = 'ts'",
+        "'hoodie.table.format' = 'test-format'")
+      spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+      val mergeStatement =
+        s"""
+           |merge into $tableName t
+           |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1002) s on t.id = s.id
+           |when matched then update set *
+         """.stripMargin
+      // On unless set
+      assertCardinalityViolation(mergeStatement)
+      checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "a1", 1000))
+      withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "false") {
+        spark.sql(mergeStatement)
+      }
+      checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "c1", 1002))
+    }
+  }
+
+  private def createTable(tableName: String, path: String, tableType: String, properties: String*): Unit = {
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  ts int
+         |) using hudi
+         | location '$path/$tableName'
+         | tblproperties (
+         |  type = '$tableType',
+         |  ${properties.mkString(",\n  ")}
+         | )
+       """.stripMargin)
   }
 
   /**

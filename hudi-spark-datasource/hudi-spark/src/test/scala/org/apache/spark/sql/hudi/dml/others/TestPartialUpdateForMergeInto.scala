@@ -366,18 +366,15 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         validateTableSchema(tableName, structFields)
 
         // Partial updates using MERGE INTO statement with changed fields: "price" and "_ts"
-        // Two source rows match target row 1, which only passes with the cardinality check off
-        withSQLConf(DataSourceWriteOptions.MERGE_INTO_CARDINALITY_CHECK.key -> "false") {
-          spark.sql(
-            s"""
-               |merge into $tableName t0
-               |using ( select 1 as id, 1.0 as price, 100 as ts
-               |union select 1 as id, 12.0 as price, 999 as ts
-               |union select 3 as id, 25.0 as price, 1260 as ts) s0
-               |on t0.id = s0.id
-               |when matched then update set price = s0.price, _ts = s0.ts
-               |""".stripMargin)
-        }
+        spark.sql(
+          s"""
+             |merge into $tableName t0
+             |using ( select 1 as id, 1.0 as price, 100 as ts
+             |union select 1 as id, 12.0 as price, 999 as ts
+             |union select 3 as id, 25.0 as price, 1260 as ts) s0
+             |on t0.id = s0.id
+             |when matched then update set price = s0.price, _ts = s0.ts
+             |""".stripMargin)
         validateTableSchema(tableName, structFields)
         if (commitTimeOrdering) {
           checkAnswer(s"select id, name, price, _ts, description from $tableName")(
