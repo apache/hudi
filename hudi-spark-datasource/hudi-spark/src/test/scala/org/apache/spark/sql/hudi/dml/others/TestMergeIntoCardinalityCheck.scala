@@ -128,6 +128,79 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
     }
   }
 
+  // (table type, index type)
+  Seq(
+    ("cow", "GLOBAL_SIMPLE"),
+    ("mor", "GLOBAL_SIMPLE"),
+    ("cow", "GLOBAL_BLOOM"),
+    ("mor", "GLOBAL_BLOOM")).foreach { case (tableType, indexType) =>
+    test(s"Test MERGE INTO with one source row for a key held twice in one base file ($tableType, $indexType index)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf("hoodie.index.type" -> indexType, MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+          createTable(tableName, tmp.getCanonicalPath, tableType, "primaryKey = 'id'", "preCombineField = 'ts'")
+          // An insert keeps both rows of key 1
+          withSQLConf("hoodie.spark.sql.insert.into.operation" -> "insert") {
+            spark.sql(s"insert into $tableName values (1, 'a1', 1000), (1, 'b1', 1000), (2, 'a2', 1000)")
+          }
+          checkAnswer(s"select count(1), count(distinct _hoodie_file_name) from $tableName where id = 1")(Seq(2, 1))
+
+          // One source row matches both target rows of key 1
+          spark.sql(
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 'c1' as name, 1001 as ts) s on t.id = s.id
+               |when matched then update set *
+               |when not matched then insert *
+             """.stripMargin)
+          assert(spark.sql(s"select id from $tableName where id = 1 and name = 'c1'").count() >= 1)
+
+          // Two source rows fail for the key held once and for the key held twice
+          Seq(2, 1).foreach { id =>
+            assertCardinalityViolation(
+              s"""
+                 |merge into $tableName t
+                 |using (select $id as id, 'd' as name, 1002 as ts union all select $id, 'e', 1003) s on t.id = s.id
+                 |when matched then update set *
+               """.stripMargin)
+          }
+        }
+      }
+    }
+  }
+
+  test("Test MERGE INTO with two source rows for a target row, of which one moves it to another partition") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE", "hoodie.simple.index.update.partition.path" -> "true",
+        MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  ts int,
+             |  dt string
+             |) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (type = 'cow', primaryKey = 'id', preCombineField = 'ts')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 1000, 'p1')")
+        // The index tags the first source row with the target row and merges the second one, which changes the
+        // partition, with the target row
+        assertCardinalityViolation(
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'b1' as name, 1001 as ts, 'p1' as dt union all select 1, 'c1', 1002, 'p2') s
+             |on t.id = s.id
+             |when matched then update set *
+           """.stripMargin)
+        checkAnswer(s"select id, name, ts, dt from $tableName")(Seq(1, "a1", 1000, "p1"))
+      }
+    }
+  }
+
   test("Test MERGE INTO cardinality check default on a native table") {
     withTempDir { tmp =>
       val tableName = generateTableName
