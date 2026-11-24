@@ -1929,4 +1929,28 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test MergeInto deletes by record key from a source without the partition field through a global index that keeps records in their partition") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, ts long, dep string) using hudi
+           | tblproperties (type = 'cow', primaryKey = 'id', preCombineField = 'ts', 'hoodie.index.type' = 'GLOBAL_SIMPLE',
+           |   '${HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE.key}' = 'false')
+           | partitioned by (dep)
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd2')")
+
+      spark.sql(
+        s"""
+           | merge into $tableName t
+           | using (select 1 as id, 20L as ts) s
+           | on t.id = s.id
+           | when matched then delete
+         """.stripMargin)
+      checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(2, "a2", 10L, "d2"))
+    }
+  }
 }

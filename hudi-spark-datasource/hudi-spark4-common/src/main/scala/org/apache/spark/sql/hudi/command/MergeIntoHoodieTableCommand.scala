@@ -1171,17 +1171,21 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * up under, each with that source value.
    */
   private def partitionAssignmentsOffLookup: Seq[(Attribute, Expression)] = {
-    val lookupExpressions = recordKeyAttributeToConditionExpression ++ partitionFieldsAssociatedExpressions
-    updatingActions.flatMap(_.assignments).flatMap {
-      case Assignment(attr: Attribute, value) =>
-        lookupExpressions.find { case (target, _) => attributeEquals(target, attr) }
-          .filter { case (_, lookup) =>
-            hoodieCatalogTable.partitionFields.exists(f => sparkSession.sessionState.conf.resolver(f, attr.name)) &&
-              !castIfNeeded(value, attr.dataType).semanticEquals(castIfNeeded(lookup, attr.dataType)) &&
-              !value.semanticEquals(attr)
-          }
-          .map { case (_, lookup) => attr -> lookup }
-      case _ => None
+    val partitionAssignments = updatingActions.flatMap(_.assignments).collect {
+      case Assignment(attr: Attribute, value)
+        if hoodieCatalogTable.partitionFields.exists(f => sparkSession.sessionState.conf.resolver(f, attr.name)) =>
+        attr -> value
+    }
+    // The source values a record is looked up under are resolved only for a statement that assigns a partition
+    // field, as a statement that does not, such as one that only deletes, need not read them from the source
+    lazy val lookupExpressions = recordKeyAttributeToConditionExpression ++ partitionFieldsAssociatedExpressions
+    partitionAssignments.flatMap { case (attr, value) =>
+      lookupExpressions.find { case (target, _) => attributeEquals(target, attr) }
+        .filter { case (_, lookup) =>
+          !castIfNeeded(value, attr.dataType).semanticEquals(castIfNeeded(lookup, attr.dataType)) &&
+            !value.semanticEquals(attr)
+        }
+        .map { case (_, lookup) => attr -> lookup }
     }
   }
 
