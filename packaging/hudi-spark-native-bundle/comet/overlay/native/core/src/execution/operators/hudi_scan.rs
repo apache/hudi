@@ -43,6 +43,7 @@ use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
     DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties,
 };
+use futures::future::{BoxFuture, FutureExt, Shared};
 use futures::stream::BoxStream;
 use futures::{StreamExt, TryStreamExt};
 use hudi::file_group::reader::FileGroupReader;
@@ -83,9 +84,7 @@ struct ReaderKey {
     batch_size: usize,
 }
 
-/// A bounded map of opened values; the least recently used entry goes first.
-/// Only successful opens are kept, so a task that misses opens on its own and a
-/// failing open never makes other tasks wait on it.
+/// A bounded map; the least recently used entry goes first.
 struct Lru<K, V> {
     capacity: usize,
     clock: u64,
@@ -110,12 +109,8 @@ impl<K: Clone + Eq + Hash, V> Lru<K, V> {
         })
     }
 
-    /// Keeps the value already present if another task stored one first.
-    fn insert(&mut self, key: K, value: Arc<V>) -> Arc<V> {
-        if let Some(existing) = self.get(&key) {
-            return existing;
-        }
-        if self.entries.len() >= self.capacity {
+    fn insert(&mut self, key: K, value: Arc<V>) {
+        if self.entries.len() >= self.capacity && !self.entries.contains_key(&key) {
             let oldest = self
                 .entries
                 .iter()
@@ -125,27 +120,69 @@ impl<K: Clone + Eq + Hash, V> Lru<K, V> {
                 self.entries.remove(&oldest);
             }
         }
-        self.entries.insert(key, (self.clock, Arc::clone(&value)));
-        value
+        self.entries.insert(key, (self.clock, value));
+    }
+
+    /// Removes the entry only if it is still `value`, so a failed open never
+    /// evicts a newer one stored under the same key.
+    fn remove_if_same(&mut self, key: &K, value: &Arc<V>) {
+        if matches!(self.entries.get(key), Some((_, current)) if Arc::ptr_eq(current, value)) {
+            self.entries.remove(key);
+        }
     }
 }
 
-type Cache<K, V> = Mutex<Lru<K, V>>;
+/// An open in progress or done, shared by every task that asks for the same
+/// key while it runs, so concurrent first users open once. A failed open is
+/// removed from the cache: the tasks already waiting on it get its error at
+/// once, and the next task opens afresh.
+type Opening<V> = Shared<BoxFuture<'static, Result<Arc<V>, Arc<str>>>>;
+type Cache<K, V> = Mutex<Lru<K, Opening<V>>>;
 
 static TABLES: LazyLock<Cache<TableKey, Table>> =
     LazyLock::new(|| Mutex::new(Lru::new(TABLE_CACHE_CAPACITY)));
 static READERS: LazyLock<Cache<ReaderKey, FileGroupReader>> =
     LazyLock::new(|| Mutex::new(Lru::new(READER_CACHE_CAPACITY)));
 
-fn cached<K: Clone + Eq + Hash, V>(cache: &Cache<K, V>, key: &K) -> Option<Arc<V>> {
-    cache.lock().unwrap_or_else(PoisonError::into_inner).get(key)
-}
-
-fn store<K: Clone + Eq + Hash, V>(cache: &Cache<K, V>, key: K, value: Arc<V>) -> Arc<V> {
-    cache
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(key, value)
+async fn open_shared<K, V>(
+    cache: &'static Cache<K, V>,
+    key: &K,
+    open: impl FnOnce() -> BoxFuture<'static, DFResult<V>>,
+) -> DFResult<Arc<V>>
+where
+    K: Clone + Eq + Hash,
+    V: Send + Sync + 'static,
+{
+    let opening = {
+        let mut lru = cache.lock().unwrap_or_else(PoisonError::into_inner);
+        match lru.get(key) {
+            Some(opening) => opening,
+            None => {
+                let open = open();
+                let opening: Arc<Opening<V>> = Arc::new(
+                    async move {
+                        open.await
+                            .map(Arc::new)
+                            .map_err(|e| Arc::<str>::from(e.to_string()))
+                    }
+                    .boxed()
+                    .shared(),
+                );
+                lru.insert(key.clone(), Arc::clone(&opening));
+                opening
+            }
+        }
+    };
+    match (*opening).clone().await {
+        Ok(value) => Ok(value),
+        Err(message) => {
+            cache
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove_if_same(key, &opening);
+            Err(DataFusionError::Execution(message.to_string()))
+        }
+    }
 }
 
 fn sorted_entries(map: &HashMap<String, String>) -> Vec<(String, String)> {
@@ -154,7 +191,7 @@ fn sorted_entries(map: &HashMap<String, String>) -> Vec<(String, String)> {
     entries
 }
 
-async fn open_table(key: &TableKey, object_store: Option<Arc<dyn ObjectStore>>) -> DFResult<Table> {
+async fn open_table(key: TableKey, object_store: Option<Arc<dyn ObjectStore>>) -> DFResult<Table> {
     // hudi-rs takes the read options (the query instant) per read, not on the
     // table.
     let table_opts: Vec<(&str, &str)> = key
@@ -172,6 +209,21 @@ async fn open_table(key: &TableKey, object_store: Option<Arc<dyn ObjectStore>>) 
     })
 }
 
+async fn create_reader(table: Arc<Table>, read_options: ReadOptions) -> DFResult<FileGroupReader> {
+    table
+        .create_file_group_reader_with_options(
+            Some(&read_options),
+            std::iter::empty::<(&str, String)>(),
+        )
+        .await
+        .map_err(|e| {
+            DataFusionError::Execution(format!(
+                "failed to create a reader for Hudi table {}: {e}",
+                table.base_url()
+            ))
+        })
+}
+
 /// The reader comes from an opened table rather than from the base URI alone
 /// so that it knows the table's current schema: a base file written before a
 /// column was added lacks that column, and only a reader holding the table
@@ -181,43 +233,26 @@ async fn file_group_reader(
     object_store: Option<Arc<dyn ObjectStore>>,
     read_options: &ReadOptions,
 ) -> DFResult<Arc<FileGroupReader>> {
+    let read_options = read_options.clone();
     // Without a snapshot of the timeline the driver planned against, nothing
     // tells a cached table from a stale one.
-    let use_cache = !key.table.timeline_snapshot.is_empty();
-    if use_cache {
-        if let Some(reader) = cached(&READERS, key) {
-            return Ok(reader);
-        }
+    if key.table.timeline_snapshot.is_empty() {
+        let table = Arc::new(open_table(key.table.clone(), object_store).await?);
+        return Ok(Arc::new(create_reader(table, read_options).await?));
     }
-    let table = match use_cache.then(|| cached(&TABLES, &key.table)).flatten() {
-        Some(table) => table,
-        None => {
-            let table = Arc::new(open_table(&key.table, object_store).await?);
-            if use_cache {
-                store(&TABLES, key.table.clone(), table)
-            } else {
-                table
-            }
+    let table_key = key.table.clone();
+    open_shared(LazyLock::force(&READERS), key, move || {
+        async move {
+            let cache_key = table_key.clone();
+            let table = open_shared(LazyLock::force(&TABLES), &cache_key, move || {
+                open_table(table_key, object_store).boxed()
+            })
+            .await?;
+            create_reader(table, read_options).await
         }
-    };
-    let reader = table
-        .create_file_group_reader_with_options(
-            Some(read_options),
-            std::iter::empty::<(&str, String)>(),
-        )
-        .await
-        .map_err(|e| {
-            DataFusionError::Execution(format!(
-                "failed to create a reader for Hudi table {}: {e}",
-                key.table.base_uri
-            ))
-        })?;
-    let reader = Arc::new(reader);
-    Ok(if use_cache {
-        store(&READERS, key.clone(), reader)
-    } else {
-        reader
+        .boxed()
     })
+    .await
 }
 
 /// Aborts a slice read whose consumer went away.
