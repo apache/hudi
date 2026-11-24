@@ -215,18 +215,17 @@ directory and the E2E catalog config (`connector.name=hudi`, metastore at
 `thrift://hivemetastore:9083`).
 
 This image is built locally on demand (also by the `hudi_trino_e2e.yml` CI workflow) and
-is NOT published to Docker Hub. The plugin directory comes from the in-repo shim project
-at `docker/trino/shim/` (see `hudi-trino/README.md` for the full build-and-run flow):
+is NOT published to Docker Hub. The plugin directory comes from
+`scripts/trino/build_plugin_zip.sh`, which builds hudi-trino and the in-repo shim at
+`docker/trino/shim/` against one Trino version (see `hudi-trino/README.md` for the full
+build-and-run flow). Its default, the released `trino.e2e.version`, matches the released
+base image, so a quick local run needs no Trino source build:
 
 ```
-# JDK 25; hudi-trino must already be installed into the local m2
-# dep.hudi.version comes from the reactor pom -- the shim is outside the reactor, so
-# cut_release_branch.sh cannot bump the literal default in its own pom.
-HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
-mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
-TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
-unzip -o -q "docker/trino/shim/target/trino-hudi-$TRINO_VERSION.zip" -d docker/trino/shim/target  # trino-maven-plugin 24 emits only the zip
-docker/trino/build_image.sh --plugin-dir "docker/trino/shim/target/trino-hudi-$TRINO_VERSION"
+# JDK 25; the Hudi modules hudi-trino depends on must already be in the local m2
+scripts/trino/build_plugin_zip.sh
+TRINO_E2E_VERSION=$(sed -n 's|.*<trino.e2e.version>\(.*\)</trino.e2e.version>.*|\1|p' pom.xml)
+docker/trino/build_image.sh --plugin-dir "$(ls -d target/hudi-trino-plugin/hudi-trino-plugin-*-trino-"$TRINO_E2E_VERSION")"
 ```
 
 The `trinocoordinator` compose service exists only in the
