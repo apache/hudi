@@ -19,17 +19,22 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -165,6 +170,46 @@ class TestTenToNineDowngradeHandler {
     assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY.name(),
         up.propertiesToUpdate().get(HoodieTableConfig.META_FIELDS_MODE),
         "the retained mode must still be COMMIT_TIME_ONLY after upgrading again");
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "ts,    true,  true",
+      "ts,    false, false",
+      "name,  true,  false",
+  })
+  void downgradeRejectsATableKeepingFractionalSecondsInTimestampPartitionPaths(
+      String partitionField, boolean fractionalSeconds, boolean rejected, @TempDir Path basePath) throws Exception {
+    // A version 9 writer predates the property and truncates a TIMESTAMP partition value to whole seconds, so it
+    // would route an update of a row with fractional seconds to another partition path. The property changes no
+    // other partition value.
+    String schema = "{\"type\":\"record\",\"name\":\"rec\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"name\",\"type\":\"string\"},"
+        + "{\"name\":\"ts\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}]}]}";
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName("test_table")
+        .setTableVersion(HoodieTableVersion.TEN)
+        .setRecordKeyFields("id")
+        .setPartitionFields(partitionField)
+        .setTableCreateSchema(schema)
+        .setTimestampPartitionFractionalSeconds(fractionalSeconds)
+        .initTable(HoodieTestUtils.getDefaultStorageConf(), basePath.toString());
+    HoodieTable table = mock(HoodieTable.class);
+    when(table.getMetaClient()).thenReturn(metaClient);
+    SupportsUpgradeDowngrade helper = mock(SupportsUpgradeDowngrade.class);
+    when(helper.getTable(any(HoodieWriteConfig.class), any(HoodieEngineContext.class))).thenReturn(table);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+
+    if (rejected) {
+      HoodieUpgradeDowngradeException ex = assertThrows(HoodieUpgradeDowngradeException.class,
+          () -> new TenToNineDowngradeHandler().downgrade(writeConfig, mock(HoodieEngineContext.class), "001", helper));
+      assertTrue(ex.getMessage().contains(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()),
+          "the message must name the property: " + ex.getMessage());
+    } else {
+      assertTrue(new TenToNineDowngradeHandler().downgrade(writeConfig, mock(HoodieEngineContext.class), "001", helper)
+          .propertiesToDelete().contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
+    }
   }
 
   @Test

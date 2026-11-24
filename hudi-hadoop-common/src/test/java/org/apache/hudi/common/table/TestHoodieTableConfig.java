@@ -442,7 +442,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @ParameterizedTest
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
   void testTimestampPartitionFractionalSecondsSurvivesConfigVersionDropping(HoodieTableVersion tableVersion) {
-    // a version 10 table downgraded to 9 keeps the layout its partition paths were written in
+    // loading the table keeps the layout its partition paths were written in, at any table version
     HoodieConfig config = new HoodieConfig();
     config.setValue(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS, "true");
     config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion.versionCode()));
