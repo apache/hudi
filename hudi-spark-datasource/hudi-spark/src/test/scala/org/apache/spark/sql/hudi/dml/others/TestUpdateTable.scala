@@ -793,24 +793,27 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, v from $tableName")(Seq(1, null))
 
       // A table of the native format keeps casting the values to the types of the columns, and an
-      // overflowing value fails under any policy
-      val nativeTable = generateTableName
-      spark.sql(
-        s"""
-           |create table $nativeTable (id int, v int, d decimal(5, 2)) using hudi
-           | location '${tmp.getCanonicalPath}/$nativeTable'
-           | tblproperties (primaryKey = 'id', type = 'cow')
-         """.stripMargin)
-      spark.sql(s"insert into $nativeTable select 1, 10, 1.5")
-      spark.sql(s"update $nativeTable set v = '20'")
-      Seq("ansi", "legacy").foreach { policy =>
-        withSQLConf("spark.sql.storeAssignmentPolicy" -> policy) {
-          Seq("v = cast(3000000000 as bigint)", "d = cast(12345.678 as decimal(10, 3))").foreach { assignment =>
-            intercept[Exception](spark.sql(s"update $nativeTable set $assignment"))
+      // overflowing value fails under any policy. The format name is matched as the table loads it,
+      // so a table configured as NATIVE is native too.
+      Seq("", ", 'hoodie.table.format' = 'NATIVE'").foreach { formatProperty =>
+        val nativeTable = generateTableName
+        spark.sql(
+          s"""
+             |create table $nativeTable (id int, v int, d decimal(5, 2)) using hudi
+             | location '${tmp.getCanonicalPath}/$nativeTable'
+             | tblproperties (primaryKey = 'id', type = 'cow'$formatProperty)
+           """.stripMargin)
+        spark.sql(s"insert into $nativeTable select 1, 10, 1.5")
+        spark.sql(s"update $nativeTable set v = '20'")
+        Seq("ansi", "legacy").foreach { policy =>
+          withSQLConf("spark.sql.storeAssignmentPolicy" -> policy) {
+            Seq("v = cast(3000000000 as bigint)", "d = cast(12345.678 as decimal(10, 3))").foreach { assignment =>
+              intercept[Exception](spark.sql(s"update $nativeTable set $assignment"))
+            }
           }
         }
+        checkAnswer(s"select id, v, cast(d as string) from $nativeTable")(Seq(1, 20, "1.50"))
       }
-      checkAnswer(s"select id, v, cast(d as string) from $nativeTable")(Seq(1, 20, "1.50"))
     }
   }
 }

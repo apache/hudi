@@ -56,11 +56,11 @@ import scala.util.Try
 object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   /**
-   * Whether the table is of a non-native table format, see [[HoodieTableConfig.TABLE_FORMAT]].
+   * Whether the table is of a non-native table format, see [[HoodieTableConfig.TABLE_FORMAT]]. This is the format
+   * the table loads, which is native for a name that no table format implementation answers to, such as NATIVE.
    */
   def isNonNativeTableFormat(sparkSession: SparkSession, table: CatalogTable): Boolean =
-    !NativeTableFormat.TABLE_FORMAT.equals(
-      new HoodieCatalogTable(sparkSession, table).tableConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
+    !NativeTableFormat.TABLE_FORMAT.equals(new HoodieCatalogTable(sparkSession, table).metaClient.getTableFormat.getName)
   // NOTE: {@code SimpleDataFormat} is NOT thread-safe
   // TODO replace w/ DateTimeFormatter
   private val defaultDateFormat =
