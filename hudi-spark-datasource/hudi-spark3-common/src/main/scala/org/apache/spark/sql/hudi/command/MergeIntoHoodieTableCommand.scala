@@ -609,15 +609,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   /**
-   * A table with record key(s) is upserted, since only the index lookup tells the source records that
-   * match the table from the rest: written as inserts, all of them take the not-matched clauses. A
-   * table without one is upserted when the statement has a matched clause: a source record matching
-   * the table carries the location of its target record, and only the upsert applies the clause there.
+   * A table without record key(s) is upserted when the statement has a matched clause: a source record
+   * matching the table carries the location of its target record, and only the upsert applies the
+   * clause there.
    */
   private def getOperationType(parameters: Map[String, String]) = {
-    if (!hasPrimaryKey()
-      && StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava))
-      && mergeInto.matchedActions.isEmpty) {
+    val hasMatchedClauseToApply = if (hasPrimaryKey()) updatingActions.nonEmpty else mergeInto.matchedActions.nonEmpty
+    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava))
+      && !hasMatchedClauseToApply) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL
