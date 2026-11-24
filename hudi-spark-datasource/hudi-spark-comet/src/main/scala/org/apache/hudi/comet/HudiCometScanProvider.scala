@@ -234,15 +234,22 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
       .copy(partitionFilters = scanExec.partitionFilters.filterNot(runtimeFilters.contains))
       .canonicalized
     val scanHashCode = canonicalScan.hashCode()
-    // Every instant with its state and completion time, so the value changes whenever a commit
-    // completes, including one that completes out of order.
+    // Every instant of every action on the active timeline, with its state and completion time,
+    // plus the table config, so the value changes whenever anything is added, completed, rolled
+    // back or restored, and whenever a table property changes without a commit.
     val timelineSnapshot = {
-      val instants = fileIndex.metaClient.getCommitsAndCompactionTimeline.getInstants.asScala
+      val metaClient = fileIndex.metaClient
+      val instants = metaClient.getActiveTimeline.getInstants.asScala
       val digest = java.security.MessageDigest.getInstance("SHA-256")
-      instants.foreach { instant =>
-        val entry = s"${instant.getState},${instant.getAction},${instant.requestedTime}," +
-          s"${instant.getCompletionTime};"
+      def add(entry: String): Unit =
         digest.update(entry.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+      instants.foreach { instant =>
+        add(s"${instant.getState},${instant.getAction},${instant.requestedTime}," +
+          s"${instant.getCompletionTime};")
+      }
+      val props = metaClient.getTableConfig.getProps
+      props.stringPropertyNames.asScala.toSeq.sorted.foreach { name =>
+        add(s"$name=${props.getProperty(name)};")
       }
       s"${instants.size}-${digest.digest().map("%02x".format(_)).mkString}"
     }

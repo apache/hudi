@@ -49,7 +49,7 @@ use hudi::file_group::reader::FileGroupReader;
 use hudi::table::builder::TableBuilder;
 use hudi::table::{ReadOptions, Table};
 use object_store::ObjectStore;
-use tokio::sync::{mpsc, OnceCell};
+use tokio::sync::mpsc;
 use tokio::task::AbortHandle;
 
 /// Opened tables kept by this process. A task that finds its table here skips
@@ -59,14 +59,15 @@ const TABLE_CACHE_CAPACITY: usize = 32;
 /// from the latest commit, which a task finding one here does not read again.
 const READER_CACHE_CAPACITY: usize = 64;
 /// File slices a partition reads at once: the one being consumed, and the next
-/// one, which opens and reads ahead meanwhile.
+/// one, which opens and reads ahead meanwhile if it has no log files.
 const SLICES_IN_FLIGHT: usize = 2;
 /// Batches a slice read may produce ahead of its consumer.
 const SLICE_READ_AHEAD: usize = 2;
 
 /// What a task's table is opened from. The timeline snapshot changes with every
-/// instant added to or completed on the timeline the driver planned against,
-/// so an entry never serves a plan newer than the timeline it read.
+/// instant added to, completed on or removed from the active timeline the
+/// driver planned against, and with every table config change, so an entry
+/// never serves a plan newer than the timeline and config it read.
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct TableKey {
     base_uri: String,
@@ -82,16 +83,16 @@ struct ReaderKey {
     batch_size: usize,
 }
 
-/// A bounded map of cells, each filled once by the first caller to need it
-/// while later callers wait for that result. The least recently used entry
-/// goes first. A failed fill leaves its cell empty for the next caller.
-struct LruCells<K, V> {
+/// A bounded map of opened values; the least recently used entry goes first.
+/// Only successful opens are kept, so a task that misses opens on its own and a
+/// failing open never makes other tasks wait on it.
+struct Lru<K, V> {
     capacity: usize,
     clock: u64,
-    entries: HashMap<K, (u64, Arc<OnceCell<V>>)>,
+    entries: HashMap<K, (u64, Arc<V>)>,
 }
 
-impl<K: Clone + Eq + Hash, V> LruCells<K, V> {
+impl<K: Clone + Eq + Hash, V> Lru<K, V> {
     fn new(capacity: usize) -> Self {
         Self {
             capacity,
@@ -100,12 +101,19 @@ impl<K: Clone + Eq + Hash, V> LruCells<K, V> {
         }
     }
 
-    fn cell(&mut self, key: &K) -> Arc<OnceCell<V>> {
+    fn get(&mut self, key: &K) -> Option<Arc<V>> {
         self.clock += 1;
         let clock = self.clock;
-        if let Some((used, cell)) = self.entries.get_mut(key) {
+        self.entries.get_mut(key).map(|(used, value)| {
             *used = clock;
-            return Arc::clone(cell);
+            Arc::clone(value)
+        })
+    }
+
+    /// Keeps the value already present if another task stored one first.
+    fn insert(&mut self, key: K, value: Arc<V>) -> Arc<V> {
+        if let Some(existing) = self.get(&key) {
+            return existing;
         }
         if self.entries.len() >= self.capacity {
             let oldest = self
@@ -117,24 +125,27 @@ impl<K: Clone + Eq + Hash, V> LruCells<K, V> {
                 self.entries.remove(&oldest);
             }
         }
-        let cell = Arc::new(OnceCell::new());
-        self.entries.insert(key.clone(), (clock, Arc::clone(&cell)));
-        cell
+        self.entries.insert(key, (self.clock, Arc::clone(&value)));
+        value
     }
 }
 
-type Cache<K, V> = Mutex<LruCells<K, V>>;
+type Cache<K, V> = Mutex<Lru<K, V>>;
 
 static TABLES: LazyLock<Cache<TableKey, Table>> =
-    LazyLock::new(|| Mutex::new(LruCells::new(TABLE_CACHE_CAPACITY)));
-static READERS: LazyLock<Cache<ReaderKey, Arc<FileGroupReader>>> =
-    LazyLock::new(|| Mutex::new(LruCells::new(READER_CACHE_CAPACITY)));
+    LazyLock::new(|| Mutex::new(Lru::new(TABLE_CACHE_CAPACITY)));
+static READERS: LazyLock<Cache<ReaderKey, FileGroupReader>> =
+    LazyLock::new(|| Mutex::new(Lru::new(READER_CACHE_CAPACITY)));
 
-fn cache_cell<K: Clone + Eq + Hash, V>(cache: &Cache<K, V>, key: &K) -> Arc<OnceCell<V>> {
+fn cached<K: Clone + Eq + Hash, V>(cache: &Cache<K, V>, key: &K) -> Option<Arc<V>> {
+    cache.lock().unwrap_or_else(PoisonError::into_inner).get(key)
+}
+
+fn store<K: Clone + Eq + Hash, V>(cache: &Cache<K, V>, key: K, value: Arc<V>) -> Arc<V> {
     cache
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .cell(key)
+        .insert(key, value)
 }
 
 fn sorted_entries(map: &HashMap<String, String>) -> Vec<(String, String)> {
@@ -170,29 +181,43 @@ async fn file_group_reader(
     object_store: Option<Arc<dyn ObjectStore>>,
     read_options: &ReadOptions,
 ) -> DFResult<Arc<FileGroupReader>> {
-    let reader_cell = cache_cell(&READERS, key);
-    let reader = reader_cell
-        .get_or_try_init(|| async {
-            let table_cell = cache_cell(&TABLES, &key.table);
-            let table = table_cell
-                .get_or_try_init(|| open_table(&key.table, object_store))
-                .await?;
-            let reader = table
-                .create_file_group_reader_with_options(
-                    Some(read_options),
-                    std::iter::empty::<(&str, String)>(),
-                )
-                .await
-                .map_err(|e| {
-                    DataFusionError::Execution(format!(
-                        "failed to create a reader for Hudi table {}: {e}",
-                        key.table.base_uri
-                    ))
-                })?;
-            Ok::<_, DataFusionError>(Arc::new(reader))
-        })
-        .await?;
-    Ok(Arc::clone(reader))
+    // Without a snapshot of the timeline the driver planned against, nothing
+    // tells a cached table from a stale one.
+    let use_cache = !key.table.timeline_snapshot.is_empty();
+    if use_cache {
+        if let Some(reader) = cached(&READERS, key) {
+            return Ok(reader);
+        }
+    }
+    let table = match use_cache.then(|| cached(&TABLES, &key.table)).flatten() {
+        Some(table) => table,
+        None => {
+            let table = Arc::new(open_table(&key.table, object_store).await?);
+            if use_cache {
+                store(&TABLES, key.table.clone(), table)
+            } else {
+                table
+            }
+        }
+    };
+    let reader = table
+        .create_file_group_reader_with_options(
+            Some(read_options),
+            std::iter::empty::<(&str, String)>(),
+        )
+        .await
+        .map_err(|e| {
+            DataFusionError::Execution(format!(
+                "failed to create a reader for Hudi table {}: {e}",
+                key.table.base_uri
+            ))
+        })?;
+    let reader = Arc::new(reader);
+    Ok(if use_cache {
+        store(&READERS, key.clone(), reader)
+    } else {
+        reader
+    })
 }
 
 /// Aborts a slice read whose consumer went away.
@@ -204,14 +229,17 @@ impl Drop for AbortOnDrop {
     }
 }
 
-/// Reads one file slice. On a Tokio runtime the read runs on its own task, so
-/// it opens the slice and fetches its first batches while the consumer is
-/// still on the previous slice.
+/// Reads one file slice. A slice with no log files, on a Tokio runtime, reads
+/// on its own task, so it opens and fetches its first batches while the
+/// consumer is still on the previous slice. A slice with log files reads only
+/// when consumed, so at most one merge buffer is live per partition and a
+/// LIMIT never pays for a merge it does not read.
 fn read_slice(
     reader: Arc<FileGroupReader>,
     read_options: ReadOptions,
     slice: HudiFileSliceSpec,
 ) -> BoxStream<'static, DFResult<RecordBatch>> {
+    let read_ahead = slice.log_file_paths.is_empty();
     let open = async move {
         let stream = reader
             .read_file_slice_from_paths_stream(
@@ -233,7 +261,7 @@ fn read_slice(
             ))
         }))
     };
-    if tokio::runtime::Handle::try_current().is_err() {
+    if !read_ahead || tokio::runtime::Handle::try_current().is_err() {
         return futures::stream::once(open).try_flatten().boxed();
     }
     let (tx, rx) = mpsc::channel(SLICE_READ_AHEAD);
@@ -444,7 +472,8 @@ impl ExecutionPlan for HudiScanExec {
             };
             let reader = file_group_reader(&reader_key, object_store, &read_options).await?;
             // Slices come out in order; buffering yields the next slice's
-            // stream, already reading on its own task, while this one drains.
+            // stream, already reading on its own task if it has no log files,
+            // while this one drains.
             let slice_streams = futures::stream::iter(slices)
                 .map(move |slice| {
                     futures::future::ready(read_slice(
