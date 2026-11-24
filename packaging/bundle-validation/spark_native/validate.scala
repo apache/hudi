@@ -244,7 +244,7 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   compare("many small file slices", expectNative = true)(
     spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts"))
   // A LIMIT stops reading mid-partition, with later slices (some merging logs) never consumed.
-  {
+  locally {
     val all = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts")
       .collect().map(_.toString).toSet
     spark.conf.set("spark.comet.scan.hudi.enabled", "true")
@@ -257,7 +257,7 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   }
   // Executors keep opened tables across queries; a commit after a native read must show up in
   // the next native read.
-  {
+  locally {
     val path = writeV8("native_scan_cache_v8", "MERGE_ON_READ", Overwrite, rows(0, 300), "upsert")
     readSorted(path, native = true)
     writeV8("native_scan_cache_v8", "MERGE_ON_READ", Append, updatedRows(0, 50), "upsert")
@@ -459,7 +459,7 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
       oneRowPlan.toString)
   }
   // A global aggregate over an empty stage still returns its one row (SPARK-44040).
-  {
+  locally {
     def globalAggregate(comet: Boolean, nativeScan: Boolean): Array[String] = {
       spark.conf.set("spark.comet.enabled", comet.toString)
       spark.conf.set("spark.comet.scan.hudi.enabled", nativeScan.toString)
