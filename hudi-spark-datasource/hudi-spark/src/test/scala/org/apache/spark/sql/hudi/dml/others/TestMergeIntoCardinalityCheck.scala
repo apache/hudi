@@ -243,6 +243,36 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
     }
   }
 
+  // (table type, ordering field)
+  Seq(("cow", false), ("mor", false), ("cow", true), ("mor", true)).foreach { case (tableType, ordered) =>
+    test(s"Test MERGE INTO with source rows of a new key that a not-matched condition tells apart ($tableType, "
+      + s"ordering field $ordered)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+          createTable(tableName, tmp.getCanonicalPath, tableType, "primaryKey = 'id'",
+            if (ordered) "preCombineField = 'ts'" else "'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'")
+          spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+          // For each new key the condition accepts one source row, which loses to the other one when the two are
+          // combined by the ordering field, or by their order without one
+          withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+            spark.sql(
+              s"""
+                 |merge into $tableName t
+                 |using (select 7 as id, 'a7' as name, 1000 as ts union all select 7, 'b7', 1001
+                 |  union all select 8, 'b8', 1001 union all select 8, 'a8', 1000) s
+                 |on t.id = s.id
+                 |when matched then update set *
+                 |when not matched and s.name like 'a%' then insert *
+               """.stripMargin)
+          }
+          checkAnswer(s"select id, name, ts from $tableName order by id")(
+            Seq(1, "a1", 1000), Seq(7, "a7", 1000), Seq(8, "a8", 1000))
+        }
+      }
+    }
+  }
+
   private def createTable(tableName: String, path: String, tableType: String, properties: String*): Unit = {
     spark.sql(
       s"""
