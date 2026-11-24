@@ -33,6 +33,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -59,8 +60,16 @@ public class HoodieInMemoryHashIndex
     super(config);
   }
 
-  private static String tableKey(StoragePath basePath) {
-    return basePath.toUri().getPath();
+  /**
+   * Keys a table by scheme, authority and path, with a scheme-less path taken as local, so {@code /tmp/t} and
+   * {@code file:/tmp/t} name one table while {@code s3a://bucket-a/t} and {@code s3a://bucket-b/t} do not.
+   */
+  @VisibleForTesting
+  static String tableKey(StoragePath basePath) {
+    URI uri = basePath.toUri();
+    String scheme = uri.getScheme() == null ? "file" : uri.getScheme();
+    String authority = uri.getAuthority() == null ? "" : uri.getAuthority();
+    return scheme + "://" + authority + uri.getPath();
   }
 
   private static ConcurrentMap<HoodieKey, HoodieRecordLocation> locationsOf(String tableKey) {

@@ -291,8 +291,8 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
   var countDownLatch: CountDownLatch = _
 
   // add a listener for stages for parallelism checking with stage name, restricted to the stages of
-  // the jobs this test started. Hudi overwrites the job group id and description on its own jobs, so
-  // the discriminator is a local property the test sets before the query.
+  // the jobs this test started. Hudi overwrites the job description on its own jobs, so the
+  // discriminator is a local property the test sets before the query.
   class StageParallelismListener(var stageName: String, scope: String) extends SparkListener {
     private val scopedStageIds = ConcurrentHashMap.newKeySet[Int]()
 
