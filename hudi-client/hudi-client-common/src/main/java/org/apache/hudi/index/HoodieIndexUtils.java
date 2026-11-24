@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -51,6 +52,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
@@ -90,6 +92,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -97,6 +100,7 @@ import java.util.Set;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
+import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -300,10 +304,12 @@ public class HoodieIndexUtils {
    * <p>
    * This will perform merged read for MOR table, in case a FileGroup contains log files.
    *
+   * @param withRowPositions whether the current location of a record holds the position of its row in the base file
    * @return {@link HoodieRecord}s that have the current location being set.
    */
   private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
-      HoodieData<Pair<String, String>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable, ReaderContextFactory<R> readerContextFactory, HoodieSchema dataSchema) {
+      HoodieData<Pair<String, String>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable, ReaderContextFactory<R> readerContextFactory, HoodieSchema dataSchema,
+      boolean withRowPositions) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     final Option<String> instantTime = metaClient
         .getActiveTimeline() // we need to include all actions and completed
@@ -325,6 +331,7 @@ public class HoodieIndexUtils {
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
       FileSlice fileSlice = fileSliceOption.get();
       HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
+      RowPositionCounter<R> rowPositions = new RowPositionCounter<>(fileSlice.getBaseFile().isPresent());
       HoodieFileGroupReader<R> fileGroupReader = HoodieFileGroupReader.<R>builder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(metaClient)
@@ -336,8 +343,19 @@ public class HoodieIndexUtils {
           .withRequestedSchema(dataSchema)
           .withInternalSchemaOpt(internalSchemaOption)
           .withProps(metaClient.getTableConfig().getProps())
+          .withShouldUseRecordPosition(withRowPositions && config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS))
+          .withFileGroupUpdateCallback(withRowPositions ? Option.of(rowPositions) : Option.empty())
           .build();
       try {
+        if (withRowPositions) {
+          return new CloseableMappingIterator<>(fileGroupReader.getClosableHoodieRecordIterator(), hoodieRecord -> {
+            hoodieRecord.unseal();
+            hoodieRecord.setCurrentLocation(
+                new HoodieRecordLocation(fileSlice.getBaseInstantTime(), fileSlice.getFileId(), rowPositions.next()));
+            hoodieRecord.seal();
+            return hoodieRecord;
+          });
+        }
         final HoodieRecordLocation currentLocation = new HoodieRecordLocation(fileSlice.getBaseInstantTime(), fileSlice.getFileId());
         return new CloseableMappingIterator<>(fileGroupReader.getClosableHoodieRecordIterator(), hoodieRecord -> {
           hoodieRecord.unseal();
@@ -349,6 +367,43 @@ public class HoodieIndexUtils {
         throw new HoodieIOException("Unable to read file slice " + fileSlice, ex);
       }
     });
+  }
+
+  /**
+   * Gives the records a file group reader returns the position of their row in the base file. The reader returns the
+   * rows of the base file in order, before the records only the log files hold, and drops a deleted row after telling
+   * this callback, so a returned record's row comes after every row returned or deleted before it.
+   */
+  private static class RowPositionCounter<R> implements BaseFileUpdateCallback<R> {
+    private final boolean hasBaseFile;
+    private long nextPosition = 0L;
+
+    RowPositionCounter(boolean hasBaseFile) {
+      this.hasBaseFile = hasBaseFile;
+    }
+
+    long next() {
+      return hasBaseFile ? nextPosition++ : HoodieRecordLocation.INVALID_POSITION;
+    }
+
+    @Override
+    public void onUpdate(String recordKey, BufferedRecord<R> previousRecord, BufferedRecord<R> mergedRecord) {
+    }
+
+    @Override
+    public void onInsert(String recordKey, BufferedRecord<R> newRecord) {
+    }
+
+    @Override
+    public void onDelete(String recordKey, BufferedRecord<R> previousRecord, HoodieOperation hoodieOperation) {
+      if (previousRecord != null) {
+        next();
+      }
+    }
+
+    @Override
+    public void onFailure(String recordKey) {
+    }
   }
 
   /**
@@ -526,8 +581,10 @@ public class HoodieIndexUtils {
      * Reads the existing records of the given partition path and file ID pairs, with the meta fields and current
      * writer schema as the output schema.
      */
-    HoodieData<HoodieRecord<R>> getExistingRecords(HoodieData<Pair<String, String>> partitionLocations, HoodieTable hoodieTable) {
-      return HoodieIndexUtils.getExistingRecords(partitionLocations, updatedConfig, hoodieTable, readerContextFactoryForExistingRecords, writerSchemaWithMetaFields);
+    HoodieData<HoodieRecord<R>> getExistingRecords(HoodieData<Pair<String, String>> partitionLocations, HoodieTable hoodieTable,
+                                                   boolean withRowPositions) {
+      return HoodieIndexUtils.getExistingRecords(
+          partitionLocations, updatedConfig, hoodieTable, readerContextFactoryForExistingRecords, writerSchemaWithMetaFields, withRowPositions);
     }
 
     /**
@@ -564,7 +621,7 @@ public class HoodieIndexUtils {
         .map(p -> Pair.of(p.getRight().get().getPartitionPath(), p.getRight().get().getFileId()))
         .distinct(updatedConfig.getGlobalIndexReconcileParallelism());
     // merged existing records with current locations being set
-    HoodieData<HoodieRecord<R>> existingRecords = merger.getExistingRecords(globalLocations, hoodieTable);
+    HoodieData<HoodieRecord<R>> existingRecords = merger.getExistingRecords(globalLocations, hoodieTable, false);
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
@@ -630,10 +687,11 @@ public class HoodieIndexUtils {
         .map(record -> Pair.of(record.getPartitionPath(), record.getCurrentLocation().getFileId()))
         .distinct(parallelism);
     HoodieData<HoodieRecord<R>> resolvedRecords = locatedRecords.mapToPair(record -> Pair.of(fileIdAndRecordKey(record), record))
-        .leftOuterJoin(merger.getExistingRecords(locations, hoodieTable).mapToPair(record -> Pair.of(fileIdAndRecordKey(record), record)))
+        .groupByKey()
+        .leftOuterJoin(merger.getExistingRecords(locations, hoodieTable, true)
+            .mapToPair(record -> Pair.of(fileIdAndRecordKey(record), record)).groupByKey())
         .values()
-        // a file slice can hold a record key more than once, and the located record is resolved once
-        .distinctWithKey(entry -> Pair.of(entry.getLeft().getCurrentLocation().getFileId(), entry.getLeft().getKey()), parallelism)
+        .flatMap(entry -> pairWithExistingRecords(entry.getLeft(), entry.getRight()).iterator())
         .flatMap(entry -> {
           HoodieRecord<R> incoming = entry.getLeft();
           if (!entry.getRight().isPresent()) {
@@ -653,6 +711,38 @@ public class HoodieIndexUtils {
           return Collections.singletonList(tagRecord(resolved, incoming.getCurrentLocation())).iterator();
         });
     return taggedRecords.filter(record -> !isLocatedExpressionPayloadRecord(record)).union(resolvedRecords);
+  }
+
+  /**
+   * Pairs the located records of one record key in one file group with the records the file group holds for the key.
+   * A file group can hold a key more than once, and an index that reads the base file locates the incoming record at
+   * each of its rows, so each such row is paired with the located record at its position. When the positions do not
+   * tell the rows apart, one located record is paired with one record of the key.
+   */
+  private static <R> List<Pair<HoodieRecord<R>, Option<HoodieRecord<R>>>> pairWithExistingRecords(
+      Iterable<HoodieRecord<R>> locatedRecords, Option<Iterable<HoodieRecord<R>>> existingRecords) {
+    HoodieRecord<R> firstLocated = locatedRecords.iterator().next();
+    if (!existingRecords.isPresent()) {
+      return Collections.singletonList(Pair.of(firstLocated, Option.empty()));
+    }
+    Map<Long, HoodieRecord<R>> locatedByPosition = new HashMap<>();
+    for (HoodieRecord<R> located : locatedRecords) {
+      long position = located.getCurrentLocation().getPosition();
+      if (HoodieRecordLocation.isPositionValid(position)) {
+        locatedByPosition.putIfAbsent(position, located);
+      }
+    }
+    List<Pair<HoodieRecord<R>, Option<HoodieRecord<R>>>> pairs = new ArrayList<>();
+    for (HoodieRecord<R> existing : existingRecords.get()) {
+      HoodieRecord<R> located = locatedByPosition.get(existing.getCurrentLocation().getPosition());
+      if (located != null) {
+        pairs.add(Pair.of(located, Option.of(existing)));
+      }
+    }
+    if (pairs.isEmpty()) {
+      pairs.add(Pair.of(firstLocated, Option.of(existingRecords.get().iterator().next())));
+    }
+    return pairs;
   }
 
   private static boolean isLocatedExpressionPayloadRecord(HoodieRecord<?> record) {
