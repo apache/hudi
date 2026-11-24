@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
-import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
+import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.index.{HoodieIndex, SparkMetadataTableGlobalRecordLevelIndex, SparkMetadataTableRecordLevelIndex}
 import org.apache.hudi.metadata.MetadataPartitionType
@@ -362,8 +362,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * Runs a statement whose merge condition matches no record as the INSERT INTO it comes to: the first
    * not-matched clause that accepts a source record inserts it, and the matched clauses apply to no record.
    * This is how a table with a record key takes such a statement, as its merge condition is otherwise an
-   * equality on the record key. The insert fails on a key the table already holds, as the upsert of a
-   * not-matched clause never writes a second record for one key.
+   * equality on the record key. The insert fails on a key the table already holds, or that more than one
+   * inserted source record carries, as the upsert of a not-matched clause never writes a second record for
+   * one key.
    */
   private def insertSourceRecords(): Unit = {
     if (insertingActions.nonEmpty) {
@@ -378,13 +379,36 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val query = InsertIntoHoodieTableCommand.alignQueryOutput(
         Project(output, Filter(conditions.reduce(Or), mergeInto.sourceTable)),
         hoodieCatalogTable, Map.empty, sparkSession.sessionState.conf)
+      val insertedDf = sparkAdapter.getUnsafeUtils.createDataFrameFrom(sparkSession, query)
+      failOnRepeatedRecordKey(insertedDf)
       InsertIntoHoodieTableCommand.run(sparkSession.asInstanceOf[org.apache.spark.sql.classic.SparkSession], hoodieCatalogTable.table,
-        sparkAdapter.getUnsafeUtils.createDataFrameFrom(sparkSession, query).queryExecution.executedPlan,
+        insertedDf.queryExecution.executedPlan,
         Map.empty, overwrite = false, extraOptions = Map(
           OPERATION.key -> INSERT_OPERATION_OPT_VAL,
           SPARK_SQL_INSERT_INTO_OPERATION.key -> INSERT_OPERATION_OPT_VAL,
           INSERT_DUP_POLICY.key -> FAIL_INSERT_DUP_POLICY),
         metrics = metrics)
+    }
+  }
+
+  /**
+   * Fails on a record key that more than one inserted source record carries. The insert checks the keys
+   * against the records the table holds only, so it would write each of these records.
+   */
+  private def failOnRepeatedRecordKey(insertedDf: DataFrame): Unit = {
+    val keyFields = hoodieCatalogTable.primaryKeys.toSeq
+    val countField = "__record_key_count"
+    val repeated = insertedDf
+      .where(keyFields.map(field => functions.col(field).isNotNull).reduce(_ && _))
+      .groupBy(keyFields.map(functions.col): _*)
+      .agg(functions.count(functions.lit(1)).as(countField))
+      .where(functions.col(countField) > 1)
+      .limit(1)
+      .collect()
+    repeated.headOption.foreach { row =>
+      val key = if (keyFields.size == 1) String.valueOf(row.get(0))
+      else keyFields.indices.map(i => s"${keyFields(i)}:${row.get(i)}").mkString(",")
+      throw new HoodieDuplicateKeyException(key)
     }
   }
 

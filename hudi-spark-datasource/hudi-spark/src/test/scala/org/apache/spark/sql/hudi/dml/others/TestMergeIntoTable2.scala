@@ -1387,6 +1387,17 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                 }
                 checkAnswer(s"select id, name, price from $tableName order by id, price")(afterClauses: _*)
 
+                // Two inserted source records with one key the table does not hold fail the insert too
+                val sameKey = s"(select 10 as id, 'new' as name, 1.0D as price union all " +
+                  "select 10 as id, 'other' as name, 2.0D as price)"
+                checkExceptionContain(s"merge into $tableName t using $sameKey s on false when not matched then insert *")(
+                  "Duplicate key found for insert statement, key is: 10")
+                checkAnswer(s"select id, name, price from $tableName order by id, price")(afterClauses: _*)
+                // A source record no clause inserts does not count
+                spark.sql(s"merge into $tableName t using $sameKey s on false when not matched and s.name = 'new' then insert *")
+                checkAnswer(s"select id, name, price from $tableName order by id, price")(
+                  afterClauses :+ Seq(10, "new", 1.0): _*)
+
                 // Another merge condition that is not an equality on the record key stays refused
                 Seq("true", "t.id > s.id").foreach { condition =>
                   checkExceptionContain(
