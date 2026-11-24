@@ -40,10 +40,9 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  * native operator opens the table from hoodie.properties under the table base URI and reads each
  * slice (Parquet decode plus log-file merge) off the JVM.
  *
+ * The tasks are planned when this node executes, over the partitions the scan lists then.
  * `runtimeFilters` are the partition filters that hold a subquery (dynamic partition pruning, or
- * a scalar subquery). Spark resolves them when this node executes; the tasks are then planned
- * again over the partitions they keep. `staticPartitionBytes` holds the tasks over every listed
- * partition when there are no runtime filters, and is empty otherwise.
+ * a scalar subquery); Spark resolves them first, and only the partitions they keep are planned.
  */
 case class CometHudiNativeScanExec(
     override val nativeOp: Operator,
@@ -54,8 +53,7 @@ case class CometHudiNativeScanExec(
     scanHashCode: Int,
     commonBytes: Array[Byte],
     isMor: Boolean,
-    runtimeFilters: Seq[Expression],
-    staticPartitionBytes: Array[Array[Byte]])
+    runtimeFilters: Seq[Expression])
     extends CometLeafExec
     with CometScanWithPlanData {
 
@@ -63,12 +61,9 @@ case class CometHudiNativeScanExec(
 
   override val nodeName: String = "CometHudiNativeScan"
 
-  // The task count is only known once the runtime filters resolve, and AQE reads the
-  // partitioning while it still holds unconverted pruning placeholders. The native RDD is sized
-  // from perPartitionData at execution, not from this.
-  override lazy val outputPartitioning: Partitioning =
-    if (runtimeFilters.isEmpty) UnknownPartitioning(staticPartitionBytes.length)
-    else UnknownPartitioning(0)
+  // The task count is only known once the scan lists at execution. The native RDD is sized from
+  // perPartitionData then, not from this.
+  override lazy val outputPartitioning: Partitioning = UnknownPartitioning(0)
 
   override def sourceKey: String =
     HudiScanDataKey.key(tableBaseUri, scanHashCode, nativeOp.getPlanId)
@@ -83,27 +78,30 @@ case class CometHudiNativeScanExec(
     copy(runtimeFilters = filters)
 
   @transient private lazy val prunedPartitionBytes: Array[Array[Byte]] = {
-    if (runtimeFilters.isEmpty) {
-      staticPartitionBytes
-    } else {
+    if (runtimeFilters.nonEmpty) {
       ensureSubqueriesResolved()
-      HudiCometScanProvider
-        .planPartitions(session, prunedPartitions, tableBaseUri, isMor)
-        .getOrElse(throw new IllegalStateException(
-          s"Hudi scan of $tableBaseUri could not plan the partitions its runtime filters keep"))
     }
+    HudiCometScanProvider
+      .planPartitions(session, prunedPartitions, tableBaseUri, isMor)
+      .getOrElse(throw new IllegalStateException(
+        s"Hudi scan of $tableBaseUri could not plan the partitions it lists at execution"))
   }
 
   /** The listed partitions the resolved runtime filters keep, as Spark's own file scan prunes. */
   private def prunedPartitions: Seq[PartitionDirectory] = {
-    val partitionSchema = originalPlan.relation.partitionSchema
-    val predicate = Predicate.create(
-      runtimeFilters.reduce(And).transform { case a: AttributeReference =>
-        val index = partitionSchema.indexWhere(a.name == _.name)
-        BoundReference(index, partitionSchema(index).dataType, nullable = true)
-      },
-      Nil)
-    HudiCometScanProvider.staticListing(originalPlan).filter(p => predicate.eval(p.values))
+    val listed = originalPlan.selectedPartitions.toSeq
+    if (runtimeFilters.isEmpty) {
+      listed
+    } else {
+      val partitionSchema = originalPlan.relation.partitionSchema
+      val predicate = Predicate.create(
+        runtimeFilters.reduce(And).transform { case a: AttributeReference =>
+          val index = partitionSchema.indexWhere(a.name == _.name)
+          BoundReference(index, partitionSchema(index).dataType, nullable = true)
+        },
+        Nil)
+      listed.filter(p => predicate.eval(p.values))
+    }
   }
 
   override def sparkFallback(newChildren: Seq[SparkPlan]): SparkPlan = {
@@ -146,7 +144,7 @@ case class CometHudiNativeScanExec(
   }
 
   override def stringArgs: Iterator[Any] =
-    Iterator(output, tableBaseUri, runtimeFilters, staticPartitionBytes.length)
+    Iterator(output, tableBaseUri, runtimeFilters)
 
   override def equals(obj: Any): Boolean = {
     obj match {

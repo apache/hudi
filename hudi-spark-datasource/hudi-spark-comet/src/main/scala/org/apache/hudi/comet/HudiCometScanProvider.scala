@@ -212,27 +212,19 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
       // A null or empty partition value is written under the default partition
       // path, which the JVM read parses back as null while the data file holds
       // what was written.
-      if (HudiCometScanProvider.staticListing(scanExec).exists(partition =>
+      if (HudiCometScanProvider.eligibilityListing(scanExec).exists(partition =>
           partitionSchema.indices.exists(partition.values.isNullAt))) {
         return None
       }
     }
 
-    // With runtime filters the tasks are planned at execution over the partitions the filters
-    // keep, so the full listing is only checked here, not serialized.
-    val staticPartitionBytes =
-      if (runtimeFilters.isEmpty) {
-        val listing = HudiCometScanProvider.staticListing(scanExec)
-        HudiCometScanProvider.planPartitions(session, listing, baseUri, format.isMORTable) match {
-          case Some(p) => p
-          case None => return None
-        }
-      } else if (HudiCometScanProvider.canPlan(
-          session, HudiCometScanProvider.staticListing(scanExec), baseUri, format.isMORTable)) {
-        Array.empty[Array[Byte]]
-      } else {
-        return None
-      }
+    // The tasks are planned when the scan executes, over the partitions it lists then, so
+    // listing runs inside the query's stages as Spark's own scan does. Here every slice of a
+    // listing without data filters, a superset of what the scan reads, is only checked.
+    if (!HudiCometScanProvider.canPlan(
+        session, HudiCometScanProvider.eligibilityListing(scanExec), baseUri, format.isMORTable)) {
+      return None
+    }
 
     // Runtime filters still hold AQE's pruning placeholders here, which differ between copies of
     // the same scan; leaving them out lets equal scans share an exchange or query stage.
@@ -281,9 +273,7 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
       .build()
 
     logInfo(
-      s"Converting Hudi scan of $baseUri to a Comet native scan " +
-        (if (runtimeFilters.isEmpty) s"(${staticPartitionBytes.length} tasks)"
-         else "(tasks planned at execution after runtime partition pruning)"))
+      s"Converting Hudi scan of $baseUri to a Comet native scan")
     Some(
       CometHudiNativeScanExec(
         placeholder,
@@ -294,37 +284,35 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
         scanHashCode,
         commonBytes,
         format.isMORTable,
-        runtimeFilters,
-        staticPartitionBytes))
+        runtimeFilters))
   }
 }
 
 object HudiCometScanProvider extends SparkAdapterSupport {
 
   /**
-   * Static partition listings by relation, query instant and canonical static filters. AQE
-   * plans a query again after each stage with new scan nodes over the same relation, and
-   * listing a Hudi table can run data skipping jobs, so a listing is computed once per
-   * snapshot and filter set. The entries for a relation go when the relation is collected.
+   * Listings without data filters, by relation, query instant and canonical static partition
+   * filters. AQE plans a query again after each stage with new scan nodes over the same relation,
+   * and scans that differ only in data filters share one entry; leaving data filters out also
+   * skips Hudi's data skipping, which only the executed scan needs. The entries for a relation go
+   * when the relation is collected.
    */
   private val listings =
     new java.util.WeakHashMap[HadoopFsRelation, java.util.Map[AnyRef, Seq[PartitionDirectory]]]()
 
   private val MaxListingsPerRelation = 32
 
-  /** `scanExec.selectedPartitions`, shared across scan nodes over the same snapshot. */
-  def staticListing(scanExec: FileSourceScanExec): Seq[PartitionDirectory] = {
+  /** The partitions `scanExec` lists without its data filters: a superset of what it reads. */
+  def eligibilityListing(scanExec: FileSourceScanExec): Seq[PartitionDirectory] = {
     val relation = scanExec.relation
+    val unfiltered = scanExec.copy(dataFilters = Nil)
     val queryTimestamp = relation.fileFormat match {
       case format: HoodieFileGroupReaderBasedFileFormat => format.getQueryTimestamp
-      case _ => return scanExec.selectedPartitions.toSeq
+      case _ => return unfiltered.selectedPartitions.toSeq
     }
     val staticFilters =
       scanExec.partitionFilters.filterNot(_.exists(_.isInstanceOf[PlanExpression[_]]))
-    val key = (
-      queryTimestamp,
-      staticFilters.map(_.canonicalized),
-      scanExec.dataFilters.map(_.canonicalized))
+    val key = (queryTimestamp, staticFilters.map(_.canonicalized))
     val byKey = listings.synchronized {
       var map = listings.get(relation)
       if (map == null) {
@@ -342,7 +330,7 @@ object HudiCometScanProvider extends SparkAdapterSupport {
     if (cached != null) {
       cached
     } else {
-      val listed = scanExec.selectedPartitions.toSeq
+      val listed = unfiltered.selectedPartitions.toSeq
       byKey.put(key, listed)
       listed
     }
