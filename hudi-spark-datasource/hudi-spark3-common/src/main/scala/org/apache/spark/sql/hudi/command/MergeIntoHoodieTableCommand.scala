@@ -42,7 +42,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, Matc
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, CaseWhen, EqualTo, Expression, Literal, NamedExpression, Or, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -319,18 +319,73 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
-    // TODO move to analysis phase
-    // Create the write parameters
-    val props = buildMergeIntoConfig(hoodieCatalogTable)
-    validate(props)
+    if (hasPrimaryKey() && matchesNoRecord && indexFindsEveryKey) {
+      insertSourceRecords()
+    } else {
+      // TODO move to analysis phase
+      // Create the write parameters
+      val props = buildMergeIntoConfig(hoodieCatalogTable)
+      validate(props)
 
-    val processedInputDf: DataFrame = getProcessedInputDf(props)
-    // Do the upsert
-    executeUpsert(processedInputDf, props)
-    // Refresh the table in the catalog
-    sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
+      val processedInputDf: DataFrame = getProcessedInputDf(props)
+      // Do the upsert
+      executeUpsert(processedInputDf, props)
+      // Refresh the table in the catalog
+      sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
+    }
 
     Seq.empty[Row]
+  }
+
+  /**
+   * Whether the merge condition is always false, so that no source record matches a record of the table.
+   */
+  private lazy val matchesNoRecord: Boolean = mergeInto.mergeCondition.foldable &&
+    Try(mergeInto.mergeCondition.eval()).toOption.contains(java.lang.Boolean.FALSE)
+
+  /**
+   * Whether the index finds every record key the table holds, so that the insert of a statement whose merge
+   * condition matches no record can fail on a key the table already has: a record-level index, or a non-bucket
+   * index of a copy-on-write table, whose keys are all in base files.
+   */
+  private lazy val indexFindsEveryKey: Boolean = {
+    val indexType = combineOptions(hoodieCatalogTable, hoodieCatalogTable.tableConfig, sparkSession.sessionState.conf,
+      defaultOpts = Map.empty).getOrElse(HoodieIndexConfig.INDEX_TYPE.key, HoodieIndex.IndexType.SIMPLE.name)
+    def isOneOf(types: HoodieIndex.IndexType*): Boolean = types.exists(_.name.equalsIgnoreCase(indexType))
+    isOneOf(HoodieIndex.IndexType.RECORD_INDEX, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX,
+      HoodieIndex.IndexType.RECORD_LEVEL_INDEX) ||
+      (targetTableType == COW_TABLE_TYPE_OPT_VAL && isOneOf(HoodieIndex.IndexType.SIMPLE, HoodieIndex.IndexType.BLOOM,
+        HoodieIndex.IndexType.GLOBAL_SIMPLE, HoodieIndex.IndexType.GLOBAL_BLOOM))
+  }
+
+  /**
+   * Runs a statement whose merge condition matches no record as the INSERT INTO it comes to: the first
+   * not-matched clause that accepts a source record inserts it, and the matched clauses apply to no record.
+   * This is how a table with a record key takes such a statement, as its merge condition is otherwise an
+   * equality on the record key. The insert fails on a key the table already holds, as the upsert of a
+   * not-matched clause never writes a second record for one key.
+   */
+  private def insertSourceRecords(): Unit = {
+    if (insertingActions.nonEmpty) {
+      checkInsertingActions(insertingActions, buildMergeIntoConfig(hoodieCatalogTable))
+      val conditions = insertingActions.map(_.condition.getOrElse(Literal.TrueLiteral))
+      val values = insertingActions.map(action =>
+        alignAssignments(action.assignments, Some(PartialAssignmentMode.NULL_VALUE), keepUpdatedFieldsOnly = false).map(_.value))
+      val output = mergeInto.targetTable.output.filterNot(attr => isMetaField(attr.name)).zip(values.transpose).map {
+        case (attr, clauseValues) =>
+          Alias(CaseWhen(conditions.zip(clauseValues.map(castIfNeeded(_, attr.dataType)))), attr.name)()
+      }
+      val query = InsertIntoHoodieTableCommand.alignQueryOutput(
+        Project(output, Filter(conditions.reduce(Or), mergeInto.sourceTable)),
+        hoodieCatalogTable, Map.empty, sparkSession.sessionState.conf)
+      InsertIntoHoodieTableCommand.run(sparkSession, hoodieCatalogTable.table,
+        sparkAdapter.getUnsafeUtils.createDataFrameFrom(sparkSession, query).queryExecution.executedPlan,
+        Map.empty, overwrite = false, extraOptions = Map(
+          OPERATION.key -> INSERT_OPERATION_OPT_VAL,
+          SPARK_SQL_INSERT_INTO_OPERATION.key -> INSERT_OPERATION_OPT_VAL,
+          INSERT_DUP_POLICY.key -> FAIL_INSERT_DUP_POLICY),
+        metrics = metrics)
+    }
   }
 
   private val updatingActions: Seq[UpdateAction] = mergeInto.matchedActions.collect { case u: UpdateAction => u}
