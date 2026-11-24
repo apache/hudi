@@ -40,6 +40,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, NoSuchTableException}
 import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.connector.catalog.CatalogManager
@@ -56,11 +57,10 @@ import org.scalatest.Assertions.assertResult
 import org.slf4j.LoggerFactory
 
 import java.io.File
-import java.util.{Optional, TimeZone}
+import java.util.{Collections, Optional, TimeZone}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.regex.Pattern
-import java.util.stream.Collectors
 
 import scala.util.Try
 
@@ -243,11 +243,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
    * external catalog with every other suite in the JVM and those suites may be mid-test, so it drops
    * only the tables whose name carries this suite's generateTableName prefix, plus its own temp views.
    */
-  private def dropSuiteTables(): Unit = {
+  protected def dropSuiteTables(): Unit = {
     val catalog = spark.sessionState.catalog
-    // Concurrent suites may drop their own databases at any time, so every per-database step is best effort.
     catalog.listDatabases().foreach { db =>
-      val tables = Try(catalog.listTables(db)).getOrElse(Seq.empty)
+      val tables = ignoringConcurrentDrops(Seq.empty[TableIdentifier])(catalog.listTables(db))
       val toDrop = if (sharedSessionEnabled) tables.filter(table => ownsTable(catalog, table)) else tables
       toDrop.foreach { table =>
         if (sharedSessionEnabled && !catalog.isTempView(table)) {
@@ -255,7 +254,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
           Try(new StoragePath(catalog.getTableMetadata(table).location))
             .foreach(path => HoodieInMemoryHashIndex.clear(path))
         }
-        Try(catalog.dropTable(table, true, true))
+        ignoringConcurrentDrops(())(catalog.dropTable(table, true, true))
       }
     }
     if (sharedSessionEnabled) {
@@ -263,6 +262,19 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       catalog.globalTempViewManager.listViewNames("*")
         .filter(name => name.startsWith(tableNamePrefix))
         .foreach(name => catalog.dropGlobalTempView(name))
+    }
+  }
+
+  /**
+   * Shared mode: another suite may drop its own database between this suite listing it and using it, so
+   * a missing database or table yields the fallback. Any other failure, and every failure in per-suite
+   * mode, propagates.
+   */
+  private def ignoringConcurrentDrops[T](fallback: => T)(body: => T): T = {
+    try {
+      body
+    } catch {
+      case _: NoSuchDatabaseException | _: NoSuchTableException if sharedSessionEnabled => fallback
     }
   }
 
@@ -690,12 +702,8 @@ object HoodieSparkSqlTestBase {
     val (metaClient, fsView) = getMetaClientAndFileSystemView(basePath)
     val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("").findFirst()
     assertTrue(fileSlice.isPresent)
-    // Oldest first. A string sort of the paths orders by the Spark write token, which precedes the
-    // instant in the file name and compares stage ids as text.
-    val logFilePathList: java.util.List[String] = fileSlice.get.getLogFiles
-      .sorted(HoodieLogFile.getLogFileComparator)
-      .map[String](logFile => logFile.getPath.toString)
-      .collect(Collectors.toList[String])
+    val logFilePathList: java.util.List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
+    Collections.sort(logFilePathList)
     var deleteLogBlockFound = false
     val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until logFilePathList.size()) {
