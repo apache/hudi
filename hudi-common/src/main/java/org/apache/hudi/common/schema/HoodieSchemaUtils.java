@@ -692,8 +692,9 @@ public final class HoodieSchemaUtils {
    * @param schema  the schema to append the columns to
    * @param columns the metadata columns of the table format, or an empty list
    * @return the schema ending with the columns
-   * @throws IllegalArgumentException if a column is not a nullable long or int with a null default, or if two
-   *                                  columns, or a column and a field of the schema, have the same name
+   * @throws IllegalArgumentException if a column is not a nullable long or int with a null default, has the name of
+   *                                  a Hudi meta field, or if two columns, or a column and a field of the schema,
+   *                                  have the same name
    */
   public static HoodieSchema appendFormatMetaColumns(HoodieSchema schema, List<FormatMetaColumn> columns) {
     if (columns.isEmpty()) {
@@ -709,6 +710,8 @@ public final class HoodieSchemaUtils {
       HoodieSchemaType type = field.schema().getNonNullType().getType();
       ValidationUtils.checkArgument(type == HoodieSchemaType.LONG || type == HoodieSchemaType.INT,
           () -> "A format meta column has to be of type long or int, got: " + field);
+      ValidationUtils.checkArgument(!isMetadataField(field.name()),
+          () -> "The format meta column " + field.name() + " has the name of a Hudi meta field");
       ValidationUtils.checkArgument(schema.getField(field.name()).isEmpty() && names.add(field.name()),
           () -> "The format meta column " + field.name() + " has the name of another field: " + schema + ", " + columns);
       HoodieSchemaField newField = createNewSchemaField(field);

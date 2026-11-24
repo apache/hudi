@@ -2611,6 +2611,14 @@ public class TestHoodieSchemaUtils {
         .forEach(columns -> assertThrows(IllegalArgumentException.class,
             () -> HoodieSchemaUtils.appendFormatMetaColumns(schema, columns), columns::toString));
 
+    // The Hudi meta fields are reserved, also when the schema does not have them yet
+    HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.forEach(name -> {
+      List<FormatMetaColumn> columns = formatMetaColumns(rowIdField, nullableLongField(name));
+      IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+          () -> HoodieSchemaUtils.appendFormatMetaColumns(schema, columns), name);
+      assertEquals("The format meta column " + name + " has the name of a Hudi meta field", e.getMessage());
+    });
+
     // Only long and int columns can be set in place in an engine row
     Stream.of(HoodieSchemaType.STRING, HoodieSchemaType.DOUBLE, HoodieSchemaType.BOOLEAN, HoodieSchemaType.BYTES)
         .forEach(type -> {
