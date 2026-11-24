@@ -320,6 +320,11 @@ message HudiScanCommon {
   // them. An S3 or ABFS table is read through the store Comet builds from
   // them.
   map<string, string> object_store_options = 6;
+  // Identifies the timeline the driver planned against. It changes whenever an
+  // instant is added, completes, or is archived, so an executor reuses a table
+  // it opened for the same value without reading a timeline older than the
+  // plan's.
+  string timeline_snapshot = 7;
 }
 
 message HudiScan {

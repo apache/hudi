@@ -234,11 +234,23 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
       .copy(partitionFilters = scanExec.partitionFilters.filterNot(runtimeFilters.contains))
       .canonicalized
     val scanHashCode = canonicalScan.hashCode()
+    // Every instant with its state and completion time, so the value changes whenever a commit
+    // completes, including one that completes out of order.
+    val timelineSnapshot = {
+      val instants = fileIndex.metaClient.getCommitsAndCompactionTimeline.getInstants.asScala
+      val digest = java.security.MessageDigest.getInstance("SHA-256")
+      instants.foreach { instant =>
+        digest.update(s"${instant.getState},${instant.getAction},${instant.requestedTime}," +
+          s"${instant.getCompletionTime};".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+      }
+      s"${instants.size}-${digest.digest().map("%02x".format(_)).mkString}"
+    }
     val commonBuilder = OperatorOuterClass.HudiScanCommon
       .newBuilder()
       .setTableBaseUri(baseUri)
       .setSessionTimezone(session.sessionState.conf.sessionLocalTimeZone)
       .setScanHashCode(scanHashCode)
+      .setTimelineSnapshot(timelineSnapshot)
       // Bounds the log-file scan to instants at or before the query instant,
       // exactly as the JVM file group reader does with the same timestamp; a
       // snapshot read passes the latest completed instant, a time-travel read

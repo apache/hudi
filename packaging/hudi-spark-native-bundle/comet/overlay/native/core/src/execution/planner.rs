@@ -1969,13 +1969,13 @@ impl PhysicalPlanner {
                     .table_base_uri
                     .split_once(':')
                     .map(|(scheme, _)| scheme.to_ascii_lowercase());
+                let object_store_options: HashMap<String, String> = common
+                    .object_store_options
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
                 let object_store = match scheme.as_deref() {
                     Some("s3" | "s3a" | "abfs" | "abfss") => {
-                        let object_store_options: HashMap<String, String> = common
-                            .object_store_options
-                            .iter()
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect();
                         let (object_store_url, _, _) = prepare_object_store_with_configs(
                             self.session_ctx.runtime_env(),
                             common.table_base_uri.clone(),
@@ -1999,8 +1999,10 @@ impl PhysicalPlanner {
                     .collect();
                 let hudi_scan = HudiScanExec::new(
                     common.table_base_uri.clone(),
+                    common.timeline_snapshot.clone(),
                     options,
                     object_store,
+                    object_store_options,
                     required_schema,
                     file_slices,
                 );
