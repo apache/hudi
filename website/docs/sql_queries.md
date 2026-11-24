@@ -2,7 +2,7 @@
 title: SQL Queries
 summary: "In this page, we go over querying Hudi tables using SQL"
 toc: true
-last_modified_at: 2026-05-29T00:00:00-00:00
+last_modified_at: 2026-11-24T00:00:00+08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -868,6 +868,57 @@ summarizes how the support for Hudi is achieved across different versions of Tri
 :::
 
 `hudi-trino-bundle` is no longer published after 1.2.0. From 1.2.1, the Trino connector is published as `org.apache.hudi:hudi-trino`, built against Trino 483 and JDK 25.
+
+### Running Hudi's Trino connector
+
+The native Hudi connector for Trino is now developed in Apache Hudi as `hudi-trino`. Trino releases keep bundling Trino's
+own copy of the connector until [trinodb/trino#30682](https://github.com/trinodb/trino/pull/30682) is released, so to run
+Hudi's connector on a Trino server today, build a plugin zip for that server's Trino version and swap it in for the
+bundled `hudi` plugin.
+
+The `hudi-trino` jar on Maven Central cannot go into a server on its own: a Trino plugin directory needs the connector, a
+plugin entry point and every runtime dependency, all built for one Trino version. The zip holds all three.
+
+![Where the shim and the connector live, and how the Hudi plugin zip replaces Trino's bundled Hudi plugin](/assets/images/trino/hudi-trino-plugin-swap.svg)
+
+**1. Build the zip.** From a Hudi source checkout (the script is on master and ships with the next Hudi release), with JDK 25:
+
+```shell
+scripts/trino/build_plugin_zip.sh --trino-version 484
+```
+
+This writes `target/hudi-trino-plugin/hudi-trino-plugin-<hudi version>-trino-484.zip`. On a `-SNAPSHOT` checkout, first
+install the Hudi modules the connector depends on, with JDK 17:
+
+```shell
+mvn install -pl :hudi-common,:hudi-hive-sync,:hudi-io,:hudi-sync-common,:hudi-client-common,:hudi-java-client \
+  -am -Dmaven.test.skip=true
+```
+
+**2. Replace the plugin on every node.** On the coordinator and on each worker, with Trino stopped:
+
+```shell
+cd <trino_install>/plugin
+# Back up outside plugin/: Trino loads every directory under it, and a second hudi plugin would clash.
+cp -r hudi /path/outside/plugin/hudi-backup
+# Remove everything except hdfs/.
+find hudi -mindepth 1 -maxdepth 1 ! -name hdfs -exec rm -rf {} +
+unzip hudi-trino-plugin-<hudi version>-trino-484.zip -d /tmp
+cp /tmp/hudi-trino-plugin-<hudi version>-trino-484/*.jar hudi/
+```
+
+Keep `plugin/hudi/hdfs/`. It holds Trino's HDFS file system jars, used when `fs.hadoop.enabled=true`, which ship only
+with the Trino server.
+
+**3. Start Trino.** Catalogs keep `connector.name=hudi`, and the server log shows `Registering connector hudi` from the
+new plugin. If a catalog property is not recognized by Hudi's connector, the server fails at startup and names it.
+
+:::note
+- The zip only works on the Trino version it was built for, since the Trino libraries inside it change between
+  releases. Rebuild it when you upgrade Trino.
+- Trino's `lakehouse` connector carries its own copy of the Hudi code and is not affected by the swap.
+- To roll back, restore the backed-up `plugin/hudi` and restart.
+:::
 
 For details on the Hudi connector, see the [connector documentation](https://trino.io/docs/current/connector/hudi.html).
 Both connectors offer 'Snapshot' queries for COW tables and 'Read Optimized' queries for MOR tables.
