@@ -1373,4 +1373,35 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test MergeInto And Update Refuse Assignments To A Field Nested In An Array Or A Map") {
+    withTempDir { tmp =>
+      // a nested field assignment needs Spark 3.5
+      Seq("primaryKey = 'id',", "").filter(_ => gteqSpark3_5).foreach { keyProp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  a array<struct<c1:int, c2:int>>,
+             |  m map<string, string>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, array(named_struct('c1', 2, 'c2', 3)), map('k', 'v')")
+        val merge = s"merge into $tableName t using (select 1 as id, -2 as c2) s on t.id = s.id when matched then "
+
+        Seq(
+          merge + "update set t.a.c1 = s.c2",
+          merge + "update set t.a.c1 = array(-2)",
+          merge + "update set t.m.key = 'new_key'",
+          s"update $tableName set a.c1 = 1",
+          s"update $tableName set m.key = 'new_key'").foreach { statement =>
+          checkExceptionContain(statement)("Updating nested fields is only supported for StructType")
+        }
+        checkAnswer(s"select id, a, m from $tableName")(Seq(1, Seq(Row(2, 3)), Map("k" -> "v")))
+      }
+    }
+  }
 }

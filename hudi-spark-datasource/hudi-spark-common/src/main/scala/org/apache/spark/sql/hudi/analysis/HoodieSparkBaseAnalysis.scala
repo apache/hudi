@@ -25,7 +25,7 @@ import org.apache.spark.sql.BaseHoodieCatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
-import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Expression, GetStructField, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.Origin
@@ -253,11 +253,17 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
                 resolveAssignments(assignments, m, resolveValuesWithSourceOnly = true))
             case o => o
           }
+          validateNestedFieldAssignments(m.targetTable.output,
+            newMatchedActions.flatMap(catalystPlanUtils.unapplyUpdateAction(_).map(_._2).getOrElse(Nil)))
           val resolvedMergeCondition = resolveExpressionByPlanChildren(m.mergeCondition, m)
           m.copy(mergeCondition = resolvedMergeCondition,
             matchedActions = newMatchedActions,
             notMatchedActions = newNotMatchedActions)
       }
+
+    case ut@UpdateTable(ResolvesToHudiTable(_), assignments, _) if assignments.exists(isOutsideStructFieldPath) =>
+      validateNestedFieldAssignments(ut.table.output, assignments)
+      ut
 
     case cmd: CreateIndex if cmd.table.resolved && cmd.columns.exists(_._1.isInstanceOf[UnresolvedFieldName]) =>
       cmd.copy(columns = cmd.columns.map {
@@ -288,6 +294,28 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       }
       Assignment(resolvedKey, resolvedValue)
     }
+  }
+
+  /**
+   * Refuses an assignment to a field nested in a column that is not a struct through Spark's alignment
+   * of the assignments, which Spark's cast of the assigned value to the type of the key would otherwise
+   * turn into a type mismatch of the value.
+   */
+  private def validateNestedFieldAssignments(attrs: Seq[Attribute], assignments: Seq[Assignment]): Unit = {
+    val outsideStructs = assignments.filter(isOutsideStructFieldPath)
+    if (outsideStructs.nonEmpty) {
+      sparkAdapter.getCatalystPlanUtils.resolveRowLevelAssignments(attrs, outsideStructs, isInsert = false)
+    }
+  }
+
+  private def isOutsideStructFieldPath(assignment: Assignment): Boolean = {
+    def isStructFieldPath(expr: Expression): Boolean = expr match {
+      case _: Attribute => true
+      case Alias(child, _) => isStructFieldPath(child)
+      case GetStructField(child, _, _) => isStructFieldPath(child)
+      case _ => false
+    }
+    assignment.key.resolved && !isStructFieldPath(assignment.key)
   }
 
   private def resolveMergeExprOrFail(e: Expression, p: LogicalPlan): Expression = {
