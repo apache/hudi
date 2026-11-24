@@ -626,8 +626,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       && getPartialUpdateMode(parameters).isEmpty)
   }
 
+  /**
+   * A table with record key(s) is upserted, since only the index lookup tells the source records that
+   * match the table from the rest: written as inserts, all of them take the not-matched clauses.
+   */
   private def getOperationType(parameters: Map[String, String]) = {
-    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava)) && updatingActions.isEmpty) {
+    if (!hasPrimaryKey()
+      && StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava))
+      && updatingActions.isEmpty) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL
