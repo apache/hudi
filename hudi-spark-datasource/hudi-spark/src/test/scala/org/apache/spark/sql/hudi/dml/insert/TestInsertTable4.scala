@@ -31,12 +31,12 @@ import org.apache.hudi.config.{HoodieClusteringConfig, HoodieIndexConfig, Hoodie
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.index.HoodieIndex.IndexType
 
-import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
+import org.apache.spark.scheduler.{SparkListener, SparkListenerJobStart, SparkListenerStageSubmitted}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 
 import java.io.File
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 
 class TestInsertTable4 extends HoodieSparkSqlTestBase {
   test("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
@@ -290,10 +290,22 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
   var listenerCallCount: Int = 0
   var countDownLatch: CountDownLatch = _
 
-  // add a listener for stages for parallelism checking with stage name
-  class StageParallelismListener(var stageName: String) extends SparkListener {
+  // add a listener for stages for parallelism checking with stage name, restricted to the stages of
+  // the jobs this test started. Hudi overwrites the job description on its own jobs, so the
+  // discriminator is a local property the test sets before the query.
+  class StageParallelismListener(var stageName: String, scope: String) extends SparkListener {
+    private val scopedStageIds = ConcurrentHashMap.newKeySet[Int]()
+
+    override def onJobStart(jobStart: SparkListenerJobStart): Unit = {
+      if (jobStart.properties != null
+        && scope == jobStart.properties.getProperty(TestInsertTable4.SCOPE_PROPERTY)) {
+        jobStart.stageIds.foreach(stageId => scopedStageIds.add(stageId))
+      }
+    }
+
     override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
-      if (stageSubmitted.stageInfo.name.contains(stageName)) {
+      if (scopedStageIds.contains(stageSubmitted.stageInfo.stageId)
+        && stageSubmitted.stageInfo.name.contains(stageName)) {
         assertResult(1)(stageSubmitted.stageInfo.numTasks)
         listenerCallCount = listenerCallCount + 1
         countDownLatch.countDown
@@ -339,7 +351,9 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
            |""".stripMargin)
       val stageClassName = classOf[HoodieSparkEngineContext].getSimpleName
       // The SparkContext outlives the suite in shared session mode, so the listener must not.
-      val listener = new StageParallelismListener(stageName = stageClassName)
+      val scope = java.util.UUID.randomUUID().toString
+      spark.sparkContext.setLocalProperty(TestInsertTable4.SCOPE_PROPERTY, scope)
+      val listener = new StageParallelismListener(stageName = stageClassName, scope = scope)
       spark.sparkContext.addSparkListener(listener)
       try {
         val df = spark.sql(
@@ -356,6 +370,7 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
         assert(listenerCallCount >= 1)
       } finally {
         spark.sparkContext.removeSparkListener(listener)
+        spark.sparkContext.setLocalProperty(TestInsertTable4.SCOPE_PROPERTY, null)
       }
     }
   }
@@ -398,7 +413,9 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
            |""".stripMargin)
       val stageClassName = classOf[HoodieSparkEngineContext].getSimpleName
       // The SparkContext outlives the suite in shared session mode, so the listener must not.
-      val listener = new StageParallelismListener(stageName = stageClassName)
+      val scope = java.util.UUID.randomUUID().toString
+      spark.sparkContext.setLocalProperty(TestInsertTable4.SCOPE_PROPERTY, scope)
+      val listener = new StageParallelismListener(stageName = stageClassName, scope = scope)
       spark.sparkContext.addSparkListener(listener)
       try {
         val df = spark.sql(
@@ -415,6 +432,7 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
         assert(listenerCallCount >= 1)
       } finally {
         spark.sparkContext.removeSparkListener(listener)
+        spark.sparkContext.setLocalProperty(TestInsertTable4.SCOPE_PROPERTY, null)
       }
     }
   }
@@ -855,4 +873,9 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
       }
     }
   }
+}
+
+object TestInsertTable4 {
+  // Local property set by a test so its stage listener only sees the jobs that test started.
+  val SCOPE_PROPERTY = "hoodie.test.stage.listener.scope"
 }

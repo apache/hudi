@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.index.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -1070,7 +1069,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"select id, name, cast(price as string), ts from $tableName")
 
           // clear after using INMEMORY index
-          HoodieInMemoryHashIndex.clear()
+          clearInMemoryIndex()
         }
       }
     }
@@ -1154,7 +1153,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
 
           // clear after using INMEMORY index
-          HoodieInMemoryHashIndex.clear()
+          clearInMemoryIndex()
         }
       }
     }

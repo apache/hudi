@@ -34,7 +34,7 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionTyp
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.{ExclusiveSuite, HoodieSparkSqlTestBase}
 import org.apache.spark.util.Utils
 
 import java.io.File
@@ -45,7 +45,7 @@ import scala.collection.JavaConverters._
  * Base class for testing HoodieBackedTableMetadata index lookup functionality.
  * Provides shared setup and common test utilities.
  */
-abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkSqlTestBase {
+abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkSqlTestBase with ExclusiveSuite {
 
   // Shared test data for all tests
   protected var tableName: String = _
