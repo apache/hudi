@@ -246,7 +246,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
   /** The records path reads with the write schema; its tasks size their own merge memory. */
   private ClusteringRunInvariants newRecordsRunInvariants() {
-    return new ClusteringRunInvariants(HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(getWriteConfig().getSchema())),
+    return new ClusteringRunInvariants(addMetaFieldsAndFormatMetaColumns(HoodieSchema.parse(getWriteConfig().getSchema())),
         getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient()), null, null);
   }
 

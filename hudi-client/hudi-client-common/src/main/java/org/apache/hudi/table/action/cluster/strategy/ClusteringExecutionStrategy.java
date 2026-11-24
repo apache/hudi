@@ -80,8 +80,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     this.hoodieTable = table;
     this.engineContext = engineContext;
     this.recordType = table.getConfig().getRecordMerger().getRecordType();
-    this.readerSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(HoodieSchemaUtils.appendFormatMetaColumns(
-        HoodieSchema.parse(writeConfig.getSchema()), table.getMetaClient().getTableFormat().getFormatMetaColumns()));
+    this.readerSchemaWithMetaFields = addMetaFieldsAndFormatMetaColumns(HoodieSchema.parse(writeConfig.getSchema()));
   }
 
   /**
@@ -101,6 +100,15 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
       groupWriteConfig.setValue(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE,
           HoodieSchemaUtils.appendFormatMetaColumns(HoodieSchema.parse(groupWriteConfig.getWriteSchema()), formatMetaColumns).toString());
     }
+  }
+
+  /**
+   * Returns the given write schema with the Hudi meta fields and the format meta columns the table format declares,
+   * the schema of the records read for clustering, see {@link #getFileGroupReader}.
+   */
+  protected final HoodieSchema addMetaFieldsAndFormatMetaColumns(HoodieSchema writeSchema) {
+    return HoodieSchemaUtils.addMetadataFields(HoodieSchemaUtils.appendFormatMetaColumns(
+        writeSchema, hoodieTable.getMetaClient().getTableFormat().getFormatMetaColumns()));
   }
 
   /**

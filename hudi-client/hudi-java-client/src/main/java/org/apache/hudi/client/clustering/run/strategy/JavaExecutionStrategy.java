@@ -128,7 +128,7 @@ public abstract class JavaExecutionStrategy<T>
       HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
       boolean preserveHoodieMetadata, String instantTime) {
     List<HoodieRecord<T>> inputRecords = readRecordsForGroup(clusteringGroup, instantTime);
-    HoodieSchema readerSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(getWriteConfig().getSchema()));
+    HoodieSchema readerSchema = addMetaFieldsAndFormatMetaColumns(HoodieSchema.parse(getWriteConfig().getSchema()));
     List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
         .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
         .collect(Collectors.toList());

@@ -75,15 +75,21 @@ class TestSparkClusteringRowLineageForTestFormat extends TestSparkCopyOnWriteRow
 
   /**
    * Clustering carries the records of several file groups over unchanged into a new base file, so every record keeps
-   * its row lineage, whether its base file stores it or not: with the row writer, and with Avro and Spark records.
+   * its row lineage, whether its base file stores it or not: with the row writer, and with Avro and Spark records,
+   * also when the records are sorted along a spatial curve.
    */
   @ParameterizedTest
-  @CsvSource({"true,AVRO", "false,AVRO", "false,SPARK"})
-  void testClusteringKeepsRowLineage(boolean rowWriter, HoodieRecordType recordType) throws IOException {
+  @CsvSource({"true,AVRO,false", "false,AVRO,false", "false,SPARK,false", "true,AVRO,true", "false,AVRO,true", "false,SPARK,true"})
+  void testClusteringKeepsRowLineage(boolean rowWriter, HoodieRecordType recordType, boolean zOrder) throws IOException {
     HoodieTableMetaClient metaClient = initTable();
     String tableBasePath = metaClient.getBasePath().toString();
+    HoodieClusteringConfig.Builder clusteringConfig = HoodieClusteringConfig.newBuilder();
+    if (zOrder) {
+      clusteringConfig.withClusteringSortColumns("begin_lat,begin_lon")
+          .withDataOptimizeStrategy(HoodieClusteringConfig.LayoutOptimizationStrategy.ZORDER.name());
+    }
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .withProperties(buildConfig(metaClient, recordType, 0, HoodieClusteringConfig.newBuilder().build()).getProps())
+        .withProperties(buildConfig(metaClient, recordType, 0, clusteringConfig.build()).getProps())
         .withProps(Collections.singletonMap(ROW_WRITER_ENABLE, String.valueOf(rowWriter))).build();
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION});
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
