@@ -91,6 +91,19 @@ Knobs (`-D` system properties):
 
 With the metadata table on (the default), planning reads it before the `dpp` scenario's date filter is ready, so at the default latencies the filter arrives close to the 1 s `hudi.dynamic-filtering.wait-timeout` (about 0.8 s for `_ro` and 1.0 s for `_rt`) and `dpp default` can differ from `dpp df_wait_10s` between runs. `-Dbench.metadata=false` brings it down to about 0.2 s and 0.4 s. To see the scans start before the filter arrives, raise the latencies, for example `-Dbench.s3.getMillis=100 -Dbench.s3.headMillis=75 -Dbench.s3.listMillis=200`.
 
+## Plugin zip for a Trino release
+
+A Trino server loads a connector from a plugin directory: the connector jar, a `Plugin` entry point with its service descriptor, and every runtime dependency, all built for that server's Trino version. hudi-trino ships only the connector, so `scripts/trino/build_plugin_zip.sh` assembles the rest with the in-repo shim at `docker/trino/shim/`:
+
+```
+# JDK 25. The Hudi modules hudi-trino depends on must be in the local m2 for a -SNAPSHOT
+# (see the script's header for the JDK 17 install command).
+scripts/trino/build_plugin_zip.sh                           # Trino trino.e2e.version, from Maven Central
+scripts/trino/build_plugin_zip.sh --trino-version 485-SNAPSHOT  # the pinned trino.version, after bootstrap
+```
+
+It writes `target/hudi-trino-plugin/hudi-trino-plugin-<hudi>-trino-<trino>.zip` and the same jars unpacked next to it. To run hudi-trino on a Trino server of that exact version, on the coordinator and every worker: delete everything in `plugin/hudi/` except the `hdfs/` subdirectory (Trino's HDFS loader jars, needed for `fs.hadoop.enabled=true` and shipped only with the server), copy the unpacked jars into `plugin/hudi/`, and restart. The catalog keeps `connector.name=hudi`.
+
 ## End-to-end tests (docker)
 
 The testcontainers E2E suite (`hudi-integ-test`, classes `ITTestTrino*` under

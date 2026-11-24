@@ -140,10 +140,8 @@
         </dependency>
 
         <dependency>
-            <!-- Trino bundles guice as the classes-only classifier; the BOM does not manage the plain jar. -->
-            <groupId>com.google.inject</groupId>
+            <groupId>io.airlift</groupId>
             <artifactId>guice</artifactId>
-            <classifier>classes</classifier>
         </dependency>
 
         <dependency>
@@ -446,18 +444,6 @@
 
         <dependency>
             <groupId>io.trino</groupId>
-            <artifactId>trino-blob-cache-alluxio</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.trino</groupId>
-            <artifactId>trino-blob-cache-memory</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.trino</groupId>
             <artifactId>trino-client</artifactId>
             <scope>test</scope>
         </dependency>
@@ -655,15 +641,26 @@
     <profiles>
         <!--
             Test-only profile. Trino does not publish trino-spi / trino-filesystem /
-            trino-hive test-jars to Maven Central, and the Hudi client modules
-            (hudi-client-common, hudi-hadoop-common, hudi-java-client) only resolve
-            from a snapshot reactor build. Activate alongside hudi-trino once those
-            artifacts are in your local m2. CI keeps the profile off so the default
-            build resolves cleanly against Maven Central.
+            trino-hive test-jars or the blob-cache plugin jars to Maven Central, and
+            the Hudi client modules (hudi-client-common, hudi-hadoop-common,
+            hudi-java-client) only resolve from a snapshot reactor build. Activate
+            alongside hudi-trino once those artifacts are in your local m2. CI keeps
+            the profile off so the default build resolves cleanly against Maven Central.
         -->
         <profile>
             <id>hudi-trino-tests</id>
             <dependencies>
+                <!-- Cache managers the tests load: memory unconditionally via HudiQueryRunner, alluxio in the caching tests. -->
+                <dependency>
+                    <groupId>io.trino</groupId>
+                    <artifactId>trino-blob-cache-alluxio</artifactId>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.trino</groupId>
+                    <artifactId>trino-blob-cache-memory</artifactId>
+                    <scope>test</scope>
+                </dependency>
                 <dependency>
                     <groupId>io.trino</groupId>
                     <artifactId>trino-filesystem</artifactId>
