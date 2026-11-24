@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 44
+  val expectedChecks = 52
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -379,6 +379,60 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
     s"jvm n=${reuseJvmRows.length} native n=${reuseRows.length}")
   check("repeated native scan reuses its exchange",
     reusePlan.contains("CometHudiNativeScan") && reusePlan.contains("ReusedExchange"), reusePlan)
+
+  // The shape of TPC-DS q44: a rank over a grouped aggregate whose filter keeps no rows, compared
+  // with a scalar subquery. Once the aggregate's shuffle finishes with no rows, adaptive execution
+  // replaces the aggregate and the comparison above it with an empty relation, so the subquery's
+  // scan of the table never runs. 150.5 lies inside every file's fare range and equals no fare, so
+  // the scan itself runs and returns nothing. The other predicate keeps every row, and one
+  // partition's average is above the table's.
+  import org.apache.spark.sql.execution.SparkPlan
+  def rankAboveAverage(predicate: String, comet: Boolean, nativeScan: Boolean): (Array[String], SparkPlan) = {
+    spark.conf.set("spark.comet.enabled", comet.toString)
+    spark.conf.set("spark.comet.scan.hudi.enabled", nativeScan.toString)
+    val df = spark.sql("select partitionpath, rnk from (select partitionpath, rank() over (order by a) as rnk " +
+      s"from (select partitionpath, avg(fare) as a from native_cow where $predicate group by partitionpath " +
+      "having avg(fare) > (select avg(fare) from native_cow)) averages) ranked where rnk < 11")
+    val result = (df.collect().map(_.toString).sorted, df.queryExecution.executedPlan)
+    spark.conf.set("spark.comet.enabled", "true")
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    result
+  }
+  def isGroupedCometAggregate(plan: SparkPlan): Boolean = plan match {
+    case agg: org.apache.spark.sql.comet.CometHashAggregateExec => agg.groupingExpressions.nonEmpty
+    case _ => false
+  }
+  // The plan adaptive execution started from, before any stage ran.
+  def plannedWithGroupedCometAggregate(plan: SparkPlan): Boolean = plan match {
+    case adaptive: org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec =>
+      adaptive.initialPlan.find(isGroupedCometAggregate).isDefined
+    case _ => false
+  }
+  // The final plan reads an empty relation where the aggregate was, and the subquery's own
+  // adaptive plan, which becomes final only when the subquery runs, never did.
+  def aggregateDropped(plan: SparkPlan): Boolean = {
+    val nodes = PlanWalk.collect(plan) { case node => node.nodeName }
+    !nodes.exists(_.contains("Aggregate")) && nodes.exists(_.contains("LocalTableScan")) &&
+      "isFinalPlan=true".r.findAllIn(plan.toString).length == 1
+  }
+  val (sparkNoRows, sparkNoRowsPlan) = rankAboveAverage("fare = 150.5", comet = false, nativeScan = false)
+  val (sparkOneRow, _) = rankAboveAverage("fare > 0", comet = false, nativeScan = false)
+  for ((label, nativeScan) <- Seq(("JVM scan under Comet", false), ("native scan", true))) {
+    val (noRows, noRowsPlan) = rankAboveAverage("fare = 150.5", comet = true, nativeScan = nativeScan)
+    val (oneRow, oneRowPlan) = rankAboveAverage("fare > 0", comet = true, nativeScan = nativeScan)
+    check(s"empty grouped aggregate ($label) rows match Spark with Comet off (n=${sparkNoRows.length})",
+      sparkNoRows.isEmpty && noRows.isEmpty, s"spark n=${sparkNoRows.length} comet n=${noRows.length}")
+    check(s"empty grouped aggregate ($label) becomes an empty relation before its subquery runs",
+      plannedWithGroupedCometAggregate(noRowsPlan) && aggregateDropped(noRowsPlan) &&
+        aggregateDropped(sparkNoRowsPlan),
+      s"comet plan\n$noRowsPlan\nspark plan\n$sparkNoRowsPlan")
+    check(s"grouped aggregate with rows ($label) rows match Spark with Comet off (n=${sparkOneRow.length})",
+      sparkOneRow.length == 1 && sparkOneRow.sameElements(oneRow),
+      s"spark=${sparkOneRow.mkString(";")} comet=${oneRow.mkString(";")}")
+    check(s"grouped aggregate with rows ($label) stays a native aggregate",
+      PlanWalk.collect(oneRowPlan) { case node if isGroupedCometAggregate(node) => node }.nonEmpty,
+      oneRowPlan.toString)
+  }
 
   if (failures > 0 || checksRun != expectedChecks) {
     println(s"::error::native hudi scan probes: failures=$failures checksRun=$checksRun expected=$expectedChecks")
