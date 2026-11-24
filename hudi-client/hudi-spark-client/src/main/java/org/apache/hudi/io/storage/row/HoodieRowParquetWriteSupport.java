@@ -86,6 +86,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_VARIANT_WRITE_SHREDDING_ENABLED;
+import static org.apache.hudi.common.util.ParquetUtils.isLegacyListFormatConfigured;
 import static org.apache.hudi.config.HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD;
 import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_STRING;
 import static org.apache.hudi.config.HoodieWriteConfig.INTERNAL_SCHEMA_STRING;
@@ -161,8 +162,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       hadoopConf.set("spark.sql.variant.forceShreddingSchemaForTest", variantForceShreddingSchemaForTest);
     }
 
-    this.writeLegacyListFormat = Boolean.parseBoolean(writeLegacyFormatEnabled)
-        || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
+    this.writeLegacyListFormat = isLegacyListFormatConfigured(config);
     this.structType = structType;
     // The avro schema is used to determine the precision for timestamps
     this.schema = SerDeHelper.fromJson(config.getString(INTERNAL_SCHEMA_STRING)).map(internalSchema -> InternalSchemaConverter.convert(internalSchema, "spark_schema"))

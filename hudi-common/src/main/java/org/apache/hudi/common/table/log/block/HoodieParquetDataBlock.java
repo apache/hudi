@@ -34,6 +34,7 @@ import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +54,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   protected final Option<String> compressionCodecName;
   protected final Option<Double> expectedCompressionRatio;
   protected final Option<Boolean> useDictionaryEncoding;
+  // Further configs of the Parquet writer of the block, such as the ones that choose its list layout
+  protected final Map<String, String> writerConfigs;
 
   public HoodieParquetDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                                 Option<byte[]> content,
@@ -67,6 +70,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     this.compressionCodecName = Option.empty();
     this.expectedCompressionRatio = Option.empty();
     this.useDictionaryEncoding = Option.empty();
+    this.writerConfigs = Collections.emptyMap();
   }
 
   public HoodieParquetDataBlock(List<HoodieRecord> records,
@@ -75,11 +79,22 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                 String compressionCodecName,
                                 double expectedCompressionRatio,
                                 boolean useDictionaryEncoding) {
+    this(records, header, keyField, compressionCodecName, expectedCompressionRatio, useDictionaryEncoding, Collections.emptyMap());
+  }
+
+  public HoodieParquetDataBlock(List<HoodieRecord> records,
+                                Map<HeaderMetadataType, String> header,
+                                String keyField,
+                                String compressionCodecName,
+                                double expectedCompressionRatio,
+                                boolean useDictionaryEncoding,
+                                Map<String, String> writerConfigs) {
     super(records, header, new HashMap<>(), keyField);
 
     this.compressionCodecName = Option.of(compressionCodecName);
     this.expectedCompressionRatio = Option.of(expectedCompressionRatio);
     this.useDictionaryEncoding = Option.of(useDictionaryEncoding);
+    this.writerConfigs = writerConfigs;
   }
 
   @Override
@@ -89,7 +104,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
   @Override
   protected ByteArrayOutputStream serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException {
-    Map<String, String> paramsMap = new HashMap<>();
+    Map<String, String> paramsMap = new HashMap<>(writerConfigs);
     paramsMap.put(PARQUET_COMPRESSION_CODEC_NAME.key(), compressionCodecName.get());
     paramsMap.put(PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(expectedCompressionRatio.get()));
     paramsMap.put(PARQUET_DICTIONARY_ENABLED.key(), String.valueOf(useDictionaryEncoding.get()));
