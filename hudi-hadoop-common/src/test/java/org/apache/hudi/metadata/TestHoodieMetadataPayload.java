@@ -392,11 +392,15 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     assertInstanceOf(GenericData.Record.class, payload.getInsertValue(withMetaFields).get());
 
     // So an equal but distinct copy of the bare class schema is not usable. It misses the identity check, and the
-    // slow path then writes at the offsets the metadata fields would occupy, which a bare copy does not have:
-    // hence ArrayIndexOutOfBoundsException rather than a wrong-but-returned record.
+    // slow path writes at the offsets the metadata fields would occupy, which a bare copy does not have: it must
+    // fail rather than return a record with values in the wrong fields.
     Schema equalCopy = new Schema.Parser().parse(HoodieMetadataRecord.getClassSchema().toString());
     assertEquals(HoodieMetadataRecord.getClassSchema(), equalCopy);
-    assertThrows(ArrayIndexOutOfBoundsException.class, () -> payload.getInsertValue(equalCopy));
+    assertThrows(HoodieMetadataException.class, () -> payload.getInsertValue(equalCopy));
+    // A FILES record writes only the first offsets, which fit inside the bare schema: still rejected, not misplaced.
+    HoodieMetadataPayload filesPayload = HoodieMetadataPayload.createPartitionFilesRecord(
+        PARTITION_NAME, Collections.singletonMap("f1.parquet", 100L), Collections.emptyList()).getData();
+    assertThrows(HoodieMetadataException.class, () -> filesPayload.getInsertValue(equalCopy));
   }
 
   @Test

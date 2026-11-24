@@ -140,6 +140,29 @@ class TestIndexActionExecutors {
   }
 
   @Test
+  void testSchedulePreservesDynamicVectorPartitionName() {
+    HoodieWriteConfig config = multiWriterConfig();
+    HoodieInstant completed = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001");
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    when(activeTimeline.getContiguousCompletedWriteTimeline()).thenReturn(completedTimeline);
+    when(completedTimeline.lastInstant()).thenReturn(Option.of(completed));
+    String partitionName = HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX + "embedding_idx";
+
+    Option<HoodieIndexPlan> plan = new ScheduleIndexActionExecutor(
+        context,
+        config,
+        table,
+        "002",
+        Collections.singletonList(MetadataPartitionType.VECTOR_INDEX),
+        Collections.singletonList(partitionName)).execute();
+
+    assertTrue(plan.isPresent());
+    assertEquals(partitionName,
+        plan.get().getIndexPartitionInfos().get(0).getMetadataPartitionPath());
+  }
+
+  @Test
   void testScheduleAbortsWhenPendingPlanCannotBeSaved() {
     HoodieWriteConfig config = multiWriterConfig();
     HoodieInstant completed = INSTANT_GENERATOR.createNewInstant(
