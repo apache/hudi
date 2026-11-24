@@ -37,7 +37,7 @@ import org.apache.parquet.hadoop.ParquetWriter
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
 
 import java.io.IOException
 import java.util
@@ -141,7 +141,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
       records.foreach { record =>
         val payload = record.getData.asInstanceOf[HoodieJsonPayload]
         assertEquals(record.getRecordKey, payload.getRowKey("_row_key"))
-        assertThrows(classOf[HoodieException], () => payload.getRowKey("rider"))
+        assertThrows[HoodieException](payload.getRowKey("rider"))
       }
       assertNull(sharedConf.get(readSchemaKey))
     }

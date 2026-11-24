@@ -44,6 +44,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -183,8 +184,11 @@ public class HDFSParquetImporterUtils implements Serializable {
     job.getConfiguration().set(FileInputFormat.INPUT_DIR_RECURSIVE, "true");
     // To parallelize reading file status.
     job.getConfiguration().set(FileInputFormat.LIST_STATUS_NUM_THREADS, "1024");
+    Schema readSchema = HoodieSchema.parse(schemaStr).getAvroSchema();
     // On the job's copy, which the read below uses; the shared Spark conf would leak the schema to every other reader.
-    AvroReadSupport.setAvroReadSchema(job.getConfiguration(), HoodieSchema.parse(schemaStr).getAvroSchema());
+    AvroReadSupport.setAvroReadSchema(job.getConfiguration(), readSchema);
+    // Without the projection every source column is read, and one the read schema lacks fails the conversion.
+    AvroReadSupport.setRequestedProjection(job.getConfiguration(), readSchema);
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
     AvroReadSupport.setAvroDataSupplier(job.getConfiguration(), GenericDataSupplier.class);
 
