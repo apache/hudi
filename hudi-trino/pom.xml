@@ -140,10 +140,8 @@
         </dependency>
 
         <dependency>
-            <!-- Trino bundles guice as the classes-only classifier; the BOM does not manage the plain jar. -->
-            <groupId>com.google.inject</groupId>
+            <groupId>io.airlift</groupId>
             <artifactId>guice</artifactId>
-            <classifier>classes</classifier>
         </dependency>
 
         <dependency>
