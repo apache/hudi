@@ -1433,4 +1433,29 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, v from $tableName order by id")(Seq(1L, 11), Seq(3L, 30))
     }
   }
+
+  test("Test MergeInto With A Source Key Column The Merge Condition Does Not Match On") {
+    withTempDir { tmp =>
+      for (tableType <- Seq("cow", "mor");
+           source <- Seq("select 2L as id, 1L as match_id, 99 as v", "select 2 as id, 1 as match_id, 99 as v");
+           updateClause <- Seq("update set v = s.v", "update set *")) {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 10), (2, 20)")
+        // the source column id would render the record key 2, while the merge condition matches id 1
+        checkExceptionContain(
+          s"merge into $tableName t using ($source) s on t.id = s.match_id when matched then $updateClause")(
+          "Invalid MERGE INTO matching condition")
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 10), Seq(2, 20))
+      }
+    }
+  }
 }
