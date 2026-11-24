@@ -151,7 +151,7 @@ public class HoodieInMemoryHashIndex
    * Clears the locations of a single table.
    */
   @VisibleForTesting
-  public static void clear(String basePath) {
-    RECORD_LOCATIONS_PER_TABLE.remove(tableKey(new StoragePath(basePath)));
+  public static void clear(StoragePath basePath) {
+    RECORD_LOCATIONS_PER_TABLE.remove(tableKey(basePath));
   }
 }

@@ -250,7 +250,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         if (sharedSessionEnabled && !catalog.isTempView(table)) {
           // Shared mode keeps one index map per table; drop this table's entry with the table.
           Try(catalog.getTableMetadata(table).location.getPath)
-            .foreach(path => HoodieInMemoryHashIndex.clear(path))
+            .foreach(path => HoodieInMemoryHashIndex.clear(new StoragePath(path)))
         }
         catalog.dropTable(table, true, true)
       }
@@ -517,7 +517,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         val ident = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
         if (catalog.tableExists(ident) && !catalog.isTempView(ident)) {
           Try(catalog.getTableMetadata(ident).location.getPath)
-            .foreach(path => HoodieInMemoryHashIndex.clear(path))
+            .foreach(path => HoodieInMemoryHashIndex.clear(new StoragePath(path)))
         }
       }
       spark.sql(s"drop table if exists $tableName purge")
