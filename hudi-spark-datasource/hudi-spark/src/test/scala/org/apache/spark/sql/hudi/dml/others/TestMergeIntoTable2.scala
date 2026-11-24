@@ -1342,4 +1342,39 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test MergeInto With Only Insert Clauses Leaves A Matched Record Out Of The Insert Condition") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        withSQLConf("spark.sql.ansi.enabled" -> "true") {
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (id int, value string, ts long) using hudi
+               | tblproperties (primaryKey = 'id', preCombineField = 'ts', type = '$tableType')
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'bad', 1)")
+          def mergeFrom(rows: (Int, String)*): Unit = spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (${rows.map { case (id, value) => s"select $id as id, '$value' as value, 2L as ts" }.mkString(" union all ")}) s
+               | on t.id = s.id
+               | when not matched and cast(s.value as int) > 0 then insert *
+             """.stripMargin)
+
+          // The insert condition cannot be evaluated on the source record of id 1, which matches a record of the
+          // table and so writes nothing, as no clause applies to a matched record. The ordering field makes the
+          // statement an upsert, which looks the records up before it evaluates the insert condition
+          mergeFrom((1, "bad"), (2, "5"), (3, "0"))
+          checkAnswer(s"select id, value from $tableName order by id")(Seq(1, "bad"), Seq(2, "5"))
+          // A source record that matches no record still has its insert condition evaluated
+          checkNestedExceptionContains(new Runnable {
+            override def run(): Unit = mergeFrom((4, "bad"))
+          })("CAST_INVALID_INPUT")
+          checkAnswer(s"select id, value from $tableName order by id")(Seq(1, "bad"), Seq(2, "5"))
+        }
+      }
+    }
+  }
 }
