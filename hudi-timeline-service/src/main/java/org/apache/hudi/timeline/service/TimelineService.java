@@ -38,12 +38,18 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.fluent.Request;
+import org.apache.http.client.utils.URIBuilder;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A standalone timeline service exposing File-System View interfaces to clients.
@@ -53,9 +59,12 @@ public class TimelineService {
 
   private static final int START_SERVICE_MAX_RETRIES = 16;
   private static final int DEFAULT_NUM_THREADS = 250;
+  private static final int PROBE_TIMEOUT_MS = 5000;
 
   @Getter
   private int serverPort;
+  // Requests the root page of this service got, which tells its own answer to the probe from another listener's
+  private final AtomicLong rootRequests = new AtomicLong();
   private final Config timelineServerConf;
   @Getter
   private final StorageConfiguration<?> storageConf;
@@ -192,7 +201,7 @@ public class TimelineService {
     public Boolean help = false;
   }
 
-  private int startServiceOnPort(int port) throws IOException {
+  private int startServiceOnPort(int port, String advertisedHost) throws IOException {
     if (!(port == 0 || (1024 <= port && port < 65536))) {
       throw new IllegalArgumentException(String.format("startPort should be between 1024 and 65535 (inclusive), "
           + "or 0 for a random free port. but now is %s.", port));
@@ -210,7 +219,11 @@ public class TimelineService {
       try {
         createApp();
         app.start(tryPort);
-        return app.port();
+        if (advertisedHost == null || isServingAt(advertisedHost, app.port())) {
+          return app.port();
+        }
+        log.warn("Another listener answers at {}:{} in place of the timeline server. Attempting another port.",
+            advertisedHost, app.port());
       } catch (Exception e) {
         if (e instanceof JavalinBindException) {
           if (tryPort == 0) {
@@ -223,11 +236,47 @@ public class TimelineService {
         }
       }
     }
+    stopApp();
     throw new IOException(String.format("Timeline server start failed on port %d, after retry %d times", port, START_SERVICE_MAX_RETRIES));
   }
 
+  /**
+   * A listener bound to a specific address takes precedence over the wildcard address this server binds, and
+   * some platforms hand out a port to a wildcard bind while such a listener holds it, so the bound port alone
+   * does not tell whether clients reach this server.
+   *
+   * @return {@code false} only if an HTTP response to a request for the root page at the given address came while
+   *     this server got no such request. No response, as from a slow host, keeps the port.
+   */
+  private boolean isServingAt(String host, int port) {
+    long requestsBefore = rootRequests.get();
+    try {
+      URI uri = new URIBuilder().setScheme("http").setHost(host).setPort(port).setPath("/").build();
+      HttpResponse response = Request.Get(uri).connectTimeout(PROBE_TIMEOUT_MS).socketTimeout(PROBE_TIMEOUT_MS)
+          .execute().returnResponse();
+      if (rootRequests.get() > requestsBefore) {
+        return true;
+      }
+      log.warn("Another listener answers at {}:{} with {}", host, port, response.getStatusLine());
+      return false;
+    } catch (URISyntaxException | IOException e) {
+      log.info("Could not check the timeline server at {}:{}, keeping the port: {}", host, port, e.toString());
+      return true;
+    }
+  }
+
   public int startService() throws IOException {
-    int realServerPort = startServiceOnPort(serverPort);
+    return startService(null);
+  }
+
+  /**
+   * Starts the service, moving to another port if a different listener answers at the advertised host.
+   *
+   * @param advertisedHost host that clients use to reach this service, or {@code null} to skip the check.
+   * @return the port the service listens on.
+   */
+  public int startService(String advertisedHost) throws IOException {
+    int realServerPort = startServiceOnPort(serverPort, advertisedHost);
     log.info("Starting Timeline server on port: {}", realServerPort);
     this.serverPort = realServerPort;
     return realServerPort;
@@ -235,9 +284,7 @@ public class TimelineService {
 
   private void createApp() {
     // if app needs to be recreated, stop the existing one
-    if (app != null) {
-      app.stop();
-    }
+    stopApp();
     int maxThreads = timelineServerConf.numThreads > 0 ? timelineServerConf.numThreads : DEFAULT_NUM_THREADS;
     QueuedThreadPool pool = new QueuedThreadPool(maxThreads, 8, 60_000);
     pool.setDaemon(true);
@@ -261,11 +308,23 @@ public class TimelineService {
 
     requestHandler = new RequestHandler(
         app, storageConf, timelineServerConf, fsViewsManager);
-    app.get("/", ctx -> ctx.result("Hello Hudi"));
+    app.get("/", ctx -> {
+      rootRequests.incrementAndGet();
+      ctx.result("Hello Hudi");
+    });
     requestHandler.register();
     if (timelineServerConf.enableUi) {
       uiHandler = new UiHandler(app);
       uiHandler.register();
+    }
+  }
+
+  private void stopApp() {
+    if (app != null) {
+      if (requestHandler != null) {
+        requestHandler.stop();
+      }
+      app.stop();
     }
   }
 

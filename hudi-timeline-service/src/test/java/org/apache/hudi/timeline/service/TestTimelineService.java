@@ -18,22 +18,31 @@
 
 package org.apache.hudi.timeline.service;
 
+import org.apache.hudi.common.table.marker.MarkerOperation;
+import org.apache.hudi.common.table.timeline.TimelineServiceClient;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 class TestTimelineService {
@@ -91,6 +100,80 @@ class TestTimelineService {
       if (server != null) {
         server.stop(0);
       }
+    }
+  }
+
+  /**
+   * A listener bound to the loopback address answers requests sent there even if the service binds the same
+   * port on the wildcard address, so the service has to end up on a port where the advertised host reaches it.
+   */
+  @Test
+  void createServerMovesOffPortAnsweredByHttpListenerAtAdvertisedHost(@TempDir Path markerDir) throws Exception {
+    HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+    server.start();
+    try {
+      assertServesMarkerRequestsOffPort(server.getAddress().getPort(), markerDir);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /**
+   * A listener that never answers looks the same to the check as a slow host, so the service keeps the port it
+   * bound rather than moving off a port it may well serve.
+   */
+  @Test
+  void createServerKeepsPortWhenAdvertisedHostDoesNotAnswer() throws Exception {
+    try (ServerSocket silentListener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+      int takenPort = silentListener.getLocalPort();
+      // Where the platform refuses the wildcard bind on the held port, the service moves on as before
+      boolean wildcardBindAllowed = canBindWildcard(takenPort);
+      TimelineService timelineService = new TimelineService(HoodieTestUtils.getDefaultStorageConf(),
+          TimelineService.Config.builder().serverPort(takenPort).build(), mock(FileSystemViewManager.class));
+      try {
+        int servicePort = timelineService.startService(InetAddress.getLoopbackAddress().getHostAddress());
+        if (wildcardBindAllowed) {
+          assertEquals(takenPort, servicePort);
+        }
+      } finally {
+        timelineService.close();
+      }
+    }
+  }
+
+  private static boolean canBindWildcard(int port) {
+    try (ServerSocket socket = new ServerSocket(port)) {
+      return true;
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
+  private static void assertServesMarkerRequestsOffPort(int takenPort, Path markerDir) throws IOException {
+    String advertisedHost = InetAddress.getLoopbackAddress().getHostAddress();
+    TimelineService.Config config = TimelineService.Config.builder()
+        .enableMarkerRequests(true)
+        .serverPort(takenPort)
+        .build();
+    TimelineService timelineService =
+        new TimelineService(HoodieTestUtils.getDefaultStorageConf(), config, mock(FileSystemViewManager.class));
+    try {
+      int servicePort = timelineService.startService(advertisedHost);
+      TimelineServiceClient client = new TimelineServiceClient(FileSystemViewStorageConfig.newBuilder()
+          .withRemoteServerHost(advertisedHost)
+          .withRemoteServerPort(servicePort)
+          .withRemoteTimelineClientTimeoutSecs(10)
+          .build());
+      boolean created = client.makeRequest(
+              TimelineServiceClient.Request.newBuilder(TimelineServiceClient.RequestMethod.POST, MarkerOperation.CREATE_MARKER_URL)
+                  .addQueryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, markerDir.toString())
+                  .addQueryParam(MarkerOperation.MARKER_NAME_PARAM, "file1.parquet.marker.CREATE")
+                  .build())
+          .getDecodedContent(new TypeReference<Boolean>() {});
+      assertTrue(created);
+      assertNotEquals(takenPort, servicePort);
+    } finally {
+      timelineService.close();
     }
   }
 
