@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 38
+  val expectedChecks = 40
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -306,6 +306,30 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
       read.nonEmpty && read.forall(n => n > 0 && n < listed),
       s"file slices read per fact scan: ${read.mkString(", ")}, listed for the table: $listed")
   }
+
+  // A scalar subquery over a DPP-filtered native scan, used in two branches, is computed once:
+  // each copy is planned with its own pruning placeholders, which must not make the scans differ.
+  spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "10485760")
+  val dppSubquery = "(select sum(f.fare) from native_cow f join dpp_dim d " +
+    "on f.partitionpath = d.p where d.flag = 'keep')"
+  val dppReuse = s"select partitionpath, count(*) from native_cow where fare < $dppSubquery " +
+    s"group by partitionpath union all select partitionpath, count(*) from native_cow " +
+    s"where fare > $dppSubquery - 1000000 group by partitionpath"
+  spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+  val dppReuseJvmRows = spark.sql(dppReuse).collect().map(_.toString).sorted
+  spark.conf.set("spark.comet.scan.hudi.enabled", "true")
+  val dppReuseDf = spark.sql(dppReuse)
+  val dppReuseRows = dppReuseDf.collect().map(_.toString).sorted
+  val dppReusePlan = dppReuseDf.queryExecution.executedPlan.toString
+  spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+  spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
+  check(s"repeated DPP subquery rows match the JVM read (n=${dppReuseJvmRows.length})",
+    dppReuseJvmRows.nonEmpty && dppReuseJvmRows.sameElements(dppReuseRows),
+    s"jvm n=${dppReuseJvmRows.length} native n=${dppReuseRows.length}")
+  check("repeated subquery over a DPP-filtered native scan is reused",
+    dppReusePlan.contains("CometHudiNativeScan") &&
+      (dppReusePlan.contains("ReusedSubquery") || dppReusePlan.contains("ReusedExchange")),
+    dppReusePlan)
 
   // The same native scan read twice in one query shares one exchange, as the JVM scan does.
   val reuseQuery = "select partitionpath, sum(fare) as s from native_cow group by partitionpath " +

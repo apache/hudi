@@ -103,7 +103,7 @@ case class CometHudiNativeScanExec(
         BoundReference(index, partitionSchema(index).dataType, nullable = true)
       },
       Nil)
-    originalPlan.selectedPartitions.toSeq.filter(p => predicate.eval(p.values))
+    HudiCometScanProvider.staticListing(originalPlan).filter(p => predicate.eval(p.values))
   }
 
   override def sparkFallback(newChildren: Seq[SparkPlan]): SparkPlan = {
