@@ -229,7 +229,8 @@ class TestComplexKeyGenExistingTableUpgrade extends HoodieSparkClientTestBase {
     val opts = loadFixture(HoodieTableVersion.EIGHT)
     assertEquals((8L, 8L, 8L, 0L), keyStatsRaw())
 
-    upsertFixtureRecords(opts + (HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false"), 10000L)
+    upsertFixtureRecords(opts + (HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.EIGHT.versionCode().toString), 10000L)
 
     assertEquals(HoodieTableVersion.EIGHT, loadMetaClient().getTableConfig.getTableVersion)
     assertEquals((8L, 8L, 8L, 0L), keyStatsRaw())

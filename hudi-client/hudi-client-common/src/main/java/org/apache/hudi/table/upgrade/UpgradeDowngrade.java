@@ -86,6 +86,12 @@ public class UpgradeDowngrade {
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
 
+  /**
+   * Whether the table needs an upgrade or a downgrade to reach the given write version. The upgrade
+   * check applies the write path's hoodie.write.auto.upgrade gate (see {@link #needsUpgrade}), so this
+   * throws on a version mismatch when auto upgrade is disabled; {@link #run} uses
+   * {@link #needsExplicitUpgradeOrDowngrade} instead.
+   */
   public static boolean needsUpgradeOrDowngrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
     return needsUpgrade(metaClient, config, toWriteVersion) || needsDowngrade(fromTableVersion, toWriteVersion);
@@ -102,8 +108,28 @@ public class UpgradeDowngrade {
     return toWriteVersion.lesserThan(fromTableVersion);
   }
 
+  /**
+   * Whether a writer must upgrade the table to the given write version before writing.
+   *
+   * @throws HoodieUpgradeDowngradeException if hoodie.write.auto.upgrade is disabled and the table
+   *     version differs from the write version in either direction, since the writer would otherwise
+   *     produce files in a format the table version does not describe.
+   */
   public static boolean needsUpgrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
+    // tables below version six get the unsupported-version error from upgradePathExists instead
+    if (!config.autoUpgrade() && !fromTableVersion.equals(toWriteVersion)
+        && fromTableVersion.greaterThanOrEquals(HoodieTableVersion.SIX)) {
+      throw new HoodieUpgradeDowngradeException(versionMismatchMessage(metaClient, fromTableVersion, toWriteVersion));
+    }
+    return upgradePathExists(fromTableVersion, toWriteVersion);
+  }
+
+  /**
+   * Whether an upgrade path exists from the table's version to the given write version,
+   * regardless of the hoodie.write.auto.upgrade gate.
+   */
+  private static boolean upgradePathExists(HoodieTableVersion fromTableVersion, HoodieTableVersion toWriteVersion) {
     if (fromTableVersion.greaterThan(toWriteVersion)) {
       log.info("Table version {} is greater than write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
       return false;
@@ -119,18 +145,33 @@ public class UpgradeDowngrade {
                   + "using a Hudi release prior to 1.0.0",
               fromTableVersion.versionCode(), HoodieTableVersion.SIX.versionCode()));
     }
-    if (!config.autoUpgrade()) {
-      // if autoUpgrade is disabled and table version is greater than or equal to SIX,
-      // then we must ensure the write version is set to the table version.
-      // and skip the upgrade
-      config.setWriteVersion(fromTableVersion);
-      log.warn("hoodie.write.auto.upgrade was disabled. Table version {} does not match write version {}. "
-                      + "Setting hoodie.write.table.version={} to match hoodie.table.version, and skipping upgrade",
-              fromTableVersion.versionCode(), toWriteVersion.versionCode(), fromTableVersion.versionCode());
-      return false;
-    }
-    // if we have passed all the checks, then this is valid to upgrade
     return true;
+  }
+
+  private static String versionMismatchMessage(HoodieTableMetaClient metaClient, HoodieTableVersion fromTableVersion,
+                                               HoodieTableVersion toWriteVersion) {
+    String remedies = fromTableVersion.lesserThan(toWriteVersion)
+        ? String.format("set %s=%s to use the table version, enable %s to upgrade the table, "
+                + "or upgrade the table to version %s explicitly",
+            HoodieWriteConfig.WRITE_TABLE_VERSION.key(), fromTableVersion.versionCode(),
+            HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), toWriteVersion.versionCode())
+        : String.format("set %s=%s to use the table version, or downgrade the table to version %s explicitly",
+            HoodieWriteConfig.WRITE_TABLE_VERSION.key(), fromTableVersion.versionCode(), toWriteVersion.versionCode());
+    return String.format("Table version %s of table %s does not match write version %s, and %s is disabled. "
+            + "To proceed, %s.",
+        fromTableVersion.versionCode(), metaClient.getBasePath(), toWriteVersion.versionCode(),
+        HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), remedies);
+  }
+
+  /**
+   * Whether {@link #run} has any upgrade or downgrade to perform. run() serves explicit
+   * upgrade/downgrade requests (CLI, SQL procedure, the nested metadata-table co-upgrade),
+   * so the hoodie.write.auto.upgrade gate does not apply here; the write path enforces the
+   * gate by checking {@link #needsUpgrade} before calling run().
+   */
+  protected boolean needsExplicitUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
+    HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
+    return upgradePathExists(fromTableVersion, toWriteVersion) || needsDowngrade(fromTableVersion, toWriteVersion);
   }
 
   public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
@@ -184,7 +225,7 @@ public class UpgradeDowngrade {
     // Determine if we are upgrading or downgrading
     boolean isUpgrade = fromVersion.versionCode() < toVersion.versionCode();
 
-    if (!needsUpgradeOrDowngrade(toVersion)) {
+    if (!needsExplicitUpgradeOrDowngrade(toVersion)) {
       return;
     }
 

@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -45,6 +46,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
@@ -96,6 +98,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
 import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.TestSpecificPartitionTransformer;
@@ -105,6 +109,8 @@ import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.pr
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
@@ -838,6 +844,52 @@ public class TestHoodieDeltaStreamerSources extends HoodieDeltaStreamerTestBase 
     deltaStreamer.sync();
     assertRecordCount(SQL_SOURCE_NUM_RECORDS * 2, tableBasePath, sqlContext);
     deltaStreamer.shutdownGracefully();
+  }
+
+  /**
+   * A Hudi incremental source reading a version-nine table into a version-six table emits checkpoint V2 keys
+   * when the writer targets version nine, which version-six readers cannot resume from. With auto upgrade off
+   * such a writer must be refused rather than commit a V2 key into the version-six table.
+   */
+  @Test
+  public void testHoodieIncrSourceRefusesHigherWriteVersionOnVersionSixTable() throws Exception {
+    String tableBasePath = basePath + "/incr_upstream_v9";
+    String downstreamTableBasePath = basePath + "/incr_downstream_v6";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+
+    HoodieDeltaStreamer.Config downstreamCfg = TestHelpers.makeConfigForHudiIncrSrc(
+        tableBasePath, downstreamTableBasePath, WriteOperationType.BULK_INSERT, true, null);
+    downstreamCfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=6");
+    new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
+    assertVersionSixCheckpoint(downstreamTableBasePath, 1);
+
+    cfg.sourceLimit = 2000;
+    cfg.operation = WriteOperationType.UPSERT;
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+
+    downstreamCfg = TestHelpers.makeConfigForHudiIncrSrc(
+        tableBasePath, downstreamTableBasePath, WriteOperationType.UPSERT, false, null);
+    downstreamCfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=9");
+    downstreamCfg.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
+    downstreamCfg.sourceLimit = 2000;
+    HoodieDeltaStreamer.Config mismatchedCfg = downstreamCfg;
+    Throwable cause = assertThrows(Exception.class, () -> new HoodieDeltaStreamer(mismatchedCfg, jsc).sync());
+    while (cause != null && !(cause instanceof HoodieUpgradeDowngradeException)) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause, "the sync should fail on the table and write version mismatch");
+    assertVersionSixCheckpoint(downstreamTableBasePath, 1);
+  }
+
+  private void assertVersionSixCheckpoint(String tablePath, int totalCommits) throws IOException {
+    HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tablePath);
+    HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(timeline.lastInstant().get());
+    assertEquals(totalCommits, timeline.countInstants());
+    assertEquals(HoodieTableVersion.SIX, meta.getTableConfig().getTableVersion());
+    assertNotNull(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V1));
+    assertNull(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2));
   }
 
   @Test

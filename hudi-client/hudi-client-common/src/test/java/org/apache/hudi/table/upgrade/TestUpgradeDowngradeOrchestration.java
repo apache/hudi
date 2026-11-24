@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -122,8 +121,10 @@ class TestUpgradeDowngradeOrchestration {
     assertThrows(HoodieUpgradeDowngradeException.class,
         () -> UpgradeDowngrade.needsUpgrade(metaClient, config, HoodieTableVersion.SIX));
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.SIX);
-    assertFalse(UpgradeDowngrade.needsUpgrade(metaClient, config, HoodieTableVersion.NINE));
-    assertEquals(HoodieTableVersion.SIX, config.getWriteVersion());
+    assertThrows(HoodieUpgradeDowngradeException.class,
+        () -> UpgradeDowngrade.needsUpgrade(metaClient, config, HoodieTableVersion.NINE));
+    assertEquals(HoodieTableVersion.current(), config.getWriteVersion(),
+        "The write version must not be rewritten when auto-upgrade is disabled");
 
     TestContext noOpContext = new TestContext(HoodieTableVersion.SIX);
     noOpContext.trackingUpgradeDowngrade().run(HoodieTableVersion.SIX, null);

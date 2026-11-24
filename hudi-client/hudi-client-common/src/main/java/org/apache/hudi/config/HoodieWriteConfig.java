@@ -170,7 +170,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("If enabled, writers automatically migrate the table to the specified write table version "
-          + "if the current table version is lower.");
+          + "if the current table version is lower. If disabled, a writer whose hoodie.write.table.version differs "
+          + "from the table version fails before writing; set hoodie.write.table.version to the table version, "
+          + "or upgrade or downgrade the table explicitly.");
 
   public static final ConfigProperty<Boolean> ALLOW_META_FIELDS_MODE_RETENTION_ON_DOWNGRADE = ConfigProperty
       .key("hoodie.downgrade.allow.meta.fields.mode.retention")

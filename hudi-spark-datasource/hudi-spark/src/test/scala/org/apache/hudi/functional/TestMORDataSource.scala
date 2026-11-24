@@ -2094,7 +2094,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     "6,8,true,UPGRADE", // Normal upgrade: table=6, write=8, autoUpgrade=true → should upgrade
     "6,9,true,UPGRADE", // Normal upgrade: table=6, write=9, autoUpgrade=true → should upgrade
     "6,6,false,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=6, autoUpgrade=false → no upgrade
-    "6,8,false,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=8, autoUpgrade=false → no upgrade
+    "6,8,false,EXCEPTION", // Auto-upgrade disabled: table=6, write=8 → mismatch, the write is refused
+    "8,6,false,EXCEPTION", // Auto-upgrade disabled: table=8, write=6 → mismatch, the write is refused
     "4,8,true,EXCEPTION", // Auto-upgrade enabled: Should throw exception since table version is less than 6
     "4,8,false,EXCEPTION", // Auto-upgrade disabled: Should throw exception since table version is less than 6
     "8,8,false,NO_UPGRADE", // Auto-upgrade disabled: Should not upgrade as auto-upgrade is disabled and same versions
@@ -2185,10 +2186,22 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
             // For Hudi 1.1.0: any table version < 6 throws exception with this message
             "Hudi 1.x release only supports table version greater than version 6 or above"
           } else {
-            "upgrade"
+            s"Table version ${tableVersion.versionCode()} of table"
           }
           assertTrue(exception.getMessage.contains(expectedMessageFragment),
             s"Exception message should contain '${expectedMessageFragment}', but was: ${exception.getMessage}")
+
+          if (tableVersion.greaterThanOrEquals(HoodieTableVersion.SIX)) {
+            // The refused write must leave the table as it was.
+            val unchangedMetaClient = HoodieTableMetaClient.builder()
+              .setConf(storageConf.newInstance())
+              .setBasePath(testBasePath)
+              .build()
+            assertEquals(tableVersion, unchangedMetaClient.getTableConfig.getTableVersion,
+              s"Table version should remain at $tableVersion")
+            assertEquals(8, spark.read.format("hudi").load(testBasePath).count(),
+              "The refused write must not add any rows")
+          }
       }
 
     } finally {

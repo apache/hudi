@@ -44,6 +44,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -182,9 +183,32 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     addNewTableParamsToProps(params);
     HoodieWriteConfig cfg = getConfigBuilder().withAutoUpgradeVersion(false).withProps(params).build();
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX);
+    HoodieTableVersion configuredWriteVersion = cfg.getWriteVersion();
+
+    // The write path refuses to write rather than upgrade the table or rewrite the writer's version.
+    HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
+        () -> UpgradeDowngrade.needsUpgrade(metaClient, cfg, HoodieTableVersion.EIGHT));
+    assertTrue(exception.getMessage().contains("Table version 6 of table " + metaClient.getBasePath()
+        + " does not match write version 8"), exception.getMessage());
+    assertEquals(configuredWriteVersion, cfg.getWriteVersion());
+    assertEquals(HoodieTableVersion.SIX, HoodieTableMetaClient.reload(metaClient).getTableConfig().getTableVersion());
+  }
+
+  /**
+   * The auto-upgrade gate belongs to the write path; {@link UpgradeDowngrade#run} serves explicit
+   * upgrade requests and upgrades regardless of the flag.
+   */
+  @Test
+  public void testExplicitRunUpgradesWithoutAutoUpgrade() throws IOException {
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params);
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoUpgradeVersion(false).withProps(params).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX);
+
     new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.EIGHT, null);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
+
+    metaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance()).setBasePath(basePath).build();
+    assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig().getTableVersion());
   }
 
   @Disabled("HUDI-9700")
@@ -822,12 +846,18 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
         .needsUpgrade(HoodieTableVersion.EIGHT);
     assertTrue(shouldUpgrade);
 
-    // assert upgrade for table version 8 from table version 6 with auto upgrade set to false
-    // should return false
+    // with auto upgrade disabled, a write version that differs from the table version throws in
+    // either direction, and a matching write version needs no upgrade
     when(writeConfig.autoUpgrade()).thenReturn(false);
-    shouldUpgrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
-        .needsUpgrade(HoodieTableVersion.EIGHT);
-    assertFalse(shouldUpgrade);
+    assertThrows(HoodieUpgradeDowngradeException.class,
+        () -> new UpgradeDowngrade(metaClient, writeConfig, context, null).needsUpgrade(HoodieTableVersion.EIGHT));
+    assertFalse(new UpgradeDowngrade(metaClient, writeConfig, context, null).needsUpgrade(HoodieTableVersion.SIX));
+
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
+    HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
+        () -> new UpgradeDowngrade(metaClient, writeConfig, context, null).needsUpgrade(HoodieTableVersion.SIX));
+    assertTrue(exception.getMessage().contains("downgrade the table to version 6 explicitly"), exception.getMessage());
+    assertFalse(new UpgradeDowngrade(metaClient, writeConfig, context, null).needsUpgrade(HoodieTableVersion.EIGHT));
   }
 
   private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant, boolean assertExists) throws IOException {
