@@ -628,11 +628,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * Whether more than one source row matching the same target row fails the statement. As in Spark, that applies
    * when a matched clause other than a single unconditional delete can act on the target row. Unless set, the check
-   * is on only for a table of a non-native table format, as a native table combined such source rows before it.
+   * is on only for a table of a non-native table format, as a native table combined such source rows before it. The
+   * format is the one the table loads, which is native for a name that no table format implementation answers to.
    */
   private def shouldCheckCardinality(parameters: Map[String, String]): Boolean = {
     parameters.get(MERGE_INTO_CARDINALITY_CHECK.key).map(_.toBoolean).getOrElse(
-      hoodieCatalogTable.tableConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT) != NativeTableFormat.TABLE_FORMAT) &&
+      hoodieCatalogTable.metaClient.getTableFormat.getName != NativeTableFormat.TABLE_FORMAT) &&
       (mergeInto.matchedActions match {
         case Seq() => false
         case Seq(DeleteAction(None)) => false

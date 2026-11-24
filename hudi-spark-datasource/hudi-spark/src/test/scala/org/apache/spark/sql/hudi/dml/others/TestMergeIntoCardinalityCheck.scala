@@ -231,23 +231,27 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test MERGE INTO cardinality check default on a native table") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      createTable(tableName, tmp.getCanonicalPath, "cow", "primaryKey = 'id'", "preCombineField = 'ts'")
-      spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
-      val mergeStatement =
-        s"""
-           |merge into $tableName t
-           |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1002) s on t.id = s.id
-           |when matched then update set *
-         """.stripMargin
-      withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
-        assertCardinalityViolation(mergeStatement)
+  // The table format as configured: unset, or a name the table loads as the native format
+  Seq(None, Some("NATIVE")).foreach { tableFormat =>
+    test(s"Test MERGE INTO cardinality check default on a native table (table format ${tableFormat.getOrElse("unset")})") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        createTable(tableName, tmp.getCanonicalPath, "cow",
+          Seq("primaryKey = 'id'", "preCombineField = 'ts'") ++ tableFormat.map(f => s"'hoodie.table.format' = '$f'"): _*)
+        spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+        val mergeStatement =
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1002) s on t.id = s.id
+             |when matched then update set *
+           """.stripMargin
+        withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+          assertCardinalityViolation(mergeStatement)
+        }
+        // Off unless set: the source rows are combined by the ordering field
+        spark.sql(mergeStatement)
+        checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "c1", 1002))
       }
-      // Off unless set: the source rows are combined by the ordering field
-      spark.sql(mergeStatement)
-      checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "c1", 1002))
     }
   }
 
