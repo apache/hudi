@@ -66,14 +66,14 @@ class TestDeleteArchiveHistoryFileProcedure extends HoodieSparkProcedureTestBase
           val call = s"call delete_archive_history_file(path => '$base'$retention)"
           val result = spark.sql(call).head()
           assert(result.getAs[Long]("cutoff_time") == cutoff)
-          val deleted = result.getAs[Seq[Row]]("deleted_files")
+          val deleted = result.getAs[scala.collection.Seq[Row]]("deleted_files")
           assert(deleted.size == 1)
           assert(deleted.head.getString(0).endsWith("/" + expired.getFileName))
           assert(deleted.head.getLong(1) == 3L)
           assert(deleted.head.getLong(2) == cutoff - 1)
           assert(Files.notExists(expired))
           retained.foreach(file => assert(Files.exists(file), file.toString))
-          assert(spark.sql(call).head().getAs[Seq[Row]]("deleted_files").isEmpty)
+          assert(spark.sql(call).head().getAs[scala.collection.Seq[Row]]("deleted_files").isEmpty)
         }
       }
   }
@@ -84,7 +84,7 @@ class TestDeleteArchiveHistoryFileProcedure extends HoodieSparkProcedureTestBase
       val files = Seq(1, 2).map(v => writeFile(archive, s".commits_.archive.$v", 1000L))
       val result = spark.sql(s"call delete_archive_history_file(path => '$base')").head()
       assert(result.isNullAt(result.fieldIndex("cutoff_time")))
-      assert(result.getAs[Seq[Row]]("deleted_files").isEmpty)
+      assert(result.getAs[scala.collection.Seq[Row]]("deleted_files").isEmpty)
       files.foreach(file => assert(Files.exists(file), file.toString))
     }
   }
