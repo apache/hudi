@@ -2016,6 +2016,8 @@ impl PhysicalPlanner {
                     let spec = HudiFileSliceSpec {
                         base_file_path: slice.base_file_path.clone(),
                         log_file_paths: slice.log_file_paths.clone(),
+                        base_file_size: (slice.base_file_size > 0)
+                            .then_some(slice.base_file_size as u64),
                     };
                     if common.parquet_scan.is_some()
                         && slice.log_file_paths.is_empty()

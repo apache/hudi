@@ -299,9 +299,11 @@ message HudiFileSlice {
   repeated string log_file_paths = 2;
   // Set for a slice the JVM scan reads as a plain Parquet file (no log files
   // and no bootstrap base file), when the scan carries parquet_scan: the base
-  // file's URI as Comet's native Parquet scan takes it, and its length from
-  // the driver's listing. Such a slice is read through Comet's Parquet scan.
+  // file's URI as Comet's native Parquet scan takes it. Such a slice is read
+  // through Comet's Parquet scan.
   string base_file_uri = 3;
+  // Base file size in bytes from the driver's listing, for every slice with a
+  // base file, so neither reader looks the size up. 0 when unknown.
   int64 base_file_size = 4;
 }
 

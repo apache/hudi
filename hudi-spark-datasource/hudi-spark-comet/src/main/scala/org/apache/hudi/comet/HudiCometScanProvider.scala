@@ -452,9 +452,10 @@ object HudiCometScanProvider extends SparkAdapterSupport {
           .newBuilder()
           .setBaseFilePath(slice.baseFilePath)
           .addAllLogFilePaths(slice.logFilePaths.asJava)
-        slice.plainBaseFile.foreach { case (uri, size) =>
-          sliceBuilder.setBaseFileUri(uri).setBaseFileSize(size)
+        if (slice.baseFileSize > 0) {
+          sliceBuilder.setBaseFileSize(slice.baseFileSize)
         }
+        slice.plainBaseFile.foreach(sliceBuilder.setBaseFileUri)
         builder.addFileSlices(sliceBuilder)
       }
       builder.build().toByteArray
@@ -462,15 +463,17 @@ object HudiCometScanProvider extends SparkAdapterSupport {
 
   /**
    * A file slice as a task reads it: the base file and log file paths relative to the table base,
-   * as the hudi-rs reader expects them. `plainBaseFile` is set for a slice the JVM scan reads as
-   * a plain Parquet file, which the file index lists without a file slice mapping because it has
-   * no log files and no bootstrap base file; it holds the base file's URI as Comet's native
-   * Parquet scan takes it and the file's length.
+   * as the hudi-rs reader expects them, and the base file's size from the listing (0 when the
+   * listing does not know it). `plainBaseFile` is set for a slice the JVM scan reads as a plain
+   * Parquet file, which the file index lists without a file slice mapping because it has no log
+   * files and no bootstrap base file; it holds the base file's URI as Comet's native Parquet scan
+   * takes it.
    */
   private case class PlannedSlice(
       baseFilePath: String,
       logFilePaths: Seq[String],
-      plainBaseFile: Option[(String, Long)])
+      baseFileSize: Long,
+      plainBaseFile: Option[String])
 
   /**
    * The file slices of each task, or None when any partition holds a shape the native reader
@@ -502,8 +505,9 @@ object HudiCometScanProvider extends SparkAdapterSupport {
     for (partition <- partitions) {
       for (file <- partition.files) {
         val filePath = file.getPath.toString
-        // (base file path, log file paths, whether the JVM scan reads the slice as a file)
-        val slice: (String, Seq[String], Boolean) = partition.values match {
+        // (base file path, log file paths, whether the JVM scan reads the slice as a file,
+        // base file size)
+        val slice: (String, Seq[String], Boolean, Long) = partition.values match {
           case _: HoodiePartitionCDCFileGroupMapping => return None
           case mapping: HoodiePartitionFileSliceMapping =>
             val fileId = FSUtils.getFileIdFromFilePath(new StoragePath(filePath))
@@ -531,16 +535,16 @@ object HudiCometScanProvider extends SparkAdapterSupport {
                     case None => return None
                   }
                 }
-                (base, logFiles.toSeq, false)
+                (base, logFiles.toSeq, false, math.max(fileSlice.getBaseFile.get().getFileSize, 0L))
               case None =>
                 relativize(filePath) match {
-                  case Some(p) => (p, Seq.empty, true)
+                  case Some(p) => (p, Seq.empty, true, file.getLen)
                   case None => return None
                 }
             }
           case _ =>
             relativize(filePath) match {
-              case Some(p) => (p, Seq.empty, true)
+              case Some(p) => (p, Seq.empty, true, file.getLen)
               case None => return None
             }
         }
@@ -549,11 +553,11 @@ object HudiCometScanProvider extends SparkAdapterSupport {
         files += partitionedFile
         val plainBaseFile =
           if (slice._3 && file.getLen > 0 && slice._1.endsWith(PARQUET_EXTENSION)) {
-            Some((partitionedFile.filePath.toString, file.getLen))
+            Some(partitionedFile.filePath.toString)
           } else {
             None
           }
-        slicesByFile.put(partitionedFile, PlannedSlice(slice._1, slice._2, plainBaseFile))
+        slicesByFile.put(partitionedFile, PlannedSlice(slice._1, slice._2, slice._4, plainBaseFile))
       }
     }
     // Largest first, as Spark orders its splits before packing them.

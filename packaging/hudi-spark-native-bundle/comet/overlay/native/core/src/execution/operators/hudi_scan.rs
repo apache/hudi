@@ -277,8 +277,9 @@ fn read_slice(
     let read_ahead = slice.log_file_paths.is_empty();
     let open = async move {
         let stream = reader
-            .read_file_slice_from_paths_stream(
+            .read_file_slice_from_paths_stream_with_base_file_size(
                 &slice.base_file_path,
+                slice.base_file_size,
                 slice.log_file_paths.iter().map(|s| s.as_str()),
                 &read_options,
             )
@@ -344,6 +345,8 @@ fn read_slice(
 pub struct HudiFileSliceSpec {
     pub base_file_path: String,
     pub log_file_paths: Vec<String>,
+    /// Size from the driver's listing; `None` makes the reader look it up.
+    pub base_file_size: Option<u64>,
 }
 
 #[derive(Debug)]
