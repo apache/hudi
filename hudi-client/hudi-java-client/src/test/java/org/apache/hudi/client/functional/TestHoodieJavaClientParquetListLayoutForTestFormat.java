@@ -22,12 +22,15 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -65,8 +68,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests that the base files of a table of a non-native format get the three-level Parquet list layout when the
- * write config does not name the table format, which the write handles then take from the table config.
+ * Tests that the base files and native log files of a table of a non-native format get the three-level Parquet list
+ * layout when the write config does not name the table format, which the write handles then take from the table config.
  */
 class TestHoodieJavaClientParquetListLayoutForTestFormat extends HoodieJavaClientTestHarness {
 
@@ -79,14 +82,14 @@ class TestHoodieJavaClientParquetListLayoutForTestFormat extends HoodieJavaClien
       .endRecord();
 
   @Override
-  protected void initMetaClient() throws IOException {
+  protected void initMetaClient(HoodieTableType tableType) throws IOException {
     if (basePath == null) {
       initPath();
     }
     storageConf.set(HoodieMetadataConfig.ENABLE.key(), "false");
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.TABLE_FORMAT.key(), "test-format");
-    metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, properties, null)
+    metaClient = HoodieTestUtils.getMetaClientBuilder(tableType, properties, null)
         .initTable(storageConf.newInstance(), basePath);
   }
 
@@ -122,6 +125,36 @@ class TestHoodieJavaClientParquetListLayoutForTestFormat extends HoodieJavaClien
     assertBaseFile(expected);
   }
 
+  @Test
+  void testUpsertIntoNativeLogWritesThreeLevelListsWithoutTableFormatInWriteConfig() throws Exception {
+    basePath = basePath + "_mor";
+    initMetaClient(HoodieTableType.MERGE_ON_READ);
+    assertEquals(HoodieTableVersion.TEN, metaClient.getTableConfig().getTableVersion());
+    HoodieWriteConfig config = getConfigBuilder(SCHEMA.toString(), HoodieIndex.IndexType.SIMPLE)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+    assertFalse(config.contains(HoodieTableConfig.TABLE_FORMAT));
+
+    Map<String, List<Integer>> expected = new HashMap<>();
+    expected.put("key0", Arrays.asList(1, null, 3));
+    expected.put("key1", Collections.singletonList(null));
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+    write(client, expected, false);
+    assertBaseFile(expected);
+
+    // The upsert of a key in the base file goes to a native log file through the native log append handle
+    Map<String, List<Integer>> updates = new HashMap<>();
+    updates.put("key0", Arrays.asList(null, 7));
+    write(client, updates, true);
+    List<HoodieLogFile> logFiles;
+    try (SyncableFileSystemView fsView = getFileSystemView(metaClient.reloadActiveTimeline())) {
+      logFiles = fsView.getLatestFileSlices(PARTITION).flatMap(FileSlice::getLogFiles).collect(Collectors.toList());
+    }
+    assertEquals(1, logFiles.size());
+    assertTrue(logFiles.get(0).getPath().getName().endsWith(".parquet"), logFiles.get(0).getPath().getName());
+    assertParquetFile(new Path(logFiles.get(0).getPath().toUri()), updates);
+  }
+
   private void write(HoodieJavaWriteClient client, Map<String, List<Integer>> values, boolean upsert) {
     List<HoodieRecord> records = values.entrySet().stream().map(entry -> {
       GenericRecord record = new GenericData.Record(SCHEMA);
@@ -144,7 +177,10 @@ class TestHoodieJavaClientParquetListLayoutForTestFormat extends HoodieJavaClien
       baseFiles = fsView.getLatestBaseFiles(PARTITION).collect(Collectors.toList());
     }
     assertEquals(1, baseFiles.size());
-    Path path = new Path(baseFiles.get(0).getPath());
+    assertParquetFile(new Path(baseFiles.get(0).getPath()), expected);
+  }
+
+  private static void assertParquetFile(Path path, Map<String, List<Integer>> expected) throws IOException {
     Configuration conf = new Configuration();
     try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(path, conf))) {
       // "list" is the repeated field of the three-level layout, "array" the one of the legacy two-level layout
