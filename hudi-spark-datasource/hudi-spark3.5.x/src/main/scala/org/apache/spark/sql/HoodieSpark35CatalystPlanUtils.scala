@@ -22,6 +22,7 @@ import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, AssignmentUtils}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Expression}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, LogicalPlan, MergeIntoTable}
+import org.apache.spark.sql.errors.QueryCompilationErrors.toSQLId
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 
@@ -62,7 +63,7 @@ object HoodieSpark35CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     a.failAnalysis(
       errorClass = "UNRESOLVED_COLUMN.WITH_SUGGESTION",
       messageParameters = Map(
-        "objectName" -> a.sql,
+        "objectName" -> toSQLId(a.name),
         "proposal" -> cols))
   }
 
