@@ -44,7 +44,7 @@ import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
-import org.apache.spark.sql.catalyst.plans.LeftOuter
+import org.apache.spark.sql.catalyst.plans.{LeftAnti, LeftOuter}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -430,6 +430,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
       val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
       Project(tableMetaCols ++ incomingDataCols, joinData)
+    } else if (getOperationType(props) == INSERT_OPERATION_OPT_VAL) {
+      // Written as inserts, the source records skip the index lookup, so the ones matching the table are dropped here
+      sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftAnti, Some(mergeInto.mergeCondition), "NONE")
     } else {
       // For a target table with record key(s) configure, the source table is used
       mergeInto.sourceTable
@@ -627,13 +630,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   /**
-   * A table with record key(s) is upserted, since only the index lookup tells the source records that
-   * match the table from the rest: written as inserts, all of them take the not-matched clauses.
+   * A table with record key(s) is upserted when the statement has a matched clause, since only the index
+   * lookup finds the target record the clause applies to.
    */
   private def getOperationType(parameters: Map[String, String]) = {
-    if (!hasPrimaryKey()
-      && StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava))
-      && updatingActions.isEmpty) {
+    val hasMatchedClauseToApply = if (hasPrimaryKey()) mergeInto.matchedActions.nonEmpty else updatingActions.nonEmpty
+    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava))
+      && !hasMatchedClauseToApply) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL
