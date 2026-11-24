@@ -662,6 +662,28 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Update Table keeps a record in its partition when its update has a lower nested ordering value") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, attributes struct<ts: long, src: string>, dep string) using hudi
+             | tblproperties (type = '$tableType', orderingFields = 'attributes.ts')
+             | partitioned by (dep)
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, 'a1', named_struct('ts', 100L, 'src', 's1'), 'd1'")
+
+        withSQLConf(HoodieCompactionConfig.INLINE_COMPACT.key -> "false") {
+          // A lower nested ordering value leaves the record as it is, as the same update without a partition change does
+          spark.sql(s"update $tableName set attributes = named_struct('ts', 90L, 'src', 's2'), name = 'a1u', dep = 'd2' where id = 1")
+        }
+        checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(Seq(1, "a1", 100L, "d1", "dep=d1"))
+      }
+    }
+  }
+
   test("Test Update Table refuses to move a record across partitions when a custom merger decides whether its update applies") {
     withTempDir { tmp =>
       val tableName = generateTableName

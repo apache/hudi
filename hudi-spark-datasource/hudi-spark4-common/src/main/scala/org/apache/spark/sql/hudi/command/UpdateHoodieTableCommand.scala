@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY, SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY}
+import org.apache.hudi.common.config.RecordMergeMode
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql
@@ -26,7 +27,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, If, Literal}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, GetStructField, If, Literal}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, LogicalPlan, Project, UpdateTable}
@@ -39,6 +40,7 @@ import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.combineOptions
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
+import org.apache.spark.sql.types.{BooleanType, StructType}
 
 import scala.collection.JavaConverters._
 
@@ -141,17 +143,45 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
                                       resolver: Resolver,
                                       targetAttrs: Seq[Attribute],
                                       updatedValue: Attribute => Expression): Expression = {
-    val orderingAttrs = catalogTable.orderingFields.asScala.toSeq.flatMap { field =>
-      targetAttrs.find(attr => resolver(attr.name, field))
+    val mergeMode = catalogTable.tableConfig.getRecordMergeMode
+    val orderingFields = catalogTable.orderingFields.asScala.toSeq.map(resolveOrderingField(resolver, targetAttrs, _))
+    val updateApplies = if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING && orderingFields.exists(_.isEmpty)) {
+      Literal(null, BooleanType)
+    } else {
+      val resolved = orderingFields.flatten
+      MergeIntoHoodieTableCommand.appliesUpdate(mergeMode,
+        resolved.map { case (attr, value) => value(attr) }, resolved.map { case (attr, value) => value(updatedValue(attr)) })
     }
-    MergeIntoHoodieTableCommand.appliesUpdate(catalogTable.tableConfig.getRecordMergeMode,
-      orderingAttrs, orderingAttrs.map(updatedValue)) match {
+    updateApplies match {
       case Literal(null, _) =>
         val partitionFields = catalogTable.partitionFields.map(field => s"`$field`").mkString(", ")
         throw new HoodieAnalysisException(s"UPDATE cannot change the partition field(s) $partitionFields of table " +
           s"`${catalogTable.table.qualifiedName}` under the ${catalogTable.tableConfig.getRecordMergeMode} merge mode, " +
           "as it cannot tell whether the merge applies the update to a record.")
       case updateApplies => updateApplies
+    }
+  }
+
+  /**
+   * The target attribute holding the ordering field `field` and the extraction of the field's value from a value of
+   * that attribute, following a nested field (`a.b`) into structs. None when the field does not resolve.
+   */
+  private def resolveOrderingField(resolver: Resolver,
+                                   targetAttrs: Seq[Attribute],
+                                   field: String): Option[(Attribute, Expression => Expression)] = {
+    val identity: Expression => Expression = e => e
+    targetAttrs.find(attr => resolver(attr.name, field)).map(attr => (attr, identity)).orElse {
+      val path = field.split('.')
+      targetAttrs.find(attr => resolver(attr.name, path.head)).flatMap { attr =>
+        path.tail.foldLeft(Option((identity, attr.dataType))) {
+          case (Some((value, struct: StructType)), name) =>
+            struct.fields.indexWhere(f => resolver(f.name, name)) match {
+              case -1 => None
+              case i => Some(((e: Expression) => GetStructField(value(e), i, Some(struct.fields(i).name)), struct.fields(i).dataType))
+            }
+          case _ => None
+        }.map { case (value, _) => (attr, value) }
+      }
     }
   }
 
