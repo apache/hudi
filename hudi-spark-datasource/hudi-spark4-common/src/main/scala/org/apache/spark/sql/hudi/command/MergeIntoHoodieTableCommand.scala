@@ -530,25 +530,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val partitionPathCol = tableMetaCols.find(_.name == HoodieRecord.PARTITION_PATH_METADATA_FIELD).get
       def updatedByClause(attr: Attribute): Expression = CaseWhen(conditions.zip(updatingActions.map(updated(_, attr))), attr)
 
-      // Under event time ordering the write applies the update when its ordering value is not lower than that of the
-      // target record: a merge that evaluates the clauses on the target record compares the ordering value of the
-      // updated record, and one that does not compares that of the source record. Null when the two disagree or the
-      // merge mode does not tell.
-      val updateApplies: Expression = Option(hoodieCatalogTable.tableConfig.getRecordMergeMode) match {
-        case Some(RecordMergeMode.COMMIT_TIME_ORDERING) => Literal.TrueLiteral
-        case Some(RecordMergeMode.EVENT_TIME_ORDERING) if orderingFieldsAssociatedExpressions.isEmpty => Literal.TrueLiteral
-        case Some(RecordMergeMode.EVENT_TIME_ORDERING) =>
-          def orderingValue(values: Seq[Expression]): Expression =
-            CreateNamedStruct(values.zipWithIndex.flatMap { case (value, i) => Seq(Literal(i.toString), value) })
-
-          val (targetOrdering, sourceOrdering) = orderingFieldsAssociatedExpressions.map {
-            case (attr, expr) => (attr, castIfNeeded(expr, attr.dataType))
-          }.unzip
-          val bySource = GreaterThanOrEqual(orderingValue(sourceOrdering), orderingValue(targetOrdering))
-          val byUpdate = GreaterThanOrEqual(orderingValue(targetOrdering.map(updatedByClause)), orderingValue(targetOrdering))
-          If(EqualTo(bySource, byUpdate), bySource, Literal(null, BooleanType))
-        case _ => Literal(null, BooleanType)
-      }
+      // A merge that evaluates the clauses on the target record compares the ordering value of the updated record,
+      // and one that does not compares that of the source record. Null when the two disagree or the merge mode does
+      // not tell.
+      val (targetOrdering, sourceOrdering) = orderingFieldsAssociatedExpressions.map {
+        case (attr, expr) => (attr, castIfNeeded(expr, attr.dataType))
+      }.unzip
+      val mergeMode = hoodieCatalogTable.tableConfig.getRecordMergeMode
+      val bySource = appliesUpdate(mergeMode, targetOrdering, sourceOrdering)
+      val byUpdate = appliesUpdate(mergeMode, targetOrdering, targetOrdering.map(updatedByClause))
+      val updateApplies = If(EqualTo(bySource, byUpdate), bySource, Literal(null, BooleanType))
       val changes = And(IsNotNull(recordKeyCol), CaseWhen(conditions.zip(changesPartition), Literal.FalseLiteral))
       val moves = Alias(And(changes, EqualNullSafe(updateApplies, Literal.TrueLiteral)), "_moves_record")()
       val withMoves = Project(joinData.output :+ moves, joinData)
@@ -1373,6 +1364,22 @@ object MergeIntoHoodieTableCommand {
     "row from the target table with multiple rows of the source table. This could result in the target row being " +
     "operated on more than once with an update or delete operation and is not allowed."
 
+  /**
+   * Whether the write applies an update that gives a record of ordering value `current` the ordering value `updated`
+   * under `mergeMode`: under event time ordering, when the ordering value of the update is not lower than that of the
+   * record. Null when the merge mode does not tell, as a custom merger decides by its own rules.
+   */
+  def appliesUpdate(mergeMode: RecordMergeMode, current: Seq[Expression], updated: Seq[Expression]): Expression = {
+    def orderingValue(values: Seq[Expression]): Expression =
+      CreateNamedStruct(values.zipWithIndex.flatMap { case (value, i) => Seq(Literal(i.toString), value) })
+
+    Option(mergeMode) match {
+      case Some(RecordMergeMode.COMMIT_TIME_ORDERING) => Literal.TrueLiteral
+      case Some(RecordMergeMode.EVENT_TIME_ORDERING) if current.isEmpty => Literal.TrueLiteral
+      case Some(RecordMergeMode.EVENT_TIME_ORDERING) => GreaterThanOrEqual(orderingValue(updated), orderingValue(current))
+      case _ => Literal(null, BooleanType)
+    }
+  }
 
   val userGuideString: String = "To use the MERGE INTO statement on this MOR table, " +
     "please specify `UPDATE SET *` as the update statement to update all columns, " +
