@@ -38,8 +38,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.fluent.Request;
 import org.apache.http.client.utils.URIBuilder;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
@@ -47,6 +45,8 @@ import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.HttpURLConnection;
+import java.net.Proxy;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -246,22 +246,31 @@ public class TimelineService {
    * does not tell whether clients reach this server.
    *
    * @return {@code false} only if an HTTP response to a request for the root page at the given address came while
-   *     this server got no such request. No response, as from a slow host, keeps the port.
+   *     this server got no such request. No response, as from a slow host, keeps the port. The status line of the
+   *     response decides: a redirect is not followed and the body is not read, as they may lead elsewhere or never end.
    */
   private boolean isServingAt(String host, int port) {
     long requestsBefore = rootRequests.get();
+    HttpURLConnection connection = null;
     try {
       URI uri = new URIBuilder().setScheme("http").setHost(host).setPort(port).setPath("/").build();
-      HttpResponse response = Request.Get(uri).connectTimeout(PROBE_TIMEOUT_MS).socketTimeout(PROBE_TIMEOUT_MS)
-          .execute().returnResponse();
+      connection = (HttpURLConnection) uri.toURL().openConnection(Proxy.NO_PROXY);
+      connection.setInstanceFollowRedirects(false);
+      connection.setConnectTimeout(PROBE_TIMEOUT_MS);
+      connection.setReadTimeout(PROBE_TIMEOUT_MS);
+      int status = connection.getResponseCode();
       if (rootRequests.get() > requestsBefore) {
         return true;
       }
-      log.warn("Another listener answers at {}:{} with {}", host, port, response.getStatusLine());
+      log.warn("Another listener answers at {}:{} with status {}", host, port, status);
       return false;
     } catch (URISyntaxException | IOException e) {
       log.info("Could not check the timeline server at {}:{}, keeping the port: {}", host, port, e.toString());
       return true;
+    } finally {
+      if (connection != null) {
+        connection.disconnect();
+      }
     }
   }
 

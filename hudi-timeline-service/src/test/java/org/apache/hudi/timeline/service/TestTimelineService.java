@@ -119,6 +119,29 @@ class TestTimelineService {
   }
 
   /**
+   * A redirect from the listener at the advertised host is its answer, so the check does not follow it, here to a
+   * listener that never answers, which would look like a slow host and keep the port.
+   */
+  @Test
+  void createServerMovesOffPortAnsweredByRedirectingListenerAtAdvertisedHost(@TempDir Path markerDir) throws Exception {
+    try (ServerSocket silentListener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+      String location = "http://" + InetAddress.getLoopbackAddress().getHostAddress() + ":" + silentListener.getLocalPort() + "/";
+      HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+      server.createContext("/", exchange -> {
+        exchange.getResponseHeaders().add("Location", location);
+        exchange.sendResponseHeaders(302, -1);
+        exchange.close();
+      });
+      server.start();
+      try {
+        assertServesMarkerRequestsOffPort(server.getAddress().getPort(), markerDir);
+      } finally {
+        server.stop(0);
+      }
+    }
+  }
+
+  /**
    * A listener that never answers looks the same to the check as a slow host, so the service keeps the port it
    * bound rather than moving off a port it may well serve.
    */
