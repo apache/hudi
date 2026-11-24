@@ -67,14 +67,9 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
 
   @Nullable
   private HoodieTableMetaClient getOrCreateMetaClient() {
-    if (this.metaClient != null) {
-      return this.metaClient;
+    if (metaClient == null && StreamerUtil.tableExists(scanContext.getPath().toString(), hadoopConf)) {
+      metaClient = StreamerUtil.createMetaClient(scanContext.getPath().toString(), hadoopConf);
     }
-    if (StreamerUtil.tableExists(this.scanContext.getPath().toString(), hadoopConf)) {
-      this.metaClient = StreamerUtil.createMetaClient(this.scanContext.getPath().toString(), hadoopConf);
-      return this.metaClient;
-    }
-    // fallback
-    return null;
+    return metaClient;
   }
 }
