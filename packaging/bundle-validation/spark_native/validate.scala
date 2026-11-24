@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 34
+  val expectedChecks = 38
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -250,8 +250,12 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   object PlanWalk extends org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
   def sliceCount(partitions: Array[Array[Byte]]): Int = partitions.map(b =>
     org.apache.comet.serde.OperatorOuterClass.HudiScan.parseFrom(b).getFileSlicesCount).sum
-  spark.range(0, 3).selectExpr("cast(id as string) as p",
-    "case when id = 1 then 'keep' else 'drop' end as flag").createOrReplaceTempView("dpp_dim")
+  // The dimension is a Hudi table too, as in TPC-DS, so Comet takes over the broadcast join.
+  val dppDim = writeV8("native_scan_dpp_dim_v8", "COPY_ON_WRITE", Overwrite,
+    spark.range(0, 3).selectExpr("concat('dim-', cast(id as string)) as uuid", "'0' as partitionpath",
+      "cast(id as string) as p", "case when id = 1 then 'keep' else 'drop' end as flag", "id as ts"),
+    "upsert")
+  spark.read.format("hudi").load(dppDim).createOrReplaceTempView("dpp_dim")
   val dppQuery = "select f.uuid, f.fare from native_cow f join dpp_dim d " +
     "on f.partitionpath = d.p where d.flag = 'keep'"
   for (adaptive <- Seq(true, false)) {
@@ -273,8 +277,24 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
       case scan: org.apache.spark.sql.comet.CometHudiNativeScanExec => scan
     }
     spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    // With the native Hudi scan off, the JVM scan runs under Comet behind a Spark-to-Arrow
+    // conversion, and its pruning must survive Comet replacing the broadcast join.
+    val jvmDf = spark.sql(dppQuery)
+    val jvmScanRows = jvmDf.collect().map(_.toString).sorted
+    val jvmScanPartitions = PlanWalk.collect(jvmDf.queryExecution.executedPlan) {
+      case scan: org.apache.spark.sql.execution.FileSourceScanExec
+          if scan.relation.location.rootPaths.exists(_.toString.contains("native_scan_cow_v8")) =>
+        scan.metrics.get("numPartitions").map(_.value).getOrElse(-1L)
+    }
     spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
     spark.conf.unset("spark.sql.adaptive.enabled")
+    check(s"$label JVM scan under Comet rows match the JVM read",
+      jvmRows.sameElements(jvmScanRows), s"jvm n=${jvmRows.length} under Comet n=${jvmScanRows.length}")
+    val jvmPlan = jvmDf.queryExecution.executedPlan.toString
+    check(s"$label JVM scan under Comet reads only the kept partitions",
+      jvmPlan.contains("CometSparkColumnarToColumnar") && jvmPlan.contains("CometBroadcastHashJoin") &&
+        jvmScanPartitions.nonEmpty && jvmScanPartitions.forall(_ == 1),
+      s"partitions read per fact scan: ${jvmScanPartitions.mkString(", ")}\n$jvmPlan")
     check(s"$label rows match the JVM read (n=${jvmRows.length})",
       jvmRows.length == 100 && jvmRows.sameElements(nativeRows),
       s"jvm n=${jvmRows.length} native n=${nativeRows.length}")
