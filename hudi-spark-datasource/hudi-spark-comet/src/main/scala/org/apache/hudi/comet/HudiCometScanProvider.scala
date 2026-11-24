@@ -240,8 +240,9 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
       val instants = fileIndex.metaClient.getCommitsAndCompactionTimeline.getInstants.asScala
       val digest = java.security.MessageDigest.getInstance("SHA-256")
       instants.foreach { instant =>
-        digest.update(s"${instant.getState},${instant.getAction},${instant.requestedTime}," +
-          s"${instant.getCompletionTime};".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+        val entry = s"${instant.getState},${instant.getAction},${instant.requestedTime}," +
+          s"${instant.getCompletionTime};"
+        digest.update(entry.getBytes(java.nio.charset.StandardCharsets.UTF_8))
       }
       s"${instants.size}-${digest.digest().map("%02x".format(_)).mkString}"
     }
