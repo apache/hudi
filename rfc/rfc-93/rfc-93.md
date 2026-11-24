@@ -113,9 +113,123 @@ the Hudi timeline, so the table format's metadata never lags behind a file rewri
 |---|---|---|
 | commit, deltacommit, insert overwrite, clustering | `commit` | after the instant completes |
 | compaction, log compaction | `commit`, with the compaction's commit metadata | after the instant completes |
-    // ... 238 lines omitted
-}
-// ... 237 more lines (total: 353)## Limitations
+| clean | `clean` | after the instant completes |
+| archival | `archive`, with the archived instants | after the instants are archived |
+| rollback, copy-on-write and merge-on-read | `rollback` before Hudi reverts the instant, `completedRollback` after the rollback completes | both |
+| savepoint | `savepoint` | after the savepoint completes |
+| restore | `restore` | after the restore completes |
+
+### Metadata:
+
+The Hudi metadata table and the table format's metadata coexist. The table format's metadata serves
+readers of the table format; the Hudi metadata table keeps serving Hudi's own writers and readers,
+including its indexes (record index, secondary index, column and partition stats, bloom filters).
+
+- **The metadata factory decides.** The table format's metadata factory returns the Hudi metadata
+  table when the writer has enabled it, as the native format does, and the table format's own
+  implementation of `HoodieTableMetadata` otherwise. Replacing the metadata table outright would drop
+  Hudi's indexes, which are a large part of what Hudi's writers bring to a table of another format.
+- **The table format decides which files belong to the table.** A table of another format can hold
+  files Hudi did not write. The file-system view of a non-native table ignores data files whose
+  names Hudi did not produce. The target shape is for the file-system view to ask the table format's
+  metadata which files belong to the table, so the decision sits in one place.
+
+### Timeline: 
+
+The timeline implementation ensures the external table format's (table format that is plugged-in) metadata state (e:g commit status) is the source of truth for all operations. 
+
+A Hudi instant that is complete in the Hudi timeline but not recorded by the table format (the
+process died between the two steps of the commit protocol) is pending in the timeline the table
+format provides, and gets rolled back like any failed write.
+
+### Conflict Resolution
+
+Hudi already provides configurable support to plugin different strategies for identifying if two concurrent operations are conflicting at the file level. The 
+external pluggable formats may not have such fine-level granularity. The external pluggable formats needs to implement the strategy based on its metadata.
+
+### Locking
+Hudi has pluggable lock provider supports. External formats will need to rely on catalog or other means for providing locking semantics. The External table format implementation needs to provide custom lock provider to adapt their locking mechanisms to Hudi's LockProvider interface so that all write and table-service operations can concurrently operate. 
+
+The lock provider and conflict resolution hooks are not part of the interface that shipped in 1.1 and
+1.2; a later revision designs them together with writers that commit to the table format outside Hudi.
+
+### Rollbacks
+External Table format implementation  needs to rollback failed writes and also be able to also restore to previous commits. The external plugin implementation needs to keep enough states to be able to rollback.
+
+A table format whose history only moves forward can record a rollback or a restore as a new state
+whose files equal those of the target instant, instead of moving its history back. Readers of the
+table format then see the restored data as the latest state.
+
+### Format meta columns
+
+A table format may keep per-row metadata in its data files that it derives from a row's position in
+the file or from the write that produced the row, such as row lineage. When Hudi rewrites a base file
+(merge, small-file packing, compaction, clustering), the rows it carries over land at new positions,
+so the table format loses those values unless Hudi carries them.
+
+- **Declaration.** The table format declares its format meta columns. Each column gives its field (a
+  nullable long or int), the value a row gets when it is written as new or changed, the value a
+  changed version of an existing row gets (by default the same as a new row, or the table format can
+  keep the replaced row's value), and a resolver that returns the value of a carried-over row from its
+  position in the base file and its stored value.
+- **The rule of the Hudi meta fields.** A row carried over unchanged keeps its value; a new or changed
+  row gets the declared value of the write. For compaction and clustering the write is the compaction
+  or clustering instant.
+- **Storage.** The columns are stored in base files after the table columns. They are not columns of
+  the table: they stay out of the table schema, the commit metadata and the rows a Hudi reader returns.
+- **Fail closed.** A rewrite path that cannot carry the columns over refuses to run on a table whose
+  format declares them, instead of silently dropping the values.
+- **Native format.** The native format declares none, so nothing changes for native tables.
+
+A row that an update moves to another file group (the update as delete and insert mode of RFC-114) is
+written as new today, so it gets the new-row value; carrying the old value across the move is a
+follow-up.
+
+### Write configuration defaults and validation
+
+A table of another format often needs write settings a native table does not: the update as delete
+and insert mode of RFC-114 on merge-on-read tables, small-file packing off, record positions on, a
+specific Parquet list layout, and refusals for features the table format cannot represent (for
+example schema evolution on read, or updates on a merge-on-read table without a record key). Today a
+user has to know and set each of them, and a writer that misses one can break the table format's
+invariants.
+
+The table format supplies them:
+
+- **Table defaults at creation.** When a table is created with a non-native format, the table format
+  returns table config entries to store with the table. Settings that every writer of the table must
+  agree on (such as the RFC-114 mode) become table properties, so a second writer or a separate table
+  service job cannot omit them.
+- **Write defaults.** When a write client or a table service client starts on the table, the table
+  format returns write config defaults. They apply to settings the user did not set.
+- **Validation.** The table format validates the final write config against the table config and
+  refuses an unsupported combination with a message that names the setting and the fix. Validation
+  runs at table creation and at every client start, before any instant is requested.
+
+The native format supplies no defaults and accepts every config, so native tables are unchanged.
+
+### Layout:
+
+The metadata corresponding to the table format (iceberg, ..) will be stored under .hoodie/ folder by default with location stored in hoodie.properties.
+
+## Integration
+
+The end to end integration is shown in the below diagram
+![integration](flow_and_arch.jpg)
+
+The key points here are:
+
+1. Hudi Writers continue to use the native file system management. This means the way Hudi organizes files as file-groups and file-slices and Hudi's index for writing will continue to be the same.
+2. Hudi will continue to record actions in timeline (.hoodie/timeline).
+3. The external table format will be configured as part of table properties to ensure all writers can recognize it.
+4. When each of Hudi's actions (write, clean, rollback,..) complete, Hudi will call the external table format plugin. It is the plugin's responsibility to record necessary metadata for external format readers to query this table. 
+5. Hudi will use the external table format plugin's timeline implementation which uses the state stored in its metadata as the source of truth. For example, an iceberg plugin needs to create a manifest file when action completes and provides a timeline that honors the state in its snapshot files. Hudi uses this timeline to determine what actions completed and what failed (for rollback). 
+6. The external plugin also needs to provide LockProvider and Conflict Resolution implementations that allows the concurrency controls supported by the external table format to be exercised (for example: optimistic concurrency control).
+7. The plugin also provides capability to allow its metadata to be used by the Hudi writer.
+8. The external table format's metadata along with Hudi's data files combined allows the table to be read as if it is written directly in external table format.
+
+
+## Limitations
 
 1. The initial implementation will only support Copy On Write format of Hudi with Spark as the processing framework. This can be extended to support MOR tables but not in the initial scope.
 2. The table needs to be written only through Hudi. No interoperability guarantee will be provided for writes happening through the external table format. 
