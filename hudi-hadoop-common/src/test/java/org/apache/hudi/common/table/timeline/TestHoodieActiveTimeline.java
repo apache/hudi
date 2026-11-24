@@ -43,6 +43,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
@@ -72,6 +73,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 
 /**
  * Tests {@link HoodieActiveTimeline}.
@@ -773,6 +777,25 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     String testInstant = "20210101120101";
     assertEquals(TimelineUtils.parseDateFromInstantTime(testInstant).getTime(),
         TimelineUtils.parseDateFromInstantTimeSafely(testInstant).get().getTime());
+  }
+
+  @Test
+  public void testCompactionCompletionActionWithTimelineOnlyImplementingPlainTransitions() {
+    HoodieActiveTimeline plainTimeline = mock(HoodieActiveTimeline.class, CALLS_REAL_METHODS);
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    HoodieInstant compactionInflight = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "1");
+    HoodieInstant compactionCompleted = INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant logCompactionInflight = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, "2");
+    HoodieInstant logCompactionCompleted = INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
+    doReturn(compactionCompleted).when(plainTimeline).transitionCompactionInflightToComplete(false, compactionInflight, metadata);
+    doReturn(logCompactionCompleted).when(plainTimeline).transitionLogCompactionInflightToComplete(false, logCompactionInflight, metadata);
+
+    List<HoodieInstant> notifiedInstants = new ArrayList<>();
+    assertSame(compactionCompleted,
+        plainTimeline.transitionCompactionInflightToComplete(false, compactionInflight, metadata, notifiedInstants::add));
+    assertSame(logCompactionCompleted,
+        plainTimeline.transitionLogCompactionInflightToComplete(false, logCompactionInflight, metadata, notifiedInstants::add));
+    assertEquals(Arrays.asList(compactionCompleted, logCompactionCompleted), notifiedInstants);
   }
 
   @Test
