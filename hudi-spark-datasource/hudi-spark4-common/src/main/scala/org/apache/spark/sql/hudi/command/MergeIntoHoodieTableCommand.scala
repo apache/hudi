@@ -660,7 +660,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   private def getOperationType(parameters: Map[String, String]) = {
-    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava)) && updatingActions.isEmpty) {
+    // The cardinality check runs on the records an upsert locates
+    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava)) && updatingActions.isEmpty
+      && !shouldCheckCardinality(parameters)) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL

@@ -169,6 +169,36 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
     }
   }
 
+  // (table type, primary key)
+  Seq(("cow", true), ("mor", true), ("cow", false), ("mor", false)).foreach { case (tableType, keyed) =>
+    test(s"Test MERGE INTO with more than one source row for a target row and only a conditional delete ($tableType, "
+      + s"primary key $keyed)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+          createTable(tableName, tmp.getCanonicalPath, tableType,
+            (if (keyed) Seq("primaryKey = 'id'") else Seq.empty) :+ "'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'": _*)
+          spark.sql(s"insert into $tableName values (1, 'a1', 1000), (6, 'a6', 1000)")
+          assertCardinalityViolation(
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1002) s on t.id = s.id
+               |when matched and s.ts > 1001 then delete
+             """.stripMargin)
+          checkAnswer(s"select id, name, ts from $tableName order by id")(Seq(1, "a1", 1000), Seq(6, "a6", 1000))
+
+          spark.sql(
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 'b1' as name, 1001 as ts union all select 6, 'b6', 1002) s on t.id = s.id
+               |when matched and s.ts > 1001 then delete
+             """.stripMargin)
+          checkAnswer(s"select id, name, ts from $tableName order by id")(Seq(1, "a1", 1000))
+        }
+      }
+    }
+  }
+
   test("Test MERGE INTO with two source rows for a target row, of which one moves it to another partition") {
     withTempDir { tmp =>
       val tableName = generateTableName
