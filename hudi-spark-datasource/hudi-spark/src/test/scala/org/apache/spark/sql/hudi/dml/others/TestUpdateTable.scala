@@ -716,6 +716,12 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           checkExceptionContain(s"update $tableName set id = 3, s.c1 = 1, id = 4")("Multiple assignments for 'id'")
           checkExceptionContain(
             s"update $tableName set s.c1 = 1, s = named_struct('c1', 1, 'c2', null)")("Conflicting assignments for 's'")
+
+          // the fields of a struct value are matched by name
+          checkExceptionContain(s"update $tableName set s = struct(7, named_struct('a', array(7), 'm', map('x', 'y'))) where id = 2")(
+            "Cannot find data for the output column `s`.`c1`")
+          spark.sql(s"update $tableName set s = named_struct('c2', named_struct('m', map('x', 'y'), 'a', array(7)), 'c1', 7) where id = 2")
+          checkAnswer(s"select id, s from $tableName where id = 2")(Seq(2, Row(7, Row(Seq(7), Map("x" -> "y")))))
         } else {
           checkExceptionContain(s"update $tableName set s.c1 = 5 where id = 2")(
             "Assigning a nested field requires Spark 3.5 or later")
@@ -739,6 +745,56 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           "Detected disallowed assignment clause in UPDATE statement for record key field `s.c1`")
         checkAnswer(s"select id, s from $tableName")(Seq(1, Row(1, 2)))
       }
+    }
+  }
+
+  test("Test Update Table Applies Store Assignment Policy") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v int not null,
+           |  s struct<n1:int not null, n2:struct<dn1:int, dn2:int>>
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (primaryKey = 'id', type = 'cow')
+         """.stripMargin)
+      spark.sql(s"insert into $tableName select 1, 10, named_struct('n1', 1, 'n2', named_struct('dn1', 3, 'dn2', 4))")
+
+      if (gteqSpark3_5) {
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "ansi") {
+          checkExceptionContain(s"update $tableName set v = 'str'")("Cannot safely cast `v` \"STRING\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set s.n1 = 'str'")("Cannot safely cast `s`.`n1` \"STRING\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set s = named_struct('n1', 1)")(
+            "Cannot find data for the output column `s`.`n2`")
+          checkExceptionContain(s"update $tableName set s.n2 = named_struct('dn3', 1, 'dn1', 2)")(
+            "Cannot find data for the output column `s`.`n2`.`dn2`")
+          checkExceptionContain(s"update $tableName set s.n1 = null")("value appeared in non-nullable field")
+          spark.sql(s"update $tableName set v = cast(20 as bigint), s.n2 = named_struct('dn2', 6, 'dn1', 5)")
+        }
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "strict") {
+          checkExceptionContain(s"update $tableName set v = cast(30 as bigint)")("Cannot safely cast `v` \"BIGINT\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set v = null")("Cannot safely cast `v` \"VOID\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set s.n1 = null")("Cannot safely cast `s`.`n1` \"VOID\" to \"INT\"")
+        }
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "legacy") {
+          checkExceptionContain(s"update $tableName set s.n2 = struct(5, 6)")(
+            "Cannot find data for the output column `s`.`n2`.`dn1`")
+          // the cast of the legacy policy turns a malformed value into null
+          spark.sql(s"update $tableName set v = 'str'")
+          checkAnswer(s"select id, v from $tableName")(Seq(1, null))
+          spark.sql(s"update $tableName set v = '30'")
+        }
+        checkAnswer(s"select id, v, s from $tableName")(Seq(1, 30, Row(1, Row(5, 6))))
+      } else {
+        spark.sql(s"update $tableName set v = '20'")
+        checkAnswer(s"select id, v from $tableName")(Seq(1, 20))
+      }
+      // the top-level NOT NULL constraint is not kept by the table
+      spark.sql(s"update $tableName set v = cast(null as int)")
+      checkAnswer(s"select id, v from $tableName")(Seq(1, null))
     }
   }
 }

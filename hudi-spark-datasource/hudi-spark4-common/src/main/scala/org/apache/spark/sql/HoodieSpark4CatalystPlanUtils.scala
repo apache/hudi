@@ -19,7 +19,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.analysis.AnalysisErrorAt
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Expression}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, LogicalPlan, MergeIntoTable}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
@@ -44,6 +44,8 @@ abstract class HoodieSpark4CatalystPlanUtils extends BaseHoodieCatalystPlanUtils
                                                   isInsert: Boolean): Option[Seq[Assignment]] = {
     Some(if (isInsert) alignInsertAssignments(attrs, assignments) else alignUpdateAssignments(attrs, assignments))
   }
+
+  override protected def isStoreAssignmentCast(cast: Cast): Boolean = cast.getTagValue(Cast.BY_TABLE_INSERTION).isDefined
 
   /**
    * Calls Spark's `AssignmentUtils.alignUpdateAssignments`, whose signature changed in Spark 4.1.

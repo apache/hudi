@@ -265,6 +265,9 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       validateNestedFieldAssignments(ut.table.output, assignments)
       ut
 
+    case ut@UpdateTable(ResolvesToHudiTable(_), assignments, _) if !ut.resolved =>
+      ut.copy(assignments = assignments.map(sparkAdapter.getCatalystPlanUtils.deferAssignmentCast))
+
     case cmd: CreateIndex if cmd.table.resolved && cmd.columns.exists(_._1.isInstanceOf[UnresolvedFieldName]) =>
       cmd.copy(columns = cmd.columns.map {
         case (u: UnresolvedFieldName, prop) => resolveFieldNames(cmd.table, u.name, u) -> prop
@@ -276,6 +279,7 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
                           assignments: Seq[Assignment],
                           mergeInto: MergeIntoTable,
                           resolveValuesWithSourceOnly: Boolean): Seq[Assignment] = {
+    val targetsHudiTable = ResolvesToHudiTable.unapply(mergeInto.targetTable).isDefined
     assignments.map { assign =>
       val resolvedKey = assign.key match {
         case c if !c.resolved =>
@@ -292,7 +296,8 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
           }
         case o => o
       }
-      Assignment(resolvedKey, resolvedValue)
+      val resolved = Assignment(resolvedKey, resolvedValue)
+      if (targetsHudiTable) sparkAdapter.getCatalystPlanUtils.deferAssignmentCast(resolved) else resolved
     }
   }
 
