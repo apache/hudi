@@ -263,9 +263,13 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  /** Shared mode: a table is this suite's if generateTableName produced it, or if no suite's generateTableName could have. */
+  /**
+   * Shared mode: a table is this suite's if its name starts with this suite's prefix, or if it does not start with
+   * any suite's generated name. A prefix match, not a full one, so a name built from a generated one
+   * (`${tableName}_ro`, `${generateTableName}_timestamp_type`) stays with the suite that generated it.
+   */
   private def ownsTable(name: String): Boolean = {
-    name.startsWith(tableNamePrefix) || !HoodieSparkSqlTestBase.GENERATED_TABLE_NAME.matcher(name).matches()
+    name.startsWith(tableNamePrefix) || !HoodieSparkSqlTestBase.GENERATED_TABLE_NAME.matcher(name).lookingAt()
   }
 
   protected lazy val tableNamePrefix: String = s"h${getClass.getSimpleName.toLowerCase}_"
@@ -594,7 +598,7 @@ object HoodieSparkSqlTestBase {
   // Read side held by every suite for its whole run, write side by an ExclusiveSuite for its whole run.
   val suiteLock = new ReentrantReadWriteLock(true)
 
-  // Table names produced by generateTableName (without a database prefix).
+  // Table names produced by generateTableName (without a database prefix); names built from one start with it.
   private[common] val GENERATED_TABLE_NAME: Pattern = Pattern.compile("h[a-z0-9]+_[0-9]+")
 
   private[common] lazy val sharedWarehouse: File = {

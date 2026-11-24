@@ -23,9 +23,10 @@ import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 
 import org.apache.hadoop.hive.conf.HiveConf
+import org.apache.spark.sql.hudi.common.ExclusiveSuite
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
-class TestHiveSyncProcedure extends HoodieSparkProcedureTestBase {
+class TestHiveSyncProcedure extends HoodieSparkProcedureTestBase with ExclusiveSuite {
 
   // Session-conf keys the procedure writes from its optional arguments; reset after the call so
   // they do not leak into sibling tests sharing the session.
