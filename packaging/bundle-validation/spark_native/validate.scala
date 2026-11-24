@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 40
+  val expectedChecks = 44
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -305,31 +305,64 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
     check(s"$label native scan reads only the kept partitions",
       read.nonEmpty && read.forall(n => n > 0 && n < listed),
       s"file slices read per fact scan: ${read.mkString(", ")}, listed for the table: $listed")
+    val partitionsRead = factScans.map(_.metrics.get("numPartitions").map(_.value).getOrElse(-1L))
+    check(s"$label native scan reports the partitions it reads",
+      partitionsRead.nonEmpty && partitionsRead.forall(_ == 1),
+      s"partitions read per fact scan: ${partitionsRead.mkString(", ")}")
   }
 
-  // A scalar subquery over a DPP-filtered native scan, used in two branches, is computed once:
-  // each copy is planned with its own pruning placeholders, which must not make the scans differ.
+  def nativeFactScans(plan: org.apache.spark.sql.execution.SparkPlan) = PlanWalk.collect(plan) {
+    case scan: org.apache.spark.sql.comet.CometHudiNativeScanExec
+        if scan.tableBaseUri.contains("native_scan_cow_v8") => scan
+  }
+  // Exchanges AQE reused whose plan reads the fact table natively.
+  def reusedOverFact(plan: org.apache.spark.sql.execution.SparkPlan): Int = PlanWalk.collect(plan) {
+    case reused: org.apache.spark.sql.execution.exchange.ReusedExchangeExec
+        if nativeFactScans(reused.child).nonEmpty => reused
+  }.size
+  def dppBranch(flag: String): String =
+    "select f.partitionpath, count(*) as c, sum(f.fare) as s from native_cow f join dpp_dim d " +
+      s"on f.partitionpath = d.p where d.flag = '$flag' group by f.partitionpath"
+  def jvmAndNative(query: String): (Array[String], Array[String], org.apache.spark.sql.execution.SparkPlan) = {
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    val jvm = spark.sql(query).collect().map(_.toString).sorted
+    spark.conf.set("spark.comet.scan.hudi.enabled", "true")
+    val df = spark.sql(query)
+    val native = df.collect().map(_.toString).sorted
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    (jvm, native, df.queryExecution.executedPlan)
+  }
+
+  // The same DPP-filtered aggregation in two branches: each copy is planned with its own pruning
+  // placeholders, which must not keep AQE from reusing the exchange over the native fact scan.
   spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "10485760")
-  val dppSubquery = "(select sum(f.fare) from native_cow f join dpp_dim d " +
-    "on f.partitionpath = d.p where d.flag = 'keep')"
-  val dppReuse = s"select partitionpath, count(*) from native_cow where fare < $dppSubquery " +
-    s"group by partitionpath union all select partitionpath, count(*) from native_cow " +
-    s"where fare > $dppSubquery - 1000000 group by partitionpath"
-  spark.conf.set("spark.comet.scan.hudi.enabled", "false")
-  val dppReuseJvmRows = spark.sql(dppReuse).collect().map(_.toString).sorted
-  spark.conf.set("spark.comet.scan.hudi.enabled", "true")
-  val dppReuseDf = spark.sql(dppReuse)
-  val dppReuseRows = dppReuseDf.collect().map(_.toString).sorted
-  val dppReusePlan = dppReuseDf.queryExecution.executedPlan.toString
-  spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+  val (sameJvm, sameNative, samePlan) =
+    jvmAndNative(s"${dppBranch("keep")} union all ${dppBranch("keep")}")
+  check(s"repeated DPP-filtered scan rows match the JVM read (n=${sameJvm.length})",
+    sameJvm.length == 2 && sameJvm.sameElements(sameNative),
+    s"jvm ${sameJvm.mkString(" ")} native ${sameNative.mkString(" ")}")
+  check("repeated DPP-filtered native scan reuses its exchange",
+    nativeFactScans(samePlan).nonEmpty && reusedOverFact(samePlan) > 0, samePlan.toString)
+
+  // Two branches that differ only in the dimension filter, joined without a broadcast so each
+  // fact scan sits right under its own exchange: the exchanges differ only in the scans' pruning
+  // filters, and AQE must not reuse one for the other.
   spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
-  check(s"repeated DPP subquery rows match the JVM read (n=${dppReuseJvmRows.length})",
-    dppReuseJvmRows.nonEmpty && dppReuseJvmRows.sameElements(dppReuseRows),
-    s"jvm n=${dppReuseJvmRows.length} native n=${dppReuseRows.length}")
-  check("repeated subquery over a DPP-filtered native scan is reused",
-    dppReusePlan.contains("CometHudiNativeScan") &&
-      (dppReusePlan.contains("ReusedSubquery") || dppReusePlan.contains("ReusedExchange")),
-    dppReusePlan)
+  spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.reuseBroadcastOnly", "false")
+  spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.fallbackFilterRatio", "1.0")
+  val (diffJvm, diffNative, diffPlan) =
+    jvmAndNative(s"${dppBranch("keep")} union all ${dppBranch("drop")}")
+  spark.conf.unset("spark.sql.optimizer.dynamicPartitionPruning.reuseBroadcastOnly")
+  spark.conf.unset("spark.sql.optimizer.dynamicPartitionPruning.fallbackFilterRatio")
+  val diffScans = nativeFactScans(diffPlan)
+  check(s"differently pruned scan rows match the JVM read (n=${diffJvm.length})",
+    diffJvm.length == 3 && diffJvm.sameElements(diffNative),
+    s"jvm ${diffJvm.mkString(" ")} native ${diffNative.mkString(" ")}")
+  check("differently pruned native scans are not reused for each other",
+    diffScans.size == 2 && diffScans.forall(_.runtimeFilters.exists(
+      _.exists(_.isInstanceOf[org.apache.spark.sql.execution.InSubqueryExec]))) &&
+      reusedOverFact(diffPlan) == 0,
+    s"fact scans: ${diffScans.size}, reused over fact: ${reusedOverFact(diffPlan)}\n$diffPlan")
 
   // The same native scan read twice in one query shares one exchange, as the JVM scan does.
   val reuseQuery = "select partitionpath, sum(fare) as s from native_cow group by partitionpath " +
