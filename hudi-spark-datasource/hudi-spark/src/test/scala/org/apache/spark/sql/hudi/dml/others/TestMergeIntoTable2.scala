@@ -214,28 +214,21 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
              | location '${tmp.getCanonicalPath}'
          """.stripMargin)
 
-        val mergeStruct = (struct: String) =>
+        spark.sql(
           s"""
              |merge into $tableName h0
              |using (
              |select
              |  1 as id,
              |  'a1' as name,
-             |  $struct as s_value,
+             |  struct(1, '10') as s_value,
              |  split('a0,a1', ',') as a_value,
              |  map('k0', 'v0') as m_value,
              |  1000 as ts
              |) s0
              |on h0.id = s0.id
              |when not matched then insert *
-             |""".stripMargin
-        if (gteqSpark3_5) {
-          // the fields of a struct value are matched by name
-          checkExceptionContain(mergeStruct("struct(1, '10')"))("Cannot find data for the output column `s_value`.`f0`")
-          spark.sql(mergeStruct("named_struct('f1', '10', 'f0', 1)"))
-        } else {
-          spark.sql(mergeStruct("struct(1, '10')"))
-        }
+             |""".stripMargin)
 
         checkAnswer(s"select id, name, s_value, a_value, m_value, ts from $tableName")(
           Seq(1, "a1", Row(1, "10"), Seq("a0", "a1"), Map("k0" -> "v0"), 1000)
@@ -248,7 +241,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
              |select
              |  1 as id,
              |  'a1' as name,
-             |  named_struct('f0', 1, 'f1', '12') as s_value,
+             |  struct(1, '12') as s_value,
              |  split('a0,a1,a2', ',') as a_value,
              |  map('k1', 'v1') as m_value,
              |  1000 as ts
@@ -739,25 +732,17 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
          """.stripMargin)
       // Insert data
       spark.sql(s"insert into $tableName select 1, 'a1', cast(10.0 as double), 999, '2021-03-21'")
-      val mergePrice = (price: String) =>
+      spark.sql(
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 'a1' as name, 1 as id, $price as price, 1000 as ts, '2021-03-21' as dt
+           |  select 'a1' as name, 1 as id, '10.1' as price, 1000 as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when matched then update set t0.price = s0.price, t0.ts = s0.ts
            | when not matched then insert *
          """.stripMargin
-      if (gteqSpark3_5) {
-        checkExceptionContain(mergePrice("'10.1'"))("Cannot safely cast `price` \"STRING\" to \"DOUBLE\"")
-        checkAnswer(s"select id,name,price,dt from $tableName")(
-          Seq(1, "a1", 10.0, "2021-03-21")
-        )
-        spark.sql(mergePrice("cast('10.1' as double)"))
-      } else {
-        spark.sql(mergePrice("'10.1'"))
-      }
+      )
       checkAnswer(s"select id,name,price,dt from $tableName")(
         Seq(1, "a1", 10.1, "2021-03-21")
       )
@@ -776,7 +761,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
              |  s struct<n1:int not null, n2:struct<dn1:int, dn2:int>>
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
-             | tblproperties (primaryKey = 'id', type = 'cow')
+             | tblproperties (primaryKey = 'id', type = 'cow', 'hoodie.table.format' = 'test-format')
            """.stripMargin)
         spark.sql(s"insert into $tableName select 1, 10, named_struct('n1', 1, 'n2', named_struct('dn1', 3, 'dn2', 4))")
         spark.sql(
@@ -816,9 +801,27 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             "on t.id = s.id when not matched then insert (id, v, s) values " +
             "(s.id, 30, named_struct('n1', 3, 'n2', named_struct('dn1', 7, 'dn2', 8)))")
         }
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "legacy") {
+          checkExceptionContain(merge("matched then update set t.v = s.c5"))("LEGACY store assignment policy is disallowed")
+        }
         checkAnswer(s"select id, v, s from $tableName order by id")(
           Seq(1, 20, Row(1, Row(5, 6))),
           Seq(2, 30, Row(3, Row(7, 8))))
+
+        // A table of the native format keeps casting the values to the types of the columns
+        val nativeTable = generateTableName
+        spark.sql(
+          s"""
+             |create table $nativeTable (id int, v int) using hudi
+             | location '${tmp.getCanonicalPath}/$nativeTable'
+             | tblproperties (primaryKey = 'id', type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $nativeTable select 1, 10")
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "strict") {
+          spark.sql(s"merge into $nativeTable t using store_assignment_source s on t.id = s.id " +
+            "when matched then update set t.v = s.c5")
+        }
+        checkAnswer(s"select id, v from $nativeTable")(Seq(1, 20))
       }
     }
   }

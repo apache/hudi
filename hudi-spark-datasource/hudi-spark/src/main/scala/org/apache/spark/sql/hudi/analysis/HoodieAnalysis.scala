@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, makePathQualified, removeMetaFields}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, isNonNativeTableFormat, makePathQualified, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.blob.ReadBlobRule
 import org.apache.spark.sql.hudi.command._
@@ -513,13 +513,14 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
     AnalysisHelper.allowInvokingTransformsInAnalyzer {
       plan match {
         // Convert to MergeIntoHoodieTableCommand
-        case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
-          MergeIntoHoodieTableCommand(resolveAssignments(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable]))
+        case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(table), _, _) if mit.resolved =>
+          MergeIntoHoodieTableCommand(resolveAssignments(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable],
+            isNonNativeTableFormat(sparkSession, table)))
 
         // Convert to UpdateHoodieTableCommand
-        case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
-          val resolvedUpdate = ut.copy(assignments =
-            sparkAdapter.getCatalystPlanUtils.resolveRowLevelAssignments(ut.table.output, ut.assignments, isInsert = false))
+        case ut@UpdateTable(plan@ResolvesToHudiTable(table), _, _) if ut.resolved =>
+          val resolvedUpdate = ut.copy(assignments = sparkAdapter.getCatalystPlanUtils.resolveRowLevelAssignments(
+            ut.table.output, ut.assignments, isInsert = false, isNonNativeTableFormat(sparkSession, table)))
           val inputPlan = UpdateHoodieTableCommand.inputPlan(sparkSession, resolvedUpdate)
           UpdateHoodieTableCommand(resolvedUpdate, inputPlan)
 
@@ -610,15 +611,16 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
     ProcedureArgs(isNamedArgs, map, new GenericInternalRow(values))
   }
 
-  private def resolveAssignments(mergeInto: MergeIntoTable): MergeIntoTable = {
+  private def resolveAssignments(mergeInto: MergeIntoTable, applyStoreAssignmentPolicy: Boolean): MergeIntoTable = {
     val planUtils = sparkAdapter.getCatalystPlanUtils
     val targetOutput = mergeInto.targetTable.output
     def resolveActions(actions: Seq[MergeAction]): Seq[MergeAction] = actions.map {
       case update: UpdateAction =>
-        update.copy(assignments = planUtils.resolveRowLevelAssignments(targetOutput, update.assignments, isInsert = false))
+        update.copy(assignments = planUtils.resolveRowLevelAssignments(
+          targetOutput, update.assignments, isInsert = false, applyStoreAssignmentPolicy))
       case insert: InsertAction =>
-        insert.copy(assignments =
-          planUtils.resolveRowLevelAssignments(removeMetaFields(targetOutput), insert.assignments, isInsert = true))
+        insert.copy(assignments = planUtils.resolveRowLevelAssignments(
+          removeMetaFields(targetOutput), insert.assignments, isInsert = true, applyStoreAssignmentPolicy))
       case action => action
     }
     mergeInto.copy(
