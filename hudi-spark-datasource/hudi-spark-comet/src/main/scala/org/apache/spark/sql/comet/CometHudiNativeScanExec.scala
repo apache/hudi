@@ -135,7 +135,7 @@ case class CometHudiNativeScanExec(
 
   /** The listed partitions the resolved runtime filters keep, as Spark's own file scan prunes. */
   private def prunedPartitions: Seq[PartitionDirectory] = {
-    val listed = originalPlan.selectedPartitions.toSeq
+    val listed = ScanListings.partitionDirectories(originalPlan)
     if (runtimeFilters.isEmpty) {
       listed
     } else {
