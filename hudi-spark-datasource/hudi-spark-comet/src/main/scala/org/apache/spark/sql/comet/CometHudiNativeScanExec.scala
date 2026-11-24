@@ -28,8 +28,9 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeReference, BoundReference, Expression, PlanExpression, Predicate}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.physical.{Partitioning, UnknownPartitioning}
-import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
+import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan, SQLExecution}
 import org.apache.spark.sql.execution.datasources.PartitionDirectory
+import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 /**
@@ -43,6 +44,8 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  * The tasks are planned when this node executes, over the partitions the scan lists then.
  * `runtimeFilters` are the partition filters that hold a subquery (dynamic partition pruning, or
  * a scalar subquery); Spark resolves them first, and only the partitions they keep are planned.
+ * `canonicalScan` is the Spark scan's canonical form without them; together with the normalized
+ * `runtimeFilters` it decides when two scans are the same.
  */
 case class CometHudiNativeScanExec(
     override val nativeOp: Operator,
@@ -50,6 +53,7 @@ case class CometHudiNativeScanExec(
     @transient override val originalPlan: FileSourceScanExec,
     override val serializedPlanOpt: SerializedPlan,
     tableBaseUri: String,
+    @transient canonicalScan: SparkPlan,
     scanHashCode: Int,
     commonBytes: Array[Byte],
     isMor: Boolean,
@@ -77,14 +81,49 @@ case class CometHudiNativeScanExec(
   override def withDynamicPruningFilters(filters: Seq[Expression]): SparkPlan =
     copy(runtimeFilters = filters)
 
+  override lazy val metrics: Map[String, SQLMetric] =
+    CometMetricNode.baselineMetrics(sparkContext) ++ Map(
+      "numPartitions" -> SQLMetrics.createMetric(sparkContext, "number of partitions read"),
+      "numFiles" -> SQLMetrics.createMetric(sparkContext, "number of files read"))
+
+  // The execution these driver metrics were last posted under, so a scan reached both through
+  // its own execution and through a fused parent posts once.
+  @transient private var postedExecutionId: String = _
+
   @transient private lazy val prunedPartitionBytes: Array[Array[Byte]] = {
     if (runtimeFilters.nonEmpty) {
       ensureSubqueriesResolved()
     }
-    HudiCometScanProvider
-      .planPartitions(session, prunedPartitions, tableBaseUri, isMor)
-      .getOrElse(throw new IllegalStateException(
-        s"Hudi scan of $tableBaseUri could not plan the partitions it lists at execution"))
+    val partitions = prunedPartitions
+    // Planning checked a listing of the same snapshot; this only trips when the listing changed
+    // in between, where a wrong answer must not be returned.
+    def unsupported(reason: String): Nothing = throw new IllegalStateException(
+      s"Hudi scan of $tableBaseUri lists $reason at execution, which the native scan does not " +
+        s"read. Set ${HudiCometScanProvider.SCAN_ENABLED_KEY}=false to read it on the JVM.")
+    val partitionSchema = originalPlan.relation.partitionSchema
+    if (output.exists(attr => partitionSchema.fieldNames.contains(attr.name)) &&
+      partitions.exists(p => partitionSchema.indices.exists(p.values.isNullAt))) {
+      unsupported("a null partition value")
+    }
+    val bytes = HudiCometScanProvider
+      .planPartitions(session, partitions, tableBaseUri, isMor)
+      .getOrElse(unsupported("a file slice"))
+    metrics("numPartitions").set(partitions.size.toLong)
+    metrics("numFiles").set(partitions.map(_.files.size.toLong).sum)
+    bytes
+  }
+
+  override def sendDriverMetrics(): Unit = {
+    val executionId = sparkContext.getLocalProperty(SQLExecution.EXECUTION_ID_KEY)
+    if (executionId != null && executionId == postedExecutionId) {
+      return
+    }
+    prunedPartitionBytes
+    SQLMetrics.postDriverMetricUpdates(
+      sparkContext,
+      executionId,
+      Seq(metrics("numPartitions"), metrics("numFiles")))
+    postedExecutionId = executionId
   }
 
   /** The listed partitions the resolved runtime filters keep, as Spark's own file scan prunes. */
@@ -115,6 +154,7 @@ case class CometHudiNativeScanExec(
   }
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
+    sendDriverMetrics()
     val nativeMetrics = CometMetricNode.fromCometPlan(this)
     val serializedPlan = CometExec.serializeNativePlan(nativeOp)
     new CometExecRDD(
@@ -151,7 +191,7 @@ case class CometHudiNativeScanExec(
       case other: CometHudiNativeScanExec =>
         this.output == other.output &&
         this.tableBaseUri == other.tableBaseUri &&
-        this.scanHashCode == other.scanHashCode &&
+        this.canonicalScan == other.canonicalScan &&
         this.runtimeFilters == other.runtimeFilters &&
         this.serializedPlanOpt == other.serializedPlanOpt
       case _ => false

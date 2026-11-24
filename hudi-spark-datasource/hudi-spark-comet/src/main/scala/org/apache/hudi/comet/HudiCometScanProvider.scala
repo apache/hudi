@@ -37,10 +37,11 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.PlanExpression
 import org.apache.spark.sql.comet.{CometHudiNativeScanExec, SerializedPlan}
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
-import org.apache.spark.sql.execution.datasources.{FileFormat, FilePartition, HadoopFsRelation, PartitionDirectory, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{FileFormat, FilePartition, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
 import org.apache.spark.sql.types.{ArrayType, BooleanType, ByteType, DataType, DateType, IntegerType, LongType, MapType, ShortType, StringType, StructType, TimestampNTZType}
 
+import java.lang.ref.WeakReference
 import java.util.IdentityHashMap
 
 import scala.collection.JavaConverters._
@@ -212,7 +213,7 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
       // A null or empty partition value is written under the default partition
       // path, which the JVM read parses back as null while the data file holds
       // what was written.
-      if (HudiCometScanProvider.eligibilityListing(scanExec).exists(partition =>
+      if (HudiCometScanProvider.eligibilityListing(scanExec, fileIndex).exists(partition =>
           partitionSchema.indices.exists(partition.values.isNullAt))) {
         return None
       }
@@ -222,16 +223,17 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
     // listing runs inside the query's stages as Spark's own scan does. Here every slice of a
     // listing without data filters, a superset of what the scan reads, is only checked.
     if (!HudiCometScanProvider.canPlan(
-        session, HudiCometScanProvider.eligibilityListing(scanExec), baseUri, format.isMORTable)) {
+        session, HudiCometScanProvider.eligibilityListing(scanExec, fileIndex), baseUri,
+        format.isMORTable)) {
       return None
     }
 
     // Runtime filters still hold AQE's pruning placeholders here, which differ between copies of
     // the same scan; leaving them out lets equal scans share an exchange or query stage.
-    val scanHashCode = scanExec
+    val canonicalScan = scanExec
       .copy(partitionFilters = scanExec.partitionFilters.filterNot(runtimeFilters.contains))
       .canonicalized
-      .hashCode()
+    val scanHashCode = canonicalScan.hashCode()
     val commonBuilder = OperatorOuterClass.HudiScanCommon
       .newBuilder()
       .setTableBaseUri(baseUri)
@@ -281,6 +283,7 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
         scanExec,
         SerializedPlan(None),
         baseUri,
+        canonicalScan,
         scanHashCode,
         commonBytes,
         format.isMORTable,
@@ -291,47 +294,52 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
 object HudiCometScanProvider extends SparkAdapterSupport {
 
   /**
-   * Listings without data filters, by relation, query instant and canonical static partition
-   * filters. AQE plans a query again after each stage with new scan nodes over the same relation,
-   * and scans that differ only in data filters share one entry; leaving data filters out also
-   * skips Hudi's data skipping, which only the executed scan needs. The entries for a relation go
-   * when the relation is collected.
+   * Listings without data filters, by the file index's timeline instance and then by file index,
+   * query instant and canonical static partition filters. AQE plans a query again after each
+   * stage with new scan nodes over the same relation, and scans that differ only in data filters
+   * share one entry; leaving data filters out also skips Hudi's data skipping, which only the
+   * executed scan needs. Refreshing a file index reloads its timeline and so starts new entries;
+   * the old ones go when their timeline is collected.
    */
-  private val listings =
-    new java.util.WeakHashMap[HadoopFsRelation, java.util.Map[AnyRef, Seq[PartitionDirectory]]]()
+  private val listings = new java.util.WeakHashMap[
+    AnyRef, java.util.Map[AnyRef, (WeakReference[HoodieFileIndex], Seq[PartitionDirectory])]]()
 
-  private val MaxListingsPerRelation = 32
+  private val MaxListingsPerTimeline = 32
 
   /** The partitions `scanExec` lists without its data filters: a superset of what it reads. */
-  def eligibilityListing(scanExec: FileSourceScanExec): Seq[PartitionDirectory] = {
-    val relation = scanExec.relation
+  def eligibilityListing(
+      scanExec: FileSourceScanExec,
+      fileIndex: HoodieFileIndex): Seq[PartitionDirectory] = {
     val unfiltered = scanExec.copy(dataFilters = Nil)
-    val queryTimestamp = relation.fileFormat match {
+    val queryTimestamp = scanExec.relation.fileFormat match {
       case format: HoodieFileGroupReaderBasedFileFormat => format.getQueryTimestamp
       case _ => return unfiltered.selectedPartitions.toSeq
     }
+    // Timelines compare by identity, and the file index lists from the one its meta client holds.
+    val timeline = fileIndex.metaClient.getActiveTimeline
     val staticFilters =
       scanExec.partitionFilters.filterNot(_.exists(_.isInstanceOf[PlanExpression[_]]))
-    val key = (queryTimestamp, staticFilters.map(_.canonicalized))
+    val key =
+      (System.identityHashCode(fileIndex), queryTimestamp, staticFilters.map(_.canonicalized))
     val byKey = listings.synchronized {
-      var map = listings.get(relation)
+      var map = listings.get(timeline)
       if (map == null) {
-        map = java.util.Collections.synchronizedMap(
-          new java.util.LinkedHashMap[AnyRef, Seq[PartitionDirectory]](16, 0.75f, true) {
-            override def removeEldestEntry(
-                eldest: java.util.Map.Entry[AnyRef, Seq[PartitionDirectory]]): Boolean =
-              size() > MaxListingsPerRelation
-          })
-        listings.put(relation, map)
+        map = java.util.Collections.synchronizedMap(new java.util.LinkedHashMap[
+          AnyRef, (WeakReference[HoodieFileIndex], Seq[PartitionDirectory])](16, 0.75f, true) {
+          override def removeEldestEntry(eldest: java.util.Map.Entry[
+              AnyRef, (WeakReference[HoodieFileIndex], Seq[PartitionDirectory])]): Boolean =
+            size() > MaxListingsPerTimeline
+        })
+        listings.put(timeline, map)
       }
       map
     }
     val cached = byKey.get(key)
-    if (cached != null) {
-      cached
+    if (cached != null && (cached._1.get eq fileIndex)) {
+      cached._2
     } else {
       val listed = unfiltered.selectedPartitions.toSeq
-      byKey.put(key, listed)
+      byKey.put(key, (new WeakReference(fileIndex), listed))
       listed
     }
   }
@@ -355,10 +363,6 @@ object HudiCometScanProvider extends SparkAdapterSupport {
   val SUPPORTED_SCHEMES: Set[String] =
     Set("file", "s3", "s3a", "gs", "abfs", "abfss", "az", "adl", "azure")
 
-  /**
-   * The serialized file slices of each task over `partitions`, or None when a partition holds a
-   * shape the native reader does not take (see [[planTasks]]).
-   */
   /** Whether every slice in `partitions` is one the native reader takes. */
   def canPlan(
       session: SparkSession,
@@ -367,6 +371,10 @@ object HudiCometScanProvider extends SparkAdapterSupport {
       isMor: Boolean): Boolean =
     planTasks(session, partitions, baseUri, isMor).isDefined
 
+  /**
+   * The serialized file slices of each task over `partitions`, or None when a partition holds a
+   * shape the native reader does not take (see [[planTasks]]).
+   */
   def planPartitions(
       session: SparkSession,
       partitions: Seq[PartitionDirectory],
