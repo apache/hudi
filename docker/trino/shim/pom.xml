@@ -101,6 +101,12 @@
                     <groupId>org.lance</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+                <!-- hudi-common brings org.lz4:lz4-java; keep only Trino's at.yawk.lz4 fork, which
+                     ships the same net.jpountz classes, as the upstream shim does. -->
+                <exclusion>
+                    <groupId>org.lz4</groupId>
+                    <artifactId>lz4-java</artifactId>
+                </exclusion>
                 <exclusion>
                     <groupId>org.rocksdb</groupId>
                     <artifactId>*</artifactId>
