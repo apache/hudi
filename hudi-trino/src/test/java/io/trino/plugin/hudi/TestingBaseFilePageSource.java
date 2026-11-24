@@ -109,7 +109,7 @@ final class TestingBaseFilePageSource
                 DateTimeZone.UTC,
                 dynamicFilter,
                 true)) {
-            return materializeSourceDataStream(session, pageSource, types).toTestTypes();
+            return materializeSourceDataStream(pageSource, types).toTestTypes();
         }
     }
 

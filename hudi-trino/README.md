@@ -91,51 +91,60 @@ Knobs (`-D` system properties):
 
 With the metadata table on (the default), planning reads it before the `dpp` scenario's date filter is ready, so at the default latencies the filter arrives close to the 1 s `hudi.dynamic-filtering.wait-timeout` (about 0.8 s for `_ro` and 1.0 s for `_rt`) and `dpp default` can differ from `dpp df_wait_10s` between runs. `-Dbench.metadata=false` brings it down to about 0.2 s and 0.4 s. To see the scans start before the filter arrives, raise the latencies, for example `-Dbench.s3.getMillis=100 -Dbench.s3.headMillis=75 -Dbench.s3.listMillis=200`.
 
+## Plugin zip for a Trino release
+
+A Trino server loads a connector from a plugin directory: the connector jar, a `Plugin` entry point with its service descriptor, and every runtime dependency, all built for that server's Trino version. hudi-trino ships only the connector, so `scripts/trino/build_plugin_zip.sh` assembles the rest with the in-repo shim at `docker/trino/shim/`:
+
+```
+# JDK 25. The Hudi modules hudi-trino depends on must be in the local m2 for a -SNAPSHOT
+# (see the script's header for the JDK 17 install command).
+scripts/trino/build_plugin_zip.sh                           # Trino trino.e2e.version, from Maven Central
+scripts/trino/build_plugin_zip.sh --trino-version 485-SNAPSHOT  # the pinned trino.version, after bootstrap
+```
+
+It writes `target/hudi-trino-plugin/hudi-trino-plugin-<hudi>-trino-<trino>.zip` and the same jars unpacked next to it. To run hudi-trino on a Trino server of that exact version, on the coordinator and every worker: delete everything in `plugin/hudi/` except the `hdfs/` subdirectory (Trino's HDFS loader jars, needed for `fs.hadoop.enabled=true` and shipped only with the server), copy the unpacked jars into `plugin/hudi/`, and restart. The catalog keeps `connector.name=hudi`.
+
 ## End-to-end tests (docker)
 
 The testcontainers E2E suite (`hudi-integ-test`, classes `ITTestTrino*` under
 `org.apache.hudi.integ2.testcontainers.trino`) runs Trino queries against a real
-HDFS + Hive metastore + Spark stack. The Trino container image bakes in a plugin
-directory assembled by the in-repo shim at `docker/trino/shim/` -- a standalone Maven
-project mirroring the upstream `trinodb/trino` `plugin/trino-hudi` shim planned by
-RFC-105 (not yet released upstream). CI runs the same flow via
-`.github/workflows/hudi_trino_e2e.yml`.
+HDFS + Hive metastore + Spark stack. The Trino container image bakes in the plugin directory built by
+`scripts/trino/build_plugin_zip.sh` (hudi-trino plus the in-repo shim at
+`docker/trino/shim/`, a standalone Maven project mirroring the upstream `trinodb/trino`
+`plugin/trino-hudi` shim planned by RFC-105, not yet merged upstream). CI runs the same flow
+via `.github/workflows/hudi_trino_e2e.yml`, in two variants:
 
-CI builds the Trino server image from the pinned `trino.sha`
-(`docker/trino/build_trino_server_image.sh`), so the plugin and the server always come from
-the same commit.
+- `pinned`: the zip and the Trino server image both build from the pinned `trino.sha`
+  (`docker/trino/build_trino_server_image.sh`), so the plugin and the server come from the
+  same commit.
+- `release`: the zip builds against `trino.e2e.version` from Maven Central and goes into the
+  stock `trinodb/trino:<trino.e2e.version>` image, the way users install it.
 
-Local flow (after bootstrap):
+Local flow:
 
 ```
 # 1. JDK 17: full reactor incl. the integ-test bundles the containers mount
 mvn clean install -T 2 -Dscala-2.13 -Dscala.binary.version=2.13 -Dspark4.0 -Dflink1.20 \
     -Pintegration-tests -DskipTests=true -Ddocker.compose.skip=true
 
-# 2. JDK 25: the connector
-mvn -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
+# 2. JDK 25: the plugin zip, and the unpacked plugin dir next to it.
+#    Release variant (no Trino source build needed):
+TRINO_VERSION=$(sed -n 's|.*<trino.e2e.version>\(.*\)</trino.e2e.version>.*|\1|p' pom.xml)
+#    Pinned variant instead (after bootstrap):
+#    TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+scripts/trino/build_plugin_zip.sh --trino-version "$TRINO_VERSION"
+PLUGIN_DIR=$(ls -d target/hudi-trino-plugin/hudi-trino-plugin-*-trino-"$TRINO_VERSION")
 
-# 3. JDK 25: assemble the plugin dir (package, NOT install -- installing would
-#    shadow the real io.trino:trino-hudi release coordinates in the local m2).
-#    dep.hudi.version comes from the reactor pom: the shim sits outside the
-#    reactor, so cut_release_branch.sh cannot bump its literal default.
-#    The unzip lives here, not in step 4: the fast-iteration loop below repeats
-#    steps 2-3 only, and `clean` wipes the previously exploded dir.
-HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
-TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
-mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
-unzip -o -q "docker/trino/shim/target/trino-hudi-$TRINO_VERSION.zip" -d docker/trino/shim/target  # trino-maven-plugin 24 emits only the zip
-
-# 3a. Optional, JDK 25: build the server image from a trinodb/trino checkout at trino.sha
-#     (the same one bootstrap used). Builds the whole trino repo, so it takes a while.
+# 3. Pinned variant only, JDK 25: build the server image from a trinodb/trino checkout at
+#    trino.sha (the same one bootstrap used). Builds the whole trino repo, so it takes a while.
 docker/trino/build_trino_server_image.sh /path/to/trino
 TRINO_SHA=$(sed -n 's|.*<trino.sha>\(.*\)</trino.sha>.*|\1|p' pom.xml)
 
-# 4. Build the Trino image (locally tagged; never published) on the server from 3a.
-#    Without --base-image it falls back to the released trinodb/trino:<trino.e2e.version>
-#    (or --trino-version), which only boots when the pin's SPI matches that release.
-docker/trino/build_image.sh --plugin-dir "docker/trino/shim/target/trino-hudi-$TRINO_VERSION" \
-    --base-image "hudi-trino-server:$TRINO_SHA"
+# 4. Build the Trino image (locally tagged; never published).
+#    Release variant, on the stock trinodb/trino:$TRINO_VERSION:
+docker/trino/build_image.sh --plugin-dir "$PLUGIN_DIR" --trino-version "$TRINO_VERSION"
+#    Pinned variant, on the server from step 3:
+#    docker/trino/build_image.sh --plugin-dir "$PLUGIN_DIR" --base-image "hudi-trino-server:$TRINO_SHA"
 
 # 5. JDK 17: run the suite (only the spark402 compose pair has the trino service)
 mvn verify -pl hudi-integ-test -Dscala-2.13 -Dscala.binary.version=2.13 -Dspark4.0 \
@@ -144,10 +153,9 @@ mvn verify -pl hudi-integ-test -Dscala-2.13 -Dscala.binary.version=2.13 -Dspark4
     -Dspark.docker.compose.prefix=docker-compose_hadoop340_hive2310_spark402
 ```
 
-Fast iteration loop: after changing connector code, redo steps 2-3, then add
-`-Dtrino.plugin.dir=$PWD/docker/trino/shim/target/trino-hudi-$TRINO_VERSION` to step 5. The
-container's overlay entrypoint swaps the freshly built plugin dir in at start, so the
-image rebuild (step 4) is skipped.
+Fast iteration loop: after changing connector code, redo step 2, then add
+`-Dtrino.plugin.dir=$PWD/$PLUGIN_DIR` to step 5. The container's overlay entrypoint swaps the
+freshly built plugin dir in at start, so the image rebuild (step 4) is skipped.
 
 ## IDE setup
 
