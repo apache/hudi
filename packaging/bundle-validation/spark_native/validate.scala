@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 54
+  val expectedChecks = 55
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -457,6 +457,25 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
     check(s"grouped aggregate with rows ($label) stays a native aggregate",
       PlanWalk.collect(oneRowPlan) { case node if isGroupedCometAggregate(node) => node }.nonEmpty,
       oneRowPlan.toString)
+  }
+  // A global aggregate over an empty stage still returns its one row (SPARK-44040).
+  {
+    def globalAggregate(comet: Boolean, nativeScan: Boolean): Array[String] = {
+      spark.conf.set("spark.comet.enabled", comet.toString)
+      spark.conf.set("spark.comet.scan.hudi.enabled", nativeScan.toString)
+      val rows = spark.sql("select count(*), sum(fare) from native_cow where fare = 150.5")
+        .collect().map(_.toString)
+      spark.conf.set("spark.comet.enabled", "true")
+      spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+      rows
+    }
+    val sparkRows = globalAggregate(comet = false, nativeScan = false)
+    val jvmRows = globalAggregate(comet = true, nativeScan = false)
+    val nativeRows = globalAggregate(comet = true, nativeScan = true)
+    check("global aggregate over an empty stage returns one row on the JVM and native scans",
+      sparkRows.sameElements(Array("[0,null]")) && jvmRows.sameElements(sparkRows) &&
+        nativeRows.sameElements(sparkRows),
+      s"spark=${sparkRows.mkString(";")} jvm=${jvmRows.mkString(";")} native=${nativeRows.mkString(";")}")
   }
 
   if (failures > 0 || checksRun != expectedChecks) {
