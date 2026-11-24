@@ -83,16 +83,7 @@ public class TenToNineDowngradeHandler implements DowngradeHandler {
     if (upgradeDowngradeHelper != null) {
       HoodieTableMetaClient metaClient = upgradeDowngradeHelper.getTable(config, context).getMetaClient();
       HoodieTableConfig tableConfig = metaClient.getTableConfig();
-      // A version 9 writer predates the property and truncates a TIMESTAMP partition value to whole seconds, so it
-      // would write an update of a row with fractional seconds under another partition path than its earlier versions
-      if (tableConfig.getBooleanOrDefault(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS)
-          && hasTimestampPartitionField(metaClient)) {
-        throw new HoodieUpgradeDowngradeException(String.format(
-            "Cannot downgrade to table version 9: %s=true keeps the fractional seconds of a TIMESTAMP partition value "
-                + "in the partition path, while a version 9 writer truncates them, so it would route an update of a "
-                + "record to a different partition path. Keep the table at version 10 or later.",
-            HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
-      }
+      checkDowngradable(metaClient);
       MetaFieldsMode metaFieldsMode = tableConfig.getMetaFieldsMode();
 
       // Always restate the legacy boolean from the mode. Version 9 readers understand only that
@@ -157,6 +148,22 @@ public class TenToNineDowngradeHandler implements DowngradeHandler {
     return new UpgradeDowngrade.TableConfigChangeSet(
         propertiesToUpdate,
         propertiesToDelete);
+  }
+
+  /**
+   * Fails when the table cannot be downgraded to version 9. A version 9 writer predates the fractional seconds property
+   * and truncates a TIMESTAMP partition value to whole seconds, so it would write an update of a row with fractional
+   * seconds under another partition path than its earlier versions.
+   */
+  static void checkDowngradable(HoodieTableMetaClient metaClient) {
+    if (metaClient.getTableConfig().getBooleanOrDefault(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS)
+        && hasTimestampPartitionField(metaClient)) {
+      throw new HoodieUpgradeDowngradeException(String.format(
+          "Cannot downgrade to table version 9: %s=true keeps the fractional seconds of a TIMESTAMP partition value "
+              + "in the partition path, while a version 9 writer truncates them, so it would route an update of a "
+              + "record to a different partition path. Keep the table at version 10 or later.",
+          HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+    }
   }
 
   /**

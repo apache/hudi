@@ -461,7 +461,9 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
         .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
     assertEquals("false", newTableProps(HoodieTableVersion.TEN, "ts", false)
         .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
-    assertEquals("true", newTableProps(HoodieTableVersion.NINE, "ts", true)
+    // an older writer truncates the fractional seconds, so a table created at an older version cannot keep them
+    assertThrows(IllegalArgumentException.class, () -> newTableProps(HoodieTableVersion.NINE, "ts", true));
+    assertEquals("false", newTableProps(HoodieTableVersion.NINE, "ts", false)
         .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
     assertFalse(newTableProps(HoodieTableVersion.TEN, null, null)
         .containsKey(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));

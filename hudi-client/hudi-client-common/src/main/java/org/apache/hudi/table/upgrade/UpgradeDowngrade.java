@@ -188,6 +188,11 @@ public class UpgradeDowngrade {
       return;
     }
 
+    // Refuse a downgrade the data table cannot take before anything, including the metadata table, is changed
+    if (!isUpgrade && fromVersion.greaterThanOrEquals(HoodieTableVersion.TEN) && toVersion.lesserThan(HoodieTableVersion.TEN)) {
+      TenToNineDowngradeHandler.checkDowngradable(metaClient);
+    }
+
     // Perform rollback and compaction only if a specific handler requires it, before upgrade/downgrade process
     performRollbackAndCompactionIfRequired(fromVersion, toVersion, isUpgrade);
 

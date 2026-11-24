@@ -213,6 +213,20 @@ class TestTenToNineDowngradeHandler {
   }
 
   @Test
+  void tableCreationBelowVersionTenRefusesFractionalSecondsInTimestampPartitionPaths(@TempDir Path basePath) {
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName("test_table")
+        .setTableVersion(HoodieTableVersion.NINE)
+        .setRecordKeyFields("id")
+        .setPartitionFields("ts")
+        .setTimestampPartitionFractionalSeconds(true)
+        .initTable(HoodieTestUtils.getDefaultStorageConf(), basePath.toString()));
+    assertTrue(ex.getMessage().contains(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()),
+        "the message must name the property: " + ex.getMessage());
+  }
+
+  @Test
   void downgradeRemovesStorageLayoutAndMetaFieldsMode() {
     UpgradeDowngrade.TableConfigChangeSet changeSet = downgradeWith(MetaFieldsMode.ALL);
 
