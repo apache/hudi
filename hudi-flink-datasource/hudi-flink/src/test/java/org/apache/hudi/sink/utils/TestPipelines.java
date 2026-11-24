@@ -416,12 +416,28 @@ public class TestPipelines {
   void testOperatorNamesAndIndexPartitioner() {
     Configuration conf = defaultConf();
     assertEquals("write: analytics.orders", Pipelines.opName("write", conf));
-    String firstUid = Pipelines.opUID("unique_test_operator", conf);
-    String secondUid = Pipelines.opUID("unique_test_operator", conf);
-    assertTrue(firstUid.startsWith("uid_unique_test_operator_analytics.orders"));
-    assertTrue(secondUid.startsWith("uid_unique_test_operator_1_analytics.orders"));
-    assertNotEquals(firstUid, secondUid);
     assertEquals(2, new Pipelines.IndexPartitioner().partition(8, 3));
+  }
+
+  @Test
+  void testOperatorUidSuffix() {
+    Configuration conf = defaultConf();
+    String operator = "unique_test_operator";
+    String firstUid = Pipelines.opUID(operator, conf);
+    String secondUid = Pipelines.opUID(operator, conf);
+    assertEquals("uid_unique_test_operator_analytics.orders", firstUid);
+    assertEquals("uid_unique_test_operator_1_analytics.orders", secondUid);
+
+    Configuration restored = new Configuration(conf);
+    restored.set(FlinkOptions.UID_SUFFIX, "");
+    assertEquals(firstUid, Pipelines.opUID(operator, restored));
+    restored.set(FlinkOptions.UID_SUFFIX, "1");
+    assertEquals(secondUid, Pipelines.opUID(operator, restored));
+
+    restored.set(FlinkOptions.UID_SUFFIX, "archive");
+    assertEquals("uid_unique_test_operator_archive_analytics.orders", Pipelines.opUID(operator, restored));
+    assertEquals("uid_unique_test_operator_2_analytics.orders", Pipelines.opUID(operator, conf));
+    assertEquals("uid_unique_test_operator_archive_analytics.orders", Pipelines.opUID(operator, restored));
   }
 
   private Configuration defaultConf() {

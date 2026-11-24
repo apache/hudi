@@ -802,8 +802,13 @@ public class Pipelines {
   }
 
   public static String opUID(String operatorN, Configuration conf) {
-    Integer operatorCount = OPERATOR_COUNTERS.merge(operatorN, 1, (oldValue, value) -> oldValue + value);
-    return "uid_" + operatorN + (operatorCount == 1 ? "" : "_" + (operatorCount - 1)) + "_" + getTablePath(conf);
+    String suffix = conf.get(FlinkOptions.UID_SUFFIX);
+    if (suffix == null) {
+      Integer operatorCount = OPERATOR_COUNTERS.merge(operatorN, 1, (oldValue, value) -> oldValue + value);
+      return "uid_" + operatorN + (operatorCount == 1 ? "" : "_" + (operatorCount - 1)) + "_" + getTablePath(conf);
+    } else {
+      return "uid_" + operatorN + (suffix.isEmpty() ? "" : "_" + suffix) + "_" + getTablePath(conf);
+    }
   }
 
   public static String getTablePath(Configuration conf) {
