@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -82,6 +83,14 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
         sf.sizeBytes = smallFileSlice.getTotalFileSizeAsParquetFormat(config);
         smallFileLocations.add(sf);
       }
+    }
+    if (config.shouldWritePartialUpdates() && !table.getIndex().canIndexLogFiles()) {
+      // The merge that packs inserts into a small base file takes every record of its file group, and would take
+      // the partial updates this write makes to the records of the file for full records
+      Set<String> updatedFileIds = profile.getWorkloadStat(partitionPath).getUpdateLocationToCount().keySet();
+      return smallFileLocations.stream()
+          .filter(smallFile -> !updatedFileIds.contains(smallFile.location.getFileId()))
+          .collect(Collectors.toList());
     }
     return smallFileLocations;
   }

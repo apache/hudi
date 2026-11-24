@@ -28,10 +28,12 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.Transformations;
@@ -49,6 +51,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieJavaCopyOnWriteTable;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.WorkloadProfile;
+import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -61,6 +65,8 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.nio.file.Paths;
@@ -68,8 +74,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -113,6 +121,40 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     assertEquals(newPathWithWriteToken.getKey().toString(), Paths.get(this.basePath, partitionPath,
         FSUtils.makeBaseFileName(instantTime, newPathWithWriteToken.getRight(), fileName, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension())).toString());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testSmallFileHandlingOfMergeOnReadSkipsFilesWithPartialUpdates(boolean partialUpdates) throws Exception {
+    initMetaClient(HoodieTableType.MERGE_ON_READ);
+    String partitionPath = "2016/01/31";
+    HoodieWriteConfig.Builder configBuilder = makeHoodieClientConfigBuilder()
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(2048).build());
+    if (partialUpdates) {
+      configBuilder.withProps(Collections.singletonMap(HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key(), SCHEMA.toString()));
+    }
+    HoodieWriteConfig config = configBuilder.build();
+    for (String fileId : Arrays.asList("fg-1", "fg-2", "fg-3")) {
+      FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", fileId, 1024);
+    }
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "002");
+
+    // Three inserts, and an update of a record in fg-2
+    WorkloadStat stat = new WorkloadStat();
+    stat.addInserts(3);
+    stat.addUpdates(new HoodieRecordLocation("002", "fg-2"), 1);
+    WorkloadStat globalStat = new WorkloadStat();
+    globalStat.addInserts(3);
+    globalStat.addUpdates(new HoodieRecordLocation("002", "fg-2"), 1);
+    WorkloadProfile profile = new WorkloadProfile(Pair.of(Collections.singletonMap(partitionPath, stat), globalStat));
+    HoodieTable table = HoodieJavaTable.create(config, context, HoodieTableMetaClient.reload(metaClient));
+
+    JavaUpsertPartitioner<?> partitioner = new JavaUpsertPartitioner<>(profile, context, table, config);
+
+    // The small file that takes the partial update takes no inserts, the others still do
+    Set<String> expected = partialUpdates ? new HashSet<>(Arrays.asList("fg-1", "fg-3"))
+        : new HashSet<>(Arrays.asList("fg-1", "fg-2", "fg-3"));
+    assertEquals(expected, new HashSet<>(partitioner.getSmallFileIds()));
   }
 
   private HoodieWriteConfig makeHoodieClientConfig() {

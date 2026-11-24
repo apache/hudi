@@ -46,12 +46,17 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import scala.Tuple2;
 
@@ -396,6 +401,43 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath)
         ),
         partitioner.getBucketInfos());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testUpsertPartitionerWithSmallFileHandlingSkipsFilesWithPartialUpdates(boolean partialUpdates) throws Exception {
+    final String partitionPath = DEFAULT_PARTITION_PATHS[0];
+    HoodieWriteConfig.Builder configBuilder = makeHoodieClientConfigBuilder()
+        .withMergeSmallFileGroupCandidatesLimit(3)
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(2048).build());
+    if (partialUpdates) {
+      configBuilder.withProps(Collections.singletonMap(HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key(), SCHEMA.toString()));
+    }
+    HoodieWriteConfig config = configBuilder.build();
+
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-1", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-2", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-3", 1024);
+    FileCreateUtilsLegacy.createCommit(basePath, "002");
+
+    // Three inserts, and an update of a record in fg-2
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
+    List<HoodieRecord> records = new ArrayList<>(dataGenerator.generateInserts("003", 3));
+    HoodieRecord update = dataGenerator.generateInserts("003", 1).get(0);
+    update.unseal();
+    update.setCurrentLocation(new HoodieRecordLocation("002", "fg-2"));
+    update.seal();
+    records.add(update);
+    WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(records)));
+    HoodieSparkTable<?> table = HoodieSparkTable.create(config, context, HoodieTableMetaClient.reload(this.metaClient));
+
+    SparkUpsertDeltaCommitPartitioner<?> partitioner =
+        new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config, WriteOperationType.UPSERT);
+
+    // The small file that takes the partial update takes no inserts, the others still do
+    Set<String> expected = partialUpdates ? new HashSet<>(Arrays.asList("fg-1", "fg-3"))
+        : new HashSet<>(Arrays.asList("fg-1", "fg-2", "fg-3"));
+    assertEquals(expected, new HashSet<>(partitioner.getSmallFileIds()));
   }
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
