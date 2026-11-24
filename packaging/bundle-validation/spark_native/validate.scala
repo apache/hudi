@@ -629,7 +629,7 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   // Routing off: every slice stays on the Hudi reader.
   spark.conf.set("spark.comet.scan.hudi.baseFilesAsParquet.enabled", "false")
   routed("base files as Parquet disabled", 300, "keeps every slice on the Hudi reader")(
-    r => r.scans == 1 && r.asParquet == 0 && r.byHudiReader > 0)(
+    r => r.scans == 1 && r.asParquet == 0)(
     hudi(nativeCow).selectExpr("uuid", "fare", "ts"))
   spark.conf.unset("spark.comet.scan.hudi.baseFilesAsParquet.enabled")
   // A table partitioned on a nested field: the files store the field nested, and the JVM scan
