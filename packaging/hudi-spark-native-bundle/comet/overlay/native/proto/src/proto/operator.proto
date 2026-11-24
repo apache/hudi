@@ -336,6 +336,14 @@ message HudiScanCommon {
   // it opened for the same value without reading a timeline older than the
   // plan's.
   string timeline_snapshot = 7;
+  // Data columns of the table, without its partition columns. A base file read
+  // through the Parquet scan may lack only these, which it reads as null; a
+  // file lacking any other required column goes to the hudi-rs reader.
+  repeated string table_data_columns = 9;
+  // Effective datetime and INT96 rebase read modes for the Parquet scan, as
+  // Spark's ParquetOptions resolves them for the relation.
+  string datetime_rebase_mode_in_read = 10;
+  string int96_rebase_mode_in_read = 11;
 }
 
 message HudiScan {

@@ -192,15 +192,7 @@ case class CometScanRule(session: SparkSession)
       .toSet -- Set("file_block_start", "file_block_length")
     val unsupportedMetadataColNames =
       metadataCols(scanExec).filterNot(constantMetadataColNames.contains)
-    // An external scan provider decides which metadata columns its format reads: a format can
-    // store columns that Spark treats as metadata columns in its data files.
-    val externallyProvided = scanExec.relation match {
-      case r: HadoopFsRelation =>
-        !CometScanExec.isFileFormatSupported(r.fileFormat) &&
-        CometExternalV1ScanProvider.findForFormat(r.fileFormat).isDefined
-      case _ => false
-    }
-    if (unsupportedMetadataColNames.nonEmpty && !externallyProvided) {
+    if (unsupportedMetadataColNames.nonEmpty) {
       return withFallbackReason(
         scanExec,
         s"Metadata column(s) ${unsupportedMetadataColNames.mkString(", ")} is not supported")

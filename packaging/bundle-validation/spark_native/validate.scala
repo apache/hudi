@@ -90,7 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  val expectedChecks = 74
+  val expectedChecks = 84
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
     if (condition) {
@@ -554,7 +554,7 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
     spark.conf.set("spark.comet.scan.hudi.enabled", "false")
     val reads = sliceReads(plan)
     check(s"$label rows match Spark with Comet off (n=${sparkRows.length})",
-      sparkRows.length == expectedRows && sparkRows.sameElements(nativeRows),
+      (expectedRows < 0 || sparkRows.length == expectedRows) && sparkRows.sameElements(nativeRows),
       s"expected n=$expectedRows spark n=${sparkRows.length} native n=${nativeRows.length}\n" +
         s"only-spark=${sparkRows.diff(nativeRows).take(5).mkString(";")}\n" +
         s"only-native=${nativeRows.diff(sparkRows).take(5).mkString(";")}")
@@ -610,13 +610,58 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
     r => compactedBaseFiles == 2 && r.scans == 1 && r.asParquet > 1 && r.byHudiReader == 1)(
     hudi(mixedMor).selectExpr("uuid", "partitionpath", "fare", "ts"))
 
-  // Meta columns are columns of the base file. Over a slice with log files they stay on the JVM.
-  routed("meta columns", 300, "reads its slices through the native Parquet scan")(
-    r => r.scans == 1 && r.asParquet > 0 && r.byHudiReader == 0)(
+  // A scan that projects meta columns stays on the JVM.
+  routed("meta columns", 300, "scan is left on the JVM")(_.scans == 0)(
     hudi(nativeCow).selectExpr("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",
       "_hoodie_partition_path", "_hoodie_file_name", "uuid", "fare"))
   routed("meta columns over log files", 280, "scan is left on the JVM")(_.scans == 0)(
     hudi(nativeMor).selectExpr("_hoodie_commit_time", "_hoodie_record_key", "uuid", "fare"))
+  // A task whose every slice has log files, with routing on: the Hudi reader reads it alone.
+  routed("merge-on-read partition with only a slice with a log file", 100,
+      "reads it through the Hudi reader")(
+    r => r.scans == 1 && r.asParquet == 0 && r.byHudiReader == 1)(
+    hudi(mixedMor).where("partitionpath = '0'").selectExpr("uuid", "fare", "ts"))
+  // A data filter over a partition column and a data column together.
+  routed("filter on a partition column or a data column", -1,
+      "reads its slices through the native Parquet scan")(
+    r => r.scans == 1 && r.asParquet > 0 && r.byHudiReader == 0)(
+    hudi(nativeCow).where("partitionpath = '1' or fare > 250").selectExpr("uuid", "partitionpath", "fare"))
+  // Routing off: every slice stays on the Hudi reader.
+  spark.conf.set("spark.comet.scan.hudi.baseFilesAsParquet.enabled", "false")
+  routed("base files as Parquet disabled", 300, "keeps every slice on the Hudi reader")(
+    r => r.scans == 1 && r.asParquet == 0 && r.byHudiReader > 0)(
+    hudi(nativeCow).selectExpr("uuid", "fare", "ts"))
+  spark.conf.unset("spark.comet.scan.hudi.baseFilesAsParquet.enabled")
+  // A table partitioned on a nested field: the files store the field nested, and the JVM scan
+  // takes the partition value from the path, so the slices are not read as plain Parquet.
+  val nestedPartitioned = writeV8("native_scan_cow_nested_partition_v8", "COPY_ON_WRITE", Overwrite,
+    rows(0, 300).selectExpr("uuid", "partitionpath", "fare", "ts",
+      "named_struct('level', concat('l', cast(cast(ts as int) % 2 as string))) as nested_record"),
+    "upsert", Map("hoodie.datasource.write.partitionpath.field" -> "nested_record.level"))
+  routed("table partitioned on a nested field", 300, "does not read its slices as plain Parquet")(
+    _.asParquet == 0)(
+    hudi(nestedPartitioned).selectExpr("uuid", "nested_record.level as level", "fare"))
+  // Dates before 1582 written with the legacy calendar read the same as the JVM read.
+  val legacyDates = "native_scan_cow_legacy_dates_v8"
+  try {
+    spark.conf.set("spark.sql.parquet.datetimeRebaseModeInWrite", "LEGACY")
+    spark.conf.set("spark.sql.parquet.datetimeRebaseModeInRead", "LEGACY")
+    val legacyPath = writeV8(legacyDates, "COPY_ON_WRITE", Overwrite,
+      rows(0, 30).selectExpr("uuid", "partitionpath", "fare", "ts",
+        "date_add(date'1500-01-01', cast(ts as int)) as d"), "upsert")
+    routed("dates before 1582", 30, "reads its slices through the native Parquet scan")(
+      r => r.scans == 1 && r.asParquet > 0)(
+      hudi(legacyPath).selectExpr("uuid", "d"))
+  } catch {
+    case e: Throwable =>
+      check("dates before 1582 rows match Spark with Comet off", false, e.toString)
+      check("dates before 1582 reads its slices through the native Parquet scan", false, "")
+  } finally {
+    spark.conf.unset("spark.sql.parquet.datetimeRebaseModeInWrite")
+    spark.conf.unset("spark.sql.parquet.datetimeRebaseModeInRead")
+    spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+    spark.conf.set("spark.comet.enabled", "true")
+  }
   // A time-travel read stays on the Hudi reader.
   val firstInstant = hudi(nativeCow).selectExpr("min(_hoodie_commit_time)").head.getString(0)
   routed("time travel", 300, "keeps every slice on the Hudi reader")(

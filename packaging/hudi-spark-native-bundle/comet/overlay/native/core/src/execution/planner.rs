@@ -2087,12 +2087,24 @@ impl PhysicalPlanner {
                             object_store_url,
                             object_store_backend,
                             files.clone(),
-                            false,
-                            "",
-                            "",
+                            true,
+                            &common.datetime_rebase_mode_in_read,
+                            &common.int96_rebase_mode_in_read,
                         )?
                         .native_plan,
                 );
+                let case_sensitive = parquet_common.case_sensitive;
+                let table_data_columns: std::collections::HashSet<String> = common
+                    .table_data_columns
+                    .iter()
+                    .map(|name| {
+                        if case_sensitive {
+                            name.clone()
+                        } else {
+                            name.to_lowercase()
+                        }
+                    })
+                    .collect();
                 let route = HudiBaseFileRouteExec::new(
                     output_schema,
                     Some(HudiBaseFileSlices {
@@ -2100,7 +2112,8 @@ impl PhysicalPlanner {
                         parquet_scan: Arc::clone(&parquet_scan),
                         object_store: base_file_store,
                         metadata_cache,
-                        case_sensitive: parquet_common.case_sensitive,
+                        case_sensitive,
+                        table_data_columns: Arc::new(table_data_columns),
                     }),
                     merged_slices,
                     hudi_scan,

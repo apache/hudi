@@ -113,8 +113,7 @@ case class CometHudiNativeScanExec(
       unsupported("a null partition value")
     }
     val bytes = HudiCometScanProvider
-      .planPartitions(
-        session, partitions, tableBaseUri, isMor, HudiCometScanProvider.projectsMetaColumns(output))
+      .planPartitions(session, partitions, tableBaseUri, isMor)
       .getOrElse(unsupported("a file slice"))
     metrics("numPartitions").set(partitions.size.toLong)
     metrics("numFiles").set(partitions.map(_.files.size.toLong).sum)

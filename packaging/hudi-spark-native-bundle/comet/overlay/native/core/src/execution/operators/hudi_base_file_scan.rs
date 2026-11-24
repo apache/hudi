@@ -27,10 +27,12 @@
 //! A base file written before a column changed type is the exception: the JVM
 //! scan reads that column as stored and casts it with Hudi's own rules, which
 //! the Parquet scan does not have. Each base file's footer is therefore read
-//! first, through the cache the Parquet scan reads it from again, and a file
-//! that stores a required column as another type goes to the hudi-rs reader
-//! along with the slices that have log files.
+//! first, a few files ahead of the read, through the cache the Parquet scan
+//! reads it from again. A file that stores a required column as another type,
+//! or lacks a required column that is not a table data column, goes to the
+//! hudi-rs reader along with the slices that have log files.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -66,8 +68,9 @@ use super::hudi_scan::HudiFileSliceSpec;
 /// Comet's Parquet scan reads for other files.
 pub const HUDI_BASE_FILE_METADATA_SIZE_HINT: usize = 1024 * 1024;
 
-/// Base file footers a partition checks at once before it starts reading.
-const FOOTERS_IN_FLIGHT: usize = 4;
+/// Base files whose footers a partition checks together, just before it reads
+/// them, so a footer is fetched close to its read and stays in the cache.
+const FOOTER_WINDOW: usize = 4;
 
 /// Slices this partition read through the Parquet scan, and through hudi-rs.
 const PARQUET_SLICES_METRIC: &str = "hudi_slices_read_as_parquet";
@@ -89,6 +92,9 @@ pub struct HudiBaseFileSlices {
     pub object_store: Arc<dyn ObjectStore>,
     pub metadata_cache: Arc<FileMetadataCache>,
     pub case_sensitive: bool,
+    /// The table's data columns, without its partition columns, lowercased
+    /// unless `case_sensitive`. A base file may lack only these.
+    pub table_data_columns: Arc<HashSet<String>>,
 }
 
 pub struct HudiBaseFileRouteExec {
@@ -188,9 +194,14 @@ fn stored_as_required(stored: &DataType, required: &DataType) -> bool {
 }
 
 /// Whether every required column the file holds is stored as the required
-/// type. A column the file lacks was added to the table later and reads as
-/// null from either reader.
-fn stores_required_types(file_schema: &Schema, required: &Schema, case_sensitive: bool) -> bool {
+/// type, and every one it lacks is a table data column, added to the table
+/// after the file was written, which reads as null from either reader.
+fn stores_required_types(
+    file_schema: &Schema,
+    required: &Schema,
+    case_sensitive: bool,
+    table_data_columns: &HashSet<String>,
+) -> bool {
     required.fields().iter().all(|field| {
         let mut stored = file_schema.fields().iter().filter(|candidate| {
             if case_sensitive {
@@ -200,7 +211,11 @@ fn stores_required_types(file_schema: &Schema, required: &Schema, case_sensitive
             }
         });
         match (stored.next(), stored.next()) {
-            (None, _) => true,
+            (None, _) => table_data_columns.contains(&if case_sensitive {
+                field.name().to_string()
+            } else {
+                field.name().to_lowercase()
+            }),
             (Some(stored), None) => stored_as_required(stored.data_type(), field.data_type()),
             // More than one column answers to the name.
             (Some(_), Some(_)) => false,
@@ -217,6 +232,7 @@ async fn is_plain_parquet_read(
     file: &PartitionedFile,
     required: &Schema,
     case_sensitive: bool,
+    table_data_columns: &HashSet<String>,
 ) -> DFResult<bool> {
     let metadata = DFParquetMetadata::new(store.as_ref(), &file.object_meta)
         .with_file_metadata_cache(Some(metadata_cache))
@@ -231,6 +247,7 @@ async fn is_plain_parquet_read(
             &file_schema,
             required,
             case_sensitive,
+            table_data_columns,
         )),
         Err(_) => Ok(false),
     }
@@ -311,81 +328,123 @@ impl ExecutionPlan for HudiBaseFileRouteExec {
         let schema = Arc::clone(&self.output_schema);
         let required = Arc::clone(&self.output_schema);
         let base_file_slices = self.base_file_slices.clone();
-        let mut hudi_slices = self.merged_slices.clone();
+        let hudi_slices = self.merged_slices.clone();
         let hudi_scan = Arc::clone(&self.hudi_scan);
+        let context_for_merged = Arc::clone(&context);
         let baseline = BaselineMetrics::new(&self.metrics, 0);
         let parquet_slices = MetricBuilder::new(&self.metrics).global_counter(PARQUET_SLICES_METRIC);
         let hudi_reader_slices =
             MetricBuilder::new(&self.metrics).global_counter(HUDI_READER_SLICES_METRIC);
+        let hudi_reader_slices_for_base = hudi_reader_slices.clone();
 
-        let batches = futures::stream::once(async move {
-            let mut streams: Vec<SendableRecordBatchStream> = Vec::with_capacity(2);
-            if let Some(base_files) = base_file_slices {
+        let merged = futures::stream::once(async move {
+            hudi_reader_slices.add(hudi_slices.len());
+            if hudi_slices.is_empty() {
+                Ok::<_, DataFusionError>(None)
+            } else {
+                Ok(Some(hudi_scan(hudi_slices).execute(0, context_for_merged)?))
+            }
+        })
+        .map_ok(|stream| match stream {
+            Some(stream) => stream.boxed(),
+            None => futures::stream::empty().boxed(),
+        })
+        .try_flatten();
+        let base_files = match base_file_slices {
+            None => futures::stream::empty().boxed(),
+            Some(base_files) => {
                 let HudiBaseFileSlices {
                     slices,
                     parquet_scan,
                     object_store,
                     metadata_cache,
                     case_sensitive,
+                    table_data_columns,
                 } = base_files;
-                let listed = slices.len();
-                let checked: Vec<(HudiFileSliceSpec, PartitionedFile, bool)> =
-                    futures::stream::iter(slices)
-                        .map(|(slice, file)| {
-                            let object_store = Arc::clone(&object_store);
-                            let metadata_cache = Arc::clone(&metadata_cache);
-                            let required = Arc::clone(&required);
-                            async move {
-                                let plain = is_plain_parquet_read(
-                                    object_store,
-                                    metadata_cache,
-                                    &file,
-                                    required.as_ref(),
-                                    case_sensitive,
-                                )
-                                .await
-                                .map_err(|e| {
-                                    DataFusionError::Execution(format!(
-                                        "failed to read the footer of Hudi base file {}: {e}",
-                                        slice.base_file_path
-                                    ))
-                                })?;
-                                Ok::<_, DataFusionError>((slice, file, plain))
+                let hudi_scan = Arc::clone(&self.hudi_scan);
+                let hudi_reader_slices = hudi_reader_slices_for_base.clone();
+                // Windows in slice order: a window's footers are checked together when the
+                // read reaches it, then its plain files go to the Parquet scan and the rest
+                // to the hudi-rs reader.
+                let windows: Vec<Vec<(HudiFileSliceSpec, PartitionedFile)>> = slices
+                    .chunks(FOOTER_WINDOW)
+                    .map(|window| window.to_vec())
+                    .collect();
+                futures::stream::iter(windows)
+                    .then(move |window| {
+                        let object_store = Arc::clone(&object_store);
+                        let metadata_cache = Arc::clone(&metadata_cache);
+                        let required = Arc::clone(&required);
+                        let table_data_columns = Arc::clone(&table_data_columns);
+                        let parquet_scan = Arc::clone(&parquet_scan);
+                        let hudi_scan = Arc::clone(&hudi_scan);
+                        let context = Arc::clone(&context);
+                        let parquet_slices = parquet_slices.clone();
+                        let hudi_reader_slices = hudi_reader_slices.clone();
+                        async move {
+                            let checked: Vec<(HudiFileSliceSpec, PartitionedFile, bool)> =
+                                futures::future::try_join_all(window.into_iter().map(
+                                    |(slice, file)| {
+                                        let object_store = Arc::clone(&object_store);
+                                        let metadata_cache = Arc::clone(&metadata_cache);
+                                        let required = Arc::clone(&required);
+                                        let table_data_columns = Arc::clone(&table_data_columns);
+                                        async move {
+                                            let plain = is_plain_parquet_read(
+                                                object_store,
+                                                metadata_cache,
+                                                &file,
+                                                required.as_ref(),
+                                                case_sensitive,
+                                                table_data_columns.as_ref(),
+                                            )
+                                            .await
+                                            .map_err(|e| {
+                                                DataFusionError::Execution(format!(
+                                                    "failed to read the footer of Hudi base file {}: {e}",
+                                                    slice.base_file_path
+                                                ))
+                                            })?;
+                                            Ok::<_, DataFusionError>((slice, file, plain))
+                                        }
+                                    },
+                                ))
+                                .await?;
+                            let mut parquet_files = Vec::new();
+                            let mut other_slices = Vec::new();
+                            for (slice, file, plain) in checked {
+                                if plain {
+                                    parquet_files.push(file);
+                                } else {
+                                    other_slices.push(slice);
+                                }
                             }
-                        })
-                        .buffered(FOOTERS_IN_FLIGHT)
-                        .try_collect()
-                        .await?;
-                let mut parquet_files = Vec::with_capacity(listed);
-                for (slice, file, plain) in checked {
-                    if plain {
-                        parquet_files.push(file);
-                    } else {
-                        hudi_slices.push(slice);
-                    }
-                }
-                parquet_slices.add(parquet_files.len());
-                if !parquet_files.is_empty() {
-                    let scan = if parquet_files.len() == listed {
-                        parquet_scan
-                    } else {
-                        with_files(&parquet_scan, parquet_files)?
-                    };
-                    streams.push(scan.execute(0, Arc::clone(&context))?);
-                }
+                            parquet_slices.add(parquet_files.len());
+                            hudi_reader_slices.add(other_slices.len());
+                            let mut streams: Vec<SendableRecordBatchStream> = Vec::with_capacity(2);
+                            if !parquet_files.is_empty() {
+                                streams.push(
+                                    with_files(&parquet_scan, parquet_files)?
+                                        .execute(0, Arc::clone(&context))?,
+                                );
+                            }
+                            if !other_slices.is_empty() {
+                                streams.push(hudi_scan(other_slices).execute(0, context)?);
+                            }
+                            Ok::<_, DataFusionError>(futures::stream::iter(streams).flatten())
+                        }
+                    })
+                    .try_flatten()
+                    .boxed()
             }
-            hudi_reader_slices.add(hudi_slices.len());
-            if !hudi_slices.is_empty() {
-                streams.push(hudi_scan(hudi_slices).execute(0, context)?);
-            }
-            Ok::<_, DataFusionError>(futures::stream::iter(streams).flatten())
-        })
-        .try_flatten()
-        .map(move |batch| {
-            let batch = with_output_schema(batch?, &schema)?;
-            baseline.record_output(batch.num_rows());
-            Ok(batch)
-        });
+        };
+        let batches = base_files
+            .chain(merged)
+            .map(move |batch| {
+                let batch = with_output_schema(batch?, &schema)?;
+                baseline.record_output(batch.num_rows());
+                Ok(batch)
+            });
 
         Ok(Box::pin(RecordBatchStreamAdapter::new(
             Arc::clone(&self.output_schema),
