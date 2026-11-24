@@ -25,7 +25,7 @@ import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.{AnalysisException, Row}
@@ -586,6 +586,41 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         }
       }
     }
+  }
+
+  test("Test Update Table moves a record to the partition it gives it in a table without a record key") {
+    withRecordType()(withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, dep string) using hudi
+             | tblproperties (type = '$tableType')
+             | partitioned by (dep)
+             | location '$tablePath'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 'd1'), (2, 'a2', 'd1'), (3, 'a3', 'd2')")
+
+        // The compaction is left to the end of the test
+        withSQLConf(HoodieCompactionConfig.INLINE_COMPACT.key -> "false") {
+          // id 1 moves to a new partition and id 2 to one that holds a record, id 3 stays
+          spark.sql(s"update $tableName set dep = 'd3', name = 'a1u' where id = 1")
+          spark.sql(s"update $tableName set dep = 'd2' where id = 2")
+          spark.sql(s"update $tableName set name = 'a3u' where id = 3")
+          checkPartitionedRows(tableName, "dep")(Seq(1, "a1u", "d3"), Seq(2, "a2", "d2"), Seq(3, "a3u", "d2"))
+
+          // A statement that moves some of the records it updates
+          spark.sql(s"update $tableName set dep = if(id = 2, 'd1', dep), name = concat(name, 'v') where id in (1, 2)")
+        }
+        val expected = Seq(Seq(1, "a1uv", "d3"), Seq(2, "a2v", "d1"), Seq(3, "a3u", "d2"))
+        checkPartitionedRows(tableName, "dep")(expected: _*)
+        if (tableType == "mor") {
+          compactAndCheck(tableName)
+          checkPartitionedRows(tableName, "dep")(expected: _*)
+        }
+      }
+    })
   }
 
   test("Test UPDATE on VECTOR column preserves custom-type metadata") {

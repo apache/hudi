@@ -1035,6 +1035,13 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final String SPARK_SQL_MERGE_INTO_READS_TARGET_KEY = "_hoodie.spark.sql.merge.into.reads.target";
 
   /**
+   * Config key with boolean value that indicates whether an update clause of a MERGE INTO Spark SQL operation gives
+   * a partition field another value than the source value its record is looked up under, so that a global index
+   * that updates the partition path reads the records the source records match to find the partition of each update.
+   */
+  public static final String SPARK_SQL_MERGE_INTO_MOVES_RECORDS_KEY = "_hoodie.spark.sql.merge.into.moves.records";
+
+  /**
    * An internal config referring to fileID encoding. 0 refers to UUID based encoding and 1 refers to raw string format(random string).
    */
   public static final String WRITES_FILEID_ENCODING = "_hoodie.writes.fileid.encoding";
@@ -2529,6 +2536,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isSparkSqlMergeIntoReadingTarget() {
     return getBooleanOrDefault(SPARK_SQL_MERGE_INTO_READS_TARGET_KEY, false);
+  }
+
+  public boolean isSparkSqlMergeIntoMovingRecords() {
+    return getBooleanOrDefault(SPARK_SQL_MERGE_INTO_MOVES_RECORDS_KEY, false);
   }
 
   public boolean shouldWritePartialUpdates() {
