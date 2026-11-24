@@ -29,6 +29,13 @@
 
 JIRA: https://issues.apache.org/jira/browse/HUDI-9332 
 
+Revised for 1.3.0. The interface section now matches the interface that shipped in 1.1 and 1.2, and the
+revision extends it with notifications for every table service, table format settings in the table
+config, a coexisting metadata table, per-row format metadata columns, and write configuration defaults
+and validation supplied by the table format. Merge-on-read tables are covered by
+[RFC-114](../rfc-114/rfc-114.md). Lock provider and conflict resolution hooks, and writers outside Hudi,
+are left to a later revision.
+
 ## Abstract
 
 This RFC proposes support for different backing table format implementations inside Hudi. For the past 4 years at-least, we have been consistently defining Hudi as a broader platform and software [stack](https://hudi.apache.org/docs/hudi_stack) that delivers much of these benefits. Hudi's table format makes choices specific to data lake workloads, allowing efficient read/write (even the recent [blog](https://bytearray.substack.com/p/computer-science-behind-lakehouse) from Vinoth), has major differences and advantages compared to other approaches. The community plans to centrally focus on the native Hudi storage format.
@@ -66,6 +73,9 @@ The main implementation step here is to create abstraction called `HoodieTableFo
 4. Conflict Resolution
 5. Lock Provider
 6. Rollbacks
+7. Table services (compaction, clustering, clean, archival), savepoint and restore
+8. Per-row metadata the table format keeps in data files (format meta columns)
+9. Write configuration the table format needs (defaults and validation)
 
 
 The Hudi platform is responsible for managing the data path and can be configured with the table format plugin or by default it continues to use Hudi's native table format. 
@@ -81,167 +91,180 @@ Hudi uses the creation of an action-complete file (e:g .commit, .deltacommit, .c
 The Hudi timeline is still very much used for all internal operations and the table format's commit metadata will be an overlay on top of this.
 With this, the action is only completed when both the above steps are completed. The plugin provided timeline needs to fence the timeline ensuring the definition of complete stays consistent.  This ensures the snapshot isolation is maintained.
 
-There will be a hudi table-property "hudi.table.format" to identify the table format with default being "native". This allows consistency in plugin behaviors across all hudi writers.
+There will be a hudi table-property "hoodie.table.format" to identify the table format with default being "native". This allows consistency in plugin behaviors across all hudi writers.
 
-### Metadata:
+### Table format settings
 
-If a different table format is configured, Hudi's metadata operations are replaced with the table format's metadata. This is done by adding a new adapter implementation of HoodieTableMetadata.
+- **Settings live in the table config.** Settings of the table format (`hoodie.table.format.*`, such as
+  where its metadata is published) are stored in `hoodie.properties` when the table is created, by
+  every writer that can create a table. Ingestion, a separate table service job and a reader of the
+  same table therefore load the same settings, and no writer has to repeat them.
+- **The name resolves or the table fails to load.** The table format name is matched ignoring case.
+  A name that matches no table format on the classpath fails the table load instead of falling back
+  to the native format, since a writer that ignores the table format would complete instants the
+  table format never records.
 
-### Timeline: 
+### Actions the table format is notified of
 
-The timeline implementation ensures the external table format's (table format that is plugged-in) metadata state (e:g commit status) is the source of truth for all operations. 
+Every Hudi action that changes the table notifies the table format once the action is complete in
+the Hudi timeline, so the table format's metadata never lags behind a file rewrite.
 
-### Conflict Resolution
-
-Hudi already provides configurable support to plugin different strategies for identifying if two concurrent operations are conflicting at the file level. The 
-external pluggable formats may not have such fine-level granularity. The external pluggable formats needs to implement the strategy based on its metadata.
-
-### Locking
-Hudi has pluggable lock provider supports. External formats will need to rely on catalog or other means for providing locking semantics. The External table format implementation needs to provide custom lock provider to adapt their locking mechanisms to Hudi's LockProvider interface so that all write and table-service operations can concurrently operate. 
-
-### Rollbacks
-External Table format implementation  needs to rollback failed writes and also be able to also restore to previous commits. The external plugin implementation needs to keep enough states to be able to rollback.
- 
-### Layout:
-
-The metadata corresponding to the table format (iceberg, ..) will be stored under .hoodie/ folder by default with location stored in hoodie.properties.
-
-## Integration
-
-The end to end integration is shown in the below diagram
-![integration](flow_and_arch.jpg)
-
-The key points here are:
-
-1. Hudi Writers continue to use the native file system management. This means the way Hudi organizes files as file-groups and file-slices and Hudi's index for writing will continue to be the same.
-2. Hudi will continue to record actions in timeline (.hoodie/timeline).
-3. The external table format will be configured as part of table properties to ensure all writers can recognize it.
-4. When each of Hudi's actions (write, clean, rollback,..) complete, Hudi will call the external table format plugin. It is the plugin's responsibility to record necessary metadata for external format readers to query this table. 
-5. Hudi will use the external table format plugin's timeline implementation which uses the state stored in its metadata as the source of truth. For example, an iceberg plugin needs to create a manifest file when action completes and provides a timeline that honors the state in its snapshot files. Hudi uses this timeline to determine what actions completed and what failed (for rollback). 
-6. The external plugin also needs to provide LockProvider and Conflict Resolution implementations that allows the concurrency controls supported by the external table format to be exercised (for example: optimistic concurrency control).
-7. The plugin also provides capability to allow its metadata to be used by the Hudi writer.
-8. The external table format's metadata along with Hudi's data files combined allows the table to be read as if it is written directly in external table format.
-
-
-## Limitations
+| Hudi action | Notification | When |
+|---|---|---|
+| commit, deltacommit, insert overwrite, clustering | `commit` | after the instant completes |
+| compaction, log compaction | `commit`, with the compaction's commit metadata | after the instant completes |
+    // ... 238 lines omitted
+}
+// ... 237 more lines (total: 353)## Limitations
 
 1. The initial implementation will only support Copy On Write format of Hudi with Spark as the processing framework. This can be extended to support MOR tables but not in the initial scope.
 2. The table needs to be written only through Hudi. No interoperability guarantee will be provided for writes happening through the external table format. 
 
+Since 1.3.0, merge-on-read tables are supported through the update as delete and insert mode of
+RFC-114, with the Spark and Java writers. Limitation 2 still holds.
 
 ## Codebase:
 
 The pluggable interface and Hudi's native format implementation will reside in hudi codebase while support for other systems will be done in Apache XTable (Incubating).
 
 
-The lakehouse platform interacts with this plugin and the table can be queried using the table format corresponding to the plugin. Here is the interface definition:
+The lakehouse platform interacts with this plugin and the table can be queried using the table format corresponding to the plugin. Here is the interface definition. Methods marked
+`1.3.0` are added by this revision; methods marked `proposed` are designed here and not built yet.
 
 ```java
 /**
- * External Table Format needs to implement this class. Hudi's native format will be implemented in NativeTableFormat.
- * Contract: 
- *    This implementation will get the commit and completeXXX calls after the Hudi platform commit's internally. 
- *    An operation must be defined as complete only when the plugin's implementation successfully handles the corresponding callback.
- *    This implementation is responsible for providing the source of truth timeline based on what operations completed successfully.
+ * External Table Format needs to implement this interface. Hudi's native format is NativeTableFormat.
+ * Contract:
+ *    Callbacks run after the corresponding action is complete in the Hudi timeline (rollback also runs before it).
+ *    An action is complete only when the table format has handled its callback.
+ *    The table format provides the timeline that is the source of truth for which actions completed.
  */
-public interface HoodieTableFormat implements Serializable {
+public interface HoodieTableFormat extends Serializable {
 
-  /**
-   * Callback to handle committing a write operation. This call is made after Hudi's internal commit. 
-   * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
-   * @param viewManager  FileSystem Manager to fetch table's file-system view.
-   * @param commitMetadata HoodieCommitMetadata  corresponding to the transaction.
-   * @param instant Hoodie Instant used for this transaction.
-   */
-  void completeWrite(
-      HoodieTableMetaClient metaClient,
-      FileSystemViewManager viewManager,
-      HoodieCommitMetadata commitMetadata,
-      HoodieInstant instant
-  );
+  /** Name of the table format, the value of hoodie.table.format. */
+  String getName();
 
-  /**
-   * Callback to complete finish clustering operation by the plugin.
-   * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
-   * @param viewManager  FileSystem Manager to fetch table's file-system view.
-   * @param replaceCommitMetadata Replace Commit Metadata corresponding to the transaction.
-   * @param instant Hoodie Instant used for this transaction.
-   */
-  void completeClustering(
-      HoodieTableMetaClient metaClient,
-      FileSystemViewManager viewManager,
-      HoodieReplaceCommitMetadata replaceCommitMetadata,
-      HoodieInstant instant
-  );
+  /** Initializes the table format with the table config, including the hoodie.table.format.* settings. */
+  default void init(Properties properties) {}
 
-  /**
-   * Callback to complete finish clean operation by the plugin.
-   * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
-   * @param viewManager  FileSystem Manager to fetch table's file-system view.
-   * @param cleanCommitMetadata Clean Commit Metadata corresponding to the clean operation.
-   * @param instant Hoodie Instant used for this transaction.
-   */
-  void completeClean(
-      HoodieTableMetaClient metaClient,
-      FileSystemViewManager viewManager,
-      HoodieCleanMetadata cleanMetadata,
-      HoodieInstant instant
-  );
+  /** Commit, deltacommit, insert overwrite and clustering; since 1.3.0 also compaction and log compaction. */
+  default void commit(HoodieCommitMetadata commitMetadata, HoodieInstant completedInstant,
+      HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {}
 
-  /**
-   * Callback to complete finish rollback operation by the plugin.
-   * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
-   * @param viewManager  FileSystem Manager to fetch table's file-system view.
-   * @param rollbackMetadata Rollback Metadata containing the instants rolledback and files deleted.
-   * @param instant Hoodie Instant used for this transaction.
-   */
-  void completeRollback(
-      HoodieTableMetaClient metaClient,
-      FileSystemViewManager viewManager,
-      HoodieRollbackMetadata rollbackMetadata,
-      HoodieInstant instant
-  );
+  default void clean(HoodieCleanMetadata cleanMetadata, HoodieInstant completedInstant,
+      HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {}
 
+  default void archive(Supplier<List<HoodieInstant>> archivedInstants,
+      HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {}
 
-  /**
-   * Callback to complete finish archive operation by the plugin.
-   * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
-   * @param viewManager  FileSystem Manager to fetch table's file-system view.
-   * @param archivedInstants List of Hoodie Instants archived.
-   */
-  void archiveInstants(
-      HoodieTableMetaClient metaClient,
-      FileSystemViewManager viewManager,
-      List<HoodieInstant> archivedInstants
-  );
+  /** Before Hudi reverts the instant; since 1.3.0 for merge-on-read tables too. */
+  default void rollback(HoodieInstant instantToRollback,
+      HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {}
 
-  /**
-   * Return Timeline Factory which uses the external plugin's timeline state as the source of truth. 
-   * The timeline factory needs to create timelines which has instants marked complete only when the plugin's commit call succeeded.
-   */
+  default void completedRollback(HoodieInstant rollbackInstant,
+      HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {}
+
+  default void savepoint(HoodieInstant savepointInstant,
+      HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {}
+
+  default void restore(HoodieInstant restoreCompletedInstant,
+      HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {}
+
+  /** Timelines whose instants are complete only when the table format recorded them. */
   TimelineFactory getTimelineFactory();
 
-  /**
-   * Provides MetadataFactory which returns metadata reader interface that uses the plugin format's metadata.
-   */
-  BaseHoodieTableMetadataFactory getMetadataFactory();
+  /** The Hudi metadata table when enabled, the table format's own HoodieTableMetadata otherwise. */
+  TableMetadataFactory getMetadataFactory();
 
-  /**
-   * LockProvider corresponding to the plugin.
-   */
-  Option<LockProvider> getLockProvider(LockConfiguration lockConfiguration, StorageConfiguration storageConf);
+  /** 1.3.0. Per-row metadata columns that rewritten base files carry over; empty by default. */
+  default List<FormatMetaColumn> getFormatMetaColumns() {
+    return Collections.emptyList();
+  }
 
-  /**
-   * Conflict resolution strategy that aligns with the plugin format.
-   */
-  Option<String> getConflictResolutionStrategyClassName(HoodieConfig config);
+  /** Proposed. Table config entries stored when a table of this format is created. */
+  default Map<String, String> getTableConfigDefaults(Properties tableProperties) {
+    return Collections.emptyMap();
+  }
+
+  /** Proposed. Write config defaults, applied to settings the user did not set. */
+  default Map<String, String> getWriteConfigDefaults(HoodieTableConfig tableConfig) {
+    return Collections.emptyMap();
+  }
+
+  /** Proposed. Refuses a write config the table format cannot support, naming the setting and the fix. */
+  default void validateWriteConfig(HoodieConfig writeConfig, HoodieTableConfig tableConfig) {}
 }
 
+/** 1.3.0. A per-row metadata column declared by a table format. */
+public interface FormatMetaColumn extends Serializable {
+
+  /** Field in the base files: a nullable long or int, not named like a Hudi meta field. */
+  HoodieSchemaField field();
+
+  /** Value of a row written as new or changed by the write with this instant. */
+  Object valueOnWrite(String instantTime);
+
+  /** Value of a changed version of an existing row; the table format may keep the replaced value. */
+  default Object valueOnUpdate(String instantTime, Object replacedValue) {
+    return valueOnWrite(instantTime);
+  }
+
+  /** Resolves the values of rows carried over from a base file; throws if it cannot, which fails the write. */
+  BaseFileColumnResolver resolverFor(HoodieTableMetaClient metaClient, HoodieBaseFile baseFile);
+}
+
+/** 1.3.0. */
+public interface BaseFileColumnResolver extends Serializable {
+
+  /** Value for the row at this position of the base file, given the value the file stores (or null). */
+  Object valueAt(long rowPosition, Object storedValue);
+}
 ```
+
+The lock provider and conflict resolution methods of the original proposal
+(`getLockProvider(LockConfiguration, StorageConfiguration)` and
+`getConflictResolutionStrategyClassName(HoodieConfig)`) are deferred to the later revision on
+concurrency.
+
 ## **Rollout/Adoption Plan**
 
 *   For existing tables, utility to construct the table format for the first time.
 *   Configuration of plugin through reflection to turn on specific formats. Default will be native.
 *   Add support in 1.x
 
+**Step 1, shipped in 1.1 and 1.2.** The interface with write, clean, archive, rollback, savepoint and
+restore callbacks, the timeline and metadata factories, and copy-on-write tables.
 
+**Step 2, 1.3.0.** Compaction, log compaction and merge-on-read rollback notifications, table format
+settings in the table config, the coexisting metadata table, format meta columns, and merge-on-read
+tables through RFC-114. All of it is a no-op for native tables.
+
+**Step 3.** Write configuration defaults and validation from the table format, which turns the
+RFC-114 mode into a table property set by the table format.
+
+**Step 4.** Lock provider and conflict resolution from the table format, and writers outside Hudi,
+in a later revision.
+
+**Switching an existing Hudi table.** An existing table switches in place without rewriting data:
+stop writers until no instant is pending, build the table format's metadata from the latest completed
+state of the table, record that state as the table format's baseline, then set `hoodie.table.format`.
+The Hudi timeline is unchanged throughout, so switching back is setting the format to `native` and
+dropping the table format's metadata.
+
+**Compatibility.** Every new method has a default that keeps today's behavior, so a table format
+built against 1.2 keeps working. Native tables see no change.
+
+## **Test Plan**
+
+The RFC is validated when:
+
+- [ ] A test table format in Hudi's test sources receives each callback in the action table above,
+  for copy-on-write and merge-on-read tables, with the Java and Spark writers.
+- [ ] A table whose format name is not on the classpath fails to load, and a table created with
+  format settings keeps them for every later writer.
+- [ ] Format meta columns keep their values across merge, small-file packing, compaction and
+  clustering, and every rewrite path that cannot carry them refuses to run.
+- [ ] A table format's write defaults apply when the user leaves a setting unset, and its validation
+  refuses an unsupported config before any instant is requested.
+- [ ] The Apache XTable plugin's integration tests read the same rows through the table format and
+  through Hudi after every action.
