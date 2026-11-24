@@ -23,8 +23,8 @@
 # grouped Comet aggregates, and a hook for external V1 scan providers. Move the
 # pin to an apache/datafusion-comet commit once those are merged.
 COMET_REPO=https://github.com/yihua/datafusion-comet.git
-COMET_COMMIT=c3d46364fb15488268d59af4ac81dedbdab3764d
-COMET_VERSION=1.2.0-hudi-2
+COMET_COMMIT=6b6f728098e3759ff1623d21d7a04cdb015af3ba
+COMET_VERSION=1.2.0-hudi-3
 # hudi-rs is pinned in overlay/native/Cargo.toml and locked with its full
 # transitive graph in overlay/native/Cargo.lock. This line documents it for
 # humans; the Cargo files are the source of truth. The pin is a git revision

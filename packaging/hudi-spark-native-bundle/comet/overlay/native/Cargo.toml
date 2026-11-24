@@ -108,3 +108,40 @@ codegen-units = 16   # Parallel codegen (faster compile, slightly larger binary)
 debug-assertions = true
 panic = "unwind"     # Allow panics to be caught and logged across FFI boundary
 # overflow-checks inherited as false from release
+
+# DataFusion 55.2.0 plus a backport of apache/datafusion PR 26953, which splits
+# multi-column sort runs so the merge before a spill fits in the sort's reservation.
+# Every datafusion crate is patched to the same commit so only one copy is linked.
+[patch.crates-io]
+datafusion = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-catalog = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-catalog-listing = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-common = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-common-runtime = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-datasource = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-datasource-arrow = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-datasource-csv = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-datasource-json = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-datasource-parquet = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-doc = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-execution = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-expr = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-expr-common = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-functions = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-functions-aggregate = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-functions-aggregate-common = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-functions-nested = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-functions-table = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-functions-window = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-functions-window-common = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-macros = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-optimizer = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-physical-expr = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-physical-expr-adapter = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-physical-expr-common = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-physical-optimizer = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-physical-plan = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-pruning = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-session = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-spark = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }
+datafusion-sql = { git = "https://github.com/yihua/datafusion", rev = "bb265a31771ad08a6f48ae557c5f084b56c0bad7" }

@@ -35,7 +35,9 @@ hudi-rs.
   unmodified Central artifact can never satisfy the dependency by accident).
   Until the Comet fixes the bundle relies on are merged upstream, the pin is a
   commit on a fork that adds them to Comet 1.2.0. The hudi-rs revision is pinned
-  in `overlay/native/Cargo.toml` and locked in `overlay/native/Cargo.lock`.
+  in `overlay/native/Cargo.toml` and locked in `overlay/native/Cargo.lock`. Because the
+  overlay replaces Comet's own `Cargo.toml`, it also carries the fork commit's
+  `[patch.crates-io]` entries for DataFusion.
 - `overlay/` - full copies of every Comet file the integration changes or adds,
   mirroring Comet's tree. Applied by copying over a clean checkout of the
   pinned commit.
@@ -65,7 +67,7 @@ The bundle then builds against the result with:
 
 ```bash
 mvn clean package -DskipTests -Dspark3.5 \
-  -Dcomet.hudi.build -Ddatafusion.comet.version=1.2.0-hudi-2 \
+  -Dcomet.hudi.build -Ddatafusion.comet.version=1.2.0-hudi-3 \
   -pl packaging/hudi-spark-native-bundle -am
 ```
 
