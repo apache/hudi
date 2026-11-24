@@ -244,32 +244,39 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   compare("many small file slices", expectNative = true)(
     spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts"))
   object PlanWalk extends org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
-  // A LIMIT stops reading mid-partition, in tasks that mix slices with and without log files, with
-  // later slices never consumed.
+  // A LIMIT stops reading mid-task, in a task that mixes slices with and without log files, with
+  // later slices never consumed. The second insert lands in new file groups that the update never
+  // touches, and the whole table packs into one task.
   locally {
-    val all = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts")
-      .collect().map(_.toString).toSet
+    val limitOptions = Map("hoodie.parquet.max.file.size" -> "65536", "hoodie.parquet.small.file.limit" -> "0",
+      "hoodie.parquet.block.size" -> "65536")
+    val path = writeV8("native_scan_limit_v8", "MERGE_ON_READ", Overwrite, rows(0, 15000), "upsert",
+      limitOptions)
+    writeV8("native_scan_limit_v8", "MERGE_ON_READ", Append, rows(15000, 30000), "upsert", limitOptions)
+    writeV8("native_scan_limit_v8", "MERGE_ON_READ", Append, updatedRows(0, 7500), "upsert", limitOptions)
+    def read() = spark.read.format("hudi").load(path).selectExpr("uuid", "fare", "ts")
+    val all = read().collect().map(_.toString).toSet
+    spark.conf.set("spark.sql.files.maxPartitionBytes", "1g")
     spark.conf.set("spark.comet.scan.hudi.enabled", "true")
-    val limitedDf = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts").limit(50)
+    val limitedDf = read().limit(50)
     val limited = limitedDf.collect().map(_.toString)
     val limitedScans = PlanWalk.collect(limitedDf.queryExecution.executedPlan) {
       case scan: org.apache.spark.sql.comet.CometHudiNativeScanExec => scan
     }
-    val ordered = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts")
-      .orderBy("uuid").limit(50).collect().map(_.toString)
+    val ordered = read().orderBy("uuid").limit(50).collect().map(_.toString)
     spark.conf.set("spark.comet.scan.hudi.enabled", "false")
-    val orderedJvm = spark.read.format("hudi").load(manyFiles).selectExpr("uuid", "fare", "ts")
-      .orderBy("uuid").limit(50).collect().map(_.toString)
+    val orderedJvm = read().orderBy("uuid").limit(50).collect().map(_.toString)
+    spark.conf.unset("spark.sql.files.maxPartitionBytes")
     // Tasks whose slices include both a slice with log files and one without.
     val mixedTasks = limitedScans.flatMap(_.perPartitionData).count { bytes =>
       val slices = org.apache.comet.serde.OperatorOuterClass.HudiScan.parseFrom(bytes).getFileSlicesList
       val withLogs = (0 until slices.size).count(i => slices.get(i).getLogFilePathsCount > 0)
       withLogs > 0 && withLogs < slices.size
     }
-    check("limit over mixed merge-on-read slices is native and returns rows of the full read",
+    check(s"limit over mixed merge-on-read slices is native and returns rows of the full read " +
+        s"(native scans=${limitedScans.size}, mixed tasks=$mixedTasks)",
       limitedScans.nonEmpty && mixedTasks > 0 && limited.length == 50 && limited.forall(all.contains),
-      s"native scans=${limitedScans.size} mixed tasks=$mixedTasks n=${limited.length} " +
-        s"not-in-full=${limited.filterNot(all.contains).take(5).mkString(";")}")
+      s"n=${limited.length} not-in-full=${limited.filterNot(all.contains).take(5).mkString(";")}")
     check("ordered limit over mixed merge-on-read slices matches the JVM read",
       ordered.length == 50 && ordered.sameElements(orderedJvm),
       s"native=${ordered.take(5).mkString(";")} jvm=${orderedJvm.take(5).mkString(";")}")
