@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.cluster.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.FormatMetaColumnHandler;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -78,7 +80,8 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     this.hoodieTable = table;
     this.engineContext = engineContext;
     this.recordType = table.getConfig().getRecordMerger().getRecordType();
-    this.readerSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(writeConfig.getSchema()));
+    this.readerSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(HoodieSchemaUtils.appendFormatMetaColumns(
+        HoodieSchema.parse(writeConfig.getSchema()), table.getMetaClient().getTableFormat().getFormatMetaColumns()));
   }
 
   /**
@@ -87,6 +90,25 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
    * Note that commit is not done as part of strategy. commit is callers responsibility.
    */
   public abstract HoodieWriteMetadata<O> performClustering(final HoodieClusteringPlan clusteringPlan, final HoodieSchema schema, final String instantTime);
+
+  /**
+   * Makes the write handles of the given write config store the format meta columns the table format declares,
+   * after the columns of the table, as the records read for clustering have them, see {@link #getFileGroupReader}.
+   */
+  protected void setFormatMetaColumnsWriteSchema(HoodieWriteConfig groupWriteConfig) {
+    List<FormatMetaColumn> formatMetaColumns = hoodieTable.getMetaClient().getTableFormat().getFormatMetaColumns();
+    if (!formatMetaColumns.isEmpty()) {
+      groupWriteConfig.setValue(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE,
+          HoodieSchemaUtils.appendFormatMetaColumns(HoodieSchema.parse(groupWriteConfig.getWriteSchema()), formatMetaColumns).toString());
+    }
+  }
+
+  /**
+   * Fails if the table format declares format meta columns, for a strategy that does not carry them over.
+   */
+  protected void checkNoFormatMetaColumns() {
+    FormatMetaColumn.checkNotDeclared(hoodieTable.getMetaClient().getTableFormat(), getClass());
+  }
 
   protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ReaderContextFactory<T> readerContextFactory, ClusteringOperation operation, String instantTime, long maxMemory) {
     TypedProperties props = getReaderProperties(maxMemory);
@@ -144,6 +166,11 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     return fileSlice;
   }
 
+  /**
+   * Returns a reader of the records of the file slice. When the table format declares format meta columns, the reader
+   * schema has them, the records carried over unchanged from the base file keep their values and the records a log
+   * file changes get their values on write for the given instant.
+   */
   protected static <R> HoodieFileGroupReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, HoodieSchema readerSchema, Option<InternalSchema> internalSchemaOption,
                                                                    ReaderContextFactory<R> readerContextFactory, String instantTime,
                                                                    TypedProperties properties, boolean usePosition) {
@@ -160,6 +187,8 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
         .withInternalSchemaOpt(internalSchemaOption)
         .withShouldUseRecordPosition(usePosition)
         .withProps(properties)
+        .withFormatMetaColumnHandler(FormatMetaColumnHandler.create(readerContext.getRecordContext(),
+            metaClient.getTableFormat().getFormatMetaColumns(), metaClient, fileSlice.getBaseFile(), instantTime))
         .build();
   }
 }

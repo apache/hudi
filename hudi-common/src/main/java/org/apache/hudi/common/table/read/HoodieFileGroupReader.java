@@ -93,6 +93,8 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
   @Getter
   private List<String> validBlockInstants = Collections.emptyList();
   private BufferedRecordConverter<T> bufferedRecordConverter;
+  // Maintains the format meta columns of the returned records, null unless the reader is given format meta columns
+  private final FormatMetaColumnHandler<T> formatMetaColumnHandler;
 
   @Builder(setterPrefix = "with")
   private HoodieFileGroupReader(
@@ -116,7 +118,8 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
       Boolean emitDelete,
       Boolean sortOutput,
       Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback,
-      FileGroupRecordBufferLoader<T> recordBufferLoader) {
+      FileGroupRecordBufferLoader<T> recordBufferLoader,
+      Option<FormatMetaColumnHandler<T>> formatMetaColumnHandler) {
 
     // Validations
     ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
@@ -155,6 +158,9 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
     if (fileGroupUpdateCallback == null) {
       fileGroupUpdateCallback = Option.empty();
     }
+    if (formatMetaColumnHandler == null) {
+      formatMetaColumnHandler = Option.empty();
+    }
 
     if (tableState == null) {
       tableState = TableState.fromMetaClient(hoodieTableMetaClient);
@@ -183,6 +189,7 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
         .emitDeletes(emitDelete)
         .sortOutputs(sortOutput)
         .inflightInstantsAllowed(allowInflightInstants)
+        .formatMetaColumns(formatMetaColumnHandler.map(FormatMetaColumnHandler::getColumnNames).orElse(Collections.emptySet()))
         .build();
     this.inputSplit = InputSplit.builder()
         .baseFileOption(baseFileOption)
@@ -221,6 +228,14 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), tableConfig);
     this.readStats = new HoodieReadStats();
+    if (formatMetaColumnHandler.isPresent()) {
+      // The value of a format meta column of a record is resolved from its position in the base file, so the read
+      // has to return every record of the base file, in the order and with the schema of the file
+      ValidationUtils.checkArgument(inputSplit.getStart() == 0 && !readerContext.getHasBootstrapBaseFile()
+              && readerContext.getKeyFilterOpt().isEmpty() && readerContext.getSchemaHandler().getInternalSchema().isEmptySchema(),
+          "Format meta columns cannot be read from a part of a base file, from a bootstrap base file, with a key filter or with schema evolution on read");
+    }
+    this.formatMetaColumnHandler = formatMetaColumnHandler.orElse(null);
   }
 
   /**
@@ -267,9 +282,12 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
           readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
+    // Resolved before any filter applies, as the values are resolved from the position of a record in the base file
+    ClosableIterator<T> baseFileRecords = formatMetaColumnHandler == null ? recordIterator
+        : formatMetaColumnHandler.resolveBaseFileRecords(recordIterator, readerContext.getSchemaHandler().getRequiredSchema());
     return readerContext.getInstantRange().isPresent()
-        ? readerContext.applyInstantRangeFilter(recordIterator)
-        : recordIterator;
+        ? readerContext.applyInstantRangeFilter(baseFileRecords)
+        : baseFileRecords;
   }
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
@@ -356,6 +374,9 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
    */
   BufferedRecord<T> next() {
     BufferedRecord<T> nextVal = recordBuffer == null ? bufferedRecordConverter.convert(baseFileIterator.next()) : recordBuffer.next();
+    if (formatMetaColumnHandler != null) {
+      formatMetaColumnHandler.setValuesOnWriteIfChanged(nextVal);
+    }
     if (outputConverter.isPresent()) {
       return nextVal.project(outputConverter.get());
     }

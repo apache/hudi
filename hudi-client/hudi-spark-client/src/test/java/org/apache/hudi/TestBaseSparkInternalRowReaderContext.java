@@ -36,6 +36,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +51,8 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -153,6 +158,26 @@ class TestBaseSparkInternalRowReaderContext {
     assertTrue(result.isNullAt(0));
     assertEquals("Dan", result.getUTF8String(1).toString());
     assertTrue(result.getBoolean(2));
+  }
+
+  @Test
+  void testSetValue() {
+    StructType structType = new StructType()
+        .add("name", DataTypes.StringType).add("first", DataTypes.LongType).add("second", DataTypes.LongType);
+    InternalRow genericRow = new GenericInternalRow(new Object[] {UTF8String.fromString("Alice"), null, 5L});
+    InternalRow unsafeRow = UnsafeProjection.create(structType).apply(genericRow.copy()).copy();
+    for (InternalRow row : Arrays.asList(genericRow, unsafeRow)) {
+      // A field of a fixed-width type is set in place, null or not
+      assertSame(row, readerContext.getRecordContext().setValue(row, 1, 42L));
+      assertSame(row, readerContext.getRecordContext().setValue(row, 2, null));
+      assertEquals(42L, row.getLong(1));
+      assertTrue(row.isNullAt(2));
+      assertEquals("Alice", row.getString(0));
+    }
+    // A string is converted to the engine type, and cannot be set in place in an UnsafeRow
+    assertSame(genericRow, readerContext.getRecordContext().setValue(genericRow, 0, "Bob"));
+    assertEquals(UTF8String.fromString("Bob"), genericRow.getUTF8String(0));
+    assertThrows(UnsupportedOperationException.class, () -> readerContext.getRecordContext().setValue(unsafeRow, 0, "Bob"));
   }
 
   static class DummySparkReaderContext extends BaseSparkInternalRowReaderContext {

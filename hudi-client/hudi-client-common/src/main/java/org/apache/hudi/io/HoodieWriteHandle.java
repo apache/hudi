@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -81,6 +82,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    */
   protected final HoodieSchema writeSchema;
   protected final HoodieSchema writeSchemaWithMetaFields;
+  // The format meta columns that follow the columns of the table in writeSchemaWithMetaFields
+  protected final List<FormatMetaColumn> formatMetaColumns;
   protected final HoodieRecordMerger recordMerger;
   protected final DeleteContext deleteContext;
 
@@ -121,7 +124,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.writeSchema = HoodieSchemaCache.intern(overriddenSchema.orElseGet(() -> getWriteSchema(config)));
-    this.writeSchemaWithMetaFields = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()));
+    this.formatMetaColumns = getFormatMetaColumns();
+    this.writeSchemaWithMetaFields = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(
+        HoodieSchemaUtils.appendFormatMetaColumns(writeSchema, formatMetaColumns), config.allowOperationMetadataField()));
     this.timer = HoodieTimer.start();
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;
@@ -164,6 +169,15 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
           .collect(Collectors.toList());
       secondaryIndexDefns.forEach(def -> writeStatus.getIndexStats().initSecondaryIndexStats(def.getIndexName()));
     }
+  }
+
+  /**
+   * Returns the format meta columns this handle stores in the file it writes, after the columns of the table,
+   * see {@link org.apache.hudi.common.HoodieTableFormat#getFormatMetaColumns()}. There are none unless the
+   * handle carries them over from an existing base file to that file. Called from the constructor.
+   */
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    return Collections.emptyList();
   }
 
   /**

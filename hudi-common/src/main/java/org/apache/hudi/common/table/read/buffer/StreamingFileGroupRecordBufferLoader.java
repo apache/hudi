@@ -64,7 +64,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             List<String> orderingFieldNames, TableState tableState,
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    HoodieSchema recordSchema = HoodieSchemaCache.intern(getRecordSchema(readerContext, props));
+    HoodieSchema recordSchema = HoodieSchemaCache.intern(getRecordSchema(readerContext, props, readerParameters));
     readerContext.getSchemaHandler().setSchemaForUpdates(recordSchema);
     // A MERGE INTO with a global index merges a matched record with its current version while tagging it. The result
     // carries the table's payload in the table schema and is final: it is buffered in that schema, which is set before
@@ -113,12 +113,15 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     return payloadClasses.isPresent() && HoodieRecordUtils.isExpressionPayloadClass(payloadClasses.get().getRight());
   }
 
-  private static <T> HoodieSchema getRecordSchema(HoodieReaderContext<T> readerContext, TypedProperties props) {
+  private static <T> HoodieSchema getRecordSchema(HoodieReaderContext<T> readerContext, TypedProperties props, ReaderParameters readerParameters) {
     if (isExpressionPayload(readerContext, props)) {
       String schemaStr = props.getString("hoodie.payload.record.schema");
       return HoodieSchema.parse(schemaStr);
     } else {
-      return HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
+      HoodieSchema recordSchema = HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
+      // The incoming records do not have the format meta columns that are read from the base file either
+      return readerParameters.getFormatMetaColumns().isEmpty()
+          ? recordSchema : HoodieSchemaUtils.removeFields(recordSchema, readerParameters.getFormatMetaColumns());
     }
   }
 }

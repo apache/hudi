@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FileNameParser;
@@ -64,6 +65,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -121,9 +123,14 @@ public class TableSchemaResolver {
     // variant columns are also stripped by shape. Both strips recurse through records, array
     // elements and map values, so typed_value never surfaces here no matter which writer shredded
     // the column or at what depth.
-    return getTableParquetSchemaFromDataFile()
+    Option<HoodieSchema> schema = getTableParquetSchemaFromDataFile()
         .map(VariantSchemaUtils::stripVariantShredding)
         .map(VariantSchemaUtils::stripVariantShreddingByShape);
+    // The metadata columns of an external table format are stored in rewritten base files only and
+    // are not columns of the table.
+    List<FormatMetaColumn> formatMetaColumns = metaClient.getTableFormat().getFormatMetaColumns();
+    return formatMetaColumns.isEmpty() ? schema : schema.map(fileSchema -> HoodieSchemaUtils.removeFields(
+        fileSchema, formatMetaColumns.stream().map(column -> column.field().name()).collect(Collectors.toSet())));
   }
 
   /**
