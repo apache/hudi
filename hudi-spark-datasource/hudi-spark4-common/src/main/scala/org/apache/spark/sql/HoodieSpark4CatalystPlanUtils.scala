@@ -48,6 +48,8 @@ abstract class HoodieSpark4CatalystPlanUtils extends BaseHoodieCatalystPlanUtils
 
   override protected def isStoreAssignmentCast(cast: Cast): Boolean = cast.getTagValue(Cast.BY_TABLE_INSERTION).isDefined
 
+  override protected def alignsRowLevelAssignments: Boolean = true
+
   /**
    * Calls Spark's `AssignmentUtils.alignUpdateAssignments`, whose signature changed in Spark 4.1.
    */

@@ -156,16 +156,16 @@ trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
     } else if (nested.isEmpty && !applyStoreAssignmentPolicy) {
       assignments
     } else {
+      // The cast of the LEGACY policy wraps an overflowing value and turns a malformed one into NULL,
+      // so it is refused as Spark refuses it for a table supporting row-level operations
+      if (applyStoreAssignmentPolicy && alignsRowLevelAssignments
+        && SQLConf.get.storeAssignmentPolicy == SQLConf.StoreAssignmentPolicy.LEGACY) {
+        throw QueryCompilationErrors.legacyStoreAssignmentPolicyError()
+      }
       val toAlign = assignments.map(a =>
         Assignment(trimAliases(a.key), if (applyStoreAssignmentPolicy) writtenValue(a.value) else a.value))
       alignRowLevelAssignments(attrs, toAlign, isInsert) match {
         case Some(aligned) =>
-          // The cast of the LEGACY policy wraps an overflowing value and turns a malformed one into NULL,
-          // so it is refused as Spark refuses it for a table supporting row-level operations
-          if (applyStoreAssignmentPolicy
-            && SQLConf.get.storeAssignmentPolicy == SQLConf.StoreAssignmentPolicy.LEGACY) {
-            throw QueryCompilationErrors.legacyStoreAssignmentPolicyError()
-          }
           aligned
             .filter(assignment => assignments.exists(_.key.references.exists(_.semanticEquals(assignment.key))))
             .map(assignment => assignment.copy(value =
@@ -206,6 +206,11 @@ trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
   protected def alignRowLevelAssignments(attrs: Seq[Attribute],
                                          assignments: Seq[Assignment],
                                          isInsert: Boolean): Option[Seq[Assignment]] = None
+
+  /**
+   * Whether [[alignRowLevelAssignments]] aligns the assignments, as it does since Spark 3.5.
+   */
+  protected def alignsRowLevelAssignments: Boolean = false
 
   /**
    * Whether Spark added the cast to the value of an assignment of a table that does not support

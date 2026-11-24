@@ -48,6 +48,8 @@ object HoodieSpark35CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
   override protected def isStoreAssignmentCast(cast: Cast): Boolean = cast.getTagValue(Cast.BY_TABLE_INSERTION).isDefined
 
+  override protected def alignsRowLevelAssignments: Boolean = true
+
   override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case s@ScanOperation(_, _, _,
