@@ -1323,4 +1323,39 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test MergeInto refuses to reassign a partition field of a table with record key and a non-global index") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, dt string) using hudi
+             | tblproperties (type = '$tableType', primaryKey = 'id')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 'p1'), (2, 'a2', 'p1')")
+
+        checkExceptionContain(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1n' as name, 'p1' as dt, 'p9' as new_dt) s
+             | on t.id = s.id
+             | when matched then update set id = s.id, name = s.name, dt = s.new_dt
+           """.stripMargin)(
+          "Detected disallowed assignment clause in MERGE INTO statement for partition field `dt`")
+        // The source value the record is looked up under can still be assigned
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1n' as name, 'p1' as dt) s
+             | on t.id = s.id
+             | when matched then update set *
+           """.stripMargin)
+        checkAnswer(s"select id, name, dt, _hoodie_partition_path from $tableName order by id")(
+          Seq(1, "a1n", "p1", "dt=p1"), Seq(2, "a2", "p1", "dt=p1"))
+      }
+    }
+  }
 }

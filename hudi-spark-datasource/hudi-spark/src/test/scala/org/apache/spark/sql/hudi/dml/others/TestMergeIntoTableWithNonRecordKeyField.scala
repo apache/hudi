@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.ScalaAssertionSupport
+import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -388,6 +389,53 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
        """.stripMargin)
         val cnt = spark.sql(s"select * from $tableName where id = 1").count()
         assertResult(0)(cnt)
+      }
+    }
+  }
+
+  Seq("cow", "mor").foreach { tableType =>
+    test(s"Test MergeInto refuses to change a partition field of a matched record in pkless $tableType table") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, dep string) using hudi
+             | tblproperties (type = '$tableType')
+             | partitioned by (dep)
+             | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'd1'), (6, 'd6')")
+
+        // id 1 takes the update to another partition
+        val e = assertThrows(classOf[HoodieException]) {
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 2 as id, 'd2' as dep union all select 1, 'd9' union all select 6, 'd6') s
+               | on t.id = s.id
+               | when matched and s.id = 1 then update set *
+               | when matched and s.id = 6 then delete
+               | when not matched and s.id = 2 then insert *
+             """.stripMargin)
+        }
+        assertResult("MERGE INTO cannot change the partition field(s) `dep` of a matched record in a table without a record key")(
+          e.getMessage)
+        checkAnswer(s"select id, dep, _hoodie_partition_path from $tableName order by id")(
+          Seq(1, "d1", "dep=d1"), Seq(6, "d6", "dep=d6"))
+
+        // The same clauses run when no matched record changes partition: id 6 takes the delete, whose source
+        // value would change the partition, and the unmatched id 2 is inserted
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 2 as id, 'd2' as dep union all select 1, 'd1' union all select 6, 'd9') s
+             | on t.id = s.id
+             | when matched and s.id = 1 then update set *
+             | when matched and s.id = 6 then delete
+             | when not matched and s.id = 2 then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, dep, _hoodie_partition_path from $tableName order by id")(
+          Seq(1, "d1", "dep=d1"), Seq(2, "d2", "dep=d2"))
       }
     }
   }
