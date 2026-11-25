@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -657,6 +658,21 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
         .withWriteUpdatesAsDeletesAndInserts(true)
         .build();
     assertWriteRejected(config, WriteOperationType.UPSERT, HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key());
+  }
+
+  /**
+   * HFile base files give no row positions to write the positional deletes against.
+   */
+  @Test
+  void testHFileBaseFileFormatRejectedInDeleteInsertMode() throws Exception {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.HFILE.name());
+    properties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
+    metaClient = HoodieTestUtils.init(storageConf, basePath, getTableType(), properties);
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.SIMPLE)
+        .withWriteUpdatesAsDeletesAndInserts(true)
+        .build();
+    assertWriteRejected(config, WriteOperationType.UPSERT, "does not support the base file format HFILE");
   }
 
   /**

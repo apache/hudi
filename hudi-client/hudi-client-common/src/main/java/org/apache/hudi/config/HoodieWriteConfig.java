@@ -978,8 +978,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "deletion vectors can represent the table exactly. Upserts, inserts and deletes require write table "
           + "version 8 or higher, " + WRITE_RECORD_POSITIONS.key() + ", the BLOOM, SIMPLE, GLOBAL_BLOOM, "
           + "GLOBAL_SIMPLE or RECORD_INDEX index (other index types write inserts to log files or do not locate "
-          + "records by base file position, and a custom index class is not supported), and commit-time ordering "
-          + "merge semantics. Prepped inserts and partial updates are not supported on merge-on-read tables, and "
+          + "records by base file position, and a custom index class is not supported), commit-time ordering "
+          + "merge semantics, and a base file format other than HFILE. Prepped inserts and partial updates are not supported on merge-on-read tables, and "
           + "prepped upserts and deletes only with the Spark write client. Compaction is not scheduled while an "
           + "earlier delta commit is pending.");
 

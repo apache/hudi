@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -202,6 +203,13 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       throw new HoodieNotSupportedException(
           HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
               + " requires " + HoodieWriteConfig.WRITE_RECORD_POSITIONS.key() + " to be enabled");
+    }
+    HoodieFileFormat baseFileFormat = metaClient.getTableConfig().getBaseFileFormat();
+    if (baseFileFormat == HoodieFileFormat.HFILE) {
+      // A positional delete needs the row position of each record in its base file, which HFile does not provide
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " does not support the base file format "
+              + baseFileFormat);
     }
     if (config.shouldWritePartialUpdates()) {
       // The new version of an updated record is inserted into a base file, so it has to carry every column
