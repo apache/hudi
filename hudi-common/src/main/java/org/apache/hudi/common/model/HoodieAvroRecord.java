@@ -191,6 +191,16 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
+  public boolean isDelete(DeleteContext deleteContext, Properties props) {
+    // The payload of a MERGE INTO applies the delete clause in the append handle only, so a false that the record was
+    // created with, or that the index tagging or the combining of source records cached, does not hold there
+    if (Boolean.FALSE.equals(isDelete) && data instanceof BaseAvroPayload && ((BaseAvroPayload) data).decidesDeleteOnWrite()) {
+      isDelete = null;
+    }
+    return super.isDelete(deleteContext, props);
+  }
+
+  @Override
   protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) throws IOException {
     if (HoodieOperation.isDelete(getOperation())) {
       return true;

@@ -88,6 +88,15 @@ public abstract class BaseAvroPayload implements Serializable, KryoSerializable 
   }
 
   /**
+   * Defines whether this implementation of {@link HoodieRecordPayload} decides with the properties of the write handle
+   * that writes the record whether the record is a delete, so that {@link #isDeleted} answers false for such a record
+   * before that.
+   */
+  public boolean decidesDeleteOnWrite() {
+    return false;
+  }
+
+  /**
    * @param genericRecord instance of {@link GenericRecord} of interest.
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */

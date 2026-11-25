@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSch
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
-import org.apache.hudi.common.config.{ConfigProperty, RecordMergeMode}
+import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, PartialUpdateMode}
@@ -31,7 +31,8 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
 import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
-import org.apache.hudi.index.HoodieIndex
+import org.apache.hudi.index.{HoodieIndex, SparkMetadataTableGlobalRecordLevelIndex, SparkMetadataTableRecordLevelIndex}
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
 
@@ -907,13 +908,30 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   def validate(props: Map[String, String]): Unit = {
     checkUpdatingActions(updatingActions, props)
     checkInsertingActions(insertingActions, props)
-    checkDeletingActions(deletingActions)
+    checkDeletingActions(deletingActions, props)
   }
 
-  private def checkDeletingActions(deletingActions: Seq[DeleteAction]): Unit = {
+  private def checkDeletingActions(deletingActions: Seq[DeleteAction], props: Map[String, String]): Unit = {
     if (deletingActions.length > 1) {
       throw new HoodieAnalysisException(s"Only one deleting action is supported in MERGE INTO statement (provided ${deletingActions.length})")
     }
+    // The delete of a merge-on-read table is written without the record it matches, and removes the key from a record
+    // level index even when it loses to the record under the ordering
+    if (deletingActions.nonEmpty && targetTableType == MOR_TABLE_TYPE_OPT_VAL
+      && !props.get(HoodieWriteConfig.RECORD_MERGE_MODE.key).contains(RecordMergeMode.COMMIT_TIME_ORDERING.name)
+      && writesRecordLevelIndex(props)) {
+      throw new HoodieNotSupportedException("A WHEN MATCHED DELETE clause is only supported with commit time ordering "
+        + "on a merge-on-read table that uses a record level index.")
+    }
+  }
+
+  private def writesRecordLevelIndex(props: Map[String, String]): Boolean = {
+    val javaProps = props.asJava.asInstanceOf[java.util.Map[String, Object]]
+    props.get(HoodieIndexConfig.INDEX_TYPE.key).exists(recordLevelIndexTypes.contains) ||
+      props.get(HoodieIndexConfig.INDEX_CLASS_NAME.key).exists(recordLevelIndexClasses.contains) ||
+      getStringWithAltKeys(javaProps, HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP).toBoolean ||
+      getStringWithAltKeys(javaProps, HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP).toBoolean ||
+      hoodieCatalogTable.tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)
   }
 
   private def checkInsertingActions(insertActions: Seq[InsertAction], props: Map[String, String]): Unit = {
@@ -1189,6 +1207,12 @@ object MergeIntoHoodieTableCommand {
       isGlobalIndexEnabled(indexType, parameters)
     }
   }
+
+  private val recordLevelIndexTypes: Set[String] = Set(HoodieIndex.IndexType.RECORD_INDEX.name,
+    HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name)
+
+  private val recordLevelIndexClasses: Set[String] = Set(classOf[SparkMetadataTableGlobalRecordLevelIndex].getName,
+    classOf[SparkMetadataTableRecordLevelIndex].getName)
 
   // Global index types mapped to the config governing whether a matched record is re-keyed onto its
   // existing partition. One map, so a type cannot be recorded as global without its config.

@@ -107,7 +107,6 @@ object HoodieCreateRecordUtils {
         !preppedSparkSqlWrites
       }
     }
-    val sqlMergeIntoWrites = parameters.getOrElse(HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key, "false").toBoolean
     // we can skip key generator for prepped flow
     val usePreppedInsteadOfKeyGen = preppedSparkSqlWrites || preppedWriteOperation
 
@@ -157,11 +156,8 @@ object HoodieCreateRecordUtils {
             val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
               val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
                 consistentLogicalTimestampEnabled, requiresOrderingValue)
-              // The clauses of a Spark SQL MERGE INTO decide on write whether a record that is not flagged as a
-              // delete deletes the record it matches
-              val knownDelete: java.lang.Boolean = if (isDelete || !sqlMergeIntoWrites) isDelete else null
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getPayloadClass, null, recordLocation, knownDelete)
+                config.getPayloadClass, null, recordLocation, isDelete)
             } else {
               HoodieRecordUtils.createHoodieRecord(processedRecord, hoodieKey,
                 config.getPayloadClass, recordLocation, isDelete)

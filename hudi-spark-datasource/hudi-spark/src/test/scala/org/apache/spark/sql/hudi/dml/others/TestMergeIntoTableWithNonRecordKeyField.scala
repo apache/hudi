@@ -422,4 +422,118 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
       }
     }
   }
+
+  // The global indexes evaluate whether a source record is a delete while they tag it, before the append handle
+  // applies the clauses, and the simple index does not
+  Seq("SIMPLE", "GLOBAL_SIMPLE", "GLOBAL_BLOOM", "RECORD_INDEX").foreach { indexType =>
+    Seq("ts", "").foreach { orderingField =>
+      val ordering = if (orderingField.isEmpty) "without an ordering field" else "with an ordering field"
+      test(s"Test MergeInto deletes a matched record of a keyed mor table $ordering with the $indexType index") {
+        withTempDir { tmp =>
+          withSQLConf("hoodie.index.type" -> indexType,
+            "hoodie.metadata.global.record.level.index.enable" -> (indexType == "RECORD_INDEX").toString) {
+            val tableName = generateTableName
+            val orderingProp = if (orderingField.isEmpty) "" else s", preCombineField = '$orderingField'"
+            spark.sql(
+              s"""
+                 | create table $tableName (id int, name string, ts long, dep string) using hudi
+                 | tblproperties (type = 'mor', primaryKey = 'id'$orderingProp)
+                 | partitioned by (dep)
+                 | location '${tmp.getCanonicalPath}/$tableName'
+               """.stripMargin)
+            spark.sql(s"insert into $tableName values (1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1'), (3, 'a3', 10, 'd1'), (4, 'a4', 10, 'd1')")
+
+            // Two source records for the deleted id 1 are combined into one on a table with an ordering field
+            val extraSource = if (orderingField.isEmpty) "" else "union all select 1, 'a1n', 21L, 'd1'"
+            val statement =
+              s"""
+                 | merge into $tableName t
+                 | using (select 1 as id, 'a1m' as name, 20L as ts, 'd1' as dep union all select 2, 'a2m', 20L, 'd1' $extraSource) s
+                 | on t.id = s.id
+                 | when matched and s.id = 2 then update set *
+                 | when matched then delete
+               """.stripMargin
+            if (indexType == "RECORD_INDEX" && orderingField.nonEmpty) {
+              // A delete that loses to the record would remove the key from the record index
+              checkExceptionContain(statement)("A WHEN MATCHED DELETE clause is only supported with commit time ordering")
+              checkAnswer(s"select id, name, ts, dep from $tableName order by id")(
+                Seq(1, "a1", 10L, "d1"), Seq(2, "a2", 10L, "d1"), Seq(3, "a3", 10L, "d1"), Seq(4, "a4", 10L, "d1"))
+            } else {
+              spark.sql(statement)
+              checkAnswer(s"select id, name, ts, dep from $tableName order by id")(
+                Seq(2, "a2m", 20L, "d1"), Seq(3, "a3", 10L, "d1"), Seq(4, "a4", 10L, "d1"))
+
+              // A statement with a delete clause only; one without an ordering field is written as an insert
+              if (orderingField.nonEmpty) {
+                spark.sql(
+                  s"""
+                     | merge into $tableName t
+                     | using (select 3 as id, 'a3m' as name, 20L as ts, 'd1' as dep union all select 4, 'a4m', 20L, 'd1') s
+                     | on t.id = s.id
+                     | when matched and s.id = 3 then delete
+                   """.stripMargin)
+                checkAnswer(s"select id, name, ts, dep from $tableName order by id")(
+                  Seq(2, "a2m", 20L, "d1"), Seq(4, "a4", 10L, "d1"))
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto applies a delete clause on a keyed mor table with event time ordering and the GLOBAL_SIMPLE index as the ordering decides") {
+    withTempDir { tmp =>
+      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE") {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, ts long, dep string) using hudi
+             | tblproperties (type = 'mor', primaryKey = 'id', preCombineField = 'ts')
+             | partitioned by (dep)
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1')")
+        // A delete with a lower ordering value than the record loses to it, and one with a higher value deletes it
+        Seq((5L, Seq(Seq(1, "a1", 10L, "d1"), Seq(2, "a2", 10L, "d1"))), (20L, Seq(Seq(2, "a2", 10L, "d1")))).foreach { case (ts, rows) =>
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'a1m' as name, ${ts}L as ts, 'd1' as dep) s
+               | on t.id = s.id
+               | when matched then delete
+             """.stripMargin)
+          checkAnswer(s"select id, name, ts, dep from $tableName order by id")(rows: _*)
+        }
+      }
+    }
+  }
+
+  // A record level index the write keeps loses the key with a delete that loses to the record under event time ordering
+  Seq(("GLOBAL_SIMPLE", "primaryKey = 'id',"), ("SIMPLE", "")).foreach { case (indexType, keyProp) =>
+    val keyed = if (keyProp.isEmpty) "keyless" else "keyed"
+    test(s"Test MergeInto refuses a delete clause on a $keyed mor table with event time ordering that keeps a record level index") {
+      withTempDir { tmp =>
+        withSQLConf("hoodie.index.type" -> indexType, "hoodie.metadata.global.record.level.index.enable" -> "true") {
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (id int, name string, ts long, dep string) using hudi
+               | tblproperties ($keyProp type = 'mor', preCombineField = 'ts')
+               | partitioned by (dep)
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1')")
+          checkExceptionContain(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'a1m' as name, 5L as ts, 'd1' as dep) s
+               | on t.id = s.id
+               | when matched then delete
+             """.stripMargin)("A WHEN MATCHED DELETE clause is only supported with commit time ordering")
+          checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(1, "a1", 10L, "d1"), Seq(2, "a2", 10L, "d1"))
+        }
+      }
+    }
+  }
 }
