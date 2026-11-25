@@ -1311,6 +1311,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Use table version 6 so HoodieBackedTableMetadataWriterTableVersionSix is used
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     tableConfig.setTableVersion(HoodieTableVersion.SIX);
+    // A table created at version 6 cannot keep fractional seconds in TIMESTAMP partition paths
+    tableConfig.setValue(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS, "false");
     initMetaClient(COPY_ON_WRITE, tableConfig.getProps());
 
     writeConfig = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false)
