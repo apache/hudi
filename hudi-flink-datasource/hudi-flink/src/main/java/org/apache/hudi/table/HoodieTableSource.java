@@ -293,11 +293,10 @@ public class HoodieTableSource extends FileIndexReader implements
    * @return the configured HoodieSource instance
    */
   private HoodieSource<RowData> createHoodieSource() {
-    ValidationUtils.checkState(metaClient != null, "MetaClient must be initialized before creating HoodieSource");
     ValidationUtils.checkState(hadoopConf != null, "Hadoop configuration must be initialized");
     ValidationUtils.checkState(conf != null, "Configuration must be initialized");
 
-    HoodieSchema tableSchema = !tableDataExists() ? inferSchemaFromDdl() : getTableSchema();
+    HoodieSchema tableSchema = tableDataExists() ? getTableSchema() : inferSchemaFromDdl();
     final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
@@ -334,6 +333,7 @@ public class HoodieTableSource extends FileIndexReader implements
    * @return the configured HoodieScanContext instance
    */
   private HoodieScanContext createHoodieScanContext(RowType rowType) {
+    boolean streaming = conf.get(FlinkOptions.READ_AS_STREAMING);
     return HoodieScanContext.builder()
         .conf(conf)
         .path(path)
@@ -348,9 +348,9 @@ public class HoodieTableSource extends FileIndexReader implements
         .maxPendingSplits(conf.get(FlinkOptions.READ_SPLITS_LIMIT))
         .partitionPruner(partitionPruner)
         .columnStatsProbe(columnStatsProbe)
-        .partitionBucketIdFunc(PartitionBucketIdFunc.create(this.dataBucketFunc,
-            this.metaClient, conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
-        .isStreaming(conf.get(FlinkOptions.READ_AS_STREAMING))
+        .partitionBucketIdFunc(streaming ? null : PartitionBucketIdFunc.create(
+            dataBucketFunc, metaClient, conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
+        .isStreaming(streaming)
         .limit(limit)
         .build();
   }
@@ -567,7 +567,7 @@ public class HoodieTableSource extends FileIndexReader implements
 
   private InputFormat<RowData, ?> getStreamInputFormat() {
     // if table does not exist or table data does not exist, use schema from the DDL
-    HoodieSchema tableSchema = (this.metaClient == null || !tableDataExists()) ? inferSchemaFromDdl() : getTableSchema();
+    HoodieSchema tableSchema = tableDataExists() ? getTableSchema() : inferSchemaFromDdl();
     final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
@@ -595,6 +595,9 @@ public class HoodieTableSource extends FileIndexReader implements
    * Returns whether the hoodie table data exists .
    */
   private boolean tableDataExists() {
+    if (metaClient == null) {
+      return false;
+    }
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = activeTimeline.getLastCommitMetadataWithValidData();
     return instantAndCommitMetadata.isPresent();
