@@ -450,7 +450,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
         () -> client.completeCompaction(mock(HoodieCommitMetadata.class), table, compactionTime, Collections.emptyList()));
     assertTrue(e.getMessage().contains("Heartbeat for instant " + compactionTime + " has expired"), e.getMessage());
     // the compaction must not be transitioned to completed
-    verify(table.getActiveTimeline(), never()).transitionCompactionInflightToComplete(anyBoolean(), any(), any());
+    verify(table.getActiveTimeline(), never()).transitionCompactionInflightToComplete(anyBoolean(), any(), any(), any());
   }
 
   @Test
@@ -462,7 +462,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
 
     // no heartbeat was started by this client for the instant, so there is nothing to check
     client.completeCompaction(mock(HoodieCommitMetadata.class), table, InProcessTimeGenerator.createNewInstantTime(), Collections.emptyList());
-    verify(table.getActiveTimeline()).transitionCompactionInflightToComplete(anyBoolean(), any(), any());
+    verify(table.getActiveTimeline()).transitionCompactionInflightToComplete(anyBoolean(), any(), any(), any());
   }
 
   @Test
@@ -486,7 +486,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     try {
       assertFalse(client.getHeartbeatClient().isHeartbeatExpired(compactionTime));
       client.completeCompaction(mock(HoodieCommitMetadata.class), table, compactionTime, Collections.emptyList());
-      verify(table.getActiveTimeline()).transitionCompactionInflightToComplete(anyBoolean(), any(), any());
+      verify(table.getActiveTimeline()).transitionCompactionInflightToComplete(anyBoolean(), any(), any(), any());
     } finally {
       client.getHeartbeatClient().stop(compactionTime);
     }
@@ -515,7 +515,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     assertTrue(client.getHeartbeatClient().isHeartbeatExpired(compactionTime));
 
     client.completeCompaction(mock(HoodieCommitMetadata.class), table, compactionTime, Collections.emptyList());
-    verify(table.getActiveTimeline()).transitionCompactionInflightToComplete(anyBoolean(), any(), any());
+    verify(table.getActiveTimeline()).transitionCompactionInflightToComplete(anyBoolean(), any(), any(), any());
   }
 
   private HoodieTable<String, String, String, String> mockTableForCompactionCommit() {

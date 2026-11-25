@@ -226,8 +226,12 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata);
 
-  HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata,
-                                                       TableFormatCompletionAction tableFormatCompletionAction);
+  default HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata,
+                                                               TableFormatCompletionAction tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionCompactionInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.execute(completedInstant);
+    return completedInstant;
+  }
 
   /**
    * Transition Log Compaction State from inflight to Committed.
@@ -239,8 +243,12 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata);
 
-  HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata,
-                                                          TableFormatCompletionAction tableFormatCompletionAction);
+  default HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata,
+                                                                  TableFormatCompletionAction tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionLogCompactionInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.execute(completedInstant);
+    return completedInstant;
+  }
 
   //-----------------------------------------------------------------
   //      END - COMPACTION RELATED META-DATA MANAGEMENT
