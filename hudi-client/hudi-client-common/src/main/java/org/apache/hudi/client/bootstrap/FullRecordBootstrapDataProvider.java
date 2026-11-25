@@ -24,8 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.List;
@@ -33,9 +32,8 @@ import java.util.List;
 /**
  * Creates Hoodie Records with complete record data, given a list of partitions to be bootstrapped.
  */
+@Slf4j
 public abstract class FullRecordBootstrapDataProvider<I> implements Serializable {
-
-  protected static final Logger LOG = LoggerFactory.getLogger(FullRecordBootstrapDataProvider.class);
 
   protected final TypedProperties props;
   protected final transient HoodieEngineContext context;

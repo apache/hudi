@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -68,6 +68,9 @@ case class TruncateHoodieTableCommand(
 
     // If we have not specified the partition, truncate will delete all the data in the table path
     if (partitionSpec.isEmpty) {
+      // Schema evolution is recorded in the timeline, while CREATE_SCHEMA may still
+      // describe the original table. Resolve it before purge removes that history.
+      val currentSchema = new TableSchemaResolver(hoodieCatalogTable.metaClient).getTableSchema(false)
       val targetPath = new StoragePath(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
       val storage = HoodieStorageUtils.getStorage(
@@ -77,10 +80,13 @@ case class TruncateHoodieTableCommand(
       // ReInit hoodie.properties
       val metaClient = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(properties)
+        .setTableCreateSchema(currentSchema.toString)
         .initTable(
           HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf),
           hoodieCatalogTable.tableLocation)
-      hoodieCatalogTable.tableConfig.clearMetadataPartitions(metaClient)
+      // Clear metadata state on the new config; the old config still has the
+      // original CREATE_SCHEMA and would write it back over the resolved schema.
+      metaClient.getTableConfig.clearMetadataPartitions(metaClient)
     } else {
       val normalizedSpecs: Seq[Map[String, String]] = Seq(partitionSpec.map { spec =>
         normalizePartitionSpec(

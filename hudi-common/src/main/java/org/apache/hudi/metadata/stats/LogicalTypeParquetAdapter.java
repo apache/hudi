@@ -63,6 +63,17 @@ public class LogicalTypeParquetAdapter implements ParquetAdapter {
       }
     } else if (annotation instanceof LogicalTypeAnnotation.UUIDLogicalTypeAnnotation) {
       return ValueType.UUID;
+    } else if (annotation instanceof LogicalTypeAnnotation.IntLogicalTypeAnnotation) {
+      // INT(8) / INT(16) columns are written by Spark (and by the row writer before #20503) for
+      // byte / short columns, and by Flink's bulk_insert and append writers up to 1.2.0 for
+      // TINYINT / SMALLINT. Unsigned INT(8) / INT(16) values fit an int and order the same as
+      // signed; unsigned INT(32) / INT(64) do not, so they stay unsupported.
+      LogicalTypeAnnotation.IntLogicalTypeAnnotation intAnnotation = (LogicalTypeAnnotation.IntLogicalTypeAnnotation) annotation;
+      if (intAnnotation.isSigned()) {
+        return intAnnotation.getBitWidth() == 64 ? ValueType.LONG : ValueType.INT;
+      } else if (intAnnotation.getBitWidth() <= 16) {
+        return ValueType.INT;
+      }
     }
 
     throw new IllegalArgumentException("Unsupported logical type annotation: " + annotation);

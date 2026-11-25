@@ -33,17 +33,15 @@ import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.io.SingleFileHandleCreateFactory;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class ClusteringIdentityTestExecutionStrategy<T extends HoodieRecordPayload<T>>
     extends SingleSparkJobExecutionStrategy<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringIdentityTestExecutionStrategy.class);
 
   public ClusteringIdentityTestExecutionStrategy(HoodieTable table,
                                                  HoodieEngineContext engineContext,

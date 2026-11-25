@@ -137,10 +137,11 @@ public class HoodieFileWriterFactory {
   }
 
   /**
-   * Check if need to enable bloom filter.
+   * Check whether to enable Hudi record-key bloom filters, excluding native logs since bloom indexes only probe base files.
    */
-  public static boolean enableBloomFilter(MetaFieldsMode metaFieldsMode, HoodieConfig config) {
-    return metaFieldsMode.isRecordKeyPopulated()
+  public static boolean enableBloomFilter(MetaFieldsMode metaFieldsMode, HoodieConfig config, StoragePath path) {
+    return !FSUtils.isNativeLogFile(path.getName())
+        && metaFieldsMode.isRecordKeyPopulated()
         && (config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED)
         // HoodieIndexConfig is located in the package hudi-client-common, and the package hudi-client-common depends on the package hudi-common,
         // so the class HoodieIndexConfig cannot be accessed in hudi-common, otherwise there will be a circular dependency problem

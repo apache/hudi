@@ -75,7 +75,6 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
       HoodieScanContext scanContext) {
     this.scanContext = scanContext;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(scanContext.getConf());
-    this.metaClient = getOrCreateMetaClient();
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(scanContext.getConf())
         .path(new Path(scanContext.getPath().toUri()))
@@ -89,25 +88,27 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
 
   @Override
   public HoodieContinuousSplitBatch discoverSplits(String lastInstant) {
-    if (metaClient == null) {
+    HoodieTableMetaClient client = getOrCreateMetaClient();
+    if (client == null) {
       return HoodieContinuousSplitBatch.EMPTY;
     }
 
-    return incrementalInputSplits.inputHoodieSourceSplits(metaClient, lastInstant, scanContext.isCdcEnabled());
+    return incrementalInputSplits.inputHoodieSourceSplits(client, lastInstant, scanContext.isCdcEnabled());
   }
 
   @Override
   public List<String> getUndiscoveredCommits(@Nullable String offset, boolean reloadTimeline) {
-    if (metaClient == null || offset == null) {
+    HoodieTableMetaClient client = getOrCreateMetaClient();
+    if (client == null || offset == null) {
       return Collections.emptyList();
     }
     if (reloadTimeline) {
-      metaClient.reloadActiveTimeline();
+      client.reloadActiveTimeline();
     }
     // filter by completion time before applying user skip configs, so skipClustering and
     // skipInsertOverwrite do not read replace-commit metadata for already-consumed commits
     String endCommit = scanContext.getConf().get(FlinkOptions.READ_END_COMMIT);
-    HoodieTimeline candidateTimeline = metaClient.getCommitsAndCompactionTimeline()
+    HoodieTimeline candidateTimeline = client.getCommitsAndCompactionTimeline()
         .filterCompletedInstants()
         .filter(instant -> {
           String completionTime = instant.getCompletionTime();
@@ -119,7 +120,7 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
       return Collections.emptyList();
     }
     HoodieTimeline timeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(
-        metaClient,
+        client,
         candidateTimeline,
         scanContext.isSkipCompaction(),
         scanContext.isSkipClustering(),
@@ -139,10 +140,11 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
    */
   @Override
   public Map<String, HoodieSourceSplitLagInfo> getLagInfo(Collection<HoodieSourceSplit> splits) {
-    if (metaClient == null || splits.isEmpty()) {
+    HoodieTableMetaClient client = getOrCreateMetaClient();
+    if (client == null || splits.isEmpty()) {
       return HoodieContinuousSplitDiscover.super.getLagInfo(splits);
     }
-    Map<String, Pair<HoodieInstant, HoodieTimeline>> commits = getCommits(splits);
+    Map<String, Pair<HoodieInstant, HoodieTimeline>> commits = getCommits(client, splits);
     Map<String, String> completionTimes = new HashMap<>();
     commits.forEach((instantTime, commit) -> completionTimes.put(instantTime, commit.getLeft().getCompletionTime()));
     // the writes of the exact-match commits by file id, then by instant time, so that each split only
@@ -171,12 +173,13 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
    */
   @Override
   public Map<String, HoodieSourceSplitLagInfo> getRangeLagInfo(Collection<HoodieSourceSplit> splits) {
-    if (metaClient == null || splits.isEmpty()) {
+    HoodieTableMetaClient client = getOrCreateMetaClient();
+    if (client == null || splits.isEmpty()) {
       return HoodieContinuousSplitDiscover.super.getRangeLagInfo(splits);
     }
     Set<String> instantTimes = getRangeCommits(splits);
     Map<String, String> completionTimes = new HashMap<>();
-    metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
+    client.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
         .filter(instant -> instantTimes.contains(instant.requestedTime()))
         .forEach(instant -> completionTimes.put(instant.requestedTime(), instant.getCompletionTime()));
     Map<Collection<String>, HoodieSourceSplitLagInfo> lagInfoByRange = new IdentityHashMap<>();
@@ -193,7 +196,8 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
 
   @Override
   public ZoneId getTimelineZone() {
-    return metaClient == null ? HoodieContinuousSplitDiscover.super.getTimelineZone() : metaClient.getTableConfig().getTimelineTimezone().getZoneId();
+    HoodieTableMetaClient client = getOrCreateMetaClient();
+    return client == null ? HoodieContinuousSplitDiscover.super.getTimelineZone() : client.getTableConfig().getTimelineTimezone().getZoneId();
   }
 
   private static HoodieSourceSplitLagInfo getLagInfo(
@@ -249,15 +253,16 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
    * Returns the completed commits of the splits keyed by instant time, with the timeline to read their
    * metadata from, looking up the archived timeline for the commits that are not active anymore.
    */
-  private Map<String, Pair<HoodieInstant, HoodieTimeline>> getCommits(Collection<HoodieSourceSplit> splits) {
+  private Map<String, Pair<HoodieInstant, HoodieTimeline>> getCommits(
+      HoodieTableMetaClient client, Collection<HoodieSourceSplit> splits) {
     Set<String> instantTimes = getRangeCommits(splits);
     Map<String, Pair<HoodieInstant, HoodieTimeline>> commits = new HashMap<>();
-    HoodieTimeline activeTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline activeTimeline = client.getCommitsTimeline().filterCompletedInstants();
     activeTimeline.getInstantsAsStream()
         .filter(instant -> instantTimes.contains(instant.requestedTime()))
         .forEach(instant -> commits.put(instant.requestedTime(), Pair.of(instant, activeTimeline)));
     instantTimes.stream().filter(instantTime -> !commits.containsKey(instantTime)).min(String::compareTo).ifPresent(oldest -> {
-      HoodieTimeline archivedTimeline = metaClient.getArchivedTimeline(oldest, false).getCommitsTimeline().filterCompletedInstants();
+      HoodieTimeline archivedTimeline = client.getArchivedTimeline(oldest, false).getCommitsTimeline().filterCompletedInstants();
       archivedTimeline.getInstantsAsStream()
           .filter(instant -> instantTimes.contains(instant.requestedTime()))
           .forEach(instant -> commits.putIfAbsent(instant.requestedTime(), Pair.of(instant, archivedTimeline)));
@@ -307,14 +312,9 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
 
   @Nullable
   private HoodieTableMetaClient getOrCreateMetaClient() {
-    if (this.metaClient != null) {
-      return this.metaClient;
+    if (metaClient == null && StreamerUtil.tableExists(scanContext.getPath().toString(), hadoopConf)) {
+      metaClient = StreamerUtil.createMetaClient(scanContext.getPath().toString(), hadoopConf);
     }
-    if (StreamerUtil.tableExists(this.scanContext.getPath().toString(), hadoopConf)) {
-      this.metaClient = StreamerUtil.createMetaClient(this.scanContext.getPath().toString(), hadoopConf);
-      return this.metaClient;
-    }
-    // fallback
-    return null;
+    return metaClient;
   }
 }

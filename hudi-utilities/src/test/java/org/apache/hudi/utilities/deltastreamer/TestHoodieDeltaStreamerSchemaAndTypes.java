@@ -232,6 +232,7 @@ public class TestHoodieDeltaStreamerSchemaAndTypes extends HoodieDeltaStreamerTe
       configs.put("hoodie.record.merge.mode", "COMMIT_TIME_ORDERING");
     }
     if (version.lesserThan(HoodieTableVersion.NINE)) {
+      configs.put("hoodie.table.precombine.field", "timestamp");
       configs.put("hoodie.compaction.payload.class", "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload");
       configs.put("hoodie.record.merge.strategy.id", "ce9acb64-bde0-424c-9b91-f6ebba25356d");
     }

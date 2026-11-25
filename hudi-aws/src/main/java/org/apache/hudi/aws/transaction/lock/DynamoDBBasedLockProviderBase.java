@@ -34,8 +34,7 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
 import com.amazonaws.services.dynamodbv2.LockItem;
 import com.amazonaws.services.dynamodbv2.model.LockNotGrantedException;
 import lombok.Getter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
@@ -65,10 +64,9 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE
  * A DynamoDB based lock. This {@link LockProvider} implementation allows to lock table operations
  * using DynamoDB. Users need to have access to AWS DynamoDB to be able to use this lock.
  */
+@Slf4j
 @NotThreadSafe
 public abstract class DynamoDBBasedLockProviderBase implements LockProvider<LockItem> {
-
-  protected static final Logger LOG = LoggerFactory.getLogger(DynamoDBBasedLockProviderBase.class);
 
   protected static final String DYNAMODB_ATTRIBUTE_NAME = "key";
 
@@ -109,13 +107,13 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
 
   @Override
   public boolean tryLock(long time, TimeUnit unit) {
-    LOG.info(generateLogStatement(LockState.ACQUIRING, generateLogSuffixString()));
+    log.info(generateLogStatement(LockState.ACQUIRING, generateLogSuffixString()));
     try {
       lock = client.acquireLock(AcquireLockOptions.builder(dynamoDBPartitionKey)
           .withAdditionalTimeToWaitForLock(time)
           .withTimeUnit(TimeUnit.MILLISECONDS)
           .build());
-      LOG.info(generateLogStatement(LockState.ACQUIRED, generateLogSuffixString()));
+      log.info(generateLogStatement(LockState.ACQUIRED, generateLogSuffixString()));
     } catch (InterruptedException e) {
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()), e);
     } catch (LockNotGrantedException e) {
@@ -127,15 +125,15 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
   @Override
   public void unlock() {
     try {
-      LOG.info(generateLogStatement(LockState.RELEASING, generateLogSuffixString()));
+      log.info(generateLogStatement(LockState.RELEASING, generateLogSuffixString()));
       if (lock == null) {
         return;
       }
       if (!client.releaseLock(lock)) {
-        LOG.info("The lock has already been stolen");
+        log.info("The lock has already been stolen");
       }
       lock = null;
-      LOG.info(generateLogStatement(LockState.RELEASED, generateLogSuffixString()));
+      log.info(generateLogStatement(LockState.RELEASED, generateLogSuffixString()));
     } catch (Exception e) {
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()), e);
     }
@@ -146,17 +144,17 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
     try {
       if (lock != null) {
         if (!client.releaseLock(lock)) {
-          LOG.info("The lock has already been stolen");
+          log.info("The lock has already been stolen");
         }
         lock = null;
       }
     } catch (Exception e) {
-      LOG.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
+      log.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
     } finally {
       try {
         this.client.close();
       } catch (Exception ex) {
-        LOG.warn("Failed to close AmazonDynamoDBLockClient after failed lock release", ex);
+        log.warn("Failed to close AmazonDynamoDBLockClient after failed lock release", ex);
       }
     }
   }
@@ -203,7 +201,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
         .billingMode(billingMode);
     dynamoDB.createTable(createTableRequestBuilder.build());
 
-    LOG.info("Creating dynamoDB table {}, waiting for table to be active", tableName);
+    log.info("Creating dynamoDB table {}, waiting for table to be active", tableName);
     try {
 
       DynamoTableUtils.waitUntilActive(dynamoDB, tableName, dynamoDbBasedLockConfig.getInt(DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT), 20 * 1000);
@@ -212,7 +210,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
     } catch (InterruptedException e) {
       throw new HoodieLockException("Thread interrupted while waiting for dynamoDB table to turn active", e);
     }
-    LOG.info("Created dynamoDB table {}", tableName);
+    log.info("Created dynamoDB table {}", tableName);
   }
 
   protected String generateLogSuffixString() {

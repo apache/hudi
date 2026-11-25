@@ -857,9 +857,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testCopyOnWriteDeletes(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(Array(
+    "AVRO,org.apache.hudi.io.FileGroupReaderBasedMergeHandle", "AVRO,org.apache.hudi.io.HoodieWriteMergeHandle",
+    "SPARK,org.apache.hudi.io.FileGroupReaderBasedMergeHandle", "SPARK,org.apache.hudi.io.HoodieWriteMergeHandle"))
+  def testCopyOnWriteDeletes(recordType: HoodieRecordType, mergeHandleClass: String): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType,
+      CommonOptionUtils.commonOpts ++ Map(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key -> mergeHandleClass))
 
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
@@ -887,10 +890,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(snapshotDF2.count(), 80)
   }
 
-  @Test
-  def testCopyOnWriteUpserts(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("org.apache.hudi.io.FileGroupReaderBasedMergeHandle", "org.apache.hudi.io.HoodieWriteMergeHandle"))
+  def testCopyOnWriteUpserts(mergeHandleClass: String): Unit = {
     val recordType = HoodieRecordType.AVRO
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType,
+      CommonOptionUtils.commonOpts ++ Map(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key -> mergeHandleClass))
 
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
@@ -911,7 +916,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option("hoodie.write.merge.handle.class", "org.apache.hudi.io.FileGroupReaderBasedMergeHandle")
       .mode(SaveMode.Append)
       .save(basePath)
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()

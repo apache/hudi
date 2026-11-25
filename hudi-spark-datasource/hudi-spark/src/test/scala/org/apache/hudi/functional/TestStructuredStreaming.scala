@@ -21,9 +21,9 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteO
 import org.apache.hudi.DataSourceWriteOptions.{STREAMING_CHECKPOINT_IDENTIFIER, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.{HoodieStorageConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.engine.RecordContext
-import org.apache.hudi.common.model.{FileSlice, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode}
+import org.apache.hudi.common.model.{FileSlice, HoodieFailedWritesCleaningPolicy, HoodieRecord, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.read.BufferedRecord
@@ -32,9 +32,10 @@ import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, FileSyste
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, MarkerUtils, Option => HOption}
-import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider
 import org.apache.hudi.exception.{HoodieException, TableNotFoundException}
+import org.apache.hudi.functional.DeferredRecordIndexTestUtils.{assertRecordIndexBuilt, assertRecordIndexMatchesTable, assertRecordIndexNotBuilt, assertRecordIndexSizedFrom, rowsPerPartition, toProperties}
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase, HoodieSparkDeleteRecordMerger}
 
@@ -226,6 +227,81 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   def testStructuredStreaming(tableType: HoodieTableType): Unit = {
     structuredStreamingTestRunner(
       tableType, addCompactionConfigs = false, isAsyncCompaction = false)
+  }
+
+  /**
+   * Deferred record index initialization through the streaming sink: the first micro-batch leaves the index unbuilt,
+   * the second builds it, and the index agrees with the table after the second and the third.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testRecordIndexDeferredUntilSecondMicroBatch(partitioned: Boolean): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val indexEnableProp = if (partitioned) {
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key
+    } else {
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key
+    }
+    val minFileGroupProp = if (partitioned) {
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key
+    } else {
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key
+    }
+    val maxFileGroupProp = if (partitioned) {
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key
+    } else {
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key
+    }
+    val hudiOptions = getOptsWithTableType(HoodieTableType.COPY_ON_WRITE) ++ Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      indexEnableProp -> "true",
+      HoodieIndexConfig.INDEX_TYPE.key -> (if (partitioned) "RECORD_LEVEL_INDEX" else "GLOBAL_RECORD_LEVEL_INDEX"),
+      HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key -> "true",
+      HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key -> "9600",
+      minFileGroupProp -> "1",
+      maxFileGroupProp -> "1000")
+    val toDf = (records: java.util.List[HoodieRecord[_]]) =>
+      spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records).asScala.toList, 2))
+    val keysOf = (records: java.util.List[HoodieRecord[_]]) => records.asScala.map(_.getRecordKey).toSeq
+    val assertTableKeys = (expectedKeys: Seq[String]) => assertEquals(expectedKeys.sorted,
+      spark.read.format("org.apache.hudi").load(destPath).select("_row_key").collect().map(_.getString(0)).toSeq.sorted)
+
+    val firstBatch = dataGen.generateInserts("001", 2000).asInstanceOf[java.util.List[HoodieRecord[_]]]
+    val streamingQuery = initWritingStreamingQuery(toDf(firstBatch).schema, sourcePath, destPath, hudiOptions)
+    try {
+      toDf(firstBatch).coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+      val numCommits = waitTillAtleastNCommits(storage, destPath, 1, 120, 1)
+      assertRecordIndexNotBuilt(destPath, storageConf)
+      val rowsBeforeBuild = rowsPerPartition(spark, destPath)
+
+      // The second micro-batch builds the index from what the first left, then writes updates, deletes and enough new
+      // rows that an index sized after it would get a different file group count.
+      val deletedRecords = firstBatch.subList(300, 350)
+      val newRecords = dataGen.generateInserts("002", 2000).asInstanceOf[java.util.List[HoodieRecord[_]]]
+      toDf(dataGen.generateUpdates("002", firstBatch.subList(0, 300)).asInstanceOf[java.util.List[HoodieRecord[_]]])
+        .union(toDf(dataGen.generateUpdates("002", deletedRecords).asInstanceOf[java.util.List[HoodieRecord[_]]])
+          .withColumn("_hoodie_is_deleted", lit(true)))
+        .union(toDf(newRecords))
+        .coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+      waitTillAtleastNCommits(storage, destPath, numCommits + 1, 120, 1)
+      assertRecordIndexBuilt(destPath, storageConf, partitioned)
+      assertRecordIndexSizedFrom(destPath, storageConf, toProperties(hudiOptions), partitioned, rowsBeforeBuild)
+      val deletedKeys = keysOf(deletedRecords).toSet
+      val keysAfterBuild = (keysOf(firstBatch) ++ keysOf(newRecords)).filterNot(deletedKeys)
+      assertTableKeys(keysAfterBuild)
+      assertRecordIndexMatchesTable(spark, destPath, storageConf)
+
+      // The third micro-batch is tagged through the index alone: it updates rows the second inserted and brings back
+      // the keys the second deleted.
+      toDf(dataGen.generateUpdates("003", newRecords.subList(0, 300)).asInstanceOf[java.util.List[HoodieRecord[_]]])
+        .union(toDf(dataGen.generateUpdates("003", deletedRecords).asInstanceOf[java.util.List[HoodieRecord[_]]]))
+        .coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+      waitTillAtleastNCommits(storage, destPath, numCommits + 2, 120, 1)
+      assertTableKeys(keysAfterBuild ++ deletedKeys)
+      assertRecordIndexMatchesTable(spark, destPath, storageConf)
+    } finally {
+      streamingQuery.stop()
+    }
   }
 
   @throws[InterruptedException]

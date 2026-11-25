@@ -21,12 +21,12 @@ package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.io.SingleFileHandleCreateFactory;
@@ -69,18 +69,15 @@ public class SparkSingleFileSortExecutionStrategy<T>
     }
     log.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
 
-    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
-        .withBulkInsertParallelism(numOutputGroups)
-        .withProps(getWriteConfig().getProps()).build();
-
     // Since clustering will write to single file group using HoodieUnboundedCreateHandle, set max file size to a large value.
-    newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
+    HoodieWriteConfig newConfig = getGroupWriteConfig(Option.of(Long.MAX_VALUE));
 
     BulkInsertPartitioner<Dataset<Row>> partitioner = getRowPartitioner(strategyParams, schema);
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
 
     return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
-        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
+        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata,
+        getGroupWriterSchema(repartitionedRecords.schema(), newConfig));
   }
 
   @Override
@@ -97,11 +94,8 @@ public class SparkSingleFileSortExecutionStrategy<T>
     }
     log.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
 
-    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
-        .withBulkInsertParallelism(numOutputGroups)
-        .withProps(getWriteConfig().getProps()).build();
     // Since clustering will write to single file group using HoodieUnboundedCreateHandle, set max file size to a large value.
-    newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
+    HoodieWriteConfig newConfig = getGroupWriteConfig(Option.of(Long.MAX_VALUE));
 
     return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
         false, getRDDPartitioner(strategyParams, schema), true, numOutputGroups,

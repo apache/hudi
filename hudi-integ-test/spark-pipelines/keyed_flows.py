@@ -24,8 +24,9 @@ import sys
 import tempfile
 
 SOURCE = 'from pyspark import pipelines as dp\nfrom pyspark.sql import SparkSession\nspark = SparkSession.active()\n@dp.temporary_view(name="input_events")\ndef input_events():\n    return spark.readStream.schema("id INT, ts LONG, part STRING, value STRING, _hoodie_is_deleted BOOLEAN").json(spark.conf.get("hudi.test.input"))\n'
-PROPERTIES = "'type'='cow', 'primaryKey'='id', 'preCombineField'='ts', 'hoodie.record.merge.mode'='EVENT_TIME_ORDERING'"
+PROPERTIES = "'primaryKey'='id', 'preCombineField'='ts', 'hoodie.record.merge.mode'='EVENT_TIME_ORDERING'"
 TABLES = ("keyed_new", "keyed_existing")
+EXISTING_ROW = [3, 7, "c", "seed"]
 
 
 def require(condition, message):
@@ -42,33 +43,57 @@ def client(mode, remote, root):
     spark = SparkSession.builder.remote(remote).getOrCreate()
     try:
         require(spark.conf.get("spark.hudi.test.run.id") == root.name, "Connected to the wrong test server")
+        table_type = (root / "table-type").read_text()
+        properties = f"'type'='{table_type}', {PROPERTIES}"
         if mode == "prepare":
             spark.sql(f"CREATE TABLE sdp_test.keyed_existing (id INT, ts BIGINT, part STRING, value STRING, "
-                      f"_hoodie_is_deleted BOOLEAN) USING hudi PARTITIONED BY (part) TBLPROPERTIES ({PROPERTIES})").collect()
+                      f"_hoodie_is_deleted BOOLEAN) USING hudi PARTITIONED BY (part) TBLPROPERTIES ({properties})").collect()
+            spark.sql("INSERT INTO sdp_test.keyed_existing (id, ts, part, value, _hoodie_is_deleted) "
+                      "VALUES (3, 7L, 'c', 'seed', false)").collect()
         else:
-            expected = json.loads((root / "expected.json").read_text())
+            input_expected = json.loads((root / "expected.json").read_text())
             for table in TABLES:
+                expected = input_expected + ([EXISTING_ROW] if table == "keyed_existing" else [])
                 actual = [list(row) for row in spark.table(f"sdp_test.{table}")
                           .select("id", "ts", "part", "value").orderBy("id").collect()]
                 require(actual == expected, (table, actual, expected))
-                print(f"PASS {mode} {table}: {actual}")
+                print(f"PASS {mode} {table_type} {table}: {actual}")
+                if table_type == "mor" and mode == "verify-2":
+                    location = root / "warehouse" / "sdp_test.db" / table
+                    require(any(location.rglob("*.log.*")), f"No MOR log files in {location}")
+                    base_rows = [list(row) for row in spark.read.format("hudi")
+                                 .option("hoodie.datasource.query.type", "read_optimized")
+                                 .load(location.as_uri()).select("id", "ts", "part", "value")
+                                 .orderBy("id").collect()]
+                    expected_base = json.loads((root / "expected-base.json").read_text())
+                    if table == "keyed_existing":
+                        expected_base.append(EXISTING_ROW)
+                    require(base_rows == expected_base, (table, "MOR base rows", base_rows, expected_base))
+                    print(f"PASS MOR log merge {table}: base rows {base_rows}, snapshot {actual}")
     finally:
         spark.stop()
 
 
-def scenario(h):
+def scenario(h, table_type):
+    (h.root / "table-type").write_text(table_type)
+    properties = f"'type'='{table_type}', {PROPERTIES}"
     source = h.root / "input"
     source.mkdir()
     (h.root / "source.py").write_text(SOURCE)
+    # Only the new target declares identity/merger settings. The existing target must load its
+    # type, key, ordering field and merge mode from the table initialized by prepare.
     flows = "\n".join(
-        f"CREATE STREAMING TABLE {table} USING hudi PARTITIONED BY (part) TBLPROPERTIES ({PROPERTIES}) "
-        "AS SELECT id, ts, part, value, _hoodie_is_deleted FROM STREAM input_events;" for table in TABLES)
+        f"CREATE STREAMING TABLE {table} USING hudi PARTITIONED BY (part) "
+        + (f"TBLPROPERTIES ({properties}) " if table == "keyed_new" else "")
+        + "AS SELECT id, ts, part, value, _hoodie_is_deleted FROM STREAM input_events;" for table in TABLES)
     (h.root / "flows.sql").write_text(flows)
     spec = {"name": "keyed_flows", "storage": (h.root / "checkpoints").as_uri(),
             "catalog": "spark_catalog", "database": "sdp_test",
             "libraries": [{"glob": {"include": "source.py"}}, {"glob": {"include": "flows.sql"}}],
             "configuration": {"hudi.test.input": source.as_uri(), "spark.sql.shuffle.partitions": "2",
-                              "spark.hoodie.metadata.enable": "false",
+                              "spark.hoodie.metadata.enable": "true",
+                              "spark.hoodie.compact.inline": "false",
+                              "spark.hoodie.datasource.write.streaming.disable.compaction": "true",
                               "spark.sql.pipelines.maxFlowRetryAttempts": "0"}}
     path = h.root / "spark-pipeline.yml"
     path.write_text(json.dumps(spec, indent=2))
@@ -83,20 +108,62 @@ def scenario(h):
         ([(1, 2, "a", "late-delete", True)], [[1, 3, "a", "updated"], [2, 1, "b", "keep"]]),
         ([(1, 4, "a", "deleted", True)], [[2, 1, "b", "keep"]]),
         ([(1, 5, "a", "reinserted", False)], [[1, 5, "a", "reinserted"], [2, 1, "b", "keep"]]))
+    (h.root / "expected-base.json").write_text(json.dumps(stages[0][1]))
     for i, (rows, expected) in enumerate(stages, 1):
         (source / f"{i}.json").write_text("".join(json.dumps(dict(zip(
             ("id", "ts", "part", "value", "_hoodie_is_deleted"), row))) + "\n" for row in rows))
         (h.root / "expected.json").write_text(json.dumps(expected))
         h.run_pipeline(path, f"stage-{i}")
         h.client(Path(__file__).resolve(), f"verify-{i}")
+        for table in TABLES:
+            metadata_path = h.root / "warehouse" / "sdp_test.db" / table / ".hoodie" / "metadata"
+            require((metadata_path / ".hoodie" / "hoodie.properties").is_file(),
+                    f"Metadata table was not initialized for {table}")
+            require(any(p.suffix in (".commit", ".deltacommit")
+                        for p in (metadata_path / ".hoodie" / "timeline").iterdir()),
+                    f"No completed metadata writes for {table}")
+    def completed_commits():
+        return {table: sorted(p.name for p in
+                (h.root / "warehouse" / "sdp_test.db" / table / ".hoodie" / "timeline").glob("*")
+                if p.suffix in (".commit", ".deltacommit", ".replacecommit")) for table in TABLES}
+
+    before_restart = completed_commits()
+    require(all(before_restart.values()), "Expected completed commits before restart")
+    # Model a crash after the Hudi commit but before Spark records batch completion. The
+    # AvailableNow queries are stopped; remove only their latest Spark commit-log entries.
+    # Keep source offsets, checkpoint identities and both Hudi timelines intact for replay.
+    checkpoint_commits = [directory for directory in (h.root / "checkpoints").rglob("commits")
+                          if directory.is_dir() and (directory.parent / "offsets").is_dir()]
+    require(len(checkpoint_commits) == len(TABLES), checkpoint_commits)
+    removed = []
+    for directory in checkpoint_commits:
+        batches = [p for p in directory.iterdir() if p.name.isdigit()]
+        require(batches, f"No committed Spark batch under {directory}")
+        latest = max(batches, key=lambda p: int(p.name))
+        require((directory.parent / "offsets" / latest.name).is_file(), latest)
+        removed.append(latest)
+        latest.unlink()
+        (directory / f".{latest.name}.crc").unlink(missing_ok=True)
+    h.run_pipeline(path, "retry-after-commit")
+    after_retry = completed_commits()
+    require(after_retry == before_restart,
+            ("Retry recommitted a completed Hudi batch", before_restart, after_retry))
+    require(all(p.is_file() for p in removed), "Retry did not finish Spark's interrupted batch")
+    h.client(Path(__file__).resolve(), "verify-retry")
+    (h.logs / "retry-commits.json").write_text(json.dumps(
+        {"before": before_restart, "after": after_retry,
+         "replayed_spark_commits": [str(p.relative_to(h.root)) for p in removed]}, indent=2))
     h.run_pipeline(path, "restart")
+    after_restart = completed_commits()
+    require(after_restart == before_restart,
+            ("Unchanged restart wrote an extra commit", before_restart, after_restart))
     h.client(Path(__file__).resolve(), "verify-restart")
     invalid = (
-        ("missing_key", PROPERTIES.replace("'primaryKey'='id'", "'primaryKey'='missing_key'"), "part", SOURCE, "Can't find primaryKey"),
-        ("missing_order", PROPERTIES.replace("'preCombineField'='ts'", "'preCombineField'='missing_order'"), "part", SOURCE, "Can't find ordering fields"),
-        ("missing_partition", PROPERTIES, "missing_partition", SOURCE, "Partition column 'missing_partition'"),
-        ("invalid_marker", PROPERTIES, "part", SOURCE.replace("_hoodie_is_deleted BOOLEAN", "_hoodie_is_deleted STRING"), "has to be BOOLEAN"),
-        ("changed_identity", PROPERTIES.replace("'primaryKey'='id'", "'primaryKey'='value'"), "part", SOURCE, "Can't set primaryKey to 'value' on Hudi table"))
+        ("missing_key", properties.replace("'primaryKey'='id'", "'primaryKey'='missing_key'"), "part", SOURCE, "Can't find primaryKey"),
+        ("missing_order", properties.replace("'preCombineField'='ts'", "'preCombineField'='missing_order'"), "part", SOURCE, "Can't find ordering fields"),
+        ("missing_partition", properties, "missing_partition", SOURCE, "Partition column 'missing_partition'"),
+        ("invalid_marker", properties, "part", SOURCE.replace("_hoodie_is_deleted BOOLEAN", "_hoodie_is_deleted STRING"), "has to be BOOLEAN"),
+        ("changed_identity", properties.replace("'primaryKey'='id'", "'primaryKey'='value'"), "part", SOURCE, "Can't set primaryKey to 'value' on Hudi table"))
     for name, props, partition, definition, error_text in invalid:
         target = "keyed_existing" if name == "changed_identity" else f"bad_{name}"
         (h.root / "source.py").write_text(definition)
@@ -118,8 +185,10 @@ def scenario(h):
         if name != "changed_identity":
             timeline = h.root / "warehouse" / "sdp_test.db" / target / ".hoodie" / "timeline"
             require(not [p for p in timeline.glob("*") if p.suffix in (".commit", ".deltacommit", ".replacecommit")], name)
+        require(completed_commits() == after_restart,
+                ("Rejected configuration changed a valid target timeline", name, completed_commits(), after_restart))
         h.client(Path(__file__).resolve(), f"verify-after-{name}")
-    print("PASS: keyed deduplication, updates, late values, delete, reinsertion, restart and invalid configurations")
+    print("PASS: keyed ordering, delete/reinsertion, persisted settings, metadata writes, retry, restart and rejection")
 
 
 def main():
@@ -127,7 +196,8 @@ def main():
         client(sys.argv[1], sys.argv[2], Path(sys.argv[3]))
         return
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--harness-dir", required=True, type=Path)
+    parser.add_argument("--harness-dir", type=Path, default=Path(__file__).resolve().parent)
+    parser.add_argument("--table-type", choices=("cow", "mor"), default="cow")
     parser.add_argument("--bundle", required=True, type=Path)
     parser.add_argument("--logs", type=Path, default=Path("target/keyed-acceptance-logs"))
     args = parser.parse_args()
@@ -138,7 +208,7 @@ def main():
     print(f"Keyed logs: {logs}", flush=True)
     signal.signal(signal.SIGTERM, interrupted)
     with ConnectHarness(args.bundle, logs) as harness:
-        scenario(harness)
+        scenario(harness, args.table_type)
 
 
 if __name__ == "__main__":

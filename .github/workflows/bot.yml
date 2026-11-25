@@ -283,7 +283,7 @@ jobs:
           flags: utilities
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  test-utilities-rest:
+  test-utilities-rest-hadoop-mr-java-client:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
@@ -305,12 +305,13 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
+        id: build
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service -Pthrift-gen-source $MVN_ARGS -am -pl hudi-utilities
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service -Pthrift-gen-source $MVN_ARGS -am -pl hudi-utilities,hudi-hadoop-mr,hudi-client/hudi-java-client
       - name: UT - hudi-utilities (non-TestHoodieDeltaStreamer)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -325,17 +326,49 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS -Djacoco.skip=false
+      # These modules had a job of their own, so a hudi-utilities test failure must not skip them.
+      - name: UT - hudi-hadoop-mr and hudi-client/hudi-java-client
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        run:
+          mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS -Djacoco.skip=false
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
-      - name: Generate merged coverage report
+      # One report per flag, each from its own modules' exec files, so each flag keeps the coverage
+      # of its own tests. Each report is uploaded before the next call replaces it.
+      - name: Generate hudi-utilities coverage report
         if: always() && github.event_name != 'merge_group'
-        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
-      - name: Upload coverage to Codecov
+        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE $GITHUB_WORKSPACE/hudi-utilities
+      - name: Upload hudi-utilities coverage to Codecov
         if: always() && github.event_name != 'merge_group'
         uses: ./.github/actions/upload-coverage
         with:
           flags: utilities
+          token: ${{ secrets.CODECOV_TOKEN }}
+      # Classes and sources come from the reactor this flag's job built on its own (hudi-hadoop-mr,
+      # hudi-java-client and their upstream modules), so hudi-utilities' classes stay out of its report.
+      # exec-maven-plugin is pinned to the version the repo's poms already use.
+      - name: Generate hudi-hadoop-mr and hudi-java-client coverage report
+        if: always() && github.event_name != 'merge_group'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        run: |
+          # Remove the utilities report first: if this step fails before the generator runs, the
+          # always() upload below must not publish it under this flag.
+          rm -f jacoco-report.xml
+          module_dirs=$(mvn -q -B -ntp -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Phudi-platform-service -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client org.codehaus.mojo:exec-maven-plugin:1.6.0:exec -Dexec.executable=pwd)
+          COVERAGE_MODULE_DIRS="$module_dirs" ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE $GITHUB_WORKSPACE/hudi-hadoop-mr $GITHUB_WORKSPACE/hudi-client/hudi-java-client
+      - name: Upload hudi-hadoop-mr and hudi-java-client coverage to Codecov
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
+        with:
+          flags: hadoop-mr-java-client
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-common-and-other-modules:
@@ -746,54 +779,6 @@ jobs:
 #          flags: spark-scala-tests
 #          token: ${{ secrets.CODECOV_TOKEN }}
 
-  test-hudi-hadoop-mr-and-hudi-java-client:
-    if: *route
-    needs: changes
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
-    strategy:
-      matrix:
-        include:
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.5"
-            flinkProfile: "flink2.2"
-
-    steps:
-      - uses: actions/checkout@v5
-      - name: Set up JDK 11
-        uses: actions/setup-java@v5
-        with:
-          java-version: '11'
-          distribution: 'temurin'
-          architecture: x64
-          cache: maven
-      - name: Build Project
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client
-      - name: UT - hudi-hadoop-mr and hudi-client/hudi-java-client
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run:
-          mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS -Djacoco.skip=false
-      - name: Test timing summary
-        if: always()
-        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
-      - name: Generate merged coverage report
-        if: always() && github.event_name != 'merge_group'
-        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
-      - name: Upload coverage to Codecov
-        if: always() && github.event_name != 'merge_group'
-        uses: ./.github/actions/upload-coverage
-        with:
-          flags: hadoop-mr-java-client
-          token: ${{ secrets.CODECOV_TOKEN }}
-
   # How the Spark JDK 17 jobs below are sharded. The minutes come from master run
   # 34314808833 on 2026-09-09, before the two-fork surefire change earlier on this branch,
   # so treat them as relative weights rather than the wall time a job takes today.
@@ -813,6 +798,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -874,6 +860,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -941,6 +928,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1005,6 +993,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1062,6 +1051,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1095,13 +1085,16 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
-      - name: Java FTB - Spark
+      # -DskipUTs=false also runs the Scala suites of scala-other-2's packages that build their
+      # own SparkContext (about two minutes) in the same invocation. The shared-session suites of
+      # the same packages run in scala-other-2.
+      - name: Java FTB - Spark, Scala UT - remaining packages, own SparkContext
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -DskipUTs=false $SCALA_TEST_OTHERS2_FILTER -Dhudi.scalatest.tagsToExclude=org.apache.hudi.functional.SparkSQLCoreFlow,org.apache.spark.sql.hudi.common.SharedSessionSuite
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
@@ -1115,10 +1108,12 @@ jobs:
           flags: spark-java-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # sharedSession + parallel: this shard holds only HoodieSparkSqlTestBase suites, which share one SparkContext and run two at a time
   test-spark-java17-scala-dml-1:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1158,14 +1153,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2
       - name: Scala FT - Spark (dml.others)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
@@ -1179,10 +1174,12 @@ jobs:
           flags: spark-scala-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # sharedSession + parallel: this shard holds only HoodieSparkSqlTestBase suites, which share one SparkContext and run two at a time
   test-spark-java17-scala-dml-2:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1222,14 +1219,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2
       - name: Scala FT - Spark (dml.insert, dml.schema)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
@@ -1279,10 +1276,12 @@ jobs:
           if-no-files-found: ignore
 
 
+  # sharedSession + parallel: this shard holds only HoodieSparkSqlTestBase suites, which share one SparkContext and run two at a time
   test-spark-java17-scala-other-1:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1322,14 +1321,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2
       - name: Scala FT - Spark (procedure, ddl)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
@@ -1343,10 +1342,12 @@ jobs:
           flags: spark-scala-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # sharedSession + parallel: the HoodieSparkSqlTestBase suites of these packages (tag SharedSessionSuite) share one SparkContext and run two at a time; the other suites of the same packages run in test-spark-java17-ftb
   test-spark-java17-scala-other-2:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1386,14 +1387,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2 -DtagsToInclude=org.apache.spark.sql.hudi.common.SharedSessionSuite
       - name: Scala FT - Spark (remaining packages)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2 -DtagsToInclude=org.apache.spark.sql.hudi.common.SharedSessionSuite
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
@@ -1486,6 +1487,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1560,6 +1562,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1659,6 +1662,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       # Keeps Java CI within the ASF cap of 20 jobs at once (2 of its 3 instances run at once); see java-ci-result.
       max-parallel: 2
@@ -1754,6 +1758,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       # Keeps Java CI within the ASF cap of 20 jobs at once (its 3 instances run one after another); see java-ci-result.
       max-parallel: 1
@@ -1869,12 +1874,13 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
           - sparkProfile: 'spark3.5'
             flinkProfile: 'flink2.2'
-            sparkArchive: 'spark-3.5.9/spark-3.5.9-bin-hadoop3.tgz'
+            sparkArchive: 'spark-3.5.10/spark-3.5.10-bin-hadoop3.tgz'
     env:
       # The only modules with integration-test classes besides hudi-flink, whose ITs run in the
       # flink jobs. The build below builds these and what they depend on (-am) and the IT step
@@ -2079,8 +2085,8 @@ jobs:
   # cancelled one. Adding or resharding a job means adding its id to `needs` below and
   # `needs: changes` and `if: *route` to the job, and nothing else. The ASF GitHub Actions policy
   # caps the jobs running at once in a workflow at 20 (15 recommended), counted across all
-  # matrices. The test jobs total 23 instances; `max-parallel` on validate-bundles and
-  # validate-bundle-spark4 holds back 3, so the test jobs can currently run 20 at once.
+  # matrices. The test jobs total 22 instances; `max-parallel` on validate-bundles and
+  # validate-bundle-spark4 holds back 3, so the test jobs can currently run 19 at once.
   # test-fork-ci-status.cjs checks that number, counting `max-parallel`, and that no test job
   # waits on another. GitHub Actions has no workflow-level job cap, so a change that pushes the
   # number past 20 must lower `max-parallel` or serialize jobs through `needs`, and make that check
@@ -2101,9 +2107,8 @@ jobs:
     needs:
       - test-spark-client-and-hadoop-common
       - test-utilities-streamer
-      - test-utilities-rest
+      - test-utilities-rest-hadoop-mr-java-client
       - test-common-and-other-modules
-      - test-hudi-hadoop-mr-and-hudi-java-client
       - test-spark-java17-ut-functional
       - test-spark-java17-ut-other
       - test-spark-java17-ut-fat-and-ftc

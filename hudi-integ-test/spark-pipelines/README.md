@@ -31,7 +31,7 @@ in-JVM `DataflowGraph` calls for the client/server protocol.
 
 | Layer | Server | Coverage | Execution |
 | --- | --- | --- | --- |
-| 2: `TestHoodieSparkConnectPipelines` | Connect service in the ScalaTest JVM, Hudi on the Maven test classpath | MV/ST exact rows, independent SQL flow insert/upsert settings, null-key failure and a fresh remote query afterward | Existing Scala-other job on PRs, pushes and merge groups |
+| 2: `TestHoodieSparkConnectPipelines` | Connect service in the ScalaTest JVM, Hudi on the Maven test classpath | MV/ST exact rows, independent SQL flow insert/upsert settings, COW/MOR full refresh and restart, invalid table configuration, null-key failure and a fresh remote query afterward | Existing Scala-other job on PRs, pushes and merge groups |
 | 3: `harness.py` | Separate `spark-submit` JVM with the candidate bundle | Bundle packaging, static server configuration, remote writes/reads, process ownership and cleanup | Existing Scala-DML job on PRs, pushes and merge groups |
 
 Both layers run as additional steps in existing `bot.yml` jobs; no new workflow,

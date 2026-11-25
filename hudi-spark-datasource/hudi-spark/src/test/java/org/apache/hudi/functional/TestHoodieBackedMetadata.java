@@ -137,7 +137,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -4418,11 +4417,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
         fileGroups.forEach(
-            g -> LoggerFactory.getLogger(TestHoodieBackedMetadata.class).info(g.toString()));
+            g -> log.info(g.toString()));
         fileGroups.forEach(g -> g.getAllBaseFiles().forEach(
-            b -> LoggerFactory.getLogger(TestHoodieBackedMetadata.class).info(b.toString())));
+            b -> log.info(b.toString())));
         fileGroups.forEach(g -> g.getAllFileSlices().forEach(
-            s -> LoggerFactory.getLogger(TestHoodieBackedMetadata.class).info(s.toString())));
+            s -> log.info(s.toString())));
 
         long numFiles = fileGroups.stream()
             .mapToLong(g -> g.getAllBaseFiles().count()

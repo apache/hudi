@@ -23,8 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Date;
 import java.util.List;
@@ -33,9 +32,8 @@ import java.util.stream.Collectors;
 /**
  * Utility methods for table service operations (compaction, clustering, log compaction).
  */
+@Slf4j
 public class TableServiceUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TableServiceUtils.class);
 
   /**
    * Find a stale inflight instant that has exceeded the max processing time.

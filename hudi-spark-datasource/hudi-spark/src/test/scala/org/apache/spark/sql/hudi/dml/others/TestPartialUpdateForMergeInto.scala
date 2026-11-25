@@ -38,17 +38,17 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getMetaClientAndF
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, StructField}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
-import java.util.{Collections, List, Optional}
+import java.util.{List, Optional}
 
 import scala.collection.JavaConverters._
 
 class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
-  test("Test partial update with COW and Avro log format") {
+  testWithMergeHandles("Test partial update with COW and Avro log format") {
     testPartialUpdate("cow", "avro")
   }
 
-  test("Test partial update with COW and Avro log format and commit time ordering") {
+  testWithMergeHandles("Test partial update with COW and Avro log format and commit time ordering") {
     testPartialUpdate("cow", "avro", commitTimeOrdering = true)
   }
 
@@ -68,7 +68,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     testPartialUpdate("mor", "parquet", commitTimeOrdering = true)
   }
 
-  test("Test partial update and insert with COW and Avro log format") {
+  testWithMergeHandles("Test partial update and insert with COW and Avro log format") {
     testPartialUpdateWithInserts("cow", "avro")
   }
 
@@ -744,7 +744,10 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       .findFirst()
     assertTrue(fileSlice.isPresent)
     val logFilePathList: List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
-    Collections.sort(logFilePathList)
+    // Order by delta commit time. A plain string sort compares the write token first, which holds the Spark stage
+    // id, so it misorders the files once stage ids in the JVM cross a power of ten.
+    logFilePathList.sort((a: String, b: String) =>
+      HoodieLogFile.getLogFileComparator.compare(new HoodieLogFile(a), new HoodieLogFile(b)))
 
     val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until expectedNumLogFile) {

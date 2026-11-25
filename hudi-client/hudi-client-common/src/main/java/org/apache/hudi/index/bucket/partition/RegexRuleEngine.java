@@ -20,8 +20,7 @@ package org.apache.hudi.index.bucket.partition;
 
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -32,9 +31,9 @@ import java.util.regex.Pattern;
 /**
  * Regex-based rule engine implementation.
  */
+@Slf4j
 public class RegexRuleEngine implements RuleEngine {
 
-  private static final Logger LOG = LoggerFactory.getLogger(PartitionBucketIndexCalculator.class);
   private static final long serialVersionUID = 1L;
   private final List<RegexRule> rules = new ArrayList<>();
 
@@ -91,10 +90,10 @@ public class RegexRuleEngine implements RuleEngine {
       }
 
       rules.add(new RegexRule(regex, bucketNumber));
-      LOG.info("Added regex rule: {} with bucket number: {}", regex, bucketNumber);
+      log.info("Added regex rule: {} with bucket number: {}", regex, bucketNumber);
     }
 
-    LOG.info("Initialized {} regex rules", rules.size());
+    log.info("Initialized {} regex rules", rules.size());
   }
 
   @Override
@@ -102,7 +101,7 @@ public class RegexRuleEngine implements RuleEngine {
     // Check each rule in order (priority by position)
     for (RegexRule rule : rules) {
       if (rule.matches(partitionPath)) {
-        LOG.debug("Partition '{}' matched regex rule: {}", partitionPath, rule);
+        log.debug("Partition '{}' matched regex rule: {}", partitionPath, rule);
         return rule.numBuckets;
       }
     }

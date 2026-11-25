@@ -47,6 +47,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -74,6 +75,7 @@ import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertG
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class TestDataValidationCheckForLogCompactionActions extends HoodieClientTestBase {
 
   private static final String RECORD_KEY_APPEND_VALUE = "-EXP";
@@ -122,12 +124,12 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     // Total ingestion writes.
     int totalWrites = 15;
 
-    LOG.warn("Starting trial with seed {}", seed);
+    log.warn("Starting trial with seed {}", seed);
 
     // Current ingestion commit.
     int curr = 1;
     while (curr < totalWrites) {
-      LOG.warn("Starting write No. {}", curr);
+      log.warn("Starting write No. {}", curr);
 
       // Pick an action. It can be insert/update/delete and write data to main table.
       boolean status = writeOnMainTable(mainTable, curr);
@@ -145,7 +147,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
 
         // Verify the records in both the tables.
         verifyRecords(mainTable, experimentTable);
-        LOG.warn("For write No.{}, verification passed. Last ingestion commit timestamp is {}", curr, mainTable.commitTimeOnMainTable);
+        log.warn("For write No.{}, verification passed. Last ingestion commit timestamp is {}", curr, mainTable.commitTimeOnMainTable);
       }
       curr++;
     }
@@ -195,7 +197,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
           result = deleteDataIntoMainTable(mainTable, commitTime);
         }
       } catch (IllegalArgumentException e) {
-        LOG.warn("{} ignoring current command.", e.getMessage());
+        log.warn("{} ignoring current command.", e.getMessage());
         return false;
       }
     }

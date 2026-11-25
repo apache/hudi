@@ -43,11 +43,14 @@ import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoExpressionIndexFilterExpr
 import org.apache.spark.sql.hudi.dataskipping.{ExpressionIndexSource, IndexedExpression, Leaf, Op}
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel
+
+import java.time.{LocalDate, ZoneId}
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
@@ -409,8 +412,8 @@ class ExpressionIndexSupport(spark: SparkSession,
   /**
    * Bloom filter keys: the values of `f(col) = v` and `f(col) IN (...)`, as strings like the writer added them. A file
    * passes if it may hold any key, which is conservative across conjuncts. A conjunct with a value that is not a
-   * non-null literal gives no keys, and is skipped. So does a term whose values the writer and the literal print
-   * differently, for ex a DATE is `2023-01-02` to the writer and `19359` here (#20567).
+   * non-null literal gives no keys, and is skipped. So does a term whose keys cannot be rebuilt here, see
+   * [[hasWriterKeys]].
    */
   private def bloomFilterKeys(use: IndexUse): List[String] =
     use.conjuncts.flatMap(Leaf.parse).filter(leaf => use.indexed.matches(leaf.term) && hasWriterKeys(leaf.term.dataType)).flatMap { leaf =>
@@ -418,12 +421,33 @@ class ExpressionIndexSupport(spark: SparkSession,
         case Literal(value, _) => value
         case _ => null
       }
-      if (values.isEmpty || values.contains(null)) Seq.empty else values.map(_.toString)
+      if (values.isEmpty || values.contains(null)) Seq.empty else values.flatMap(writerKeys(_, leaf.term.dataType))
     }.toList
 
+  /**
+   * Whether the writer's keys, `toString` of the external value, can be rebuilt from a literal of this type.
+   *
+   * NOTE: Not TIMESTAMP: the writer prints a `java.sql.Timestamp` in the executor's default time zone, or an `Instant`
+   * with `spark.sql.datetime.java8API.enabled`, which cannot be rebuilt here.
+   * NOTE: Not FLOAT/DOUBLE: `-0.0` and `0.0` print apart though they compare equal. Not DECIMAL: it prints its scale.
+   */
   private def hasWriterKeys(dataType: DataType): Boolean = dataType match {
-    case _: StringType | ByteType | ShortType | IntegerType | LongType => true
+    case _: StringType | ByteType | ShortType | IntegerType | LongType | DateType => true
     case _ => false
+  }
+
+  /**
+   * The writer's keys for an internal literal value. A DATE is epoch days here, and the writer prints a `java.sql.Date`,
+   * or a `LocalDate` with `spark.sql.datetime.java8API.enabled`; both are probed, as they differ for edge years.
+   * A `java.sql.Date` prints in the writer's JVM time zone, which is not known here, and a day that zone skipped prints
+   * as the next one (2011-12-30 is `2011-12-31` in Pacific/Apia). So a day some zone skipped also probes the next day.
+   */
+  private def writerKeys(value: Any, dataType: DataType): Seq[String] = dataType match {
+    case DateType =>
+      val days = value.asInstanceOf[Int]
+      val probedDays = if (isSkippedInSomeZone(days)) Seq(days, days + 1) else Seq(days)
+      probedDays.flatMap(day => Seq(DateTimeUtils.toJavaDate(day).toString, DateTimeUtils.daysToLocalDate(day).toString)).distinct
+    case _ => Seq(value.toString)
   }
 
   private def loadExpressionIndexRecords(indexPartition: String,
@@ -566,6 +590,14 @@ object ExpressionIndexSupport {
   }
 
   val INDEX_NAME = "EXPRESSION"
+
+  private lazy val allZones: Seq[ZoneId] = ZoneId.getAvailableZoneIds.asScala.toSeq.map(id => ZoneId.of(id))
+
+  /** Whether some time zone skipped this whole day: its earliest local time is then on a later day. */
+  private def isSkippedInSomeZone(days: Int): Boolean = {
+    val date = LocalDate.ofEpochDay(days)
+    allZones.exists(zone => date.atStartOfDay(zone).toLocalDate != date)
+  }
 
   /** One expression index, and the query conjuncts that read it. */
   private case class IndexUse(definition: HoodieIndexDefinition, indexed: IndexedExpression, conjuncts: Seq[Expression]) {

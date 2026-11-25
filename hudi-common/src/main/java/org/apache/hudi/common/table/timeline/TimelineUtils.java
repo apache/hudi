@@ -103,6 +103,8 @@ public class TimelineUtils {
   /**
    * Returns partitions that have been deleted or marked for deletion in the timeline between given commit time range.
    * Does not include internal operations such as clean in the timeline.
+   *
+   * @throws HoodieIOException if an instant since the last sync, including a clean, cannot be read
    */
   public static List<String> getDroppedPartitions(HoodieTableMetaClient metaClient, Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
     HoodieTimeline timeline = lastCommitTimeSynced.isPresent()
@@ -125,7 +127,13 @@ public class TimelineUtils {
             .map(partition -> new AbstractMap.SimpleEntry<>(partition, pair.getLeft().requestedTime()))
         ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replace) -> replace));
     // cleaner could delete a partition when there are no active filegroups in the partition
-    HoodieTimeline cleanerTimeline = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
+    HoodieTimeline completedCleanerTimeline = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
+    // Both watermarks are needed to bound the scan: without the completion time, a clean requested before the last
+    // commit time synced but still inflight at the last sync would never be read.
+    boolean cleansSinceLastSyncOnly = lastCommitTimeSynced.isPresent() && lastCommitCompletionTimeSynced.isPresent();
+    HoodieTimeline cleanerTimeline = cleansSinceLastSyncOnly
+        ? getInstantsSince(completedCleanerTimeline, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced)
+        : completedCleanerTimeline;
     cleanerTimeline.getInstantsAsStream()
         .forEach(instant -> {
           try {
@@ -136,7 +144,9 @@ public class TimelineUtils {
               }
             });
           } catch (HoodieIOException e) {
-            if (e.getCause() instanceof FileNotFoundException) {
+            // The unbounded scan is best effort over every active clean, so one the archiver removed mid-scan is
+            // skipped; inside the window every clean is required.
+            if (!cleansSinceLastSyncOnly && e.getCause() instanceof FileNotFoundException) {
               log.warn("Instant {} not found in storage and has been archived", instant, e);
             } else {
               throw e;
@@ -323,12 +333,20 @@ public class TimelineUtils {
         ? metaClient.getArchivedTimeline(exclusiveStartInstantTime).mergeTimeline(writeTimeline)
         : writeTimeline;
 
-    HoodieTimeline timelineSinceLastSync = timeline.getCommitsTimeline()
-        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
+    return getInstantsSince(timeline.getCommitsTimeline(), exclusiveStartInstantTime, lastMaxCompletionTime);
+  }
+
+  /**
+   * Returns the instants of the timeline that a sync up to {@code exclusiveStartInstantTime} could not have seen:
+   * those requested after it, plus the completed "hollow" ones requested before it but completed after
+   * {@code lastMaxCompletionTime}.
+   */
+  public static HoodieTimeline getInstantsSince(HoodieTimeline timeline, String exclusiveStartInstantTime, Option<String> lastMaxCompletionTime) {
+    HoodieTimeline timelineSinceLastSync = timeline.findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
 
     if (lastMaxCompletionTime.isPresent()) {
       // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
-      HoodieTimeline hollowInstantsTimeline = timeline.getCommitsTimeline()
+      HoodieTimeline hollowInstantsTimeline = timeline
           .filterCompletedInstants()
           .filter(s -> compareTimestamps(s.requestedTime(), LESSER_THAN, exclusiveStartInstantTime))
           .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN, lastMaxCompletionTime.get()));
