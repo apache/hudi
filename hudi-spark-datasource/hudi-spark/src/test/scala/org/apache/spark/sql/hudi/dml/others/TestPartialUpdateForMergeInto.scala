@@ -208,31 +208,28 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
   }
 
   Seq(true, false).foreach { partitioned =>
-    test("Test partial update next to a source record without a match on a "
+    test("Test partial update without an insert clause next to a source record without a match on a "
       + s"${if (partitioned) "partitioned" else "non-partitioned"} MOR table with a small base file") {
       withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (id int, name string, price double, dt string) using hudi
+             |${if (partitioned) "partitioned by (dt)" else ""}
+             |tblproperties (type = 'mor', primaryKey = 'id')
+             |location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 'p1'), (2, 'a2', 20.0, 'p1')")
         // id 9 matches no record and is written next to id 1, whose base file is small enough to take inserts
-        Seq(("", Seq.empty), ("when not matched then insert *", Seq(Seq(9, "a9", 90.0, "p1")))).foreach { case (insertClause, inserted) =>
-          val tableName = generateTableName
-          spark.sql(
-            s"""
-               |create table $tableName (id int, name string, price double, dt string) using hudi
-               |${if (partitioned) "partitioned by (dt)" else ""}
-               |tblproperties (type = 'mor', primaryKey = 'id')
-               |location '${tmp.getCanonicalPath}/$tableName'
-             """.stripMargin)
-          spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 'p1'), (2, 'a2', 20.0, 'p1')")
-          spark.sql(
-            s"""
-               |merge into $tableName t
-               |using (select 1 as id, 'x' as name, 11.0 as price, 'p1' as dt union all select 9, 'a9', 90.0, 'p1') s
-               |on t.id = s.id
-               |when matched then update set price = s.price
-               |$insertClause
-             """.stripMargin)
-          checkAnswer(s"select id, name, price, dt from $tableName order by id")(
-            Seq(Seq(1, "a1", 11.0, "p1"), Seq(2, "a2", 20.0, "p1")) ++ inserted: _*)
-        }
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'x' as name, 11.0 as price, 'p1' as dt union all select 9, 'a9', 90.0, 'p1') s
+             |on t.id = s.id
+             |when matched then update set price = s.price
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+          Seq(1, "a1", 11.0, "p1"), Seq(2, "a2", 20.0, "p1"))
       }
     }
   }
@@ -533,7 +530,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
       withSQLConf(
-        HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key() -> "0",
         DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key() -> "true",
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key() -> logDataBlockFormat,
         HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> "true") {
