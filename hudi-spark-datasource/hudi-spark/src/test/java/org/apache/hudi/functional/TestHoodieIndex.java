@@ -209,11 +209,18 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         createSimpleRecord("004", "2016-01-31T00:00:04.000Z", 4));
   }
 
-  private static List<HoodieRecord> getRandomInserts(int count) {
+  /**
+   * Generates inserts with record keys not in {@code usedRecordKeys}, which takes the new keys. A key drawn twice
+   * would turn an insert into an update of a record that a global index can find in another partition.
+   */
+  private static List<HoodieRecord> getRandomInserts(int count, Set<String> usedRecordKeys) {
     List<HoodieRecord> records = new ArrayList<>();
     Random random = new Random();
     for (int i = 0; i < count; i++) {
-      String recordKey = String.format("%03d", random.nextInt(10000));
+      String recordKey;
+      do {
+        recordKey = String.format("%03d", random.nextInt(10000));
+      } while (!usedRecordKeys.add(recordKey));
       // Generate random timestamp within a range
       int year = 2016 + random.nextInt(5); // 2016-2020
       int month = 1 + random.nextInt(12);
@@ -368,7 +375,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     setUp(indexType, populateMetaFields, enableMetadataIndex);
     String newCommitTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
     int initialRecords = 10;
-    List<HoodieRecord> originalBatch = getRandomInserts(initialRecords);
+    Set<String> recordKeys = new HashSet<>();
+    List<HoodieRecord> originalBatch = getRandomInserts(initialRecords, recordKeys);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(originalBatch, 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -398,7 +406,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Generate updates for all existing records.
     List<HoodieRecord> newRecords = getUpdates(originalBatch);
     int newInsertsCount = 10;
-    newRecords.addAll(getRandomInserts(newInsertsCount));
+    newRecords.addAll(getRandomInserts(newInsertsCount, recordKeys));
     // For record_index updating partitionPath should not matter.
     if (indexType.equals(RECORD_INDEX)) {
       String newPartitionPath = "2022/11/04";
