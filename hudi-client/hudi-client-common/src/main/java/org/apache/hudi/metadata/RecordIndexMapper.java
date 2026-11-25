@@ -20,6 +20,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -33,6 +34,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.reduceByKeys;
 
 /**
  * Mapper for Record Level Index (RLI).
@@ -86,5 +89,14 @@ public class RecordIndexMapper extends MetadataIndexMapper {
       }
     }
     return allRecords;
+  }
+
+  /**
+   * Fails the write when a record key gets two index entries, as an insert batch that repeats the key does,
+   * before any record index entry is written.
+   */
+  @Override
+  public HoodieData<HoodieRecord> postProcess(HoodieData<HoodieRecord> records) {
+    return reduceByKeys(records, records.getNumPartitions(), dataWriteConfig.isRecordLevelIndexEnabled());
   }
 }
