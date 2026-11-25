@@ -124,6 +124,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String LAST_INSTANT_TS = "lastinstantts";
   public static final String TIMELINE_HASH = "timelinehash";
   public static final String REFRESH_OFF = "refreshoff";
+  public static final String LOCAL_FALLBACK = "localfallback";
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
 
   public static final String MULTI_VALUE_SEPARATOR = ",";
@@ -142,6 +143,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private final HoodieTableMetaClient metaClient;
   private HoodieTimeline timeline;
   private final TimelineServiceClientBase timelineServiceClient;
+  // A REMOTE_FIRST view uses a local view for the requests that the timeline server rejects.
+  private final boolean hasLocalFallback;
 
   private boolean closed = false;
 
@@ -154,6 +157,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     this.metaClient = metaClient;
     this.timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     this.timelineServiceClient = new TimelineServiceClient(viewConf);
+    this.hasLocalFallback = viewConf.getStorageType() == FileSystemViewStorageType.REMOTE_FIRST;
   }
 
   private <T> T executeRequest(String requestPath, Map<String, String> queryParameters, TypeReference<T> reference,
@@ -163,6 +167,9 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     // Adding mandatory parameters - Last instants affecting file-slice
     timeline.lastInstant().ifPresent(instant -> queryParameters.put(LAST_INSTANT_TS, instant.requestedTime()));
     queryParameters.put(TIMELINE_HASH, timeline.getTimelineHash());
+    if (hasLocalFallback) {
+      queryParameters.put(LOCAL_FALLBACK, "true");
+    }
 
     return timelineServiceClient.makeRequest(
             TimelineServiceClient.Request.newBuilder(method, requestPath).addQueryParams(queryParameters).build())

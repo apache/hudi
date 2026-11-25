@@ -18,14 +18,18 @@
 
 package org.apache.hudi.timeline.service;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineServiceClient;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.PriorityBasedFileSystemView;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
@@ -36,6 +40,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -43,10 +48,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -427,6 +436,188 @@ class TestTimelineViewRefresh extends HoodieCommonTestHarness {
     HoodieTimeline updated = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
     assertEquals(Arrays.asList("002"), request(updated, "003", "partition"));
     verify(view).sync();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testArchivalBeforeServerLoadSyncsOnceForClientsWithLocalFallback(boolean archiveFirstInstant) throws Exception {
+    HoodieTableMetaClient clientMetaClient = archiveAfterClientLoadAndLoadServerView(archiveFirstInstant);
+    ExecutorService executor = Executors.newFixedThreadPool(8);
+    try {
+      List<Future<List<String>>> tasks = new ArrayList<>();
+      for (int i = 0; i < 32; i++) {
+        tasks.add(executor.submit(() -> latestBaseFileCommitTimes(clientMetaClient, FileSystemViewStorageType.REMOTE_FIRST)));
+      }
+      for (Future<List<String>> task : tasks) {
+        assertEquals(Arrays.asList("003"), task.get(60, TimeUnit.SECONDS));
+      }
+    } finally {
+      executor.shutdownNow();
+    }
+    // The first request syncs the server view, and the timelines still differ. The server rejects all the requests, and syncs one time only.
+    verify(view).sync();
+    verify(view, never()).getLatestBaseFiles("partition");
+  }
+
+  @Test
+  void testArchivalBeforeServerLoadSyncsOnEveryRequestForClientsWithoutLocalFallback() throws Exception {
+    HoodieTableMetaClient clientMetaClient = archiveAfterClientLoadAndLoadServerView(false);
+    for (int i = 0; i < 3; i++) {
+      assertThrows(HoodieRemoteException.class, () -> latestBaseFileCommitTimes(clientMetaClient, FileSystemViewStorageType.REMOTE_ONLY));
+    }
+    verify(view, times(3)).sync();
+  }
+
+  @Test
+  void testNewClientTimelineSyncsAfterUnmatchedClientTimeline() throws Exception {
+    HoodieTableMetaClient staleMetaClient = archiveAfterClientLoadAndLoadServerView(false);
+    assertEquals(Arrays.asList("003"), latestBaseFileCommitTimes(staleMetaClient, FileSystemViewStorageType.REMOTE_FIRST));
+    // The next write loads its timeline after a new commit.
+    FileCreateUtils.createCommit(metaClient, "006");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "006", "file");
+    HoodieTableMetaClient newMetaClient = loadClientMetaClient(basePath);
+    assertEquals(Arrays.asList("006"), latestBaseFileCommitTimes(newMetaClient, FileSystemViewStorageType.REMOTE_FIRST));
+    assertEquals(Arrays.asList("003"), latestBaseFileCommitTimes(staleMetaClient, FileSystemViewStorageType.REMOTE_FIRST));
+    // The server syncs one time for each client timeline. It answers only the request with the new timeline.
+    verify(view, times(2)).sync();
+    verify(view).getLatestBaseFiles("partition");
+  }
+
+  @Test
+  void testCommitOfOtherWriterBeforeServerLoadSyncsOnceForClientsWithLocalFallback() throws Exception {
+    FileCreateUtils.createCommit(metaClient, "001");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file");
+    HoodieTableMetaClient clientMetaClient = loadClientMetaClient(basePath);
+    // A different writer completes a commit after the client loads its timeline and before the server loads its view.
+    FileCreateUtils.createCommit(metaClient, "002");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "002", "file");
+    loadServerView();
+    for (int i = 0; i < 3; i++) {
+      assertEquals(Arrays.asList("001"), latestBaseFileCommitTimes(clientMetaClient, FileSystemViewStorageType.REMOTE_FIRST));
+    }
+    verify(view).sync();
+    verify(view, never()).getLatestBaseFiles("partition");
+  }
+
+  @Test
+  void testRollbackOfOldestCommitBeforeServerLoadIsNotServedRemotely() throws Exception {
+    FileCreateUtils.createCommit(metaClient, "001");
+    String rolledBackFile = FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file-1");
+    FileCreateUtils.createCommit(metaClient, "002");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "002", "file-2");
+    FileCreateUtils.createCommit(metaClient, "003");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "003", "file-3");
+    FileCreateUtils.createRequestedRollbackFile(metaClient, "004");
+    FileCreateUtils.createInflightRollbackFile(metaClient, "004");
+    HoodieTableMetaClient clientMetaClient = loadClientMetaClient(basePath);
+    // The rollback of 001 deletes the files and the instant of 001 before it completes.
+    // The server timeline then looks like the client timeline after archival of 001.
+    Files.delete(Paths.get(rolledBackFile));
+    FileCreateUtils.deleteCommit(metaClient, "001");
+    loadServerView();
+    for (int i = 0; i < 3; i++) {
+      assertEquals(Arrays.asList("002", "003"), latestBaseFileCommitTimes(clientMetaClient, FileSystemViewStorageType.REMOTE_FIRST));
+    }
+    verify(view).sync();
+    verify(view, never()).getLatestBaseFiles("partition");
+  }
+
+  @Test
+  void testUnmatchedClientTimelineOfOneTableDoesNotApplyToOtherTable(@TempDir Path otherTableDir) throws Exception {
+    // The clients of the two tables have the same timeline hash. For this table, a sync does not make the server match it.
+    FileCreateUtils.createCommit(metaClient, "001");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file");
+    HoodieTableMetaClient clientMetaClient = loadClientMetaClient(basePath);
+    FileCreateUtils.createCommit(metaClient, "002");
+    loadServerView();
+    assertEquals(Arrays.asList("001"), latestBaseFileCommitTimes(clientMetaClient, FileSystemViewStorageType.REMOTE_FIRST));
+    verify(view).sync();
+
+    // For the other table, the server loaded its view before 001. A sync makes the server match the client.
+    HoodieTableMetaClient otherMetaClient = HoodieTestUtils.init(otherTableDir.toAbsolutePath().toString());
+    String otherBasePath = otherMetaClient.getBasePath().toString();
+    SyncableFileSystemView otherView = spy(HoodieTableFileSystemView.fileListingBasedFileSystemView(
+        new HoodieLocalEngineContext(otherMetaClient.getStorageConf()), otherMetaClient, otherMetaClient.reloadActiveTimeline()));
+    when(manager.getFileSystemView(otherBasePath)).thenReturn(otherView);
+    try {
+      FileCreateUtils.createCommit(otherMetaClient, "001");
+      FileCreateUtils.createBaseFile(otherMetaClient, "partition", "001", "file");
+      HoodieTableMetaClient otherClientMetaClient = loadClientMetaClient(otherBasePath);
+      assertEquals(clientMetaClient.getActiveTimeline().getTimelineHash(), otherClientMetaClient.getActiveTimeline().getTimelineHash());
+      assertEquals(Arrays.asList("001"), latestBaseFileCommitTimes(otherClientMetaClient, FileSystemViewStorageType.REMOTE_FIRST));
+      verify(otherView).sync();
+      verify(otherView).getLatestBaseFiles("partition");
+    } finally {
+      otherView.close();
+    }
+  }
+
+  @Test
+  void testLateCompletionStillSyncsForClientsWithLocalFallback() throws Exception {
+    FileCreateUtils.createCommit(metaClient, "001");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "001", "file");
+    FileCreateUtils.createInflightCommit(metaClient, "002");
+    FileCreateUtils.createCleanFile(metaClient, "003", Option.empty(), null, true);
+    loadServerView();
+    // 002 completes after the server loaded its view. The last instant is the same for the server and the client.
+    FileCreateUtils.createCommit(metaClient, "002");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "002", "file");
+    HoodieTableMetaClient clientMetaClient = loadClientMetaClient(basePath);
+    for (int i = 0; i < 3; i++) {
+      assertEquals(Arrays.asList("002"), latestBaseFileCommitTimes(clientMetaClient, FileSystemViewStorageType.REMOTE_FIRST));
+    }
+    // One sync makes the timelines match, and the server answers all the requests.
+    verify(view).sync();
+    verify(view, times(3)).getLatestBaseFiles("partition");
+  }
+
+  /**
+   * Archival of a commit and a clean complete after a client loads its timeline and before the server loads its view.
+   *
+   * @param archiveFirstInstant true if the archived commit is the first instant of the timeline, as with TimelineArchiverV2.
+   *                            false if an old rollback is the first instant and stays, as with TimelineArchiverV1.
+   * @return the meta client of the client.
+   */
+  private HoodieTableMetaClient archiveAfterClientLoadAndLoadServerView(boolean archiveFirstInstant) throws Exception {
+    if (!archiveFirstInstant) {
+      FileCreateUtils.createRollbackFile(metaClient, "001", null, true);
+    }
+    FileCreateUtils.createCommit(metaClient, "002");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "002", "file");
+    FileCreateUtils.createCommit(metaClient, "003");
+    FileCreateUtils.createBaseFile(metaClient, "partition", "003", "file");
+    FileCreateUtils.createCleanFile(metaClient, "004", Option.empty(), null, true);
+    HoodieTableMetaClient clientMetaClient = loadClientMetaClient(basePath);
+    FileCreateUtils.deleteCommit(metaClient, "002");
+    FileCreateUtils.createCleanFile(metaClient, "005", Option.empty(), null, true);
+    loadServerView();
+    return clientMetaClient;
+  }
+
+  private HoodieTableMetaClient loadClientMetaClient(String tableBasePath) {
+    HoodieTableMetaClient clientMetaClient = HoodieTestUtils.createMetaClient(metaClient.getStorageConf(), tableBasePath);
+    clientMetaClient.getActiveTimeline();
+    return clientMetaClient;
+  }
+
+  private void loadServerView() {
+    view = spy(HoodieTableFileSystemView.fileListingBasedFileSystemView(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient,
+        metaClient.reloadActiveTimeline()));
+  }
+
+  /**
+   * Gets the latest base files as a task of a writer does: with a new view on the timeline that the writer loaded.
+   */
+  private List<String> latestBaseFileCommitTimes(HoodieTableMetaClient clientMetaClient, FileSystemViewStorageType storageType) {
+    FileSystemViewManager taskViewManager = FileSystemViewManager.createViewManager(new HoodieLocalEngineContext(clientMetaClient.getStorageConf()),
+        HoodieMetadataConfig.newBuilder().enable(false).build(),
+        FileSystemViewStorageConfig.newBuilder().withStorageType(storageType).withRemoteServerHost("localhost").withRemoteServerPort(server.getServerPort()).build(),
+        HoodieCommonConfig.newBuilder().build());
+    try {
+      return taskViewManager.getFileSystemView(clientMetaClient).getLatestBaseFiles("partition").map(HoodieBaseFile::getCommitTime).sorted().collect(Collectors.toList());
+    } finally {
+      taskViewManager.close();
+    }
   }
 
   private List<String> request(HoodieTimeline timeline, String boundary, String partition) throws IOException {
