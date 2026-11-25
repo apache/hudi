@@ -61,6 +61,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -445,6 +446,7 @@ public class HoodieTableConfig extends HoodieConfig {
   private static final Set<String> CONFIGS_REQUIRED_FOR_OLDER_VERSIONED_TABLES = new HashSet<>(Arrays.asList(
       KEY_GENERATOR_CLASS_NAME.key(),
       KEY_GENERATOR_TYPE.key(),
+      PRECOMBINE_FIELD.key(),
       // records what the data of a table at any version carries, so it must survive on older versions too
       COMPLEX_KEYGEN_ENCODING.key()
   ));
@@ -672,6 +674,14 @@ public class HoodieTableConfig extends HoodieConfig {
     HoodieConfig hoodieConfig = HoodieConfig.copy(properties);
     StoragePath propertyPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     HoodieTableVersion tableVersion = getTableVersion(hoodieConfig);
+    List<String> orderingFields = StringUtils.split(hoodieConfig.getProps().getProperty(ORDERING_FIELDS.key()), ",");
+    // readers of tables below version 9 take the deprecated precombine key as one field name, so such a table is refused
+    // before hoodie.properties is created or overwritten
+    if (orderingFields.size() > 1 && tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      throw new HoodieNotSupportedException(String.format("Table version %d does not support several ordering fields %s; "
+          + "use a single ordering field or table version %d and above", tableVersion.versionCode(), orderingFields,
+          HoodieTableVersion.NINE.versionCode()));
+    }
     try (OutputStream outputStream = storage.create(propertyPath)) {
       if (!hoodieConfig.contains(NAME)) {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
@@ -703,6 +713,8 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       getMissingKeyGeneratorClass(hoodieConfig).ifPresent(
           keyGeneratorClass -> hoodieConfig.setValue(KEY_GENERATOR_CLASS_NAME, keyGeneratorClass));
+      getMissingPrecombineField(hoodieConfig).ifPresent(
+          precombineField -> hoodieConfig.setValue(PRECOMBINE_FIELD, precombineField));
 
       dropInvalidConfigs(hoodieConfig);
       storeProperties(hoodieConfig.getProps(), outputStream, propertyPath);
@@ -723,6 +735,20 @@ public class HoodieTableConfig extends HoodieConfig {
         .filter(type -> type != KeyGeneratorType.USER_PROVIDED && type.name().equals(keyGeneratorType))
         .map(KeyGeneratorType::getClassName)
         .findFirst());
+  }
+
+  /**
+   * Returns the ordering field that a table below version 9 records only under {@code hoodie.table.ordering.fields}.
+   * Readers of such a table, 0.x for version 6 and 1.0.x for version 8, know only the deprecated precombine key, which
+   * the 9 to 8 downgrade writes too, and take its value as one field name, so a table ordered on several fields gets none.
+   */
+  public static Option<String> getMissingPrecombineField(HoodieConfig config) {
+    if (!getTableVersion(config).lesserThan(HoodieTableVersion.NINE) || config.contains(PRECOMBINE_FIELD)) {
+      return Option.empty();
+    }
+    // the raw key: reading ORDERING_FIELDS through its alternatives would resolve to the precombine key itself
+    List<String> orderingFields = StringUtils.split(config.getProps().getProperty(ORDERING_FIELDS.key()), ",");
+    return orderingFields.size() == 1 ? Option.of(orderingFields.get(0)) : Option.empty();
   }
 
   public static long generateChecksum(Properties props) {

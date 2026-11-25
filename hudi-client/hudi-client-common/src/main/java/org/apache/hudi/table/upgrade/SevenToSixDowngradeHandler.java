@@ -18,10 +18,15 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * There is no format change between table version 6 and 7.
@@ -35,6 +40,9 @@ public class SevenToSixDowngradeHandler implements DowngradeHandler {
   public UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SIX, table.getMetaClient());
-    return new UpgradeDowngrade.TableConfigChangeSet();
+    // a table brought down to version 7 before the 8 to 7 step recorded the precombine key may still lack it
+    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+    EightToSevenDowngradeHandler.downgradePrecombineField(table.getMetaClient().getTableConfig(), tablePropsToAdd);
+    return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptySet());
   }
 }

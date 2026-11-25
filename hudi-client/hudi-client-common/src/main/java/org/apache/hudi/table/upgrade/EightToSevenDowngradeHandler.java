@@ -130,6 +130,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     tablePropsToRemove.addAll(unsetRecordMergeMode(config, metaClient.getTableConfig(), tablePropsToAdd));
     tablePropsToRemove.add(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID);
     downgradeKeyGeneratorType(metaClient.getTableConfig(), tablePropsToAdd);
+    downgradePrecombineField(metaClient.getTableConfig(), tablePropsToAdd);
     downgradeBootstrapIndexType(metaClient.getTableConfig(), tablePropsToAdd);
 
     // Prepare parameters.
@@ -196,6 +197,18 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       }
     }
     tableConfig.getProps().remove(HoodieTableConfig.KEY_GENERATOR_TYPE.key());
+  }
+
+  /**
+   * Records the ordering field under the legacy precombine key that 0.x reads, for a table created below version 9
+   * by a 1.x writer before that key was written on creation. The write client backfills it too, but a downgrade runs
+   * outside the write client, so a table rolled back to 0.x would otherwise reach it without its ordering field.
+   * Both the 8 to 7 and the 7 to 6 downgrades apply it.
+   */
+  static void downgradePrecombineField(HoodieTableConfig tableConfig,
+                                       Map<ConfigProperty, String> tablePropsToAdd) {
+    HoodieTableConfig.getMissingPrecombineField(tableConfig).ifPresent(
+        precombineField -> tablePropsToAdd.put(HoodieTableConfig.PRECOMBINE_FIELD, precombineField));
   }
 
   @SuppressWarnings("rawtypes, unchecked")
