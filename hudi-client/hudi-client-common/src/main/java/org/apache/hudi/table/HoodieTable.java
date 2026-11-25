@@ -914,10 +914,24 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * GenericRecords with writerSchema. Hence, we need to ensure that this conversion can take place without errors.
    */
   public void validateSchema() throws HoodieUpsertException, HoodieInsertException {
+    validateSchema(false);
+  }
 
+  /**
+   * Ensure that a schema change of an ALTER TABLE statement keeps the columns of secondary indexes compatible.
+   *
+   * The statement validates the change against the internal schema itself, and a renamed or dropped column is
+   * missing from the new schema by intent, so the table schema compatibility checks of {@link #validateSchema()}
+   * do not apply.
+   */
+  public void validateAlterTableSchema() throws SchemaCompatibilityException {
+    validateSchema(true);
+  }
+
+  private void validateSchema(boolean onlySecondaryIndexColumns) {
     boolean shouldValidate = config.shouldValidateAvroSchema();
     boolean allowProjection = config.shouldAllowAutoEvolutionColumnDrop();
-    if ((!shouldValidate && allowProjection)
+    if ((!onlySecondaryIndexColumns && !shouldValidate && allowProjection)
         || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()
         || StringUtils.isNullOrEmpty(config.getSchema())
     ) {
@@ -934,12 +948,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
       HoodieSchema writerSchema = HoodieSchemaUtils.createHoodieWriteSchema(config.getSchema(), false);
       HoodieSchema tableSchema = HoodieSchemaUtils.addMetadataFields(existingTableSchemaOpt.get());
-      HoodieSchemaCompatibility.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
-      
+      if (!onlySecondaryIndexColumns) {
+        HoodieSchemaCompatibility.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
+      }
+
       // Check secondary index column compatibility
       Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
       if (indexMetadata.isPresent()) {
-        validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata.get());
+        validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata.get(), !onlySecondaryIndexColumns);
       }
     } catch (SchemaCompatibilityException e) {
       throw e;
@@ -960,6 +976,20 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       HoodieSchema tableSchema,
       HoodieSchema writerSchema,
       HoodieIndexMetadata indexMetadata) throws SchemaCompatibilityException {
+    validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata, true);
+  }
+
+  /**
+   * Validates that columns with secondary indexes are not evolved in an incompatible way.
+   *
+   * @param allowMissingColumns whether the writer schema may leave out a secondary index column, as a write
+   *                            with fewer columns does; a schema change that leaves one out renames or drops it
+   */
+  static void validateSecondaryIndexSchemaEvolution(
+      HoodieSchema tableSchema,
+      HoodieSchema writerSchema,
+      HoodieIndexMetadata indexMetadata,
+      boolean allowMissingColumns) throws SchemaCompatibilityException {
     
     // Filter for secondary index definitions
     List<HoodieIndexDefinition> secondaryIndexDefs = indexMetadata.getIndexDefinitions().values().stream()
@@ -998,7 +1028,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
       // Use HoodieSchemaCompatibility's field lookup logic to handle aliases
       HoodieSchemaField writerField = HoodieSchemaCompatibility.lookupWriterField(writerSchema, tableField);
-      
+      if (writerField == null && !allowMissingColumns) {
+        throw new SchemaCompatibilityException(String.format(
+            "Column '%s' has secondary index '%s' and cannot be renamed or dropped. "
+            + "Please drop the secondary index before changing the column.", columnName, indexName));
+      }
+
       if (writerField != null && !tableField.schema().equals(writerField.schema())) {
         // Check if this is just making the field nullable/non-nullable, which is safe from SI perspective
         HoodieSchema nonNullTableField = tableField.schema().getNonNullType();
