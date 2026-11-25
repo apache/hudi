@@ -2183,4 +2183,39 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test MergeInto without update clause inserts a source row whose key was deleted") {
+    withTempDir { tmp =>
+      for (tableType <- Seq("cow", "mor"); indexType <- Seq("SIMPLE", "BLOOM")) {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double
+             | ) using hudi
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  hoodie.index.type = '$indexType'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0), (2, 'a2', 20.0)")
+        // On a mor table the delete goes to a log file, while the base file still holds id 1
+        spark.sql(s"delete from $tableName where id = 1")
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'n1' as name, 11.0 as price
+             |  union all select 2, 'n2', 21.0 union all select 3, 'n3', 31.0) s
+             | on t.id = s.id
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(1, "n1", 11.0), Seq(2, "a2", 20.0), Seq(3, "n3", 31.0))
+      }
+    }
+  }
 }

@@ -43,7 +43,7 @@ import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, BoundReference, CaseWhen, Coalesce, Cast, CreateNamedStruct, EqualNullSafe, EqualTo, Expression, GetStructField, GreaterThanOrEqual, If, IsNotNull, IsNull, Literal, NamedExpression, Not, Or, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
-import org.apache.spark.sql.catalyst.plans.LeftOuter
+import org.apache.spark.sql.catalyst.plans.{LeftAnti, LeftOuter}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -500,6 +500,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       } else {
         joined
       }
+    } else if (getOperationType(props) == INSERT_OPERATION_OPT_VAL) {
+      // Written as inserts, the source records skip the index lookup, so the ones matching the table are dropped here
+      sparkAdapter.getCatalystPlanUtils.createMITJoin(sourceTableWithoutIgnoredRecords, mergeInto.targetTable, LeftAnti,
+        Some(mergeInto.mergeCondition), "NONE")
     } else {
       // For a target table with record key(s) configure, the source table is used
       sourceTableWithoutIgnoredRecords
@@ -866,14 +870,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   /**
-   * A table with record key(s) is upserted, since only the index lookup tells the source records that
-   * match the table from the rest: written as inserts, all of them take the not-matched clauses. A
-   * table without one is upserted when the statement has a matched clause: a source record matching
-   * the table carries the location of its target record, and only the upsert applies the clause there.
+   * A statement with a matched clause is upserted: for a table with record key(s) only the index lookup finds
+   * the target record the clause applies to, and for a table without one a source record matching the table
+   * carries the location of its target record, and only the upsert applies the clause there. Without a matched
+   * clause the source records that match the table are dropped before the write, so the rest is inserted.
    */
   private def getOperationType(parameters: Map[String, String]) = {
-    if (!hasPrimaryKey()
-      && StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava))
+    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava))
       && mergeInto.matchedActions.isEmpty) {
       INSERT_OPERATION_OPT_VAL
     } else {
