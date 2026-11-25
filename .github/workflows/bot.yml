@@ -1876,7 +1876,7 @@ jobs:
         include:
           - sparkProfile: 'spark3.5'
             flinkProfile: 'flink2.2'
-            sparkArchive: 'spark-3.5.9/spark-3.5.9-bin-hadoop3.tgz'
+            sparkArchive: 'spark-3.5.10/spark-3.5.10-bin-hadoop3.tgz'
     env:
       # The only modules with integration-test classes besides hudi-flink, whose ITs run in the
       # flink jobs. The build below builds these and what they depend on (-am) and the IT step
