@@ -274,6 +274,8 @@ class TestStreamerUtil {
     configs.put("hoodie.timeline.history.path", "history");
     if (partitioned) {
       configs.put("hoodie.table.partition.fields", "p0,p1");
+      configs.put("hoodie.datasource.write.partitionpath.timestamp.fractional.seconds",
+          String.valueOf(version.greaterThanOrEquals(HoodieTableVersion.TEN)));
     }
     if (version.lesserThan(HoodieTableVersion.EIGHT)) {
       configs.put("hoodie.timeline.layout.version", "1");

@@ -21,13 +21,19 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -75,8 +81,10 @@ public class TenToNineDowngradeHandler implements DowngradeHandler {
 
     Map<ConfigProperty, String> propertiesToUpdate = new HashMap<>();
     if (upgradeDowngradeHelper != null) {
-      MetaFieldsMode metaFieldsMode =
-          upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig().getMetaFieldsMode();
+      HoodieTableMetaClient metaClient = upgradeDowngradeHelper.getTable(config, context).getMetaClient();
+      HoodieTableConfig tableConfig = metaClient.getTableConfig();
+      checkDowngradable(metaClient);
+      MetaFieldsMode metaFieldsMode = tableConfig.getMetaFieldsMode();
 
       // Always restate the legacy boolean from the mode. Version 9 readers understand only that
       // property, and without it POPULATE_META_FIELDS falls back to its `true` default -- i.e. the
@@ -86,8 +94,7 @@ public class TenToNineDowngradeHandler implements DowngradeHandler {
       propertiesToUpdate.put(HoodieTableConfig.POPULATE_META_FIELDS,
           String.valueOf(metaFieldsMode.toLegacyPopulateMetaFields()));
 
-      HoodieTableVersion initialVersion =
-          upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig().getTableInitialVersion();
+      HoodieTableVersion initialVersion = tableConfig.getTableInitialVersion();
 
       if (!metaFieldsMode.isSelective()) {
         // ALL and NONE are exactly what the boolean can express, so the mode carries no information
@@ -141,5 +148,36 @@ public class TenToNineDowngradeHandler implements DowngradeHandler {
     return new UpgradeDowngrade.TableConfigChangeSet(
         propertiesToUpdate,
         propertiesToDelete);
+  }
+
+  /**
+   * Fails when the table cannot be downgraded to version 9. A version 9 writer predates the fractional seconds property
+   * and truncates a TIMESTAMP partition value to whole seconds, so it would write an update of a row with fractional
+   * seconds under another partition path than its earlier versions.
+   */
+  static void checkDowngradable(HoodieTableMetaClient metaClient) {
+    if (metaClient.getTableConfig().getBooleanOrDefault(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS)
+        && hasTimestampPartitionField(metaClient)) {
+      throw new HoodieUpgradeDowngradeException(String.format(
+          "Cannot downgrade to table version 9: %s=true keeps the fractional seconds of a TIMESTAMP partition value "
+              + "in the partition path, while a version 9 writer truncates them, so it would route an update of a "
+              + "record to a different partition path. Keep the table at version 10 or later.",
+          HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+    }
+  }
+
+  /**
+   * Whether a partition field of the table is a TIMESTAMP column, the only kind of value the fractional seconds
+   * property changes the partition path of. A table without a schema has written no partition path.
+   */
+  private static boolean hasTimestampPartitionField(HoodieTableMetaClient metaClient) {
+    Option<String[]> partitionFields = metaClient.getTableConfig().getPartitionFields();
+    if (!partitionFields.isPresent() || partitionFields.get().length == 0) {
+      return false;
+    }
+    Option<HoodieSchema> schema = new TableSchemaResolver(metaClient).getTableSchemaIfPresent(false);
+    return schema.isPresent() && Arrays.stream(partitionFields.get()).anyMatch(field -> schema.get().getField(field)
+        .map(schemaField -> schemaField.getNonNullSchema().getType() == HoodieSchemaType.TIMESTAMP)
+        .orElse(false));
   }
 }

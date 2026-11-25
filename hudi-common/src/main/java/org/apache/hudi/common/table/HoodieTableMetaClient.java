@@ -1618,6 +1618,9 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, partitionFields);
       }
       if (null != timestampPartitionFractionalSeconds) {
+        ValidationUtils.checkArgument(!timestampPartitionFractionalSeconds || tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN),
+            () -> HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key() + "=true needs table version 10 or later, since an older "
+                + "writer truncates the fractional seconds of a TIMESTAMP partition value; the table is created at version " + tableVersion.versionCode());
         tableConfig.setValue(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS, Boolean.toString(timestampPartitionFractionalSeconds));
       } else if (StringUtils.nonEmpty(partitionFields)) {
         // Recorded even when false, so a later change of the default never changes the table's layout

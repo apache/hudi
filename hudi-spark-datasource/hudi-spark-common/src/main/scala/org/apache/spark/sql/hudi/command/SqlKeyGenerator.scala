@@ -30,6 +30,7 @@ import org.apache.avro.LogicalTypes
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types.{StructField, StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.joda.time.DateTimeZone
@@ -194,7 +195,7 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
                 case TimestampType if keepFractionalSeconds =>
                   val micros = exactMicros(partitionField).getOrElse {
                     if (rowType || isConsistentLogicalTimestampEnabled) {
-                      SqlKeyGenerator.toMicros(Timestamp.valueOf(PartitionPathEncodeUtils.unescapePathName(_partitionValue)))
+                      DateTimeUtils.fromJavaTimestamp(Timestamp.valueOf(PartitionPathEncodeUtils.unescapePathName(_partitionValue)))
                     } else {
                       _partitionValue.toLong
                     }
@@ -242,19 +243,13 @@ object SqlKeyGenerator {
       Instant.ofEpochSecond(Math.floorDiv(micros, 1000000L), Math.floorMod(micros, 1000000L) * 1000L),
       ZoneId.of(DateTimeZone.getDefault.getID)))
 
-  private def toMicros(timestamp: Timestamp): Long =
-    Math.floorDiv(timestamp.getTime, 1000L) * 1000000L + timestamp.getNanos / 1000
-
-  private def toMicros(instant: Instant): Long =
-    Math.multiplyExact(instant.getEpochSecond, 1000000L) + instant.getNano / 1000
-
   private def avroTimestampMicros(record: GenericRecord, field: StructField): Option[Long] =
     Option(record.getSchema.getField(field.name)).flatMap { avroField =>
       val logicalType = HoodieAvroUtils.unwrapNullable(avroField.schema).getLogicalType
       (logicalType, record.get(avroField.pos)) match {
         case (_: LogicalTypes.TimestampMicros, micros: java.lang.Long) => Some(micros.longValue)
         case (_: LogicalTypes.TimestampMillis, millis: java.lang.Long) => Some(millis.longValue * 1000L)
-        case (_: LogicalTypes.TimestampMicros | _: LogicalTypes.TimestampMillis, instant: Instant) => Some(toMicros(instant))
+        case (_: LogicalTypes.TimestampMicros | _: LogicalTypes.TimestampMillis, instant: Instant) => Some(DateTimeUtils.instantToMicros(instant))
         case _ => None
       }
     }
@@ -262,8 +257,8 @@ object SqlKeyGenerator {
   private def rowTimestampMicros(row: Row, field: StructField): Option[Long] =
     Option(row.schema).flatMap(schema => schema.getFieldIndex(field.name)).flatMap { index =>
       row.get(index) match {
-        case timestamp: Timestamp => Some(toMicros(timestamp))
-        case instant: Instant => Some(toMicros(instant))
+        case timestamp: Timestamp => Some(DateTimeUtils.fromJavaTimestamp(timestamp))
+        case instant: Instant => Some(DateTimeUtils.instantToMicros(instant))
         case _ => None
       }
     }

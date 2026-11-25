@@ -29,6 +29,7 @@ import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types.{LongType, StructField, StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.joda.time.DateTimeZone
@@ -367,5 +368,9 @@ class TestSqlKeyGenerator {
     // An Instant is what a row holds with spark.sql.datetime.java8API.enabled
     assertEquals("2026-08-11 00%3A00%3A00.123456", fractionalKeyGenerator().getPartitionPath(
       new GenericRowWithSchema(Array[Any](1L, Instant.ofEpochSecond(1786406400L, 123456000L)), timestampRowSchema): Row))
+    // Before 1582 Spark hands over a Timestamp rebased to the hybrid Julian calendar
+    val julianTimestamp = DateTimeUtils.toJavaTimestamp(DateTimeUtils.instantToMicros(Instant.parse("1000-03-01T12:00:00.500Z")))
+    assertEquals("1000-03-01 12%3A00%3A00.5", fractionalKeyGenerator().getPartitionPath(
+      new GenericRowWithSchema(Array[Any](1L, julianTimestamp), timestampRowSchema): Row))
   }
 }

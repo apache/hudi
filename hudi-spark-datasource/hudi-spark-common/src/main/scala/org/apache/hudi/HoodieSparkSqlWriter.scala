@@ -422,13 +422,12 @@ class HoodieSparkSqlWriterInternal {
 
       var instantTime: String = null
       tableConfig = tableMetaClient.getTableConfig
-      // The key generator follows the layout the table records, including the one a new table was just given
+      // The key generator follows the layout the table records, including the one a new table was just given,
+      // whatever the write options say: validateTableConfig does not check them under SaveMode.Overwrite
       val fractionalSecondsKey = HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key
-      if (!parameters.contains(fractionalSecondsKey) && tableConfig.contains(fractionalSecondsKey)) {
-        val fractionalSeconds = tableConfig.getString(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS)
-        parameters = parameters ++ Map(fractionalSecondsKey -> fractionalSeconds)
-        hoodieConfig.setValue(fractionalSecondsKey, fractionalSeconds)
-      }
+      val fractionalSeconds = tableConfig.getStringOrDefault(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS)
+      parameters = parameters ++ Map(fractionalSecondsKey -> fractionalSeconds)
+      hoodieConfig.setValue(fractionalSecondsKey, fractionalSeconds)
 
       val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
 

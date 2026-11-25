@@ -476,7 +476,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @ParameterizedTest
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
   void testTimestampPartitionFractionalSecondsSurvivesConfigVersionDropping(HoodieTableVersion tableVersion) {
-    // a version 10 table downgraded to 9 keeps the layout its partition paths were written in
+    // loading the table keeps the layout its partition paths were written in, at any table version
     HoodieConfig config = new HoodieConfig();
     config.setValue(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS, "true");
     config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion.versionCode()));
@@ -495,7 +495,9 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
         .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
     assertEquals("false", newTableProps(HoodieTableVersion.TEN, "ts", false)
         .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
-    assertEquals("true", newTableProps(HoodieTableVersion.NINE, "ts", true)
+    // an older writer truncates the fractional seconds, so a table created at an older version cannot keep them
+    assertThrows(IllegalArgumentException.class, () -> newTableProps(HoodieTableVersion.NINE, "ts", true));
+    assertEquals("false", newTableProps(HoodieTableVersion.NINE, "ts", false)
         .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
     assertFalse(newTableProps(HoodieTableVersion.TEN, null, null)
         .containsKey(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));

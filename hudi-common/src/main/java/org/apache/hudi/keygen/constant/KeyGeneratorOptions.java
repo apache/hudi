@@ -53,7 +53,8 @@ public class KeyGeneratorOptions extends HoodieConfig {
           + "partitioned table is created, true for a table created at table version 10 or later and false for an "
           + "older version, and fixed from then on: changing it would route a row with fractional seconds to a "
           + "different partition path than the one its earlier versions were written under. A table without the "
-          + "property truncates. Kept across upgrades and downgrades; a writer that predates it truncates.");
+          + "property truncates. Kept across upgrades. A writer that predates it truncates, so a table that enables it "
+          + "cannot be downgraded below table version 10.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = ConfigProperty
       .key("hoodie.datasource.write.partitionpath.urlencode")

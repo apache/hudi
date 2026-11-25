@@ -117,7 +117,20 @@ class TestTimestampPartitionFractionalSeconds extends HoodieSparkSqlTestBase {
       withSQLConf(fractionalSecondsKey -> "true") {
         checkExceptionContain(s"INSERT INTO $tableName VALUES (4, 'd', TIMESTAMP '2024-02-29 10:30:00.5')")(
           "can only be set when a table is created")
+        // An overwrite skips that check, and still writes the layout the table records
+        spark.sql(s"INSERT OVERWRITE TABLE $tableName VALUES (5, 'e', TIMESTAMP '2024-02-29 10:30:00.5')")
       }
+      assertResult(Seq("2024-02-29 10%3A30%3A00"))(partitionDirs(basePath))
+      assertResult(Seq("5|e|2024-02-29 10:30:00"))(rows(tableName))
+
+      // A table without the config truncates, so a CREATE TABLE over it cannot ask for fractional seconds
+      checkExceptionContain(
+        s"""
+           |CREATE TABLE ${tableName}_2 (id INT, name STRING, ts TIMESTAMP) USING hudi
+           | TBLPROPERTIES (primaryKey = 'id', type = 'cow', '$fractionalSecondsKey' = 'true')
+           | PARTITIONED BY (ts)
+           | LOCATION '$basePath'
+         """.stripMargin)("can only be set when a table is created")
     })
   }
 }
