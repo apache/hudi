@@ -455,14 +455,18 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     refreshFsView();
 
     if (NativeTableFormat.TABLE_FORMAT.equals(tableFormat)) {
-      Exception exception = assertThrows(Exception.class, () -> roView.getLatestBaseFiles(partitionPath).count());
-      assertTrue(exception instanceof InvalidHoodiePathException || exception.getCause() instanceof InvalidHoodiePathException,
-          "a native table must list the data file Hudi did not name but got: " + exception);
+      assertListingFailsOnDataFileHudiDidNotName(partitionPath);
     } else {
       assertEquals(Collections.singletonList(hudiFileName),
           roView.getLatestBaseFiles(partitionPath).map(HoodieBaseFile::getFileName).collect(Collectors.toList()));
       assertEquals(1, fsView.getAllFileGroups(partitionPath).count());
     }
+  }
+
+  protected void assertListingFailsOnDataFileHudiDidNotName(String partitionPath) {
+    Exception exception = assertThrows(Exception.class, () -> roView.getLatestBaseFiles(partitionPath).count());
+    assertTrue(exception instanceof InvalidHoodiePathException || exception.getCause() instanceof InvalidHoodiePathException,
+        "a native table must list the data file Hudi did not name but got: " + exception);
   }
 
   @Test
