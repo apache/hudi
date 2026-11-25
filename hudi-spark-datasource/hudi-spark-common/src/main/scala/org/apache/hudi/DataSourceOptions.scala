@@ -773,9 +773,11 @@ object DataSourceWriteOptions {
       + "the duplicates. \"drop\" drops the matching incoming records and ingests the rest. \"fail\" fails the write when an incoming "
       + "record key is already in the table, or appears more than once in the incoming records unless hoodie.combine.before.insert "
       + "combines them. In other words, a given record as deduced by the key generation policy can be ingested only once to the target table "
-      + "of interest. When the policy is not set, a table without a record key keeps the duplicates, and a table with a record key fails "
-      + "the write as \"fail\" does, looking the incoming record keys up in the table only where its index tells whether the table holds "
-      + "a record key: on a copy-on-write table with a simple or bloom index, and on any table with the record level index.")
+      + "of interest. When the policy is not set, a native table and a table without a record key keep the duplicates, and a table "
+      + "of a non-native table format (hoodie.table.format) with a record key fails the write when a record key appears more than "
+      + "once in the incoming records unless hoodie.combine.before.insert combines them. It also fails on a record key the table "
+      + "already holds only with the record level index once it is built; with any other index set \"fail\" to check the incoming "
+      + "record keys against the table.")
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes

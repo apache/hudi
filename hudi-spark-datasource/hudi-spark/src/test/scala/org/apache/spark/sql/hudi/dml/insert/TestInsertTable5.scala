@@ -305,16 +305,18 @@ class TestInsertTable5 extends HoodieSparkSqlTestBase {
       "hoodie.bucket.index.num.buckets" -> "1",
       "hoodie.metadata.global.record.level.index.enable" -> (indexType == "RECORD_INDEX").toString)(f)
 
-  private def createTable(tableName: String, tableType: String, keyProp: String, path: String): Unit =
+  // Tables of a non-native table format fail an INSERT INTO of duplicate record keys by default
+  private def createTable(tableName: String, tableType: String, keyProp: String, path: String,
+                          tableFormat: String = "test-format"): Unit =
     spark.sql(
       s"""
          |create table $tableName (id int, name string, ts long) using hudi
-         |tblproperties ($keyProp type = '$tableType')
+         |tblproperties ($keyProp type = '$tableType', 'hoodie.table.format' = '$tableFormat')
          |location '$path/$tableName'
          |""".stripMargin)
 
-  test("Test duplicate record keys fail an INSERT INTO a table with a record key by default") {
-    Seq("cow" -> "SIMPLE", "mor" -> "RECORD_INDEX").foreach { case (tableType, indexType) =>
+  test("Test duplicate record keys fail an INSERT INTO a table of a non-native format with a record key by default") {
+    Seq("cow" -> "SIMPLE", "mor" -> "SIMPLE").foreach { case (tableType, indexType) =>
       withTempDir { tmp =>
         val keyed = generateTableName
         withIndexType(indexType) {
@@ -322,8 +324,11 @@ class TestInsertTable5 extends HoodieSparkSqlTestBase {
           checkExceptionContain(s"insert into $keyed values (1, 'a1', 10), (1, 'a2', 11)")(
             s"$DUPLICATE_KEY_PREFIX 1. $DUPLICATE_INCOMING_KEY")
           spark.sql(s"insert into $keyed values (1, 'a1', 10)")
-          checkExceptionContain(s"insert into $keyed values (1, 'a2', 11)")(
-            s"$DUPLICATE_KEY_PREFIX 1. $DUPLICATE_EXISTING_KEY")
+          // A key the table holds is looked up by default only through the record level index, and under the fail policy
+          withSQLConf("hoodie.datasource.insert.dup.policy" -> FAIL_INSERT_DUP_POLICY) {
+            checkExceptionContain(s"insert into $keyed values (1, 'a2', 11)")(
+              s"$DUPLICATE_KEY_PREFIX 1. $DUPLICATE_EXISTING_KEY")
+          }
           checkExceptionContain(s"insert into $keyed values (2, 'b1', 20), (3, 'c1', 30), (2, 'b2', 21)")(
             s"$DUPLICATE_KEY_PREFIX 2. $DUPLICATE_INCOMING_KEY")
           checkAnswer(s"select id, name, ts from $keyed")(Seq(1, "a1", 10))
@@ -359,12 +364,20 @@ class TestInsertTable5 extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $keyless values (1, 'a1', 10), (1, 'a2', 11)")
         spark.sql(s"insert into $keyless values (1, 'a3', 12)")
         checkAnswer(s"select id, name, ts from $keyless")(keptDuplicates: _*)
+
+        val native = generateTableName
+        withIndexType(indexType) {
+          createTable(native, tableType, "primaryKey = 'id',", tmp.getCanonicalPath, "native")
+          spark.sql(s"insert into $native values (1, 'a1', 10), (1, 'a2', 11)")
+          spark.sql(s"insert into $native values (1, 'a3', 12)")
+        }
+        checkAnswer(s"select id, name, ts from $native")(keptDuplicates: _*)
       }
     }
   }
 
-  test("Test an INSERT INTO a table with a record key takes new and deleted record keys by default") {
-    for (tableType <- Seq("cow", "mor"); indexType <- Seq("SIMPLE", "BLOOM", "BUCKET", "RECORD_INDEX")) {
+  test("Test an INSERT INTO a table of a non-native format with a record key takes new and deleted record keys by default") {
+    for (tableType <- Seq("cow", "mor"); indexType <- Seq("SIMPLE", "BLOOM", "BUCKET")) {
       withTempDir { tmp =>
         withIndexType(indexType) {
           val tableName = generateTableName
@@ -377,15 +390,9 @@ class TestInsertTable5 extends HoodieSparkSqlTestBase {
           checkExceptionContain(s"insert into $tableName values (4, 'd1', 40), (4, 'd2', 41)")(
             s"$DUPLICATE_KEY_PREFIX 4. $DUPLICATE_INCOMING_KEY")
 
-          // The table is looked up only where a location the index gives a key means that the table holds it
-          val insertExistingKey = s"insert into $tableName values (2, 'b2', 21), (5, 'e1', 50)"
-          if (indexType == "RECORD_INDEX" || (tableType == "cow" && indexType != "BUCKET")) {
-            checkExceptionContain(insertExistingKey)(s"$DUPLICATE_KEY_PREFIX 2. $DUPLICATE_EXISTING_KEY")
-            checkAnswer(s"select id, name, ts from $tableName where id = 5")()
-          } else {
-            spark.sql(insertExistingKey)
-            checkAnswer(s"select id, name, ts from $tableName where id = 5")(Seq(5, "e1", 50))
-          }
+          // By default the table is looked up only through the record level index
+          spark.sql(s"insert into $tableName values (2, 'b2', 21), (5, 'e1', 50)")
+          checkAnswer(s"select id, name, ts from $tableName where id = 5")(Seq(5, "e1", 50))
         }
       }
     }
