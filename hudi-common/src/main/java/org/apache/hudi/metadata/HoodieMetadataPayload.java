@@ -105,7 +105,8 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStats
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
 
-  // Note: Variable is unused, but caching is required.
+  // Unused as a variable. Interning the class schema when this class loads keeps the reference check in getInsertValue
+  // hitting for equal schemas interned later; getInsertValue does not depend on it.
   private static final HoodieSchema HOODIE_METADATA_SCHEMA = HoodieSchemaCache.intern(
       HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
   // Held for the reference-equality fast path in getInsertValue: getClassSchema() returns the

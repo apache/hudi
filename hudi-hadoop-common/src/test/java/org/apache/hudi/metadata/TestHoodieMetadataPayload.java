@@ -49,6 +49,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_REC
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -376,7 +377,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testInsertValueFastPathForSchemasWithoutMetaFields() throws IOException {
+  public void testInsertValueReturnsGeneratedRecordUnlessSchemaHasMetaFields() throws IOException {
     HoodieMetadataPayload payload = newBloomFilterPayload();
 
     // The class schema singleton (and no schema) takes the reference-equality fast path and returns the generated record.
@@ -396,6 +397,20 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     Schema equalCopy = new Schema.Parser().parse(HoodieMetadataRecord.getClassSchema().toString());
     assertEquals(HoodieMetadataRecord.getClassSchema(), equalCopy);
     assertInstanceOf(HoodieMetadataRecord.class, payload.getInsertValue(equalCopy).get());
+
+    // So does a schema without meta fields that differs from the class schema, such as an older one without the last
+    // field, SecondaryIndexMetadata.
+    Schema classSchema = HoodieMetadataRecord.getClassSchema();
+    List<Schema.Field> olderFields = new ArrayList<>();
+    for (Schema.Field field : classSchema.getFields().subList(0, classSchema.getFields().size() - 1)) {
+      olderFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
+    }
+    Schema olderSchema = Schema.createRecord(
+        classSchema.getName(), classSchema.getDoc(), classSchema.getNamespace(), false, olderFields);
+    assertNull(olderSchema.getField("SecondaryIndexMetadata"));
+    IndexedRecord fromOlderSchema = payload.getInsertValue(olderSchema).get();
+    assertInstanceOf(HoodieMetadataRecord.class, fromOlderSchema);
+    assertEquals(payload.getBloomFilterMetadata().get(), ((HoodieMetadataRecord) fromOlderSchema).getBloomFilterMetadata());
   }
 
   @Test
