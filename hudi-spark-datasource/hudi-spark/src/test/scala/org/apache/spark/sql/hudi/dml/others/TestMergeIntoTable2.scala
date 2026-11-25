@@ -2458,4 +2458,70 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test MergeInto with only an insert clause and a merge condition beyond the record key leaves the key the table holds") {
+    withTempDir { tmp =>
+      // A condition on another column than the record key does not match, but the table holds the key
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, price double) using hudi
+           | tblproperties (primaryKey = 'id', type = 'cow')
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10.0)")
+      spark.sql(
+        s"""
+           | merge into $tableName t using (select 1 as id, 'b1' as name, 20.0D as price) s
+           | on t.id = s.id and t.name = s.name
+           | when not matched then insert *
+         """.stripMargin)
+      checkAnswer(s"select id, name, price from $tableName")(Seq(1, "a1", 10.0))
+
+      // A condition on the partition of a table with a global index does not match a record in another partition,
+      // but the index finds its key
+      val partitioned = generateTableName
+      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE") {
+        spark.sql(
+          s"""
+             | create table $partitioned (id int, name string, dt string) using hudi
+             | tblproperties (primaryKey = 'id', type = 'cow')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$partitioned'
+           """.stripMargin)
+        spark.sql(s"insert into $partitioned values (1, 'a1', 'p1')")
+        spark.sql(
+          s"""
+             | merge into $partitioned t using (select 1 as id, 'b1' as name, 'p2' as dt) s
+             | on t.id = s.id and t.dt = s.dt
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, dt from $partitioned")(Seq(1, "a1", "p1"))
+      }
+    }
+  }
+
+  test("Test MergeInto with an always false merge condition before the record level index is built") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      withSQLConf("hoodie.index.type" -> "RECORD_INDEX",
+        "hoodie.metadata.global.record.level.index.enable" -> "false") {
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, price double) using hudi
+             | tblproperties (primaryKey = 'id', type = 'mor')
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0), (2, 'a2', 20.0)")
+        spark.sql(s"delete from $tableName where id = 1")
+        // Until the record level index is built, the index does not find every key, so the statement is refused
+        // rather than failing on the key the log files deleted
+        checkExceptionContain(
+          s"merge into $tableName t using (select 1 as id, 'b1' as name, 30.0D as price) s on false " +
+            "when not matched then insert *")(
+          "Currently only equality predicates are supported in MERGE INTO statement on record key table")
+        checkAnswer(s"select id, name, price from $tableName")(Seq(2, "a2", 20.0))
+      }
+    }
+  }
 }

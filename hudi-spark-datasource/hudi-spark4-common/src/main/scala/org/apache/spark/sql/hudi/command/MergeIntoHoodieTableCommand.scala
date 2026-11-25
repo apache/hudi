@@ -33,6 +33,7 @@ import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SC
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException, HoodieMultipleMatchesException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.index.HoodieIndex
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
 
@@ -382,16 +383,23 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     Try(mergeInto.mergeCondition.eval()).toOption.contains(java.lang.Boolean.FALSE)
 
   /**
+   * The index type of the write, the default one when the table and the session set none.
+   */
+  private lazy val writeIndexType: String = combineOptions(hoodieCatalogTable, hoodieCatalogTable.tableConfig,
+    sparkSession.sessionState.conf, defaultOpts = Map.empty)
+    .getOrElse(HoodieIndexConfig.INDEX_TYPE.key, HoodieIndex.IndexType.SIMPLE.name)
+
+  /**
    * Whether the index finds every record key the table holds, so that the insert of a statement whose merge
-   * condition matches no record can fail on a key the table already has: a record-level index, or a non-bucket
-   * index of a copy-on-write table, whose keys are all in base files.
+   * condition matches no record can fail on a key the table already has: a built record-level index, or a
+   * non-bucket index of a copy-on-write table, whose keys are all in base files. Until the record-level index is
+   * built, the write falls back to an index that reads the keys of the base files only.
    */
   private lazy val indexFindsEveryKey: Boolean = {
-    val indexType = combineOptions(hoodieCatalogTable, hoodieCatalogTable.tableConfig, sparkSession.sessionState.conf,
-      defaultOpts = Map.empty).getOrElse(HoodieIndexConfig.INDEX_TYPE.key, HoodieIndex.IndexType.SIMPLE.name)
-    def isOneOf(types: HoodieIndex.IndexType*): Boolean = types.exists(_.name.equalsIgnoreCase(indexType))
-    isOneOf(HoodieIndex.IndexType.RECORD_INDEX, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX,
-      HoodieIndex.IndexType.RECORD_LEVEL_INDEX) ||
+    def isOneOf(types: HoodieIndex.IndexType*): Boolean = types.exists(_.name.equalsIgnoreCase(writeIndexType))
+    (isOneOf(HoodieIndex.IndexType.RECORD_INDEX, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX,
+      HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
+      && hoodieCatalogTable.metaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) ||
       (targetTableType == COW_TABLE_TYPE_OPT_VAL && isOneOf(HoodieIndex.IndexType.SIMPLE, HoodieIndex.IndexType.BLOOM,
         HoodieIndex.IndexType.GLOBAL_SIMPLE, HoodieIndex.IndexType.GLOBAL_BLOOM))
   }
@@ -434,7 +442,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * against the records the table holds only, so it would write each of these records.
    */
   private def failOnRepeatedRecordKey(insertedDf: DataFrame): Unit = {
-    val keyFields = hoodieCatalogTable.primaryKeys.toSeq
+    // A non-global index keys a record by its partition too, so one key in two partitions is two records
+    val keyFields = hoodieCatalogTable.primaryKeys.toSeq ++
+      (if (isGlobalIndexType(writeIndexType.toUpperCase)) Seq.empty else hoodieCatalogTable.partitionFields)
     val countField = "__record_key_count"
     val repeated = insertedDf
       .where(keyFields.map(field => functions.col(field).isNotNull).reduce(_ && _))
@@ -1002,11 +1012,29 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    */
   private def getOperationType(parameters: Map[String, String]) = {
     if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava))
-      && mergeInto.matchedActions.isEmpty) {
+      && mergeInto.matchedActions.isEmpty
+      && (!hasPrimaryKey() || mergeConditionMatchesAsIndex)) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL
     }
+  }
+
+  /**
+   * Whether the merge condition matches a source record with exactly the table record the index finds for it: the
+   * condition holds the record key equalities alone, and the index finds a key in any partition or the table has
+   * no partition. Otherwise dropping the source records that the condition matches would insert a key the table
+   * already holds, so the statement is upserted.
+   */
+  private lazy val mergeConditionMatchesAsIndex: Boolean = {
+    val resolver = sparkSession.sessionState.analyzer.resolver
+    val keyFields = hoodieCatalogTable.primaryKeys
+    // A condition the statement does not support is left to the validation of the upsert
+    val conjuncts = splitConjunctivePredicates(mergeInto.mergeCondition)
+    lazy val targetAttrToExpression = doCasting(conjuncts, pkTable = false)
+    conjuncts.forall(_.isInstanceOf[EqualTo]) && targetAttrToExpression.size == conjuncts.size &&
+      targetAttrToExpression.forall { case (attr, _) => keyFields.exists(resolver(attr.name, _)) } &&
+      (hoodieCatalogTable.partitionFields.isEmpty || isGlobalIndexType(writeIndexType.toUpperCase))
   }
 
   private def getTableSchema: HoodieSchema = {
