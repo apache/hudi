@@ -20,6 +20,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.BaseFile;
@@ -33,8 +34,10 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.log.LogReadAheadStorage;
+import org.apache.hudi.common.table.read.buffer.BatchMatcher;
 import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
@@ -59,6 +62,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
@@ -73,6 +77,9 @@ import java.util.stream.Stream;
  */
 @AllArgsConstructor
 public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
+
+  // Rows per batch when the rows of a row-based merge are returned as batches
+  private static final int ROWS_PER_BATCH = 4096;
 
   private final HoodieReaderContext<T> readerContext;
   private final TableState tableState;
@@ -236,21 +243,28 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
           rec -> readerContext.getRecordContext().seal(requiredSchema, rec));
     } else {
       this.baseFileIterator = iter;
-      Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult;
-      LogReadAheadStorage logReadAhead = startLogReadAhead();
-      try {
-        initializationResult = recordBufferLoader.getRecordBuffer(readerContext, logReadAhead != null ? logReadAhead : storage,
-            inputSplit, orderingFieldNames, tableState, props, readerParameters, readStats, fileGroupUpdateCallback);
-      } finally {
-        // The log scan is over once the buffer is loaded
-        if (logReadAhead != null) {
-          logReadAhead.close();
-        }
-      }
-      recordBuffer = initializationResult.getLeft();
-      validBlockInstants = initializationResult.getRight();
+      loadRecordBuffer();
       recordBuffer.setBaseFileIterator(baseFileIterator);
     }
+  }
+
+  /**
+   * Scans the log files into the record buffer.
+   */
+  private void loadRecordBuffer() throws IOException {
+    Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult;
+    LogReadAheadStorage logReadAhead = startLogReadAhead();
+    try {
+      initializationResult = recordBufferLoader.getRecordBuffer(readerContext, logReadAhead != null ? logReadAhead : storage,
+          inputSplit, orderingFieldNames, tableState, props, readerParameters, readStats, fileGroupUpdateCallback);
+    } finally {
+      // The log scan is over once the buffer is loaded
+      if (logReadAhead != null) {
+        logReadAhead.close();
+      }
+    }
+    recordBuffer = initializationResult.getLeft();
+    validBlockInstants = initializationResult.getRight();
   }
 
   /**
@@ -420,6 +434,201 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
 
   public ClosableIterator<T> getClosableIterator() throws IOException {
     return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.ENGINE_RECORD), BufferedRecord::getRecord);
+  }
+
+  /**
+   * Reads the file group as engine batches of the requested schema through the reader context's {@link BatchSupport}.
+   *
+   * <p>Under commit-time or event-time ordering with the built-in merging, the log records are loaded first and then
+   * merged into the vectorized base file batches: a base row without a log record stays in its batch, matched by its
+   * position in the file when the log blocks carry record positions and by its record key otherwise. Every other
+   * merge, and a slice whose log records cannot be matched that way, is merged row by row and returned as batches.
+   */
+  @SuppressWarnings("unchecked")
+  public <B> ClosableIterator<B> getClosableBatchIterator() throws IOException {
+    BatchSupport<T, B> batchSupport = (BatchSupport<T, B>) readerContext.getBatchSupport()
+        .orElseThrow(() -> new IllegalStateException("The reader context does not read columnar batches"));
+    readerContext.setIteratorMode(IteratorMode.ENGINE_RECORD);
+    if (!canMergeBatches()) {
+      return rowsAsBatches(batchSupport, getClosableIterator());
+    }
+    HoodieSchema requestedSchema = readerContext.getSchemaHandler().getRequestedSchema();
+    RecordMergeMode mergeMode = readerContext.getMergeMode();
+    Option<HoodieBaseFile> baseFile = inputSplit.getBaseFileOption();
+    if (inputSplit.hasNoRecordsToMerge()) {
+      ClosableIterator<B> batches = baseFile.isPresent()
+          ? batchSupport.readBaseFile(baseFile.get(), requestedSchema, true) : new EmptyIterator<>();
+      return new BatchMergeIterator<>(selectAll(batchSupport, batches, requestedSchema.getFields().size()), this);
+    }
+
+    // With record positions, the base file read does not depend on the log records, so it starts during the log scan
+    HoodieSchema earlySchema = null;
+    CompletableFuture<ClosableIterator<B>> earlyBase = null;
+    if (baseFile.isPresent() && readerContext.getShouldMergeUseRecordPosition() && batchSupport.supportsConcurrentOpen()) {
+      earlySchema = baseReadSchema(requestedSchema, PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME, mergeMode);
+      HoodieSchema schema = earlySchema;
+      earlyBase = BaseBatchOpener.open(() -> batchSupport.readBaseFile(baseFile.get(), schema, mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING));
+    }
+    ClosableIterator<B> baseBatches = null;
+    try {
+      loadRecordBuffer();
+      int maxLogRecords = props.getInteger(HoodieReaderConfig.VECTORIZED_MOR_READ_MAX_LOG_RECORDS.key(),
+          HoodieReaderConfig.VECTORIZED_MOR_READ_MAX_LOG_RECORDS.defaultValue());
+      Option<BatchMatcher<T>> matcher = recordBuffer.size() > maxLogRecords ? Option.empty() : recordBuffer.batchMatcher(batchSupport);
+      if (!matcher.isPresent()) {
+        BaseBatchOpener.discard(earlyBase);
+        earlyBase = null;
+        this.baseFileIterator = makeBaseFileIterator();
+        recordBuffer.setBaseFileIterator(baseFileIterator);
+        return rowsAsBatches(batchSupport,
+            new CloseableMappingIterator<>(new HoodieFileGroupReaderIterator<>(this), BufferedRecord::getRecord));
+      }
+
+      HoodieSchema baseReadSchema = baseReadSchema(requestedSchema, matcher.get().columnName(), mergeMode);
+      if (earlyBase != null) {
+        if (baseReadSchema.equals(earlySchema)) {
+          baseBatches = BaseBatchOpener.await(earlyBase);
+        } else {
+          BaseBatchOpener.discard(earlyBase);
+        }
+        earlyBase = null;
+      }
+      if (baseBatches == null) {
+        baseBatches = baseFile.isPresent()
+            ? batchSupport.readBaseFile(baseFile.get(), baseReadSchema, mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING)
+            : new EmptyIterator<>();
+      }
+      HoodieSchema logSchema = readerContext.getSchemaHandler().getRequiredSchema();
+      BufferedRecordMerger<T> merger = BufferedRecordMergerFactory.create(readerContext, mergeMode, false,
+          readerContext.getRecordMerger(), logSchema, readerContext.getPayloadClasses(props), props, Option.empty());
+      return new BatchMergeIterator<>(new BatchFileGroupMerger<>(batchSupport, baseBatches, matcher.get(), merger, mergeMode,
+          readerContext.getRecordContext(), baseReadSchema, logSchema, requestedSchema, orderingFieldNames), this);
+    } catch (IOException | RuntimeException e) {
+      // Nothing returned owns the base file or the record buffer yet
+      BaseBatchOpener.discard(earlyBase);
+      if (baseBatches != null) {
+        baseBatches.close();
+      }
+      close();
+      throw e;
+    }
+  }
+
+  /**
+   * Whether the log records of this file group can be merged into base file batches: a snapshot read of a Parquet base
+   * file, or no base file, under commit-time or event-time ordering with the built-in merging.
+   */
+  private boolean canMergeBatches() {
+    if (!props.getBoolean(HoodieReaderConfig.VECTORIZED_MOR_READ_ENABLED.key(), HoodieReaderConfig.VECTORIZED_MOR_READ_ENABLED.defaultValue())) {
+      return false;
+    }
+    boolean skipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true)
+        .equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
+    Option<HoodieBaseFile> baseFile = inputSplit.getBaseFileOption();
+    return !skipMerge
+        && (!baseFile.isPresent() || (inputSplit.isParquetBaseFile() && !baseFile.get().getBootstrapBaseFile().isPresent()))
+        && !readerContext.getInstantRange().isPresent()
+        && !readerParameters.isEmitDeletes()
+        && !readerParameters.isSortOutputs()
+        && !fileGroupUpdateCallback.isPresent()
+        // Key-based matching reads the stored record key; nested ordering fields are not columns of a base batch
+        && tableState.getTableConfig().populateMetaFields()
+        && orderingFieldNames.stream().noneMatch(name -> name.contains("."))
+        && !BufferedRecordMergerFactory.needsFullRowMerge(readerContext.getMergeMode(),
+            Option.ofNullable(tableState.getTableConfig().getPayloadClass()), tableState.getTableConfig().getPartialUpdateMode());
+  }
+
+  /**
+   * The base file read of a merge: the requested columns, then the column the log records are matched by and, under
+   * event-time ordering, the ordering fields the requested schema lacks.
+   */
+  private HoodieSchema baseReadSchema(HoodieSchema requestedSchema, String matchColumn, RecordMergeMode mergeMode) {
+    List<String> extraFields = new ArrayList<>();
+    extraFields.add(matchColumn);
+    if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
+      extraFields.addAll(orderingFieldNames);
+    }
+    HoodieSchema requiredSchema = readerContext.getSchemaHandler().getRequiredSchema();
+    List<HoodieSchemaField> fields = new ArrayList<>();
+    for (HoodieSchemaField field : requestedSchema.getFields()) {
+      fields.add(field);
+    }
+    for (String name : extraFields) {
+      if (!requestedSchema.getField(name).isPresent() && fields.stream().noneMatch(f -> f.name().equals(name))) {
+        fields.add(requiredSchema.getField(name)
+            .orElseThrow(() -> new IllegalStateException("Field " + name + " is not in the required schema of the merge")));
+      }
+    }
+    return readerContext.getSchemaHandler().createSchemaFromFields(fields);
+  }
+
+  private static <T, B> ClosableIterator<B> selectAll(BatchSupport<T, B> batchSupport, ClosableIterator<B> batches,
+                                                      int numColumns) {
+    return new CloseableMappingIterator<>(batches,
+        batch -> batchSupport.select(batch, numColumns, numColumns, null, batchSupport.numRows(batch)));
+  }
+
+  /**
+   * Returns the rows of a row-based read as engine batches, copying each row since the read may reuse it.
+   */
+  private <B> ClosableIterator<B> rowsAsBatches(BatchSupport<T, B> batchSupport, ClosableIterator<T> rows) {
+    HoodieSchema rowSchema = readerContext.getSchemaHandler().getRequestedSchema();
+    return new ClosableIterator<B>() {
+      @Override
+      public boolean hasNext() {
+        return rows.hasNext();
+      }
+
+      @Override
+      public B next() {
+        List<T> batch = new ArrayList<>();
+        while (rows.hasNext() && batch.size() < ROWS_PER_BATCH) {
+          batch.add(readerContext.getRecordContext().seal(rowSchema, rows.next()));
+        }
+        return batchSupport.toBatch(batch);
+      }
+
+      @Override
+      public void close() {
+        rows.close();
+      }
+    };
+  }
+
+  /**
+   * Batches from a merge that also close this reader, which holds the record buffer.
+   */
+  private static final class BatchMergeIterator<B> implements ClosableIterator<B> {
+    private final ClosableIterator<B> batches;
+    private final HoodieFileGroupReader<?> reader;
+
+    private BatchMergeIterator(ClosableIterator<B> batches, HoodieFileGroupReader<?> reader) {
+      this.batches = batches;
+      this.reader = reader;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return batches.hasNext();
+    }
+
+    @Override
+    public B next() {
+      return batches.next();
+    }
+
+    @Override
+    public void close() {
+      try {
+        batches.close();
+      } finally {
+        try {
+          reader.close();
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to close the reader", e);
+        }
+      }
+    }
   }
 
   /**

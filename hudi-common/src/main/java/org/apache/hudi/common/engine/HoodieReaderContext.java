@@ -36,6 +36,7 @@ import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.read.BatchSupport;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.IteratorMode;
@@ -129,6 +130,10 @@ public abstract class HoodieReaderContext<T> {
   @Setter
   @Accessors(fluent = true)
   private Boolean enableLogicalTimestampFieldRepair = true;
+  // How this engine reads base files as columnar batches and builds output batches, when it does
+  @Getter
+  @Setter
+  private Option<BatchSupport<T, ?>> batchSupport = Option.empty();
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,

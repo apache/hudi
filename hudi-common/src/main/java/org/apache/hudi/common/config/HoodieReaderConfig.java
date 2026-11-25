@@ -78,6 +78,23 @@ public class HoodieReaderConfig extends HoodieConfig {
           + "of waiting. The setting applies to the scans that set it and can only lower the JVM-wide cap of 10% of "
           + "the JVM heap, at most 512 MB.");
 
+  public static final ConfigProperty<Boolean> VECTORIZED_MOR_READ_ENABLED = ConfigProperty
+      .key("hoodie.read.mor.vectorized.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Whether a merge-on-read read that returns columnar batches merges the log records of a file "
+          + "slice into the vectorized base file batches, for tables with commit-time or event-time ordering and the "
+          + "built-in merging. Custom mergers, other payloads and partial updates keep the row-based merge.");
+
+  public static final ConfigProperty<Integer> VECTORIZED_MOR_READ_MAX_LOG_RECORDS = ConfigProperty
+      .key("hoodie.read.mor.vectorized.max.log.records")
+      .defaultValue(2_000_000)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("File slices with more log records than this are merged row by row by the vectorized "
+          + "merge-on-read read, which holds a slice's log records on the heap while it merges.");
+
   public static final ConfigProperty<Integer> LSM_SORT_MERGE_SPILL_THRESHOLD = ConfigProperty
       .key("hoodie.lsm.sort.merge.spill.threshold")
       .defaultValue(16)

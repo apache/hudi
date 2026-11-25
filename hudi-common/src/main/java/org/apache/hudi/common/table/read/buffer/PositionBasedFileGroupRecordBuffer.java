@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.BatchSupport;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.BufferedRecords;
@@ -46,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -323,5 +325,30 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
 
     return blockPositions;
+  }
+
+  @Override
+  public Option<BatchMatcher<T>> batchMatcher(BatchSupport<T, ?> batchSupport) {
+    if (!readerContext.getShouldMergeUseRecordPosition()) {
+      return super.batchMatcher(batchSupport);
+    }
+    if (enablePartialMerging || records.getDiskBasedMapNumEntries() > 0) {
+      return Option.empty();
+    }
+    long[] positions = new long[records.size()];
+    int count = 0;
+    for (Serializable key : records.keySet()) {
+      if (!(key instanceof Long)) {
+        return Option.empty();
+      }
+      positions[count++] = (Long) key;
+    }
+    Arrays.sort(positions, 0, count);
+    @SuppressWarnings("unchecked")
+    BufferedRecord<T>[] sorted = new BufferedRecord[count];
+    for (int i = 0; i < count; i++) {
+      sorted[i] = records.get(positions[i]);
+    }
+    return Option.of(new BatchMatcher.PositionBased<>(count == positions.length ? positions : Arrays.copyOf(positions, count), sorted));
   }
 }

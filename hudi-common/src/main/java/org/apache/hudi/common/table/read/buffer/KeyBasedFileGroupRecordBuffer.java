@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.read.BatchSupport;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.BufferedRecords;
@@ -41,7 +42,9 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -170,5 +173,20 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
    */
   public final boolean isPartialMergingEnabled() {
     return enablePartialMerging;
+  }
+
+  @Override
+  public Option<BatchMatcher<T>> batchMatcher(BatchSupport<T, ?> batchSupport) {
+    if (enablePartialMerging || records.getDiskBasedMapNumEntries() > 0) {
+      return Option.empty();
+    }
+    Map<Object, BufferedRecord<T>> byKey = new HashMap<>(Math.max(16, records.size() * 2));
+    for (Map.Entry<Serializable, BufferedRecord<T>> entry : records.entrySet()) {
+      if (!(entry.getKey() instanceof String)) {
+        return Option.empty();
+      }
+      byKey.put(batchSupport.toEngineKey((String) entry.getKey()), entry.getValue());
+    }
+    return Option.of(new BatchMatcher.KeyBased<>(byKey));
   }
 }

@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.read.BatchSupport;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -117,4 +118,13 @@ public interface HoodieFileGroupRecordBuffer<T> {
   BufferedRecord<T> next();
 
   void close();
+
+  /**
+   * A matcher of the buffered log records to the rows of base file batches, once the log files are loaded. Empty when
+   * the records cannot be matched that way: they were spilled to disk, they need partial merging, or they mix record
+   * keys and positions.
+   */
+  default Option<BatchMatcher<T>> batchMatcher(BatchSupport<T, ?> batchSupport) {
+    return Option.empty();
+  }
 }

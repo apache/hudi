@@ -22,10 +22,13 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -37,12 +40,35 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Factory to create a {@link BufferedRecordMerger}.
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class BufferedRecordMergerFactory {
+
+  private static final Set<String> BUILT_IN_PAYLOADS = new HashSet<>(Arrays.asList(
+      OverwriteWithLatestAvroPayload.class.getName(), DefaultHoodieRecordPayload.class.getName()));
+
+  /**
+   * Whether merging a log record into a base record of the table needs more than the two records' ordering values:
+   * anything but commit-time or event-time ordering with the built-in merging, such as a custom merger, a payload
+   * class other than the built-in ones, or partial updates. Such merges read whole rows.
+   */
+  public static boolean needsFullRowMerge(HoodieTableConfig tableConfig) {
+    return needsFullRowMerge(tableConfig.getRecordMergeMode(), Option.ofNullable(tableConfig.getPayloadClass()),
+        tableConfig.getPartialUpdateMode());
+  }
+
+  public static boolean needsFullRowMerge(RecordMergeMode mergeMode, Option<String> payloadClass,
+                                          Option<PartialUpdateMode> partialUpdateMode) {
+    return !(mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING || mergeMode == RecordMergeMode.EVENT_TIME_ORDERING)
+        || payloadClass.map(className -> !className.isEmpty() && !BUILT_IN_PAYLOADS.contains(className)).orElse(false)
+        || partialUpdateMode.isPresent();
+  }
 
   public static <T> BufferedRecordMerger<T> create(HoodieReaderContext<T> readerContext,
                                                    RecordMergeMode recordMergeMode,
