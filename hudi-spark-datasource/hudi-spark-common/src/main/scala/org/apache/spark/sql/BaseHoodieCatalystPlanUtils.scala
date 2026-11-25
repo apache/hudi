@@ -27,6 +27,7 @@ import org.apache.spark.sql.catalyst.expressions.objects.AssertNotNull
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, CreateIndex, DropIndex, HoodieShowIndexes, InsertIntoStatement, Join, JoinHint, LogicalPlan, RefreshIndex}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
+import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand, RepairTableCommand}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -140,28 +141,42 @@ trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
 
   override def resolveRowLevelAssignments(attrs: Seq[Attribute],
                                           assignments: Seq[Assignment],
-                                          isInsert: Boolean): Seq[Assignment] = {
+                                          isInsert: Boolean,
+                                          applyStoreAssignmentPolicy: Boolean): Seq[Assignment] = {
+    val nested = assignments.find(!_.key.isInstanceOf[Attribute])
     // A key that references none of the attributes, as in a MERGE INTO of a table into itself, would
     // be dropped by the alignment, so such assignments are left to the command as they are
     val alignable = assignments.forall(_.key.references.exists(ref => attrs.exists(_.semanticEquals(ref))))
-    lazy val aligned = alignRowLevelAssignments(
-      attrs, assignments.map(a => Assignment(trimAliases(a.key), writtenValue(a.value))), isInsert)
     if (!alignable) {
       assignments.flatMap(_.value.collectFirst { case uncast: UncastAssignmentValue => uncast }).foreach { uncast =>
         throw new HoodieAnalysisException(s"Cannot cast `${uncast.child.sql}` of type " +
           s"${uncast.child.dataType.sql} to ${uncast.dataType.sql}")
       }
       assignments
-    } else if (aligned.isDefined) {
-      aligned.get
-        .filter(assignment => assignments.exists(_.key.references.exists(_.semanticEquals(assignment.key))))
-        .map(assignment => assignment.copy(value = trimAlignment(assignment.value)))
-    } else {
-      assignments.find(!_.key.isInstanceOf[Attribute]).foreach { nested =>
-        throw new HoodieAnalysisException(
-          s"Assigning a nested field requires Spark 3.5 or later (provided: `${nested.sql}`)")
-      }
+    } else if (nested.isEmpty && !applyStoreAssignmentPolicy) {
       assignments
+    } else {
+      // The cast of the LEGACY policy wraps an overflowing value and turns a malformed one into NULL,
+      // so it is refused as Spark refuses it for a table supporting row-level operations
+      if (applyStoreAssignmentPolicy && alignsRowLevelAssignments
+        && SQLConf.get.storeAssignmentPolicy == SQLConf.StoreAssignmentPolicy.LEGACY) {
+        throw QueryCompilationErrors.legacyStoreAssignmentPolicyError()
+      }
+      val toAlign = assignments.map(a =>
+        Assignment(trimAliases(a.key), if (applyStoreAssignmentPolicy) writtenValue(a.value) else a.value))
+      alignRowLevelAssignments(attrs, toAlign, isInsert) match {
+        case Some(aligned) =>
+          aligned
+            .filter(assignment => assignments.exists(_.key.references.exists(_.semanticEquals(assignment.key))))
+            .map(assignment => assignment.copy(value =
+              if (applyStoreAssignmentPolicy) trimAlignment(assignment.value) else trimAliases(assignment.value)))
+        case None =>
+          nested.foreach { nestedAssignment =>
+            throw new HoodieAnalysisException(
+              s"Assigning a nested field requires Spark 3.5 or later (provided: `${nestedAssignment.sql}`)")
+          }
+          assignments
+      }
     }
   }
 
@@ -191,6 +206,11 @@ trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
   protected def alignRowLevelAssignments(attrs: Seq[Attribute],
                                          assignments: Seq[Assignment],
                                          isInsert: Boolean): Option[Seq[Assignment]] = None
+
+  /**
+   * Whether [[alignRowLevelAssignments]] aligns the assignments, as it does since Spark 3.5.
+   */
+  protected def alignsRowLevelAssignments: Boolean = false
 
   /**
    * Whether Spark added the cast to the value of an assignment of a table that does not support

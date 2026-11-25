@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.util.ArrayData
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, isNonNativeTableFormat}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieSparkBaseAnalysis.{CatalogTableRelation, HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
@@ -272,7 +272,8 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       validateNestedFieldAssignments(ut.table.output, assignments)
       ut
 
-    case ut@UpdateTable(ResolvesToHudiTable(_), assignments, _) if !ut.resolved =>
+    case ut@UpdateTable(ResolvesToHudiTable(table), assignments, _)
+      if !ut.resolved && isNonNativeTableFormat(spark, table) =>
       ut.copy(assignments = assignments.map(sparkAdapter.getCatalystPlanUtils.deferAssignmentCast))
 
     case cmd: CreateIndex if cmd.table.resolved && cmd.columns.exists(_._1.isInstanceOf[UnresolvedFieldName]) =>
@@ -286,7 +287,8 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
                           assignments: Seq[Assignment],
                           mergeInto: MergeIntoTable,
                           resolveValuesWithSourceOnly: Boolean): Seq[Assignment] = {
-    val targetsHudiTable = ResolvesToHudiTable.unapply(mergeInto.targetTable).isDefined
+    val appliesStoreAssignmentPolicy =
+      ResolvesToHudiTable.unapply(mergeInto.targetTable).exists(isNonNativeTableFormat(spark, _))
     assignments.map { assign =>
       val resolvedKey = assign.key match {
         case c if !c.resolved =>
@@ -304,7 +306,7 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
         case o => o
       }
       val resolved = Assignment(resolvedKey, resolvedValue)
-      if (targetsHudiTable) sparkAdapter.getCatalystPlanUtils.deferAssignmentCast(resolved) else resolved
+      if (appliesStoreAssignmentPolicy) sparkAdapter.getCatalystPlanUtils.deferAssignmentCast(resolved) else resolved
     }
   }
 
@@ -316,7 +318,8 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
   private def validateNestedFieldAssignments(attrs: Seq[Attribute], assignments: Seq[Assignment]): Unit = {
     val outsideStructs = assignments.filter(isOutsideStructFieldPath)
     if (outsideStructs.nonEmpty) {
-      sparkAdapter.getCatalystPlanUtils.resolveRowLevelAssignments(attrs, outsideStructs, isInsert = false)
+      sparkAdapter.getCatalystPlanUtils.resolveRowLevelAssignments(
+        attrs, outsideStructs, isInsert = false, applyStoreAssignmentPolicy = false)
     }
   }
 

@@ -746,10 +746,8 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           checkExceptionContain(
             s"update $tableName set s.c1 = 1, s = named_struct('c1', 1, 'c2', null)")("Conflicting assignments for 's'")
 
-          // the fields of a struct value are matched by name
-          checkExceptionContain(s"update $tableName set s = struct(7, named_struct('a', array(7), 'm', map('x', 'y'))) where id = 2")(
-            "Cannot find data for the output column `s`.`c1`")
-          spark.sql(s"update $tableName set s = named_struct('c2', named_struct('m', map('x', 'y'), 'a', array(7)), 'c1', 7) where id = 2")
+          // a struct without the field names of the column is assigned by position
+          spark.sql(s"update $tableName set s = struct(7, named_struct('a', array(7), 'm', map('x', 'y'))) where id = 2")
           checkAnswer(s"select id, s from $tableName where id = 2")(Seq(2, Row(7, Row(Seq(7), Map("x" -> "y")))))
         } else {
           checkExceptionContain(s"update $tableName set s.c1 = 5 where id = 2")(
@@ -770,7 +768,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
            |  s struct<n1:int not null, n2:struct<dn1:int, dn2:int>>
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (primaryKey = 'id', type = 'cow')
+           | tblproperties (primaryKey = 'id', type = 'cow', 'hoodie.table.format' = 'test-format')
          """.stripMargin)
       spark.sql(s"insert into $tableName select 1, 10, named_struct('n1', 1, 'n2', named_struct('dn1', 3, 'dn2', 4))")
 
@@ -791,14 +789,12 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           checkExceptionContain(s"update $tableName set s.n1 = null")("Cannot safely cast `s`.`n1` \"VOID\" to \"INT\"")
         }
         withSQLConf("spark.sql.storeAssignmentPolicy" -> "legacy") {
-          checkExceptionContain(s"update $tableName set s.n2 = struct(5, 6)")(
-            "Cannot find data for the output column `s`.`n2`.`dn1`")
-          // the cast of the legacy policy turns a malformed value into null
-          spark.sql(s"update $tableName set v = 'str'")
-          checkAnswer(s"select id, v from $tableName")(Seq(1, null))
-          spark.sql(s"update $tableName set v = '30'")
+          // the cast of the legacy policy wraps an overflowing value and turns a malformed one into null
+          Seq("v = 'str'", "v = cast(3000000000 as bigint)", "s.n2 = struct(5, 6)").foreach { assignment =>
+            checkExceptionContain(s"update $tableName set $assignment")("LEGACY store assignment policy is disallowed")
+          }
         }
-        checkAnswer(s"select id, v, s from $tableName")(Seq(1, 30, Row(1, Row(5, 6))))
+        checkAnswer(s"select id, v, s from $tableName")(Seq(1, 20, Row(1, Row(5, 6))))
       } else {
         spark.sql(s"update $tableName set v = '20'")
         checkAnswer(s"select id, v from $tableName")(Seq(1, 20))
@@ -806,6 +802,29 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       // the top-level NOT NULL constraint is not kept by the table
       spark.sql(s"update $tableName set v = cast(null as int)")
       checkAnswer(s"select id, v from $tableName")(Seq(1, null))
+
+      // A table of the native format keeps casting the values to the types of the columns, and an
+      // overflowing value fails under any policy. The format name is matched as the table loads it,
+      // so a table configured as NATIVE is native too.
+      Seq("", ", 'hoodie.table.format' = 'NATIVE'").foreach { formatProperty =>
+        val nativeTable = generateTableName
+        spark.sql(
+          s"""
+             |create table $nativeTable (id int, v int, d decimal(5, 2)) using hudi
+             | location '${tmp.getCanonicalPath}/$nativeTable'
+             | tblproperties (primaryKey = 'id', type = 'cow'$formatProperty)
+           """.stripMargin)
+        spark.sql(s"insert into $nativeTable select 1, 10, 1.5")
+        spark.sql(s"update $nativeTable set v = '20'")
+        Seq("ansi", "legacy").foreach { policy =>
+          withSQLConf("spark.sql.storeAssignmentPolicy" -> policy) {
+            Seq("v = cast(3000000000 as bigint)", "d = cast(12345.678 as decimal(10, 3))").foreach { assignment =>
+              intercept[Exception](spark.sql(s"update $nativeTable set $assignment"))
+            }
+          }
+        }
+        checkAnswer(s"select id, v, cast(d as string) from $nativeTable")(Seq(1, 20, "1.50"))
+      }
     }
   }
 
