@@ -17,11 +17,19 @@
 
 package org.apache.spark.sql.catalyst.plans.logical
 
+import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 
+/**
+ * Time travel over [[relation]], resolved by Hudi when [[relation]] is a Hudi table.
+ *
+ * @param parsedRelation the relation as parsed, used to hand the time travel back to Spark when
+ *                       [[relation]] is not a Hudi table
+ */
 case class TimeTravelRelation(relation: LogicalPlan,
                               timestamp: Option[Expression],
-                              version: Option[String]) extends UnaryNode with HoodieUnaryLikeSham[LogicalPlan] {
+                              version: Option[String],
+                              parsedRelation: UnresolvedRelation) extends UnaryNode with HoodieUnaryLikeSham[LogicalPlan] {
 
   override lazy val resolved: Boolean = false
 

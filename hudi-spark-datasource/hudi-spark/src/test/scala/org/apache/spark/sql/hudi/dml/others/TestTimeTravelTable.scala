@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
+import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 import java.text.SimpleDateFormat
@@ -463,6 +464,40 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
       checkExceptionContain(
         s"select * from $tableName TIMESTAMP AS OF (select max(ts) from $tableName)")(
         subqueryError)
+    }
+  }
+
+  test("Test time travel on a non-Hudi table is left to Spark") {
+    // Spark's in-memory test catalog serves `VERSION AS OF v` from table `<name>v` and
+    // `TIMESTAMP AS OF ts` from table `<name><ts in micros>`.
+    withSQLConf(
+      "spark.sql.catalog.time_travel_cat" -> "org.apache.spark.sql.connector.catalog.InMemoryTableCatalog",
+      "spark.sql.session.timeZone" -> "UTC") {
+      val name = generateTableName
+      val table = s"time_travel_cat.ns.$name"
+      spark.sql("create namespace if not exists time_travel_cat.ns")
+      Seq("" -> 1, "v1" -> 2, "1000000" -> 3).foreach { case (suffix, id) =>
+        spark.sql(s"create table $table$suffix (id int) using parquet")
+        spark.sql(s"insert into $table$suffix values ($id)")
+      }
+
+      checkAnswer(s"select * from $table")(Seq(1))
+      checkAnswer(s"select * from $table VERSION AS OF 'v1'")(Seq(2))
+      checkAnswer(s"select * from $table TIMESTAMP AS OF '1970-01-01 00:00:01'")(Seq(3))
+      checkAnswer(
+        s"""with c as (select * from $table VERSION AS OF 'v1')
+           |select c.id from c join $table TIMESTAMP AS OF '1970-01-01 00:00:01' t on c.id + 1 = t.id
+           |""".stripMargin)(Seq(2))
+
+      // A CTE named like a table in the current namespace must not read that table's version
+      spark.sql("use time_travel_cat.ns")
+      try {
+        intercept[AnalysisException] {
+          spark.sql(s"with $name as (select 9 as id) select * from $name VERSION AS OF 'v1'").collect()
+        }
+      } finally {
+        spark.sql("use spark_catalog.default")
+      }
     }
   }
 }
