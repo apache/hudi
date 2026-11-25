@@ -1199,6 +1199,53 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     }
   }
 
+  Seq(Seq("keep", "purge"), Seq("purge", "keep")).foreach { statuses =>
+    test(s"Test MergeInto with target fields in a condition on mor table holding a key twice in one base file "
+      + s"(${statuses.mkString(", ")})") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf("hoodie.index.type" -> "SIMPLE") {
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id int,
+               |  status string
+               | ) using hudi
+               | tblproperties (
+               |  type = 'mor',
+               |  primaryKey = 'id'
+               | )
+               | location '${tmp.getCanonicalPath}'
+             """.stripMargin)
+          // An insert keeps both rows of id 1
+          withSQLConf("hoodie.spark.sql.insert.into.operation" -> "insert") {
+            spark.sql(s"insert into $tableName values (1, '${statuses.head}'), (1, '${statuses(1)}'), (2, 'keep')")
+          }
+          checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName")(Seq(1))
+
+          // Each row of id 1 is evaluated against the clause, also once a log file holds the first update
+          Seq(("purge", "updated"), ("updated", "twice")).foreach { case (from, to) =>
+            spark.sql(
+              s"""
+                 | merge into $tableName t
+                 | using (select 1 as id) s
+                 | on t.id = s.id
+                 | when matched and t.status = '$from' then update set status = '$to'
+               """.stripMargin)
+            checkAnswer(s"select id, status from $tableName order by id, status")(
+              Seq(1, "keep"), Seq(1, to), Seq(2, "keep"))
+          }
+
+          withSQLConf(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1") {
+            spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
+          }
+          checkAnswer(s"select id, status from $tableName order by id, status")(
+            Seq(1, "keep"), Seq(1, "twice"), Seq(2, "keep"))
+        }
+      }
+    }
+  }
+
   test("Test MergeInto with a matched condition on a target field refused on mor table without record key") {
     withTempDir { tmp =>
       val tableName = generateTableName
