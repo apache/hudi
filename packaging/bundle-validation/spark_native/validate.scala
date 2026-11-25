@@ -90,6 +90,7 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
+  var checksSkipped = 0
   val expectedChecks = 84
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
@@ -225,11 +226,17 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
     spark.read.format("hudi").load(nullPartitions).selectExpr("uuid", "fare"))
   // The JVM read appends partition values parsed back from the path; a
   // timestamp's path form keeps milliseconds and follows the JVM time zone.
-  val timestampPartition = writeV8("native_scan_timestamp_partition_v8", "COPY_ON_WRITE", Overwrite,
-    rows(0, 60).withColumn("partitionpath",
-      org.apache.spark.sql.functions.expr("timestamp_micros((ts % 3) * 1000000 + 123456)")), "upsert")
-  compare("timestamp partition column", expectNative = false)(
-    spark.read.format("hudi").load(timestampPartition).selectExpr("uuid", "partitionpath", "fare"))
+  // On Spark 4 the JVM read itself cannot parse that path form back while planning,
+  // so the shape is checked on Spark 3 only.
+  if (spark.version.startsWith("3.")) {
+    val timestampPartition = writeV8("native_scan_timestamp_partition_v8", "COPY_ON_WRITE", Overwrite,
+      rows(0, 60).withColumn("partitionpath",
+        org.apache.spark.sql.functions.expr("timestamp_micros((ts % 3) * 1000000 + 123456)")), "upsert")
+    compare("timestamp partition column", expectNative = false)(
+      spark.read.format("hudi").load(timestampPartition).selectExpr("uuid", "partitionpath", "fare"))
+  } else {
+    checksSkipped += 2
+  }
   // A column added after the base files were written is null-filled from the table schema.
   val evolved = writeV8("native_scan_mor_evolved_v8", "MERGE_ON_READ", Overwrite, rows(0, 300), "upsert")
   writeV8("native_scan_mor_evolved_v8", "MERGE_ON_READ", Append,
@@ -668,8 +675,8 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
     r => r.scans == 1 && r.asParquet == 0)(
     spark.read.format("hudi").option("as.of.instant", firstInstant).load(nativeCow).selectExpr("uuid", "fare", "ts"))
 
-  if (failures > 0 || checksRun != expectedChecks) {
-    println(s"::error::native hudi scan probes: failures=$failures checksRun=$checksRun expected=$expectedChecks")
+  if (failures > 0 || checksRun != expectedChecks - checksSkipped) {
+    println(s"::error::native hudi scan probes: failures=$failures checksRun=$checksRun expected=$expectedChecks skipped=$checksSkipped")
     System.exit(1)
   }
 }
