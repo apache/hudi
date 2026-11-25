@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FileNameParser;
@@ -518,12 +519,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return pathName.contains(baseFileExtension);
       }
     };
-    // A table shared with an external table format through a pluggable table format can hold data
-    // files that Hudi did not write; they carry no file id or commit time and belong to no file
-    // group, so they are not part of the view.
+    // A table of a non-native table format can hold data files that Hudi did not write; they carry
+    // no file id or commit time and belong to no file group, so they are not part of the view.
+    boolean nativeTableFormat = NativeTableFormat.TABLE_FORMAT.equals(metaClient.getTableFormat().getName());
     return pathInfoList.stream()
         .filter(roFilePredicate)
-        .filter(pathInfo -> FileNameParser.parseBaseFile(pathInfo.getPath().getName()).isPresent())
+        .filter(pathInfo -> nativeTableFormat || FileNameParser.parseBaseFile(pathInfo.getPath().getName()).isPresent())
         .map(HoodieBaseFile::new);
   }
 

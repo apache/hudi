@@ -255,6 +255,20 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
                              boolean skipStreamingWritesToMetadataTable,
                              Option<HoodieTable> hoodieTableOpt) {
+    try {
+      return commitStatsAndRunPostCommit(instantTime, tableWriteStats, extraMetadata, commitActionType, partitionToReplaceFileIds,
+          extraPreCommitFunc, skipStreamingWritesToMetadataTable, hoodieTableOpt);
+    } finally {
+      operationTypesByInstant.remove(instantTime);
+    }
+  }
+
+  private boolean commitStatsAndRunPostCommit(String instantTime, TableWriteStats tableWriteStats,
+                                              Option<Map<String, String>> extraMetadata,
+                                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
+                                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                                              boolean skipStreamingWritesToMetadataTable,
+                                              Option<HoodieTable> hoodieTableOpt) {
     // Skip the empty commit if not allowed
     if (!config.allowEmptyCommit() && tableWriteStats.isEmptyDataTableWriteStats()) {
       return true;
@@ -606,10 +620,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       BaseWriteHelper.validateUpdatesAsDeletesAndInserts(config, metaClient, writeOperationType);
     }
     setOperationType(writeOperationType);
-    operationTypesByInstant.put(instantTime, writeOperationType);
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
+    // Drops the operation types of writes that are no longer pending, such as one that failed before its commit
+    operationTypesByInstant.keySet().retainAll(this.pendingInflightAndRequestedInstants);
+    if (!WriteOperationType.isTableService(writeOperationType)) {
+      // A table service commits through the table service client, which sets its own operation type
+      operationTypesByInstant.put(instantTime, writeOperationType);
+    }
     this.pendingInflightAndRequestedInstants.remove(instantTime);
     tableServiceClient.setLastCompletedTxnAndMetadata(this.lastCompletedTxnAndMetadata);
     tableServiceClient.setPendingInflightAndRequestedInstants(this.pendingInflightAndRequestedInstants);
@@ -1706,6 +1725,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // stop heartbeat for instant
     heartbeatClient.stop(instantTime);
     operationTypesByInstant.remove(instantTime);
+  }
+
+  @VisibleForTesting
+  public Map<String, WriteOperationType> getOperationTypesByInstant() {
+    return Collections.unmodifiableMap(operationTypesByInstant);
   }
 
   @Override
