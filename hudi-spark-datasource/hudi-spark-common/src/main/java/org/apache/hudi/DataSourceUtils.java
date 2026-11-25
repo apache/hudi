@@ -47,6 +47,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -281,6 +282,22 @@ public class DataSourceUtils {
       // No table exists yet, so no duplicates to drop
       return incomingHoodieRecords;
     }
+  }
+
+  /**
+   * Throws a {@link HoodieDuplicateKeyException} if more than one of the records carries the same key. The records
+   * are keyed as the index of the write keys a record: by record key for a global index, and by record key and
+   * partition path otherwise.
+   */
+  public static JavaRDD<HoodieRecord> failOnRepeatedKeys(JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig) {
+    boolean isIndexingGlobal = SparkHoodieIndexFactory.isGlobalIndex(writeConfig);
+    return records
+        .mapToPair(record -> new Tuple2<Object, HoodieRecord>(
+            isIndexingGlobal ? record.getRecordKey() : record.getKey(), record.copy()))
+        .reduceByKey((first, second) -> {
+          throw new HoodieDuplicateKeyException(first.getRecordKey());
+        }, records.getNumPartitions())
+        .values();
   }
 
   /**

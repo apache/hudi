@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
-import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException, HoodieNotSupportedException}
+import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.index.{HoodieIndex, SparkMetadataTableGlobalRecordLevelIndex, SparkMetadataTableRecordLevelIndex}
 import org.apache.hudi.metadata.MetadataPartitionType
@@ -345,17 +345,26 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   /**
    * Whether the index finds every record key the table holds, so that the insert of a statement whose merge
-   * condition matches no record can fail on a key the table already has: a record-level index, or a non-bucket
-   * index of a copy-on-write table, whose keys are all in base files.
+   * condition matches no record can fail on a key the table already has: a built record-level index that the write
+   * does not drop with the metadata table, or an index of a copy-on-write table that reads the keys of the base
+   * files, as a record-level index also does until it is built. A user-defined index class, which takes precedence
+   * over the index type, is not known to.
    */
   private lazy val indexFindsEveryKey: Boolean = {
-    val indexType = combineOptions(hoodieCatalogTable, hoodieCatalogTable.tableConfig, sparkSession.sessionState.conf,
-      defaultOpts = Map.empty).getOrElse(HoodieIndexConfig.INDEX_TYPE.key, HoodieIndex.IndexType.SIMPLE.name)
+    val opts = combineOptions(hoodieCatalogTable, hoodieCatalogTable.tableConfig, sparkSession.sessionState.conf,
+      defaultOpts = Map.empty)
+    val indexType = opts.getOrElse(HoodieIndexConfig.INDEX_TYPE.key, HoodieIndex.IndexType.SIMPLE.name)
     def isOneOf(types: HoodieIndex.IndexType*): Boolean = types.exists(_.name.equalsIgnoreCase(indexType))
-    isOneOf(HoodieIndex.IndexType.RECORD_INDEX, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX,
-      HoodieIndex.IndexType.RECORD_LEVEL_INDEX) ||
-      (targetTableType == COW_TABLE_TYPE_OPT_VAL && isOneOf(HoodieIndex.IndexType.SIMPLE, HoodieIndex.IndexType.BLOOM,
-        HoodieIndex.IndexType.GLOBAL_SIMPLE, HoodieIndex.IndexType.GLOBAL_BLOOM))
+    val isRecordIndex = isOneOf(HoodieIndex.IndexType.RECORD_INDEX, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX,
+      HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
+    val keepsMetadataTable = opts.getOrElse(HoodieMetadataConfig.ENABLE.key, HoodieMetadataConfig.ENABLE.defaultValue.toString).toBoolean
+    val findsEveryKey = if (isRecordIndex && hoodieCatalogTable.tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
+      keepsMetadataTable
+    } else {
+      targetTableType == COW_TABLE_TYPE_OPT_VAL && (isRecordIndex || isOneOf(HoodieIndex.IndexType.SIMPLE,
+        HoodieIndex.IndexType.BLOOM, HoodieIndex.IndexType.GLOBAL_SIMPLE, HoodieIndex.IndexType.GLOBAL_BLOOM))
+    }
+    findsEveryKey && opts.get(HoodieIndexConfig.INDEX_CLASS_NAME.key).forall(_.isEmpty)
   }
 
   /**
@@ -379,36 +388,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val query = InsertIntoHoodieTableCommand.alignQueryOutput(
         Project(output, Filter(conditions.reduce(Or), mergeInto.sourceTable)),
         hoodieCatalogTable, Map.empty, sparkSession.sessionState.conf)
-      val insertedDf = sparkAdapter.getUnsafeUtils.createDataFrameFrom(sparkSession, query)
-      failOnRepeatedRecordKey(insertedDf)
       InsertIntoHoodieTableCommand.run(sparkSession.asInstanceOf[org.apache.spark.sql.classic.SparkSession], hoodieCatalogTable.table,
-        insertedDf.queryExecution.executedPlan,
+        sparkAdapter.getUnsafeUtils.createDataFrameFrom(sparkSession, query).queryExecution.executedPlan,
         Map.empty, overwrite = false, extraOptions = Map(
           OPERATION.key -> INSERT_OPERATION_OPT_VAL,
           SPARK_SQL_INSERT_INTO_OPERATION.key -> INSERT_OPERATION_OPT_VAL,
-          INSERT_DUP_POLICY.key -> FAIL_INSERT_DUP_POLICY),
+          INSERT_DUP_POLICY.key -> FAIL_INSERT_DUP_POLICY,
+          HoodieSparkSqlWriter.SQL_MERGE_INTO_INSERTS.key -> "true"),
         metrics = metrics)
-    }
-  }
-
-  /**
-   * Fails on a record key that more than one inserted source record carries. The insert checks the keys
-   * against the records the table holds only, so it would write each of these records.
-   */
-  private def failOnRepeatedRecordKey(insertedDf: DataFrame): Unit = {
-    val keyFields = hoodieCatalogTable.primaryKeys.toSeq
-    val countField = "__record_key_count"
-    val repeated = insertedDf
-      .where(keyFields.map(field => functions.col(field).isNotNull).reduce(_ && _))
-      .groupBy(keyFields.map(functions.col): _*)
-      .agg(functions.count(functions.lit(1)).as(countField))
-      .where(functions.col(countField) > 1)
-      .limit(1)
-      .collect()
-    repeated.headOption.foreach { row =>
-      val key = if (keyFields.size == 1) String.valueOf(row.get(0))
-      else keyFields.indices.map(i => s"${keyFields(i)}:${row.get(i)}").mkString(",")
-      throw new HoodieDuplicateKeyException(key)
     }
   }
 
