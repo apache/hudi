@@ -118,10 +118,57 @@ class TestTimelineService {
     }
   }
 
+  /**
+   * A redirect from the listener at the advertised host is its answer, so the check does not follow it, here to a
+   * listener that never answers, which would look like a slow host and keep the port.
+   */
   @Test
-  void createServerMovesOffPortHeldBySilentListenerAtAdvertisedHost(@TempDir Path markerDir) throws Exception {
+  void createServerMovesOffPortAnsweredByRedirectingListenerAtAdvertisedHost(@TempDir Path markerDir) throws Exception {
     try (ServerSocket silentListener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
-      assertServesMarkerRequestsOffPort(silentListener.getLocalPort(), markerDir);
+      String location = "http://" + InetAddress.getLoopbackAddress().getHostAddress() + ":" + silentListener.getLocalPort() + "/";
+      HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+      server.createContext("/", exchange -> {
+        exchange.getResponseHeaders().add("Location", location);
+        exchange.sendResponseHeaders(302, -1);
+        exchange.close();
+      });
+      server.start();
+      try {
+        assertServesMarkerRequestsOffPort(server.getAddress().getPort(), markerDir);
+      } finally {
+        server.stop(0);
+      }
+    }
+  }
+
+  /**
+   * A listener that never answers looks the same to the check as a slow host, so the service keeps the port it
+   * bound rather than moving off a port it may well serve.
+   */
+  @Test
+  void createServerKeepsPortWhenAdvertisedHostDoesNotAnswer() throws Exception {
+    try (ServerSocket silentListener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+      int takenPort = silentListener.getLocalPort();
+      // Where the platform refuses the wildcard bind on the held port, the service moves on as before
+      boolean wildcardBindAllowed = canBindWildcard(takenPort);
+      TimelineService timelineService = new TimelineService(HoodieTestUtils.getDefaultStorageConf(),
+          TimelineService.Config.builder().serverPort(takenPort).build(), mock(FileSystemViewManager.class));
+      try {
+        int servicePort = timelineService.startService(InetAddress.getLoopbackAddress().getHostAddress());
+        if (wildcardBindAllowed) {
+          assertEquals(takenPort, servicePort);
+        }
+      } finally {
+        timelineService.close();
+      }
+    }
+  }
+
+  private static boolean canBindWildcard(int port) {
+    try (ServerSocket socket = new ServerSocket(port)) {
+      return true;
+    } catch (IOException e) {
+      return false;
     }
   }
 

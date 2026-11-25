@@ -38,20 +38,18 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.http.client.fluent.Request;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.conn.ConnectTimeoutException;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.net.ConnectException;
-import java.net.NoRouteToHostException;
+import java.net.HttpURLConnection;
+import java.net.Proxy;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.UnknownHostException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A standalone timeline service exposing File-System View interfaces to clients.
@@ -62,10 +60,11 @@ public class TimelineService {
   private static final int START_SERVICE_MAX_RETRIES = 16;
   private static final int DEFAULT_NUM_THREADS = 250;
   private static final int PROBE_TIMEOUT_MS = 5000;
-  private static final String ROOT_RESPONSE = "Hello Hudi";
 
   @Getter
   private int serverPort;
+  // Requests the root page of this service got, which tells its own answer to the probe from another listener's
+  private final AtomicLong rootRequests = new AtomicLong();
   private final Config timelineServerConf;
   @Getter
   private final StorageConfiguration<?> storageConf;
@@ -246,19 +245,32 @@ public class TimelineService {
    * some platforms hand out a port to a wildcard bind while such a listener holds it, so the bound port alone
    * does not tell whether clients reach this server.
    *
-   * @return {@code false} only if something other than this server answers at the given address.
+   * @return {@code false} only if an HTTP response to a request for the root page at the given address came while
+   *     this server got no such request. No response, as from a slow host, keeps the port. The status line of the
+   *     response decides: a redirect is not followed and the body is not read, as they may lead elsewhere or never end.
    */
-  private static boolean isServingAt(String host, int port) {
+  private boolean isServingAt(String host, int port) {
+    long requestsBefore = rootRequests.get();
+    HttpURLConnection connection = null;
     try {
       URI uri = new URIBuilder().setScheme("http").setHost(host).setPort(port).setPath("/").build();
-      return ROOT_RESPONSE.equals(Request.Get(uri).connectTimeout(PROBE_TIMEOUT_MS).socketTimeout(PROBE_TIMEOUT_MS)
-          .execute().returnContent().asString());
-    } catch (URISyntaxException | ConnectException | ConnectTimeoutException | UnknownHostException | NoRouteToHostException e) {
-      log.info("Could not connect to {}:{} to check the timeline server: {}", host, port, e.toString());
-      return true;
-    } catch (IOException e) {
-      log.warn("Unexpected response from {}:{}: {}", host, port, e.toString());
+      connection = (HttpURLConnection) uri.toURL().openConnection(Proxy.NO_PROXY);
+      connection.setInstanceFollowRedirects(false);
+      connection.setConnectTimeout(PROBE_TIMEOUT_MS);
+      connection.setReadTimeout(PROBE_TIMEOUT_MS);
+      int status = connection.getResponseCode();
+      if (rootRequests.get() > requestsBefore) {
+        return true;
+      }
+      log.warn("Another listener answers at {}:{} with status {}", host, port, status);
       return false;
+    } catch (URISyntaxException | IOException e) {
+      log.info("Could not check the timeline server at {}:{}, keeping the port: {}", host, port, e.toString());
+      return true;
+    } finally {
+      if (connection != null) {
+        connection.disconnect();
+      }
     }
   }
 
@@ -305,7 +317,10 @@ public class TimelineService {
 
     requestHandler = new RequestHandler(
         app, storageConf, timelineServerConf, fsViewsManager);
-    app.get("/", ctx -> ctx.result(ROOT_RESPONSE));
+    app.get("/", ctx -> {
+      rootRequests.incrementAndGet();
+      ctx.result("Hello Hudi");
+    });
     requestHandler.register();
     if (timelineServerConf.enableUi) {
       uiHandler = new UiHandler(app);
