@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -34,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * A {@link FileGroupReaderBasedMergeHandle} that supports MERGE write incrementally(small data buffers).
@@ -64,6 +66,12 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
     if (getAttemptId() > 0) {
       deleteInvalidDataFile(getAttemptId() - 1);
     }
+  }
+
+  @Override
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    // The Flink record context cannot set the values of format meta columns
+    return checkNoFormatMetaColumns();
   }
 
   @Override

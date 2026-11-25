@@ -22,15 +22,18 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy;
+import org.apache.hudi.client.clustering.run.strategy.JavaExecutionStrategy;
 import org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy;
 import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -53,6 +56,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandleWithChangeLog;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandleWithChangeLog;
@@ -62,6 +66,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.commit.JavaBulkInsertHelper;
 import org.apache.hudi.tableformat.TestTableFormat;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
@@ -379,6 +384,50 @@ public class TestHoodieJavaClientRowLineageForTestFormat extends HoodieJavaClien
           hasUpdates ? 3 : 5, hasUpdates ? 2 : 0);
     }
     assertRowLineageColumnsNotInTable(15);
+  }
+
+  /**
+   * A clustering strategy that does not declare that it writes the format meta columns of the records it clusters
+   * is refused before it writes a file, as it may write the records without the format meta columns.
+   */
+  @Test
+  void testClusteringStrategyWithoutFormatMetaColumnsIsRefused() throws Exception {
+    initTable(HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.current(), true);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProperties(buildConfig(HoodieTableVersion.current()).getProps())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(0).build())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withClusteringPlanStrategyClass(JavaSizeBasedClusteringPlanStrategy.class.getName())
+            .withClusteringExecutionStrategyClass(TableSchemaJavaExecutionStrategy.class.getName()).build())
+        .build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+    for (String instant : Arrays.asList("001", "002", "003")) {
+      write(client, dataGen.generateInsertsForPartition(instant, 5, PARTITION), false);
+    }
+    List<String> dataFiles = listDataFiles();
+    assertEquals(3, dataFiles.size());
+
+    Option<String> clusteringTime = client.scheduleClustering(Option.empty());
+    assertTrue(clusteringTime.isPresent());
+    Throwable failure = assertThrows(Exception.class, () -> client.cluster(clusteringTime.get(), true));
+    assertTrue(exceptionChainContains(failure, refusalMessage(TableSchemaJavaExecutionStrategy.class)), () -> "Unexpected failure: " + failure);
+    assertEquals(dataFiles, listDataFiles());
+  }
+
+  /**
+   * Writes the records it clusters with the schema of the table.
+   */
+  public static class TableSchemaJavaExecutionStrategy<T> extends JavaExecutionStrategy<T> {
+    public TableSchemaJavaExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
+      super(table, engineContext, writeConfig);
+    }
+
+    @Override
+    public List<WriteStatus> performClusteringWithRecordList(List<HoodieRecord<T>> inputRecords, int numOutputGroups, String instantTime,
+                                                             Map<String, String> strategyParams, HoodieSchema schema,
+                                                             List<HoodieFileGroupId> fileGroupIdList, boolean preserveHoodieMetadata) {
+      return (List<WriteStatus>) JavaBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), getWriteConfig(),
+          false, getPartitioner(strategyParams, schema), true, numOutputGroups, new CreateHandleFactory(preserveHoodieMetadata));
+    }
   }
 
   @Test

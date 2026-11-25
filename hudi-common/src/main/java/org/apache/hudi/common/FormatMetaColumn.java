@@ -39,7 +39,7 @@ import java.io.Serializable;
 public interface FormatMetaColumn extends Serializable {
 
   /**
-   * Returns the field of the column in the base files, which is nullable and defaults to null.
+   * Returns the field of the column in the base files, a nullable long or int that defaults to null.
    */
   HoodieSchemaField field();
 
