@@ -485,7 +485,9 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   // adaptive plan, which becomes final only when the subquery runs, never did.
   def aggregateDropped(plan: SparkPlan): Boolean = {
     val nodes = PlanWalk.collect(plan) { case node => node.nodeName }
-    !nodes.exists(_.contains("Aggregate")) && nodes.exists(_.contains("LocalTableScan")) &&
+    // Spark 4 plans an emptied stage as EmptyRelation (CometEmptyRelation under Comet).
+    !nodes.exists(_.contains("Aggregate")) &&
+      nodes.exists(n => n.contains("LocalTableScan") || n.contains("EmptyRelation")) &&
       "isFinalPlan=true".r.findAllIn(plan.toString).length == 1
   }
   val (sparkNoRows, sparkNoRowsPlan) = rankAboveAverage("fare = 150.5", comet = false, nativeScan = false)
