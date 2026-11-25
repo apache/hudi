@@ -1729,26 +1729,45 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   private void backfillTableConfigs(HoodieTableMetaClient metaClient) {
-    if (!HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig()).isPresent()) {
+    if (getMissingTableConfigs(metaClient.getTableConfig()).isEmpty()) {
       return;
     }
     // another writer may have backfilled the table since this meta client loaded its config
     metaClient.reloadTableConfig();
-    Option<String> missingKeyGeneratorClass = HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig());
-    if (missingKeyGeneratorClass.isPresent()) {
-      log.info("Backfilling {}={} for table {}", HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(),
-          missingKeyGeneratorClass.get(), metaClient.getBasePath());
+    Map<String, String> missingTableConfigs = getMissingTableConfigs(metaClient.getTableConfig());
+    if (!missingTableConfigs.isEmpty()) {
+      log.info("Backfilling {} for table {}", missingTableConfigs, metaClient.getBasePath());
       Properties updatedProps = new Properties();
-      updatedProps.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), missingKeyGeneratorClass.get());
+      updatedProps.putAll(missingTableConfigs);
       HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
       metaClient.reloadTableConfig();
     }
   }
 
+  /**
+   * Returns the table configs that readers of the table version need but the table does not carry:
+   * the key generator class below version 8 and the precombine field below version 9.
+   * Returns the shared empty map when none is missing, so a table that carries every key, or is at version 9,
+   * allocates nothing on the commit path.
+   */
+  private static Map<String, String> getMissingTableConfigs(HoodieTableConfig tableConfig) {
+    Option<String> missingKeyGeneratorClass = HoodieTableConfig.getMissingKeyGeneratorClass(tableConfig);
+    Option<String> missingPrecombineField = HoodieTableConfig.getMissingPrecombineField(tableConfig);
+    if (!missingKeyGeneratorClass.isPresent() && !missingPrecombineField.isPresent()) {
+      return Collections.emptyMap();
+    }
+    Map<String, String> missingTableConfigs = new HashMap<>();
+    missingKeyGeneratorClass.ifPresent(
+        keyGeneratorClass -> missingTableConfigs.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), keyGeneratorClass));
+    missingPrecombineField.ifPresent(
+        precombineField -> missingTableConfigs.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), precombineField));
+    return missingTableConfigs;
+  }
+
   private boolean needsUpgradeOrBackfill(HoodieTableMetaClient metaClient) {
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
     return upgradeDowngrade.needsUpgrade(config.getWriteVersion())
-        || HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig()).isPresent();
+        || !getMissingTableConfigs(metaClient.getTableConfig()).isEmpty();
   }
 
   /**

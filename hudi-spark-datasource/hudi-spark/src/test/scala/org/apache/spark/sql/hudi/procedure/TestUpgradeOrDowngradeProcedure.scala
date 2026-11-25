@@ -250,6 +250,44 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test downgrade from version eight to six records the legacy precombine key") {
+    // the session may still carry inline compaction from an earlier test in this suite
+    withSQLConf("hoodie.compact.inline" -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '$tablePath'
+             | options (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  orderingFields = 'ts',
+             |  hoodie.write.table.version = '8'
+             | )
+         """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+        // a version 8 table created before the legacy key was recorded on creation carries only the new key,
+        // and a downgrade for a 0.x rollback runs outside the write client that backfills it
+        var metaClient = createMetaClient(spark, tablePath)
+        HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath,
+          java.util.Collections.singleton(HoodieTableConfig.PRECOMBINE_FIELD.key))
+        checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'SIX')""")(Seq(true))
+
+        metaClient = createMetaClient(spark, tablePath)
+        assertResult(HoodieTableVersion.SIX)(metaClient.getTableConfig.getTableVersion)
+        assertResult("ts")(metaClient.getTableConfig.getProps.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key))
+      }
+    }
+  }
+
   @throws[IOException]
   private def assertTableVersionFromPropertyFile(metaClient: HoodieTableMetaClient, versionCode: Int): Unit = {
     val propertyFile = new StoragePath(metaClient.getMetaPath + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE)
