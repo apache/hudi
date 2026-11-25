@@ -117,6 +117,30 @@ public class TestHudiMorMergeModeSemantics
     }
 
     @Test
+    public void testCharMatchesBaseReaderOnUntouchedRow()
+    {
+        String query = "SELECT code FROM %s WHERE key = 'k3'";
+        Object readOptimized = computeScalar(query.formatted(CommitTimeOrderingHudiTablesInitializer.TABLE_NAME));
+        assertThat(readOptimized).isEqualTo(" ab  ");
+        assertThat(computeScalar(query.formatted(CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME))).isEqualTo(readOptimized);
+    }
+
+    @Test
+    public void testCharFilterMatchesLeadingSpaceOnSnapshotRead()
+    {
+        assertQuery(
+                "SELECT key FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME + " WHERE code = CAST(' ab' AS CHAR(5))",
+                "VALUES 'k3'");
+    }
+
+    @Test
+    public void testCharKeepsTabsOnUpdatedRow()
+    {
+        assertThat(computeScalar("SELECT code FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k1'"))
+                .isEqualTo("\tx\t  ");
+    }
+
+    @Test
     public void testCountAfterDeletes()
     {
         assertThat(computeScalar("SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME)).isEqualTo(4L);

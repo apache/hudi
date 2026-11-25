@@ -22,6 +22,9 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class NativeTableMetadataFactory extends TableMetadataFactory {
   private static final NativeTableMetadataFactory INSTANCE = new NativeTableMetadataFactory();
 
@@ -38,7 +41,7 @@ public class NativeTableMetadataFactory extends TableMetadataFactory {
       if (metadata.isMetadataTableInitialized()) {
         return metadata;
       }
-      LOG.warn("Falling back to FileSystemBackedTableMetadata as metadata table is not initialized");
+      log.warn("Falling back to FileSystemBackedTableMetadata as metadata table is not initialized");
     }
     return createFSBackedTableMetadata(engineContext, storage, datasetBasePath);
   }

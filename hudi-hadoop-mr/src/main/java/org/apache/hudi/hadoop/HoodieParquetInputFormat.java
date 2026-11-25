@@ -36,6 +36,7 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -62,8 +63,6 @@ import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.Type;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
@@ -90,9 +89,9 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFileg
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
+@Slf4j
 public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetInputFormat.class);
   // Compiled once: the raw columns.types screen below runs on every legacy-path split.
   private static final Pattern WHITESPACE = Pattern.compile("\\s");
   // A member a synced variant's Hive type carries, as it appears in a struct<...> type string:
@@ -181,7 +180,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
     // if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {
     // FilterPredicate predicate = constructHoodiePredicate(job, tableName, split);
-    // LOG.info("Setting parquet predicate push down as " + predicate);
+    // log.info("Setting parquet predicate push down as " + predicate);
     // ParquetInputFormat.setFilterPredicate(job, predicate);
     // clearOutExistingPredicate(job);
     // }
@@ -199,7 +198,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     SchemaEvolutionContext schemaEvolutionContext = new SchemaEvolutionContext(split, job);
     schemaEvolutionContext.doEvolutionForParquetFormat();
 
-    LOG.debug("EMPLOYING DEFAULT RECORD READER - {}", split);
+    log.debug("EMPLOYING DEFAULT RECORD READER - {}", split);
 
     return getRecordReaderInternal(split, job, reporter, schemaEvolutionContext.internalSchemaOption);
   }
@@ -248,7 +247,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     List<Pair<String, String>> colNamesWithTypesForExternal = colNameWithTypes.stream()
         .filter(p -> !HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey())).collect(Collectors.toList());
 
-    LOG.info("colNameWithTypes ={}, Num Entries ={}", colNameWithTypes, colNameWithTypes.size());
+    log.info("colNameWithTypes ={}, Num Entries ={}", colNameWithTypes, colNameWithTypes.size());
 
     Option<FileSplit> singleSplit = resolveSingleFileSplit(eSplit, !hoodieColsProjected.isEmpty(),
         !externalColsProjected.isEmpty());
@@ -265,7 +264,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       jobConfCopy.unset(TableScanDesc.FILTER_EXPR_CONF_STR);
       jobConfCopy.unset(ConvertAstToSearchArg.SARG_PUSHDOWN);
 
-      LOG.info("Generating column stitching reader for {} and {}", eSplit.getPath(), rightSplit.getPath());
+      log.info("Generating column stitching reader for {} and {}", eSplit.getPath(), rightSplit.getPath());
       return new BootstrapColumnStichingRecordReader(getRecordReaderInternal(eSplit, jobConfCopy, reporter),
           HoodieRecord.HOODIE_META_COLUMNS.size(),
           getRecordReaderInternal(rightSplit, jobConfCopy, reporter),
@@ -378,7 +377,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       // The screen above strips whitespace and lower-cases; the TypeInfoUtils parse tolerates
       // neither, so a string it lets through can still fail to parse. Bail out like the pairing
       // check below rather than failing a read the plain parquet reader would serve.
-      LOG.debug("Skipping the shredded variant guard for {}: {} did not parse", filePath, IOConstants.COLUMNS_TYPES, e);
+      log.debug("Skipping the shredded variant guard for {}: {} did not parse", filePath, IOConstants.COLUMNS_TYPES, e);
       return;
     }
     if (ioColumns.size() != ioColumnTypes.size()) {

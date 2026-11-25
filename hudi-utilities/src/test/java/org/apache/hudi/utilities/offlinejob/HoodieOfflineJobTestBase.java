@@ -29,13 +29,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Properties;
@@ -44,8 +43,8 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Slf4j(topic = "org.apache.hudi.utilities.testutils.UtilitiesTestBase")
 public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
-  private static final Logger LOG = LoggerFactory.getLogger(UtilitiesTestBase.class);
   protected HoodieTestDataGenerator dataGen;
   protected SparkRDDWriteClient client;
   protected HoodieTableMetaClient metaClient;
@@ -110,7 +109,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     static void assertNCompletedCommits(int expected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getWriteTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numCommits = timeline.countInstants();
       assertEquals(expected, numCommits, "Got=" + numCommits + ", exp =" + expected);
     }
@@ -118,7 +117,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     static void assertNCleanCommits(int expected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numCleanCommits = timeline.countInstants();
       assertEquals(expected, numCleanCommits, "Got=" + numCleanCommits + ", exp =" + expected);
     }
@@ -126,7 +125,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     static void assertNClusteringCommits(int expected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
-      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
+      log.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numCommits = timeline.countInstants();
       assertEquals(expected, numCommits, "Got=" + numCommits + ", exp =" + expected);
     }

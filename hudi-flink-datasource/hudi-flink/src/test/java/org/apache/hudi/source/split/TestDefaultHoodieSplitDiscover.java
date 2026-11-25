@@ -28,6 +28,7 @@ import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +38,10 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link DefaultHoodieSplitDiscover}.
@@ -209,22 +213,20 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testDiscoverSplitsWithNonExistentTable() throws Exception {
-    // Use a path that doesn't have a Hudi table initialized
-    String nonExistentPath = basePath + "/non_existent_table";
-    Configuration conf = TestConfigurations.getDefaultConf(nonExistentPath);
+  void testDiscoverSplitsWhenTableIsCreatedAfterFirstPoll() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
     conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
 
-    HoodieScanContext scanContext = createScanContext(conf);
-    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
-        scanContext);
+    HoodieContinuousSplitBatch beforeWrite = discover.discoverSplits(null);
+    assertTrue(beforeWrite.getSplits().isEmpty());
+    assertTrue(beforeWrite.getOffset().isEmpty());
 
-    // Should return empty batch when table doesn't exist
-    HoodieContinuousSplitBatch result = discover.discoverSplits(null);
-
-    assertNotNull(result, "Result should not be null");
-    assertNotNull(result.getSplits(), "Splits should not be null");
-    // Empty batch should have no splits
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    HoodieContinuousSplitBatch afterWrite = discover.discoverSplits(null);
+    assertFalse(afterWrite.getSplits().isEmpty());
+    assertEquals(TestUtils.getLastCompleteInstant(basePath), afterWrite.getEndInstant());
+    assertTrue(discover.discoverSplits(afterWrite.getOffset()).getSplits().isEmpty());
   }
 
   @Test

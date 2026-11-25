@@ -26,11 +26,10 @@ import org.apache.hudi.hive.HiveSyncTool;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -59,9 +58,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
  *   --hoodie-conf hoodie.datasource.hive_sync.table=my_table
  * </pre>
  */
+@Slf4j
 public class HudiHiveSyncJob {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HudiHiveSyncJob.class);
 
   private final Config cfg;
   private final Configuration hadoopConf;
@@ -76,7 +74,7 @@ public class HudiHiveSyncJob {
   public static void main(String[] args) throws IOException {
     final Config cfg = new Config();
     new JCommander(cfg, null, args);
-    LOG.info("Cfg received: {}", cfg);
+    log.info("Cfg received: {}", cfg);
     JavaSparkContext jsc;
     if (StringUtils.isNullOrEmpty(cfg.sparkMaster)) {
       jsc = UtilHelpers.buildSparkContext("HudiHiveSyncJob", "local[2]", true);
@@ -91,24 +89,24 @@ public class HudiHiveSyncJob {
   }
 
   public void run() throws IOException {
-    LOG.info("Starting hive sync for {}", cfg.basePath);
+    log.info("Starting hive sync for {}", cfg.basePath);
     HoodieTimer timer = HoodieTimer.start();
     HiveSyncTool syncTool = null;
     try {
       props.put(META_SYNC_BASE_PATH.key(), cfg.basePath);
       props.put(META_SYNC_BASE_FILE_FORMAT.key(), cfg.baseFileFormat);
 
-      LOG.info("HiveSyncConfig props used to sync data {}", props);
+      log.info("HiveSyncConfig props used to sync data {}", props);
       syncTool = new HiveSyncTool(props, new HiveConf(hadoopConf, HiveConf.class));
       syncTool.syncHoodieTable();
     } catch (Exception e) {
-      LOG.error("Exception in running hive-sync", e);
+      log.error("Exception in running hive-sync", e);
       throw new HoodieException("Hive sync failed", e);
     } finally {
       if (syncTool != null) {
         syncTool.close();
       }
-      LOG.info("Hive-sync duration in ms {}", timer.endTimer());
+      log.info("Hive-sync duration in ms {}", timer.endTimer());
     }
   }
 

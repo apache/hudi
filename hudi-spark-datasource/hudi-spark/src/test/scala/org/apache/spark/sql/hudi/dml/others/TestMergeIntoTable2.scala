@@ -748,7 +748,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test Merge into where manually set DefaultHoodieRecordPayload") {
+  testWithMergeHandles("Test Merge into where manually set DefaultHoodieRecordPayload") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       // Create a cow table with default payload class, check whether it will be overwritten by ExpressionPayload.
@@ -1250,7 +1250,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test MergeInto with commit time/event time ordering coverage") {
+  testWithMergeHandles("Test MergeInto with commit time/event time ordering coverage") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
         Seq(RecordMergeMode.COMMIT_TIME_ORDERING.name(),

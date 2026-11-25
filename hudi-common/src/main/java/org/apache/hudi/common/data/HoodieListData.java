@@ -25,8 +25,7 @@ import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Iterator;
 import java.util.List;
@@ -62,9 +61,8 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper
  *
  * @param <T> type of object.
  */
+@Slf4j
 public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieData<T> {
-  private static Logger LOG = LoggerFactory.getLogger(HoodieListData.class);
-
   private HoodieListData(List<T> data, boolean lazy) {
     super(data, lazy);
   }
@@ -109,7 +107,7 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
             try {
               ((AutoCloseable) iterator).close();
             } catch (Exception ex) {
-              LOG.warn("Failed to close the iterator", ex);
+              log.warn("Failed to close the iterator", ex);
             }
           }
         });

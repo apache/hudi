@@ -381,7 +381,9 @@ public class StreamSync implements Serializable, Closeable {
    * @throws IOException in case of any IOException
    */
   private HoodieTableMetaClient initializeMetaClient(boolean refreshTimeline) throws IOException {
-    if (storage.exists(new StoragePath(cfg.targetBasePath))) {
+    final StoragePath basePath = new StoragePath(cfg.targetBasePath);
+    final StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    if (this.storage.exists(metaPath)) {
       try {
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
             .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
@@ -435,6 +437,10 @@ public class StreamSync implements Serializable, Closeable {
         throw e;
       }
     } else {
+      if (!this.storage.isEmpty(basePath)) {
+        throw new HoodieException("Target base path " + cfg.targetBasePath + " is not empty and not a hoodie table. "
+            + "Please either delete the existing data or use a different path.");
+      }
       return initializeEmptyTable();
     }
   }

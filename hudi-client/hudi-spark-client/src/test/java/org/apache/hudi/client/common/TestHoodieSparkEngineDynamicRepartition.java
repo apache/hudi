@@ -22,15 +22,13 @@ package org.apache.hudi.client.common;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.data.HoodieJavaPairRDD;
-import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,9 +44,8 @@ import scala.Tuple3;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Slf4j
 public class TestHoodieSparkEngineDynamicRepartition {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTestDelayedTableMetadata.class);
 
   private JavaSparkContext jsc;
 
@@ -210,7 +207,7 @@ public class TestHoodieSparkEngineDynamicRepartition {
     } catch (AssertionError e) {
       logRDDContent("Original RDD", originalRdd);
       logRDDContent("Repartitioned RDD", repartitionedRdd);
-      LOG.error("Validation failed: {}", e.getMessage(), e);
+      log.error("Validation failed: {}", e.getMessage(), e);
       throw e; // rethrow to fail the test
     }
   }
@@ -249,7 +246,7 @@ public class TestHoodieSparkEngineDynamicRepartition {
   private static void logRDDContent(String label, HoodiePairData<Integer, String> pairData) {
     JavaPairRDD<Integer, String> rdd = HoodieJavaPairRDD.getJavaPairRDD(pairData);
 
-    LOG.info("===== {} =====", label);
+    log.info("===== {} =====", label);
     rdd
         .mapPartitionsWithIndex((idx, iter) -> {
           StringBuilder builder = new StringBuilder();
@@ -263,8 +260,8 @@ public class TestHoodieSparkEngineDynamicRepartition {
           return Collections.singletonList(builder.toString()).iterator();
         }, true)
         .collect()
-        .forEach(LOG::info);
-    LOG.info("============================\n");
+        .forEach(log::info);
+    log.info("============================\n");
   }
 
   @BeforeEach

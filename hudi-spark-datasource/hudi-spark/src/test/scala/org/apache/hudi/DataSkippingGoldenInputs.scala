@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, BinaryOperator, BitwiseOr, Cast, Coalesce, Concat, DateAdd, DateDiff, DateFormatClass, DateSub, DayOfMonth, Divide, EqualNullSafe, EqualTo, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, Literal, Log, Log10, Log1p, Log2, Lower, Multiply, Not, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, StartsWith, Substring, TimeZoneAwareExpression, ToUnixTimestamp, ToUTCTimestamp, UnixTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, BinaryOperator, BitwiseOr, Cast, Coalesce, Concat, DateAdd, DateDiff, DateFormatClass, DateSub, DayOfMonth, Divide, EqualNullSafe, EqualTo, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, Length, LessThan, Literal, Log, Log10, Log1p, Log2, Lower, Multiply, Not, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, StartsWith, Substring, Subtract, TimeZoneAwareExpression, ToUnixTimestamp, ToUTCTimestamp, UnixTimestamp, Upper}
 import org.apache.spark.sql.catalyst.util.ArrayData
 import org.apache.spark.sql.types.{ArrayType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, IntegerType, LongType, ShortType, StringType, StructField, StructType, TimestampType}
 
@@ -126,14 +126,27 @@ object DataSkippingGoldenInputs {
    *
    * An int shifts by the low 5 bits of the amount, which 33 pins (a 6-bit mask would shift by 33).
    * The smallint and tinyint terms take a literal of their own type, as an int literal would widen
-   * the result to int. Decimal results overflow into NULL instead, so their ranges are partial.
+   * the result to int. Decimal results overflow into NULL instead, so their ranges are partial. A date
+   * adds or subtracts its int number of days: the extreme day counts pin each side of its guard, and
+   * date_sub by Int.MinValue a constant whose negation is not an int.
    */
   private val overflowTerms: Seq[Expression] = Seq(
     ShiftLeft(a, Literal(33)),
     Add(sm, Literal(1.toShort)),
     Multiply(tn, Literal(3.toByte)),
     Add(dec, Literal(Decimal(1), DecimalType(10, 2))),
-    Divide(dec, Literal(Decimal(2), DecimalType(10, 2))))
+    Divide(dec, Literal(Decimal(2), DecimalType(10, 2))),
+    DateAdd(d, Literal(Int.MaxValue)), DateAdd(d, Literal(Int.MinValue)), DateSub(d, Literal(Int.MinValue)))
+
+  /**
+   * Terms whose other operand references the column (#20741), added after the golden file was first
+   * generated, kept out of [[terms]] for the same reason as [[dateTimeTerms]]. Neither has a range: an
+   * int shifts by the low 5 bits of the amount (32 >> 32 = 32 > 33 >> 33 = 16), and left(s, length(s) - 1)
+   * maps 'ab' to 'a', but the larger 'b' to ''.
+   */
+  private val nonConstantOperandTerms: Seq[Expression] = Seq(
+    ShiftRight(a, a),
+    new org.apache.spark.sql.catalyst.expressions.Left(s, Subtract(Length(s), Literal(1))))
 
   /**
    * Sets a time zone wherever the analyzer would, so that resolution does not depend on the Spark
@@ -166,7 +179,8 @@ object DataSkippingGoldenInputs {
 
   /**
    * Every input, in golden file order: the leaves, a seeded sample of AND / OR / NOT trees, the
-   * struct and array leaves, the leaves of [[dateTimeTerms]], then the leaves of [[overflowTerms]].
+   * struct and array leaves, the leaves of [[dateTimeTerms]], of [[overflowTerms]], then of
+   * [[nonConstantOperandTerms]].
    */
   def inputs: Seq[Expression] = {
     val allLeaves = terms.map(withTimeZone).flatMap(leaves).map(withTimeZone)
@@ -185,7 +199,8 @@ object DataSkippingGoldenInputs {
       }
     allLeaves ++ (1 to 60).map(_ => tree(3)) ++ nestedLeaves ++
       dateTimeTerms.map(withTimeZone).flatMap(leaves).map(withTimeZone) ++
-      overflowTerms.map(withTimeZone).flatMap(leaves).map(withTimeZone)
+      overflowTerms.map(withTimeZone).flatMap(leaves).map(withTimeZone) ++
+      nonConstantOperandTerms.map(withTimeZone).flatMap(leaves).map(withTimeZone)
   }
 
   /**

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -34,6 +35,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
@@ -42,20 +44,27 @@ import org.apache.parquet.schema.PrimitiveType;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.catalyst.util.ArrayBasedMapData;
+import org.apache.spark.sql.catalyst.util.GenericArrayData;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -142,6 +151,59 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     assertEquals(9, decimalParquetTypeLength(decimalRecordSchema(
         "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":2}")),
         "bytes decimal keeps the precision-minimal FIXED_LEN width (9)");
+  }
+
+  /**
+   * Byte and short columns, top level and nested, are written as plain INT32: the table schema
+   * records them as int (it has no 8- or 16-bit integer type), and so do the other Spark write paths.
+   */
+  @Test
+  public void testByteAndShortWrittenAsPlainInt32() throws Exception {
+    StructType nested = new StructType()
+        .add("b", DataTypes.ByteType, true)
+        .add("s", DataTypes.ShortType, true);
+    StructType structType = new StructType()
+        .add("b", DataTypes.ByteType, true)
+        .add("s", DataTypes.ShortType, true)
+        .add("st", nested, true)
+        .add("arr", DataTypes.createArrayType(DataTypes.ShortType), true)
+        .add("m", DataTypes.createMapType(DataTypes.StringType, DataTypes.ByteType), true);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withSchema(HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, "rec").toString())
+        .build();
+    HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(
+        storageConf.unwrap(), structType, Option.empty(), config);
+
+    MessageType parquetSchema = writeSupport.init(writeSupport.getHadoopConf()).getSchema();
+    for (ColumnDescriptor column : parquetSchema.getColumns()) {
+      if (column.getPath()[0].equals("m") && column.getPath()[column.getPath().length - 1].equals("key")) {
+        continue;
+      }
+      PrimitiveType type = column.getPrimitiveType();
+      assertEquals(PrimitiveType.PrimitiveTypeName.INT32, type.getPrimitiveTypeName(), String.join(".", column.getPath()));
+      assertNull(type.getLogicalTypeAnnotation(), String.join(".", column.getPath()));
+    }
+
+    // Write a row through the byte and short value writers and read it back as the table's int
+    HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
+        CompressionCodecName.SNAPPY, config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
+        new HadoopStorageConfiguration(writeSupport.getHadoopConf()), config.getParquetCompressionRatio(), config.parquetDictionaryEnabled());
+    StoragePath filePath = new StoragePath(basePath + "/byte_short.parquet");
+    InternalRow row = new GenericInternalRow(new Object[] {(byte) -7, (short) 300,
+        new GenericInternalRow(new Object[] {Byte.MAX_VALUE, Short.MIN_VALUE}),
+        new GenericArrayData(new Object[] {(short) -1, Short.MAX_VALUE}),
+        new ArrayBasedMapData(new GenericArrayData(new Object[] {UTF8String.fromString("k")}), new GenericArrayData(new Object[] {Byte.MIN_VALUE}))});
+    try (HoodieInternalRowParquetWriter writer = new HoodieInternalRowParquetWriter(filePath, parquetConfig)) {
+      writer.writeRow(row);
+    }
+    Row actual = sqlContext.read().parquet(filePath.toString()).collectAsList().get(0);
+    assertEquals(-7, actual.getInt(0));
+    assertEquals(300, actual.getInt(1));
+    assertEquals(Byte.MAX_VALUE, actual.getStruct(2).getInt(0));
+    assertEquals(Short.MIN_VALUE, actual.getStruct(2).getInt(1));
+    assertEquals(Arrays.asList(-1, (int) Short.MAX_VALUE), actual.getList(3));
+    assertEquals(Collections.singletonMap("k", (int) Byte.MIN_VALUE), actual.getJavaMap(4));
   }
 
   /**

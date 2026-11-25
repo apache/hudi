@@ -40,6 +40,7 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -51,8 +52,6 @@ import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -86,9 +85,8 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableBasePa
 /**
  * {@link HoodieFileGroupReader} based implementation of Hive's {@link RecordReader} for {@link ArrayWritable}.
  */
+@Slf4j
 public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<NullWritable, ArrayWritable> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFileGroupReaderBasedRecordReader.class);
 
   public interface HiveReaderCreator {
     org.apache.hadoop.mapred.RecordReader<NullWritable, ArrayWritable> getRecordReader(
@@ -142,7 +140,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         props.setProperty(MERGE_TYPE.key(), REALTIME_PAYLOAD_COMBINE);
       }
     }
-    LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
+    log.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
     FileSlice fileSlice = getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath);
     this.containsBaseFile = fileSlice.getBaseFile().isPresent();
     this.recordIterator = HoodieFileGroupReader.<ArrayWritable>builder()

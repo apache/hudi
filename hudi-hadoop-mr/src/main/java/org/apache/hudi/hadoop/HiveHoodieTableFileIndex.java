@@ -27,8 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
@@ -37,9 +36,8 @@ import java.util.stream.Collectors;
 /**
  * Implementation of {@link BaseHoodieTableFileIndex} for Hive-based query engines
  */
+@Slf4j
 public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
-
-  public static final Logger LOG = LoggerFactory.getLogger(HiveHoodieTableFileIndex.class);
 
   public HiveHoodieTableFileIndex(HoodieEngineContext engineContext,
                                   HoodieTableMetaClient metaClient,

@@ -26,8 +26,7 @@ import org.apache.hudi.core.validator.BasePreCommitValidator;
 import org.apache.hudi.core.validator.ValidationContext;
 import org.apache.hudi.exception.HoodieValidationException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 
@@ -75,9 +74,8 @@ import java.util.Arrays;
  * and must be invoked via {@link SparkStreamerValidatorUtils} — not {@code SparkValidatorUtils},
  * which expects a different constructor signature.</p>
  */
+@Slf4j
 public class SparkWriteErrorValidator extends BasePreCommitValidator {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkWriteErrorValidator.class);
 
   private final ValidationFailurePolicy failurePolicy;
 
@@ -108,13 +106,13 @@ public class SparkWriteErrorValidator extends BasePreCommitValidator {
 
     if (totalRecords == 0) {
       // Empty commit (mirrors HSWSV "No new data, perform empty commit.").
-      LOG.info("Empty commit (no records written, no errors). Skipping write-error validation "
+      log.info("Empty commit (no records written, no errors). Skipping write-error validation "
           + "for instant {}.", context.getInstantTime());
       return;
     }
 
     if (totalErrors == 0) {
-      LOG.info("Write-error validation passed for instant {}: 0 errors out of {} records.",
+      log.info("Write-error validation passed for instant {}: 0 errors out of {} records.",
           context.getInstantTime(), totalRecords);
       return;
     }
@@ -128,7 +126,7 @@ public class SparkWriteErrorValidator extends BasePreCommitValidator {
         HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.key());
 
     if (failurePolicy == ValidationFailurePolicy.WARN_LOG) {
-      LOG.warn("{} (failure policy is WARN_LOG, commit will proceed)", errorMsg);
+      log.warn("{} (failure policy is WARN_LOG, commit will proceed)", errorMsg);
     } else {
       throw new HoodieValidationException(errorMsg);
     }

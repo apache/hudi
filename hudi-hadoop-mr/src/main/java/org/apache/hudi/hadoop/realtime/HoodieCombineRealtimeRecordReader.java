@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader;
 import org.apache.hudi.hadoop.hive.HoodieCombineRealtimeFileSplit;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.IOContextMap;
 import org.apache.hadoop.io.ArrayWritable;
@@ -30,8 +31,6 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.lib.CombineFileSplit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -42,9 +41,9 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFileg
 /**
  * Allows to read multiple realtime file splits grouped together by CombineInputFormat.
  */
+@Slf4j
 public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCombineRealtimeRecordReader.class);
   // RecordReaders for each split
   private final List<RecordReader> recordReaders = new LinkedList<>();
   // Points to the currently iterating record reader
@@ -60,12 +59,12 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
           .size(), "Num Splits does not match number of unique RecordReaders!");
       for (InputSplit rtSplit : ((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits()) {
         if (useFileGroupReader) {
-          LOG.info("Creating new HoodieFileGroupReaderRecordReader for split");
+          log.info("Creating new HoodieFileGroupReaderRecordReader for split");
           RecordReader reader = readers.remove(0);
           ValidationUtils.checkArgument(reader instanceof HoodieFileGroupReaderBasedRecordReader, reader.toString() + "not instance of HoodieFileGroupReaderRecordReader ");
           recordReaders.add(reader);
         } else {
-          LOG.info("Creating new RealtimeRecordReader for split");
+          log.info("Creating new RealtimeRecordReader for split");
           recordReaders.add(
               new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) rtSplit, jobConf, readers.remove(0)));
         }

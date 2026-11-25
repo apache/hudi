@@ -20,9 +20,8 @@ package org.apache.hudi.hadoop.utils.shims;
 
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.io.Writable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -32,9 +31,8 @@ import java.sql.Timestamp;
 /**
  * Shim clazz for Hive3.
  */
+@Slf4j
 public class Hive3Shim implements HiveShim {
-
-  public static final Logger LOG = LoggerFactory.getLogger(Hive3Shim.class);
 
   public static final String TIMESTAMP_CLASS_NAME = "org.apache.hadoop.hive.common.type.Timestamp";
   public static final String TIMESTAMP_WRITEABLE_V2_CLASS_NAME = "org.apache.hadoop.hive.serde2.io.TimestampWritableV2";
@@ -65,7 +63,7 @@ public class Hive3Shim implements HiveShim {
       TIMESTAMP_WRITEABLE_V2_CONSTRUCTOR = TIMESTAMP_WRITABLE_V2_CLASS.getConstructor(TIMESTAMP_CLASS);
     } catch (ClassNotFoundException | NoSuchMethodException e) {
       // This will be printed out when Hive3Shim initialization as a singleton fails
-      LOG.warn("cannot find hive3 timestampv2 class or method, use hive2 class!", e);
+      log.warn("cannot find hive3 timestampv2 class or method, use hive2 class!", e);
     }
 
     // date
@@ -75,7 +73,7 @@ public class Hive3Shim implements HiveShim {
       DATE_WRITEABLE_V2_CONSTRUCTOR = DATE_WRITEABLE_CLASS.getConstructor(int.class);
     } catch (ClassNotFoundException | NoSuchMethodException e) {
       // This will be printed out when Hive3Shim initialization as a singleton fails
-      LOG.warn("cannot find hive3 datev2 class or method, use hive2 class!", e);
+      log.warn("cannot find hive3 datev2 class or method, use hive2 class!", e);
     }
   }
 

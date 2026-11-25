@@ -100,6 +100,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   private long totalTimeTakenToReadAndMergeBlocks;
   private final String[] orderingFields;
   private final DeleteContext deleteContext;
+  // Merging registers schema IDs, so the context and its local cache must belong to this scanner.
+  private final RecordContext recordContext = new AvroRecordContext();
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, HoodieSchema readerSchema,
@@ -255,7 +257,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {
       // Merge and store the combined record
-      RecordContext recordContext = AvroRecordContext.getFieldAccessorInstance();
       BufferedRecord<T> prevBufferedRecord = BufferedRecords.fromHoodieRecord(prevRecord, readerSchema,
           recordContext, this.getPayloadProps(), orderingFields, deleteContext);
       BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, readerSchema,

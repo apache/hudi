@@ -25,13 +25,12 @@ import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.JobConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -39,9 +38,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
+@Slf4j
 public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeInputFormatUtils.class);
 
   public static boolean doesBelongToIncrementalQuery(FileSplit s) {
     if (s instanceof HoodieRealtimeFileSplit) {
@@ -75,7 +73,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       // If not already in the list - then add it
       conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNamesPrefix + fieldName);
       conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readColIdsPrefix + fieldIndex);
-      LOG.debug("Adding extra column {}, to enable log merging cols ({}) ids ({})",
+      log.debug("Adding extra column {}, to enable log merging cols ({}) ids ({})",
           fieldName,
           conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
           conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
@@ -167,7 +165,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           .collect(Collectors.joining(","));
       if (!cleanedColumnIds.equals(columnIds)) {
         conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, cleanedColumnIds);
-        LOG.debug("The projection Ids: {{}} contained blank entries. Cleaned to: {{}}", columnIds, cleanedColumnIds);
+        log.debug("The projection Ids: {{}} contained blank entries. Cleaned to: {{}}", columnIds, cleanedColumnIds);
       }
     }
   }

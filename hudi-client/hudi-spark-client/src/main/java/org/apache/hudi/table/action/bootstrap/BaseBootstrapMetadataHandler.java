@@ -34,15 +34,14 @@ import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataHandler {
-  private static final Logger LOG = LoggerFactory.getLogger(ParquetBootstrapMetadataHandler.class);
   protected HoodieWriteConfig config;
   protected HoodieTable table;
   protected HoodieFileStatus srcFileStatus;
@@ -65,7 +64,7 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
           .collect(Collectors.toList());
       HoodieSchema recordKeySchema = HoodieSchemaUtils.generateProjectionSchema(schema, recordKeyColumns);
 
-      LOG.info("Schema to be used for reading record keys: {}", recordKeySchema);
+      log.info("Schema to be used for reading record keys: {}", recordKeySchema);
 
       executeBootstrap(bootstrapHandle, sourceFilePath, keyGenerator, partitionPath, recordKeySchema);
     } catch (Exception e) {

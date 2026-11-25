@@ -38,6 +38,7 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
 import org.apache.hadoop.hive.serde.serdeConstants;
@@ -47,8 +48,6 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.mapred.JobConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -63,9 +62,8 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 /**
  * Record Reader implementation to merge fresh avro data with base parquet data, to support real time queries.
  */
+@Slf4j
 public abstract class AbstractRealtimeRecordReader {
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractRealtimeRecordReader.class);
-
   @Getter
   protected final RealtimeSplit split;
   @Getter
@@ -94,9 +92,9 @@ public abstract class AbstractRealtimeRecordReader {
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
     this.jobConf = job;
-    LOG.info("cfg ==> {}", job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
-    LOG.info("columnIds ==> {}", job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-    LOG.info("partitioningColumns ==> {}", job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
+    log.info("cfg ==> {}", job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
+    log.info("columnIds ==> {}", job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+    log.info("partitioningColumns ==> {}", job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     this.supportPayload = Boolean.parseBoolean(job.get("hoodie.support.payload", "true"));
     try {
       metaClient = HoodieTableMetaClient.builder()
@@ -106,7 +104,7 @@ public abstract class AbstractRealtimeRecordReader {
         this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getOrderingFieldsStr().orElse(null));
       }
       this.usesCustomPayload = usesCustomPayload(metaClient);
-      LOG.info("usesCustomPayload ==> {}", this.usesCustomPayload);
+      log.info("usesCustomPayload ==> {}", this.usesCustomPayload);
 
       // get timestamp columns
       supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
@@ -147,7 +145,7 @@ public abstract class AbstractRealtimeRecordReader {
         if (writerSchemaColNames.contains(lastColName)) {
           break;
         }
-        LOG.debug("remove virtual column: {}", lastColName);
+        log.debug("remove virtual column: {}", lastColName);
         columnNameList.remove(columnNameList.size() - 1);
         columnTypeList.remove(columnTypeList.size() - 1);
       }
@@ -155,7 +153,7 @@ public abstract class AbstractRealtimeRecordReader {
       this.serializer = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList);
     } catch (Exception e) {
       // fallback to origin logical
-      LOG.warn("Failed to init HiveAvroSerializer to support payload merge. Fallback to origin logical", e);
+      log.warn("Failed to init HiveAvroSerializer to support payload merge. Fallback to origin logical", e);
       this.supportPayload = false;
     }
   }
@@ -166,7 +164,7 @@ public abstract class AbstractRealtimeRecordReader {
    * job conf.
    */
   private void init() throws Exception {
-    LOG.info("Getting writer schema from table avro schema ");
+    log.info("Getting writer schema from table avro schema ");
     writerSchema = new TableSchemaResolver(metaClient).getTableSchema();
 
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
@@ -184,13 +182,13 @@ public abstract class AbstractRealtimeRecordReader {
     // to null out fields not present before
 
     readerSchema = HoodieRealtimeRecordReaderUtils.generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
-    LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
+    log.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
         split.getDeltaLogPaths(), split.getPath(), projectionFields));
   }
 
   public HoodieSchema constructHiveOrderedSchema(HoodieSchema writerSchema, Map<String, HoodieSchemaField> schemaFieldsMap, String hiveColumnString) {
     String[] hiveColumns = hiveColumnString.isEmpty() ? new String[0] : hiveColumnString.split(",");
-    LOG.info("Hive Columns : {}", hiveColumnString);
+    log.info("Hive Columns : {}", hiveColumnString);
     List<HoodieSchemaField> hiveSchemaFields = new ArrayList<>();
 
     for (String columnName : hiveColumns) {
@@ -201,13 +199,13 @@ public abstract class AbstractRealtimeRecordReader {
       } else {
         // Hive has some extra virtual columns like BLOCK__OFFSET__INSIDE__FILE which do not exist in table schema.
         // They will get skipped as they won't be found in the original schema.
-        LOG.debug("Skipping Hive Column => {}", columnName);
+        log.debug("Skipping Hive Column => {}", columnName);
       }
     }
 
     HoodieSchema hiveSchema = HoodieSchema.createRecord(writerSchema.getName(), writerSchema.getDoc().orElse(null),
         writerSchema.getNamespace().orElse(null), writerSchema.isError(), hiveSchemaFields);
-    LOG.debug("HIVE Schema is :{}", hiveSchema);
+    log.debug("HIVE Schema is :{}", hiveSchema);
     return hiveSchema;
   }
 

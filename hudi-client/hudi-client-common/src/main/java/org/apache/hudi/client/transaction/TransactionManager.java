@@ -25,8 +25,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 
 import lombok.Getter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 
@@ -34,9 +33,9 @@ import java.io.Serializable;
  * This class allows clients to start and end transactions. Anything done between a start and end transaction is
  * guaranteed to be atomic.
  */
+@Slf4j
 public class TransactionManager implements Serializable, AutoCloseable {
 
-  protected static final Logger LOG = LoggerFactory.getLogger(TransactionManager.class);
   @Getter
   protected final LockManager lockManager;
   @Getter
@@ -56,21 +55,21 @@ public class TransactionManager implements Serializable, AutoCloseable {
   public void beginStateChange(Option<HoodieInstant> changeActionInstant,
                                Option<HoodieInstant> lastCompletedActionInstant) {
     if (isLockRequired) {
-      LOG.info("State change starting for {} with latest completed action instant {}",
+      log.info("State change starting for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
       lockManager.lock();
       reset(this.changeActionInstant, changeActionInstant, lastCompletedActionInstant);
-      LOG.info("State change started for {} with latest completed action instant {}",
+      log.info("State change started for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
     }
   }
 
   public void endStateChange(Option<HoodieInstant> changeActionInstant) {
     if (isLockRequired) {
-      LOG.info("State change ending for action instant {}", changeActionInstant);
+      log.info("State change ending for action instant {}", changeActionInstant);
       if (reset(changeActionInstant, Option.empty(), Option.empty())) {
         lockManager.unlock();
-        LOG.info("State change ended for action instant {}", changeActionInstant);
+        log.info("State change ended for action instant {}", changeActionInstant);
       }
     }
   }
@@ -90,7 +89,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
   public void close() {
     if (isLockRequired) {
       lockManager.close();
-      LOG.debug("Transaction manager closed");
+      log.debug("Transaction manager closed");
     }
   }
 

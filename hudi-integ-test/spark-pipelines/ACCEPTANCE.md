@@ -67,6 +67,157 @@ fan-in, chaining, or commit/checkpoint failure injection.
 The generated source, SQL and pipeline specification are retained in the logs as
 runnable examples within the harness's isolated filesystem layout.
 
+## Single-writer streaming-table acceptance
+
+The release scope of [#20406](https://github.com/apache/hudi/issues/20406) is
+**one writer per Hudi target**. Multiple flows targeting the same Hudi table are
+unsupported. Automatic rejection before any target writes is deferred: stock
+Spark 4.1.1 does not expose a graph-validation extension for Hudi to enforce it.
+Validate this constraint when defining the pipeline; do not assume Spark rejects
+fan-in. Future fan-in support is tracked by
+[#20530](https://github.com/apache/hudi/issues/20530).
+
+The automated checks are split across existing suites:
+
+| Contract | Coverage |
+| --- | --- |
+| Explicit insert, two input batches, ordinary restart | `phase1_acceptance.py` checks exact rows and unchanged completed Hudi commits. |
+| Purge-style full refresh and restart | `TestHoodieSparkConnectPipelines` runs real CLI/Connect flows for COW and MOR with metadata enabled. It checks two initial batches, a quiescent restart, `--full-refresh-all`, replayed rows, removal of old commits, a fresh streaming query identity with committed batch 0, another quiescent restart, and ingestion of new data. |
+| Invalid table configuration | The same CLI suite rejects a nonexistent primary-key column and checks that no Hudi data commit was published. |
+| Commit/checkpoint interruption and resource cleanup | `TestStreamingSinkRecovery` exercises AvailableNow, explicit stop, and failure for COW/MOR. It checks checkpoint replay, socket/client cleanup, and an unrelated query. Its post-commit metadata-sync failures must not retry the data write. |
+| Connect failure isolation | `TestHoodieSparkConnectPipelines` checks a null-key failure followed by a fresh remote query. |
+
+Run the CLI suite with the layer-2 command in [README.md](README.md). Its
+full-refresh checks retain the pipeline storage root: SDP selects the fresh
+checkpoint, and Hudi purges the old target timeline and sink batch IDs. This
+does not implement timeline-preserving generation isolation from #20404.
+
+### Manual external connector example: Kafka
+
+The automated tests use deterministic JSON files and require no broker. The
+following is a manual connector recipe, not a claimed Kafka test result. Use a
+reachable Kafka broker, an empty single-partition topic `hudi_sdp_events`, JDK 17,
+the pinned PySpark dependencies, and the candidate Hudi Spark 4.1 bundle. Keep
+all sample records available for replay. See Spark's
+[Kafka connector guide](https://spark.apache.org/docs/4.1.1/structured-streaming-kafka-integration.html)
+for authentication and deployment details.
+
+Start a dedicated Connect server in a separate terminal, setting `HUDI_BUNDLE`
+to the absolute bundle path. The connector must be installed on the server:
+
+```sh
+spark-submit --master 'local[2]' --driver-memory 2g \
+  --jars "$HUDI_BUNDLE" \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1 \
+  --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
+  --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
+  --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+  --conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
+  --conf spark.sql.catalogImplementation=in-memory \
+  --conf spark.sql.warehouse.dir=file:///tmp/hudi-sdp-kafka-warehouse \
+  --conf spark.connect.grpc.binding.address=127.0.0.1 \
+  --conf spark.connect.grpc.binding.port=15002 \
+  --class org.apache.spark.sql.connect.service.SparkConnectServer
+```
+
+Place these three files in an empty working directory. Use fresh warehouse and
+checkpoint locations if repeating the recipe from scratch. In `source.py`:
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql import SparkSession, functions as F
+
+spark = SparkSession.active()
+
+@dp.temporary_view(name="kafka_events")
+def kafka_events():
+    raw = (spark.readStream.format("kafka")
+           .option("kafka.bootstrap.servers", spark.conf.get("example.kafka.brokers"))
+           .option("subscribe", "hudi_sdp_events")
+           .option("startingOffsets", "earliest").load())
+    return raw.select(F.from_json(F.col("value").cast("string"),
+                                 "id INT, ts LONG, value STRING").alias("event")).select("event.*")
+```
+
+In `flows.sql`:
+
+```sql
+SET spark.hoodie.datasource.write.operation=insert;
+CREATE STREAMING TABLE kafka_target USING hudi
+TBLPROPERTIES ('type'='cow', 'primaryKey'='id', 'preCombineField'='ts')
+AS SELECT id, ts, value FROM STREAM kafka_events;
+```
+
+In `spark-pipeline.yml`, replace the broker address with one reachable from the server:
+
+```yaml
+name: hudi_kafka_append
+catalog: spark_catalog
+database: kafka_demo
+storage: file:///tmp/hudi-sdp-kafka-checkpoints
+libraries:
+  - glob: {include: source.py}
+  - glob: {include: flows.sql}
+configuration:
+  example.kafka.brokers: localhost:9092
+  spark.sql.shuffle.partitions: '2'
+```
+
+Using Kafka's console producer, publish `{"id":1,"ts":1,"value":"first"}`,
+then run `spark-pipelines run --remote sc://127.0.0.1:15002 --spec spark-pipeline.yml`.
+Publish `{"id":2,"ts":2,"value":"second"}` and rerun the command. Through a
+Connect client, query `spark_catalog.kafka_demo.kafka_target` and verify exactly
+those two business rows. Rerun with no new input, then add `--full-refresh-all`
+and rerun again: both must retain exactly those two rows. Full refresh starts
+from the earliest retained Kafka offsets; it cannot recover expired source data.
+Stop this dedicated server with Ctrl-C after the manual check.
+
+## Truncate and full-refresh limitations
+
+The release scope agreed in [#20404](https://github.com/apache/hudi/issues/20404)
+retains the existing full-table truncate behavior. Timeline-preserving truncate
+and streaming checkpoint-generation isolation are deferred together; they are
+not prerequisites for this release's SDP integration.
+
+| Operation | Current behavior |
+| --- | --- |
+| `TRUNCATE TABLE t` | Deletes the table directory and re-initializes the table from its properties. Data, timeline history, savepoints, metadata table, and stored sink batch IDs are lost. |
+| `TRUNCATE TABLE t PARTITION (...)` | Uses a `delete_partition` replace commit; it does not purge and re-initialize the whole table. |
+| SDP full refresh of a streaming table | Purges the target and restarts the flow from a fresh SDP-managed checkpoint. Old sink batch IDs are removed with the table, so they cannot suppress replay starting at batch 0. |
+| Ordinary streaming restart | Reuses the existing checkpoint and sink identifier to skip batches already committed to Hudi. |
+
+Full-table truncate is non-transactional. Do not run it while another writer is
+active. Deletion and table re-initialization can fail independently; a failed
+truncate does not guarantee that the previous snapshot survives. SDP's
+truncate–alter–append sequence is also non-atomic: a failure after truncation
+can leave an empty table, and a failure during replay can leave only the batches
+committed so far. A successful refresh with empty input leaves an empty table.
+Savepoints and retention settings cannot preserve history across this physical
+purge, and the old metadata table is not retained.
+
+Incremental/streaming reader offsets into the old table history become invalid.
+Downstream consumers are **not reset automatically** when their source is
+truncated or recreated. Stop affected consumers before the reset, then refresh
+or rebuild downstream tables and their checkpoints in dependency order along
+with the upstream table. This applies to chained SDP flows and to HoodieStreamer
+using `HoodieIncrSource`. Do not assume a downstream reader will detect the reset
+and fail safely; default failure on source recreation is follow-up work.
+
+Keep the checkpoint and sink identifier on ordinary restarts. Deleting a
+checkpoint in place while retaining the target's sink metadata is unsupported:
+batch IDs restart at zero and can be skipped against an old high-water mark.
+Checkpoint relocation requires an explicit rebuild/migration; changing a path
+alone does not isolate a new generation in the current sink. SDP full refresh
+coordinates the target purge with a fresh checkpoint. Replay requires the source
+data needed to rebuild the target to remain available.
+
+These are operational limitations, not additional acceptance-test results.
+Timeline-preserving truncate (the proposal in
+[#20378](https://github.com/apache/hudi/pull/20378)) must ship together with
+checkpoint-generation isolation and an explicit legacy-identifier migration
+contract if pursued after this release. Atomic refresh and automatic downstream
+recovery are not provided by the current implementation.
+
 ## Incremental Hudi table chaining
 
 `chaining_acceptance.py` adds a second partitioned Hudi streaming table that
@@ -106,21 +257,20 @@ commits. Skipping empty sink batches is proposed follow-up work for #20406;
 this scenario preserves the current sink behavior.
 
 Explicit projection of `id, ts, value, part` excludes reserved upstream metadata
-columns from the downstream input. **`SELECT * FROM STREAM upstream` is not
-validated by this scenario.** Its metadata-column handling remains acceptance
-work under #20407: add a real CLI case and either establish safe stripping or
-verify a clear rejection. Do not infer that wildcard chaining is supported from
-these passing projection-based runs. `_hoodie_is_deleted` is a separate supported
-business input marker, not a reason to drop every `_hoodie_*` field blindly.
+columns from this scenario. The separate `TestHoodieSparkConnectPipelines` CLI
+suite covers COW/MOR wildcard chaining, unique target metadata fields and an
+explicit boolean `_hoodie_is_deleted` expression. That marker remains supported;
+it is not removed along with reserved system fields.
 
 This tests the default earliest starting offset and checkpoint-based resume.
 The source emits latest-state incremental records, not every intermediate
 change or hard-delete events. Its AvailableNow fallback has no bounded admission
 control; size the input backlog to fit one micro-batch.
 
-This scenario covers the incremental portion and **leaves #20407 open**.
-Reset/recreation, expired-history recovery and reader-option behavior are
-covered separately by #20516. Stop downstream consumers before resetting
+This scenario covers the incremental portion of #20407. Reset/recreation,
+expired-history recovery and reader-option behavior are implemented by merged
+#20516; `source_safety_acceptance.py` adds real CLI rejection and coordinated
+full-refresh/restart checks (see [SOURCE_SAFETY.md](SOURCE_SAFETY.md)). Stop downstream consumers before resetting
 upstream tables; rebuild affected tables and checkpoints in dependency order.
 
 Validated with Spark 4.1.1 / Scala 2.13 / JDK 17, using a freshly built candidate
@@ -130,3 +280,8 @@ exercising the enabled default. Both tables passed metadata initialization/write
 exact-row, two-partition, and unchanged-restart checks. MOR completed upstream
 compaction; in this run its catch-up needed no additional downstream commit.
 The bundle package build skipped unit-test execution.
+
+## Source reset and expired-history safeguards
+
+See [streaming source recovery](SOURCE_SAFETY.md) for the default failure
+policy, explicit recovery strategies, and `source_safety_acceptance.py` scenario.

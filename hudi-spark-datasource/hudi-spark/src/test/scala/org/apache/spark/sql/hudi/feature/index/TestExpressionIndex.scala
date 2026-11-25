@@ -57,15 +57,16 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.execution.FileSourceScanExec
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.{ExclusiveSuite, HoodieSparkSqlTestBase}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
+import java.util.TimeZone
 import java.util.stream.Collectors
 
 import scala.collection.JavaConverters
 
-class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSupport {
+class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSupport with ExclusiveSuite {
 
   override protected def beforeAll(): Unit = {
     spark.sql("set hoodie.metadata.index.column.stats.enable=false")
@@ -1923,26 +1924,60 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
   test("Test Expression Index Leaves A Filter It Cannot Prune To Column Stats") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      // One base file per insert, so that column stats prune inside the partition
+      // One base file per insert, so that column stats prune inside the partition. Instant times in UTC, so that moving
+      // the JVM time zone below does not put an instant hours ahead of the next one
       withSQLConf("hoodie.metadata.index.column.stats.enable" -> "true", "hoodie.parquet.small.file.limit" -> "0") {
         spark.sql(
           s"""CREATE TABLE $tableName (ts STRING, uuid STRING, rider STRING, fare DOUBLE, city STRING) USING HUDI
              |PARTITIONED BY (city)
              |LOCATION '${tmp.getCanonicalPath}/$tableName'
-             |TBLPROPERTIES (primaryKey = 'uuid', preCombineField = 'ts')
+             |TBLPROPERTIES (primaryKey = 'uuid', preCombineField = 'ts', 'hoodie.table.timeline.timezone' = 'UTC')
              |""".stripMargin)
         spark.sql(s"INSERT INTO $tableName VALUES ('2023-09-23 09:42:17','u1','rider-F',34.15,'sao_paulo')")
         spark.sql(s"INSERT INTO $tableName VALUES ('2023-09-24 09:00:00','u2','rider-Z',12.50,'sao_paulo')")
         spark.sql(s"CREATE INDEX ts_year ON $tableName USING column_stats(ts) options(expr='date_format', format='yyyy')")
-        spark.sql(s"CREATE INDEX ts_two_days ON $tableName USING bloom_filters(ts) options(expr='date_add', days='2')")
 
         withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
           "spark.sql.adaptive.enabled" -> "false") {
           // Spark casts the indexed string to INT here, which no rule ranges: the index cannot prune this filter
           assertScan(tableName, "date_format(ts, 'yyyy') = 2023 AND fare = 12.5", Seq("rider-Z"), expectedFiles = 1)
-          // A bloom filter holds a DATE as the writer's string, not as the epoch days of the literal: it cannot answer this
-          assertScan(tableName, "date_add(ts, 2) IN (DATE'2023-09-25', DATE'2023-09-27')", Seq("rider-F"), expectedFiles = 2)
         }
+
+        // Year 0 prints as 0001 in a java.sql.Date and as 0000 in a LocalDate; 2011-12-30 is a day Pacific/Apia skipped
+        spark.sql(s"INSERT INTO $tableName VALUES ('0000-01-01 10:00:00','u3','rider-Y',7.25,'sao_paulo')")
+        spark.sql(s"INSERT INTO $tableName VALUES ('2011-12-28 10:00:00','u4','rider-X',8.75,'sao_paulo')")
+
+        // A bloom filter holds a DATE as the writer's string, a java.sql.Date or, with the java8 API, a LocalDate,
+        // not as the epoch days of the literal (#20567)
+        Seq("false", "true").foreach { java8Api =>
+          withSQLConf("spark.sql.datetime.java8API.enabled" -> java8Api) {
+            spark.sql(s"CREATE INDEX ts_two_days ON $tableName USING bloom_filters(ts) options(expr='date_add', days='2')")
+          }
+          withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+            "spark.sql.adaptive.enabled" -> "false") {
+            assertScan(tableName, "date_add(ts, 2) = DATE'2023-09-25'", Seq("rider-F"), expectedFiles = 1)
+            assertScan(tableName, "date_add(ts, 2) IN (DATE'2023-09-25', DATE'2023-09-27')", Seq("rider-F"), expectedFiles = 1)
+            assertScan(tableName, "date_add(ts, 2) = DATE'0000-01-03'", Seq("rider-Y"), expectedFiles = 1)
+          }
+          spark.sql(s"DROP INDEX ts_two_days ON $tableName")
+        }
+
+        // A java.sql.Date prints in the writer's JVM time zone: an executor in Pacific/Apia, which skipped 2011-12-30,
+        // stores that day as 2011-12-31, which a reader in another zone must still probe
+        withSQLConf("spark.sql.datetime.java8API.enabled" -> "false") {
+          val defaultZone = TimeZone.getDefault
+          TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Apia"))
+          try {
+            spark.sql(s"CREATE INDEX ts_two_days ON $tableName USING bloom_filters(ts) options(expr='date_add', days='2')")
+          } finally {
+            TimeZone.setDefault(defaultZone)
+          }
+        }
+        withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+          "spark.sql.adaptive.enabled" -> "false") {
+          assertScan(tableName, "date_add(ts, 2) = DATE'2011-12-30'", Seq("rider-X"), expectedFiles = 1)
+        }
+        spark.sql(s"DROP INDEX ts_two_days ON $tableName")
       }
     }
   }

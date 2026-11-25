@@ -19,9 +19,11 @@ import com.google.common.io.Resources;
 import io.trino.Session;
 import io.trino.blob.cache.alluxio.AlluxioBlobCachePlugin;
 import io.trino.filesystem.Location;
+import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.filesystem.TrinoInputFile;
 import io.trino.filesystem.local.LocalInputFile;
+import io.trino.metastore.HiveMetastoreFactory;
 import io.trino.parquet.ParquetReaderOptions;
 import io.trino.plugin.base.metrics.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveTimestampPrecision;
@@ -43,6 +45,7 @@ import io.trino.testing.MaterializedResult;
 import io.trino.testing.MaterializedRow;
 import io.trino.testing.QueryRunner;
 import io.trino.testing.TestingConnectorSession;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.intellij.lang.annotations.Language;
@@ -57,6 +60,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.Iterator;
@@ -64,12 +68,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.concurrent.locks.Lock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.trino.metastore.HiveType.HIVE_TIMESTAMP;
 import static io.trino.plugin.hive.HiveColumnHandle.ColumnType.REGULAR;
 import static io.trino.plugin.hive.HiveColumnHandle.createBaseColumn;
@@ -160,6 +166,49 @@ public class TestHudiSmokeTest
         System.out.println(res);
         assertQuery("SELECT dt, count(1) FROM " + STOCK_TICKS_MOR + " GROUP BY dt",
                 "SELECT * FROM VALUES ('2018-08-31', '99')");
+    }
+
+    @Test
+    public void testReadOptimizedSkipsLogOnlyFileGroup()
+            throws IOException
+    {
+        Session session = SessionBuilder.from(getSession())
+                .withMdtEnabled(false)
+                .withTableStatisticsEnabled(false)
+                .withResolveColumnNameCasingEnabled(false)
+                .build();
+        String schemaName = session.getSchema().orElseThrow();
+        String tableName = STOCK_TICKS_MOR.getTableName();
+        String query = "SELECT count(*) FROM " + tableName;
+        String basePath = hudiConnector().getInjector()
+                .getInstance(HiveMetastoreFactory.class)
+                .createMetastore(Optional.empty())
+                .getTable(schemaName, tableName).orElseThrow()
+                .getStorage().getLocation();
+
+        TrinoFileSystem fileSystem = fileSystem();
+        HoodieTableMetaClient metaClient = HudiUtil.buildTableMetaClient(fileSystem, schemaName + "." + tableName, basePath);
+        String commit = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().requestedTime();
+        Location partition = Location.of(basePath).appendPath(getOnlyElement(STOCK_TICKS_MOR.getPartitions().values()));
+        Location log = partition.appendPath(".logonly_" + commit + ".log.1_0-0-0");
+
+        // Keep the temporary file out of other queries that use this fixture.
+        Lock lock = getQueryRunner().getExclusiveLock();
+        lock.lock();
+        try {
+            assertThat(computeScalar(session, query)).isEqualTo(99L);
+            try {
+                // Read-optimized planning skips the file group before it opens the synthetic log.
+                fileSystem.newOutputFile(log).createOrOverwrite(new byte[100]);
+                assertThat(computeScalar(session, query)).isEqualTo(99L);
+            }
+            finally {
+                fileSystem.deleteFile(log);
+            }
+        }
+        finally {
+            lock.unlock();
+        }
     }
 
     @Test
@@ -1441,10 +1490,19 @@ public class TestHudiSmokeTest
 
     private TrinoInputFile toInputFile(String path)
     {
-        return ((HudiConnector) getDistributedQueryRunner().getCoordinator().getConnector("hudi")).getInjector()
+        return fileSystem().newInputFile(Location.of(path));
+    }
+
+    private TrinoFileSystem fileSystem()
+    {
+        return hudiConnector().getInjector()
                 .getInstance(TrinoFileSystemFactory.class)
-                .create(ConnectorIdentity.ofUser("test"))
-                .newInputFile(Location.of(path));
+                .create(ConnectorIdentity.ofUser("test"));
+    }
+
+    private HudiConnector hudiConnector()
+    {
+        return (HudiConnector) getDistributedQueryRunner().getCoordinator().getConnector("hudi");
     }
 
     public static <K, V> Map<K, V> listsToMap(List<K> keys, List<V> values)

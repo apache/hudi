@@ -41,12 +41,11 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.JavaScalaConverters;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -57,9 +56,8 @@ import java.util.stream.Stream;
 /**
  * Spark validator utils to verify and run any pre-commit validators configured.
  */
+@Slf4j
 public class SparkValidatorUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(SparkValidatorUtils.class);
-
   /**
    * Check configured pre-commit validators and run them. Note that this only works for COW tables
    * <p>
@@ -71,7 +69,7 @@ public class SparkValidatorUtils {
                                    HoodieTable table,
                                    String instantTime) {
     if (StringUtils.isNullOrEmpty(config.getPreCommitValidators())) {
-      LOG.info("no validators configured.");
+      log.info("no validators configured.");
     } else {
       if (!writeMetadata.getWriteStats().isPresent()) {
         writeMetadata.setWriteStats(writeMetadata.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
@@ -90,7 +88,7 @@ public class SparkValidatorUtils {
             try {
               Class<?> clazz = Class.forName(validatorClass);
               if (!SparkPreCommitValidator.class.isAssignableFrom(clazz)) {
-                LOG.warn("Skipping validator {} — it does not implement SparkPreCommitValidator. "
+                log.warn("Skipping validator {} — it does not implement SparkPreCommitValidator. "
                     + "If this is a streaming offset validator (e.g. SparkKafkaOffsetValidator), "
                     + "it will be invoked by SparkStreamerValidatorUtils instead.", validatorClass);
                 return Stream.empty();
@@ -111,9 +109,9 @@ public class SparkValidatorUtils {
           .stream().reduce(true, Boolean::logicalAnd);
 
       if (allSuccess) {
-        LOG.info("All validations succeeded");
+        log.info("All validations succeeded");
       } else {
-        LOG.error("At least one pre-commit validation failed");
+        log.error("At least one pre-commit validation failed");
         throw new HoodieValidationException("At least one pre-commit validation failed");
       }
     }
@@ -128,10 +126,10 @@ public class SparkValidatorUtils {
                                       Dataset<Row> beforeState, Dataset<Row> afterState, String instantTime) {
     try {
       validator.validate(instantTime, writeMetadata, beforeState, afterState);
-      LOG.info("validation complete for {}", validator.getClass().getName());
+      log.info("validation complete for {}", validator.getClass().getName());
       return true;
     } catch (HoodieValidationException e) {
-      LOG.error("validation failed for {}", validator.getClass().getName(), e);
+      log.error("validation failed for {}", validator.getClass().getName(), e);
       return false;
     }
   }
@@ -179,9 +177,9 @@ public class SparkValidatorUtils {
           HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(
               new TableSchemaResolver(table.getMetaClient()).getTableSchema()));
     } catch (Exception e) {
-      LOG.warn("Could not get table schema for empty DataFrame.", e);
+      log.warn("Could not get table schema for empty DataFrame.", e);
       if (fallbackSchema.isPresent()) {
-        LOG.warn("Using fallback schema to create the empty Spark DataFrame: {}", fallbackSchema.get());
+        log.warn("Using fallback schema to create the empty Spark DataFrame: {}", fallbackSchema.get());
         return sqlContext.createDataFrame(sqlContext.emptyDataFrame().rdd(), fallbackSchema.get());
       }
       return sqlContext.emptyDataFrame();
@@ -200,11 +198,11 @@ public class SparkValidatorUtils {
       HoodieSchema schema = HoodieSchema.parse(table.getConfig().getWriteSchema());
       readerSchema = isPopulateMetaFieldsEnabled ? HoodieSchemaUtils.addMetadataFields(schema) : schema;
     } else {
-      LOG.warn("Schema not found from write config, defaulting to parsing schema from latest commit.");
+      log.warn("Schema not found from write config, defaulting to parsing schema from latest commit.");
       try {
         readerSchema = new TableSchemaResolver(table.getMetaClient()).getTableSchema();
       } catch (Exception e) {
-        LOG.warn(String.format("Failed parsing schema from latest commit with exception %s, "
+        log.warn(String.format("Failed parsing schema from latest commit with exception %s, "
             + "defaulting to inferring schema from data files", e));
         return sqlContext
             .read()

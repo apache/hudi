@@ -27,8 +27,7 @@ import org.apache.hudi.io.SingleFileHandleCreateFactory;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.keygen.KeyGenUtils;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,9 +35,8 @@ import java.util.List;
 /**
  * Abstract of bucket index bulk_insert partitioner
  */
+@Slf4j
 public abstract class BucketIndexBulkInsertPartitioner<T> extends BucketSortBulkInsertPartitioner<T> {
-
-  public static final Logger LOG = LogManager.getLogger(BucketIndexBulkInsertPartitioner.class);
 
   private final boolean preserveHoodieMetadata;
 

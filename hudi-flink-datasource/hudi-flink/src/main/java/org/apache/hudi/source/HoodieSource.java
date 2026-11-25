@@ -21,6 +21,7 @@ package org.apache.hudi.source;
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -87,12 +88,12 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
       HoodieScanContext scanContext,
       SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
       SerializableComparator<HoodieSourceSplit> splitComparator,
-      HoodieTableMetaClient metaClient,
+      @Nullable HoodieTableMetaClient metaClient,
       HoodieRecordEmitter<T> recordEmitter) {
     ValidationUtils.checkArgument(scanContext != null, "scanContext can't be null.");
     ValidationUtils.checkArgument(readerFunctionSupplier != null, "readerFunctionSupplier can't be null.");
     ValidationUtils.checkArgument(splitComparator != null, "splitComparator can't be null.");
-    ValidationUtils.checkArgument(metaClient != null, "metaClient can't be null.");
+    ValidationUtils.checkArgument(scanContext.isStreaming() || metaClient != null, "Bounded reads require a meta client.");
     ValidationUtils.checkArgument(recordEmitter != null, "recordEmitter can't be null.");
 
     this.scanContext = scanContext;
@@ -100,8 +101,12 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
     this.splitComparator = splitComparator;
     this.metaClient = metaClient;
     this.recordEmitter = recordEmitter;
-    this.tableName = metaClient.getTableConfig().getTableName();
-    this.timelineTimeZone = metaClient.getTableConfig().getTimelineTimezone();
+    this.tableName = metaClient == null
+        ? scanContext.getConf().get(FlinkOptions.TABLE_NAME)
+        : metaClient.getTableConfig().getTableName();
+    this.timelineTimeZone = metaClient == null
+        ? HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue()
+        : metaClient.getTableConfig().getTimelineTimezone();
   }
 
   @Override

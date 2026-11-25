@@ -33,10 +33,9 @@ function workflow(name) {
   }));
 }
 const bridgeWorkflow = workflow('fork_ci_status.yml');
-// The Java CI workflow the bridge mirrors, with the id of its aggregate job and of the transitional
-// job that reports the former Java CI Engines context.
+// The Java CI workflow the bridge mirrors, with the id of its aggregate job.
 const ci = {
-  file: 'bot.yml', name: 'Java CI', aggregate: 'java-ci-result', transitional: 'java-ci-engines-result',
+  file: 'bot.yml', name: 'Java CI', aggregate: 'java-ci-result',
   workflow: workflow('bot.yml'),
 };
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -65,11 +64,13 @@ async function execute({
   event = 'schedule', checks = [], runs = [run()], workflowState = 'active',
   recent = [pr], slice = [pr], candidates = [pr], repo = 'hudi',
   owner = 'apache', runError, count = 1, notification = {}, checkErrors = {},
+  files = [{ filename: 'hudi-common/src/main/java/A.java' }],
 } = {}) {
   const writes = [], calls = [], failures = [];
   let sweepPage;
   const github = { rest: { checks: {}, actions: {}, pulls: {} } };
   github.rest.checks.listForRef = async () => {};
+  github.rest.pulls.listFiles = async () => {};
   github.rest.pulls.list = async (params) => {
     calls.push(['pulls', params]);
     if (params.per_page === 1) return {
@@ -101,6 +102,11 @@ async function execute({
       calls.push(['checks', params]);
       if (checkErrors[params.ref]) throw new Error(checkErrors[params.ref]);
       return checks;
+    }
+    if (fn === github.rest.pulls.listFiles) {
+      calls.push(['files', params]);
+      assert.deepEqual(params, { owner, repo, pull_number: 10, per_page: 100 });
+      return files;
     }
     assert.equal(fn, github.rest.pulls.list);
     assert.equal(params.head, 'contributor:feature');
@@ -164,23 +170,52 @@ test('only runs for the exact branch head on push/manual events are mirrored', a
   ] });
   assert.equal(result.writes[0].details_url, run(5).html_url);
 });
+// A fork with Actions turned off in its settings still lists bot.yml as active, so an active
+// workflow without a run asks for action as loudly as a disabled one.
 for (const [state, expected, title] of [
-  ['active', 'neutral', 'No fork CI run for this commit'],
+  ['active', 'action_required', 'No fork CI run for this commit'],
   ['disabled_manually', 'action_required', 'Enable CI on your fork'],
   ['disabled_fork', 'action_required', 'Enable CI on your fork'],
   [null, 'action_required', 'Enable CI on your fork'],
 ]) {
   test('missing run reports workflow state ' + state, async () => {
-    const { writes } = await execute({ runs: [], workflowState: state });
+    const { writes, calls } = await execute({ runs: [], workflowState: state });
     assert.equal(writes[0].conclusion, expected);
     assert.equal(writes[0].output.title, title);
     assert.equal(writes[0].details_url, 'https://github.com/contributor/hudi/actions');
     assert.match(writes[0].output.summary, /^No Java CI run was found for /);
-    assert.match(writes[0].output.summary, /Enable workflows/);
+    assert.match(writes[0].output.summary, /Enable Actions on your fork/);
     assert.match(writes[0].output.summary, /only docs or images is skipped by the path filter/);
     assert.deepEqual(JSON.parse(writes[0].output.text).runs.map((item) => item.run_id), [null]);
+    // Only an active workflow needs the PR's files to tell a docs-only change apart.
+    assert.equal(calls.some(([kind]) => kind === 'files'), state === 'active');
   });
 }
+// [case, PR files, whether the missing run is expected]
+for (const [name, files, docsOnly] of [
+  ['docs and images', [{ filename: 'README.md' }, { filename: 'rfc/rfc-1/a.png' }, { filename: '.gitignore' }], true],
+  ['a doc renamed from another doc', [{ filename: 'b.md', previous_filename: 'a.md' }], true],
+  ['a nested .gitignore', [{ filename: 'hudi-common/.gitignore' }], false],
+  ['a doc renamed from code', [{ filename: 'A.md', previous_filename: 'A.java' }], false],
+  ['docs and code', [{ filename: 'README.md' }, { filename: 'pom.xml' }], false],
+  ['no files', [], false],
+  ['the files API limit', Array.from({ length: 3000 }, (_, index) => ({ filename: index + '.md' })), false],
+]) {
+  test('a missing run on a PR with ' + name + ' ' + (docsOnly ? 'is expected' : 'asks for action'), async () => {
+    const { writes } = await execute({ runs: [], files });
+    assert.equal(writes[0].conclusion, docsOnly ? 'neutral' : 'action_required');
+    assert.equal(writes[0].output.title,
+      docsOnly ? 'No fork CI run: docs-only change' : 'No fork CI run for this commit');
+  });
+}
+test('the docs-only paths of the bridge are what the push filter of bot.yml ignores', () => {
+  const script = bridgeWorkflow.jobs.bridge.steps[0].with.script;
+  const list = (name) => JSON.parse(new RegExp('const ' + name + ' = (\\[[^\\]]*\\]);').exec(script)[1].replace(/'/g, '"'));
+  const ignored = ci.workflow.true.push.paths.filter((pattern) => pattern.startsWith('!')).map((pattern) => pattern.slice(1));
+  assert.deepEqual(
+    [...list('DOCS_EXTENSIONS').map((extension) => '**' + extension), ...list('DOCS_ROOT_FILES')].sort(),
+    [...ignored].sort());
+});
 test('a missing workflow endpoint is handled as missing CI', async () => {
   const { writes } = await execute({ runError: 404, workflowState: null });
   assert.equal(writes[0].conclusion, 'action_required');
@@ -245,7 +280,7 @@ test('a manual run can replace a failed push run', async () => {
 test('a deleted run clears its stale success result', async () => {
   const { writes } = await execute({ checks: [await existing()], runs: [] });
   assert.equal(writes[0].method, 'update');
-  assert.equal(writes[0].conclusion, 'neutral');
+  assert.equal(writes[0].conclusion, 'action_required');
 });
 test('unchanged results do not consume check write requests', async () => {
   const check = await existing();
@@ -352,7 +387,7 @@ const skippedChanges = { changes: { result: 'skipped', outputs: {} } };
 const jobIf = (job, github, needs = skippedChanges) =>
   interpolate(ci.workflow.jobs[job].if, { github: withName(github), needs, ...functions });
 const testJobs = Object.keys(ci.workflow.jobs).filter((job) =>
-  ![ci.aggregate, ci.transitional, 'changes'].includes(job));
+  ![ci.aggregate, 'changes'].includes(job));
 // GitHub expressions resolve absent properties to an empty string.
 function context({
   event_name, repository = 'apache/hudi', ref = 'refs/heads/feature', sha = 'first',
@@ -393,24 +428,73 @@ test('every test job carries the route condition, and the aggregate job does not
 test('the matrix-expanded test jobs stay within the ASF cap of 20 jobs at once', () => {
   let total = 0;
   for (const job of testJobs) {
-    const matrix = ci.workflow.jobs[job].strategy?.matrix;
+    // All test jobs start together once `changes` is done. A test job that waited on another would
+    // not run at the same time as it, which this count does not model; extend it first.
+    assert.equal(ci.workflow.jobs[job].needs, 'changes', job);
+    const strategy = ci.workflow.jobs[job].strategy;
+    const matrix = strategy?.matrix;
     const axes = Object.keys(matrix || {}).filter((key) => !['include', 'exclude'].includes(key));
+    let instances;
     if (axes.length) {
       // Combining axes with include or exclude needs GitHub's matching rules; extend this count first.
       assert.ok(!('include' in matrix) && !('exclude' in matrix), job);
-      total += axes.reduce((product, axis) => product * matrix[axis].length, 1);
+      instances = axes.reduce((product, axis) => product * matrix[axis].length, 1);
     } else {
-      total += matrix?.include ? matrix.include.length : 1;
+      instances = matrix?.include ? matrix.include.length : 1;
     }
+    total += Math.min(instances, strategy?.['max-parallel'] ?? instances);
   }
-  assert.ok(total <= 20, 'test job instances: ' + total);
-  // The aggregate job's comment states the current total.
-  const stated = /test jobs currently total (\d+) instances/.exec(
+  assert.ok(total <= 20, 'test job instances at once: ' + total);
+  // The aggregate job's comment states the current number.
+  const stated = /test jobs can currently run (\d+) at once/.exec(
     readFileSync(path.join(__dirname, '../../workflows/bot.yml'), 'utf8'));
   assert.equal(Number(stated?.[1]), total);
 });
 
-// [case, context, whether the test jobs run, whether the aggregate jobs run, the `changes` job]
+// test-common-and-other-modules builds and tests the default reactor minus its bundles. A bundle
+// missing from BUNDLE_MODULES stays in the reactor and fails to resolve the modules the trimmed
+// build no longer installs.
+test('BUNDLE_MODULES lists every bundle of the default reactor', () => {
+  const pom = readFileSync(path.join(__dirname, '../../../pom.xml'), 'utf8');
+  // The first <modules> block is the default reactor; profiles declare theirs later in the file.
+  const modules = [.../<modules>([\s\S]*?)<\/modules>/.exec(pom)[1].matchAll(/<module>([^<]+)<\/module>/g)]
+    .map((match) => match[1]);
+  const bundles = modules.filter((module) => module.startsWith('packaging/'));
+  assert.ok(bundles.length > 0);
+  const listed = ci.workflow.jobs['test-common-and-other-modules'].env.BUNDLE_MODULES.split(',')
+    .map((module) => module.replace(/^!/, ''));
+  assert.deepEqual([...listed].sort(), [...bundles].sort());
+});
+
+test('IT_MODULES lists every module with integration-test classes but hudi-flink', () => {
+  const root = path.join(__dirname, '../../..');
+  // The integration-tests profile of the root pom runs **/IT*.java; hudi-flink's ITs run in the
+  // flink jobs.
+  const modules = new Set();
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || entry.name === 'target' || entry.name === 'node_modules') {
+        continue;
+      }
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(file);
+      } else if (/^IT.*\.java$/.test(entry.name)) {
+        const relative = path.relative(root, file).split(path.sep).join('/');
+        const module = /^(.+?)\/src\/test\//.exec(relative);
+        if (module) {
+          modules.add(module[1]);
+        }
+      }
+    }
+  };
+  walk(root);
+  assert.ok(modules.delete('hudi-flink-datasource/hudi-flink'));
+  const listed = ci.workflow.jobs['integration-tests'].env.IT_MODULES.split(',');
+  assert.deepEqual([...listed].sort(), [...modules].sort());
+});
+
+// [case, context, whether the test jobs run, whether the aggregate job runs, the `changes` job]
 for (const [name, github, tests, aggregate, needs] of [
   ['fork PR to master', forkPr, false, true],
   ['fork PR to release-1.2', { ...forkPr, base_ref: 'release-1.2' }, true, true],
@@ -433,7 +517,6 @@ for (const [name, github, tests, aggregate, needs] of [
   test('routes ' + name, () => {
     for (const job of testJobs) assert.equal(jobIf(job, github, needs), tests, job);
     assert.equal(jobIf(ci.aggregate, github, needs), aggregate, ci.aggregate);
-    assert.equal(jobIf(ci.transitional, github, needs), aggregate, ci.transitional);
     // The selector runs on merge_group only; GitHub evaluates an `if` without ${{ }} as an expression.
     assert.equal(evaluate(ci.workflow.jobs.changes.if, { github }), github.event_name === 'merge_group');
   });
@@ -488,27 +571,6 @@ test('the aggregate job links the fork run of bot.yml on fork PRs', () => {
   assert.ok(step.run.includes('/actions/workflows/' + ci.file + ')'));
   assert.doesNotMatch(step.run, /\$\{\{/);
 });
-// Branch protection required `Java CI Engines result` before Java CI Engines was folded into
-// bot.yml, so a transitional job reports that context with the result of the aggregate job.
-test('the transitional job reports the result of the aggregate job as Java CI Engines result', () => {
-  const job = ci.workflow.jobs[ci.transitional];
-  const aggregate = ci.workflow.jobs[ci.aggregate];
-  assert.equal(job.name, 'Java CI Engines result');
-  assert.equal(job.needs, ci.aggregate);
-  assert.equal(job.if, aggregate.if);
-  assert.equal(job['runs-on'], 'ubuntu-slim');
-  assert.deepEqual(job.permissions, {});
-  assert.equal(job.steps.length, 1);
-  const [step] = job.steps;
-  for (const result of ['success', 'failure', 'skipped', 'cancelled']) {
-    const needs = { [ci.aggregate]: { result } };
-    assert.equal(interpolate(step.if, { needs, ...functions }), result !== 'success', result);
-  }
-  assert.match(step.run, /::error::/);
-  assert.match(step.run, /exit 1/);
-  assert.doesNotMatch(step.run, /\$\{\{/);
-});
-
 // The docs-only selector, the `changes` job.
 const changesJob = ci.workflow.jobs.changes;
 const changesStep = changesJob.steps.find((item) => item.id === 'diff');

@@ -133,7 +133,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     var updatedOptions = options.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
     updatedOptions = updatedOptions.updated(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID, batchId.toString)
 
-    retry(retryCnt, retryIntervalMs)(
+    retry(batchId, retryCnt, retryIntervalMs)(
       Try(
         HoodieSparkSqlWriter.write(
           sqlContext, mode, updatedOptions, data, Some(StreamingWriteParams(hoodieTableConfig,
@@ -226,16 +226,49 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   override def toString: String = s"HoodieStreamingSink[${options("path")}]"
 
   @annotation.tailrec
-  private def retry[T](n: Int, waitInMillis: Long)(fn: => Try[T]): Try[T] = {
+  private def retry[T](batchId: Long, n: Int, waitInMillis: Long)(fn: => Try[T]): Try[T] = {
     fn match {
       case x: Success[T] =>
         x
-      case _ if n > 1 =>
-        Thread.sleep(waitInMillis)
-        retry(n - 1, waitInMillis * 2)(fn)
-      case f =>
-        reset(false)
-        f
+      case failure: Failure[T] =>
+        // A writer can throw during clean/archive/meta sync after publishing the commit. Never
+        // retry the write in that case. Fail the query so the post-commit failure remains visible;
+        // restarting from the same Spark checkpoint deduplicates the already committed batch.
+        val committed = Try(isBatchCommitted(batchId))
+        committed match {
+          case Success(false) if n > 1 =>
+            Thread.sleep(waitInMillis)
+            retry(batchId, n - 1, waitInMillis * 2)(fn)
+          case _ =>
+            reset(false)
+            committed match {
+              case Success(true) => Failure(new HoodieException(
+                s"Micro batch id=$batchId is already committed; refusing to retry the write after a post-commit failure. "
+                  + "Resolve the failed post-commit operation and restart from the same checkpoint.", failure.exception))
+              case Failure(checkError) =>
+                // An unknown commit outcome is not permission to write the batch a second time.
+                failure.exception.addSuppressed(checkError)
+                failure
+              case _ => failure
+            }
+        }
+    }
+  }
+
+  private def isBatchCommitted(batchId: Long): Boolean = {
+    if (metaClient.isEmpty) {
+      // The first batch may have created and committed the table before the writer threw.
+      metaClient = try {
+        Some(HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration))
+          .setBasePath(tablePath.get).build())
+      } catch {
+        case _: TableNotFoundException => None
+      }
+    }
+    metaClient.exists { client =>
+      client.reloadActiveTimeline()
+      canSkipBatch(batchId, options.getOrElse(OPERATION.key, UPSERT_OPERATION_OPT_VAL))
     }
   }
 
