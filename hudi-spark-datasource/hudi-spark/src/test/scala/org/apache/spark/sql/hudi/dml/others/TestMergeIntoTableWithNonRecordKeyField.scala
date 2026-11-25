@@ -302,9 +302,11 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
                | when matched then update set $updateStr
                | when not matched then insert *
          """.stripMargin
-          // Both source rows match the target row
-          checkExceptionContain(mergeStatement)(
-            "MERGE statement matched a single row from the target table with multiple rows of the source table")
+          // Both source rows match the target row, which fails with the cardinality check on
+          withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+            checkExceptionContain(mergeStatement)(
+              "MERGE statement matched a single row from the target table with multiple rows of the source table")
+          }
           checkAnswer(s"select id, name, price, ts from $tableName")(Seq(1, "a1", 10.0, 100))
           withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "false") {
             spark.sql(mergeStatement)

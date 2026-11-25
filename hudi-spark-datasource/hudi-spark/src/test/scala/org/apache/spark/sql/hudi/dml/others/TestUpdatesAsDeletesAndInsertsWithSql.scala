@@ -479,8 +479,10 @@ class TestUpdatesAsDeletesAndInsertsWithSql extends HoodieSparkSqlTestBase {
              |when matched then update set *
              |when not matched then insert *
            """.stripMargin
-        checkExceptionContain(statement)(
-          "MERGE statement matched a single row from the target table with multiple rows of the source table")
+        withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+          checkExceptionContain(statement)(
+            "MERGE statement matched a single row from the target table with multiple rows of the source table")
+        }
         checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
           Seq(1, "a1", 10.0, 100, "p1"), Seq(2, "a2", 20.0, 100, "p1"))
 

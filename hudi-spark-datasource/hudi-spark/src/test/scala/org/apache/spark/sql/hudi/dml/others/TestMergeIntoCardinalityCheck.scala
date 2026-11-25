@@ -51,7 +51,7 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
       + s"update-as-delete-insert $updatesAsDeletesAndInserts, primary key $keyed, ordering field $ordered, $indexType index)") {
       withTempDir { tmp =>
         val tableName = generateTableName
-        withSQLConf("hoodie.index.type" -> indexType,
+        withSQLConf("hoodie.index.type" -> indexType, MERGE_INTO_CARDINALITY_CHECK.key -> "true",
           HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() -> updatesAsDeletesAndInserts.toString) {
           val keyProperties = (if (keyed) Seq("primaryKey = 'id'") else Seq.empty) ++
             (if (ordered) Seq("preCombineField = 'ts'") else Seq("'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'"))
@@ -95,16 +95,19 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
               spark.sql(s"merge into $tableName t using ($source) s on t.id = s.id when not matched then insert *")
               spark.sql(s"merge into $tableName t using ($source) s on t.id = s.id when matched then delete")
 
-              // Source rows of a key the table does not hold are combined into one insert, by the ordering field if any
-              spark.sql(
-                s"""
-                   |merge into $tableName t
-                   |using (select 6 as id, 'b6' as name, 1001 as ts union all select 7, 'a7', 1001
-                   |  union all select 7, 'b7', 1000) s
-                   |on t.id = s.id
-                   |when matched then update set *
-                   |when not matched then insert *
-                 """.stripMargin)
+              // Source rows of a key the table does not hold are combined into one insert, by the ordering field if any.
+              // Without small file packing the insert goes to a new file group, whose write keeps every record of a key.
+              withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+                spark.sql(
+                  s"""
+                     |merge into $tableName t
+                     |using (select 6 as id, 'b6' as name, 1001 as ts union all select 7, 'a7', 1001
+                     |  union all select 7, 'b7', 1000) s
+                     |on t.id = s.id
+                     |when matched then update set *
+                     |when not matched then insert *
+                   """.stripMargin)
+              }
               checkAnswer(s"select id, name, ts from $tableName where id = 6")(Seq(6, "b6", 1001))
               checkAnswer(s"select count(1) from $tableName where id = 7")(Seq(1))
               if (ordered) {
@@ -127,6 +130,201 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
         }
       }
     }
+  }
+
+  // (table type, index type)
+  Seq(
+    ("cow", "GLOBAL_SIMPLE"),
+    ("mor", "GLOBAL_SIMPLE"),
+    ("cow", "GLOBAL_BLOOM"),
+    ("mor", "GLOBAL_BLOOM")).foreach { case (tableType, indexType) =>
+    test(s"Test MERGE INTO with one source row for a key held twice in one base file ($tableType, $indexType index)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf("hoodie.index.type" -> indexType, MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+          createTable(tableName, tmp.getCanonicalPath, tableType, "primaryKey = 'id'", "preCombineField = 'ts'")
+          // An insert keeps both rows of key 1
+          withSQLConf("hoodie.spark.sql.insert.into.operation" -> "insert") {
+            spark.sql(s"insert into $tableName values (1, 'a1', 1000), (1, 'b1', 1000), (2, 'a2', 1000)")
+          }
+          checkAnswer(s"select count(1), count(distinct _hoodie_file_name) from $tableName where id = 1")(Seq(2, 1))
+
+          // One source row matches both target rows of key 1
+          spark.sql(
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 'c1' as name, 1001 as ts) s on t.id = s.id
+               |when matched then update set *
+               |when not matched then insert *
+             """.stripMargin)
+          assert(spark.sql(s"select id from $tableName where id = 1 and name = 'c1'").count() >= 1)
+
+          // Two source rows fail for the key held once and for the key held twice
+          Seq(2, 1).foreach { id =>
+            assertCardinalityViolation(
+              s"""
+                 |merge into $tableName t
+                 |using (select $id as id, 'd' as name, 1002 as ts union all select $id, 'e', 1003) s on t.id = s.id
+                 |when matched then update set *
+               """.stripMargin)
+          }
+        }
+      }
+    }
+  }
+
+  // (table type, primary key)
+  Seq(("cow", true), ("mor", true), ("cow", false), ("mor", false)).foreach { case (tableType, keyed) =>
+    test(s"Test MERGE INTO with more than one source row for a target row and only a conditional delete ($tableType, "
+      + s"primary key $keyed)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+          createTable(tableName, tmp.getCanonicalPath, tableType,
+            (if (keyed) Seq("primaryKey = 'id'") else Seq.empty) :+ "'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'": _*)
+          spark.sql(s"insert into $tableName values (1, 'a1', 1000), (6, 'a6', 1000)")
+          assertCardinalityViolation(
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1002) s on t.id = s.id
+               |when matched and s.ts > 1001 then delete
+             """.stripMargin)
+          checkAnswer(s"select id, name, ts from $tableName order by id")(Seq(1, "a1", 1000), Seq(6, "a6", 1000))
+
+          spark.sql(
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 'b1' as name, 1001 as ts union all select 6, 'b6', 1002) s on t.id = s.id
+               |when matched and s.ts > 1001 then delete
+             """.stripMargin)
+          checkAnswer(s"select id, name, ts from $tableName order by id")(Seq(1, "a1", 1000))
+        }
+      }
+    }
+  }
+
+  test("Test MERGE INTO with two source rows for a target row, of which one moves it to another partition") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE", "hoodie.simple.index.update.partition.path" -> "true",
+        MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  ts int,
+             |  dt string
+             |) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (type = 'cow', primaryKey = 'id', preCombineField = 'ts')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 1000, 'p1')")
+        // The index tags the first source row with the target row and merges the second one, which changes the
+        // partition, with the target row
+        assertCardinalityViolation(
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'b1' as name, 1001 as ts, 'p1' as dt union all select 1, 'c1', 1002, 'p2') s
+             |on t.id = s.id
+             |when matched then update set *
+           """.stripMargin)
+        checkAnswer(s"select id, name, ts, dt from $tableName")(Seq(1, "a1", 1000, "p1"))
+      }
+    }
+  }
+
+  // The table format as configured: unset, or a name the table loads as the native format
+  Seq(None, Some("NATIVE")).foreach { tableFormat =>
+    test(s"Test MERGE INTO cardinality check default on a native table (table format ${tableFormat.getOrElse("unset")})") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        createTable(tableName, tmp.getCanonicalPath, "cow",
+          Seq("primaryKey = 'id'", "preCombineField = 'ts'") ++ tableFormat.map(f => s"'hoodie.table.format' = '$f'"): _*)
+        spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+        val mergeStatement =
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1002) s on t.id = s.id
+             |when matched then update set *
+           """.stripMargin
+        withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+          assertCardinalityViolation(mergeStatement)
+        }
+        // Off unless set: the source rows are combined by the ordering field
+        spark.sql(mergeStatement)
+        checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "c1", 1002))
+      }
+    }
+  }
+
+  test("Test MERGE INTO cardinality check default on a table of a non-native table format") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      createTable(tableName, tmp.getCanonicalPath, "cow", "primaryKey = 'id'", "preCombineField = 'ts'",
+        "'hoodie.table.format' = 'test-format'")
+      spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+      val mergeStatement =
+        s"""
+           |merge into $tableName t
+           |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1002) s on t.id = s.id
+           |when matched then update set *
+         """.stripMargin
+      // On unless set
+      assertCardinalityViolation(mergeStatement)
+      checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "a1", 1000))
+      withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "false") {
+        spark.sql(mergeStatement)
+      }
+      checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "c1", 1002))
+    }
+  }
+
+  // (table type, ordering field)
+  Seq(("cow", false), ("mor", false), ("cow", true), ("mor", true)).foreach { case (tableType, ordered) =>
+    test(s"Test MERGE INTO with source rows of a new key that a not-matched condition tells apart ($tableType, "
+      + s"ordering field $ordered)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+          createTable(tableName, tmp.getCanonicalPath, tableType, "primaryKey = 'id'",
+            if (ordered) "preCombineField = 'ts'" else "'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'")
+          spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+          // For each new key the condition accepts one source row, which loses to the other one when the two are
+          // combined by the ordering field, or by their order without one
+          withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+            spark.sql(
+              s"""
+                 |merge into $tableName t
+                 |using (select 7 as id, 'a7' as name, 1000 as ts union all select 7, 'b7', 1001
+                 |  union all select 8, 'b8', 1001 union all select 8, 'a8', 1000) s
+                 |on t.id = s.id
+                 |when matched then update set *
+                 |when not matched and s.name like 'a%' then insert *
+               """.stripMargin)
+          }
+          checkAnswer(s"select id, name, ts from $tableName order by id")(
+            Seq(1, "a1", 1000), Seq(7, "a7", 1000), Seq(8, "a8", 1000))
+        }
+      }
+    }
+  }
+
+  private def createTable(tableName: String, path: String, tableType: String, properties: String*): Unit = {
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  ts int
+         |) using hudi
+         | location '$path/$tableName'
+         | tblproperties (
+         |  type = '$tableType',
+         |  ${properties.mkString(",\n  ")}
+         | )
+       """.stripMargin)
   }
 
   /**

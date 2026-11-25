@@ -34,10 +34,12 @@ import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -154,26 +156,31 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
     boolean isIndexingGlobal = table.getIndex().isGlobal();
     Option<SerializableBiFunction<HoodieRecord<T>, HoodieRecord<T>, HoodieRecord<T>>> newKeyCombiner =
         combineNewKeys ? Option.of(recordCombiner(table)) : Option.empty();
+    HoodieSchema writeSchema = HoodieSchema.parse(table.getConfig().getWriteSchema());
+    TypedProperties props = table.getConfig().getProps();
     return taggedRecords
         // NOTE: the incoming record may hold an instance of [[InternalRow]] pointing into a
         //       shared, mutable buffer, so it has to be copied before the shuffle
         .mapToPair(record -> Pair.of(isIndexingGlobal ? record.getRecordKey() : record.getKey(), record.copy()))
         .groupByKey()
         .values()
-        .flatMap(records -> failOnMultipleMatches(records, newKeyCombiner).iterator());
+        .flatMap(records -> failOnMultipleMatches(records, newKeyCombiner, writeSchema, props).iterator());
   }
 
   /**
    * Fails when two of the records with one key are located at the same row, and combines the ones that are not
    * located with the given combiner, if any. One record can be located at more than one row: a key the
    * update-as-delete-insert write mode moved keeps a tombstoned copy in its older file group, and a base file can
-   * hold rows with the same key.
+   * hold rows with the same key. Before combining, drops the records that the write of an insert ignores, as a Spark
+   * SQL MERGE INTO record that no WHEN NOT MATCHED clause accepts, so that such a record does not take the place of
+   * one that a clause accepts.
    */
   private static <T> List<HoodieRecord<T>> failOnMultipleMatches(
-      Iterable<HoodieRecord<T>> records, Option<SerializableBiFunction<HoodieRecord<T>, HoodieRecord<T>, HoodieRecord<T>>> newKeyCombiner) {
+      Iterable<HoodieRecord<T>> records, Option<SerializableBiFunction<HoodieRecord<T>, HoodieRecord<T>, HoodieRecord<T>>> newKeyCombiner,
+      HoodieSchema writeSchema, TypedProperties props) {
     List<HoodieRecord<T>> result = new ArrayList<>();
     Set<Pair<String, Long>> matchedRows = new HashSet<>();
-    HoodieRecord<T> combinedNewKeyRecord = null;
+    List<HoodieRecord<T>> newKeyRecords = new ArrayList<>();
     for (HoodieRecord<T> record : records) {
       if (record.isCurrentLocationKnown()) {
         HoodieRecordLocation location = record.getCurrentLocation();
@@ -182,14 +189,25 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
         }
         result.add(record);
       } else if (newKeyCombiner.isPresent()) {
-        combinedNewKeyRecord = combinedNewKeyRecord == null ? record : newKeyCombiner.get().apply(combinedNewKeyRecord, record);
+        newKeyRecords.add(record);
       } else {
         result.add(record);
       }
     }
-    if (combinedNewKeyRecord != null) {
-      result.add(combinedNewKeyRecord);
+    if (newKeyRecords.size() > 1) {
+      newKeyRecords.removeIf(record -> shouldIgnore(record, writeSchema, props));
+    }
+    if (!newKeyRecords.isEmpty()) {
+      result.add(newKeyRecords.stream().reduce(newKeyCombiner.get()::apply).get());
     }
     return result;
+  }
+
+  private static <T> boolean shouldIgnore(HoodieRecord<T> record, HoodieSchema writeSchema, TypedProperties props) {
+    try {
+      return record.shouldIgnore(writeSchema, props);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to evaluate the record with key " + record.getRecordKey(), e);
+    }
   }
 }

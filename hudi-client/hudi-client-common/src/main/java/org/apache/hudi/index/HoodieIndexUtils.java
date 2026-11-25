@@ -100,7 +100,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -554,34 +553,43 @@ public class HoodieIndexUtils {
   }
 
   /**
-   * Keeps one located incoming record per record key, as {@link HoodieData#distinctWithKey} does, and fails with a
-   * {@link HoodieMultipleMatchesException} when more than one incoming record has the key. The index can locate one
-   * record at several file groups, so more than one incoming record shows as more pairs for the key than distinct
-   * locations. See {@link HoodieWriteConfig#UPSERT_FAIL_ON_MULTIPLE_MATCHES}.
+   * Keeps one incoming record per record key of the ones that wait for a merged lookup, as
+   * {@link HoodieData#distinctWithKey} does, and fails with a {@link HoodieMultipleMatchesException} when more than one
+   * incoming record matches one row. The index pairs every incoming record with each row it locates the key at, and
+   * the rows of a key differ in file group or position, so more than one incoming record shows as more than one pair
+   * for a row, while one record located at several rows does not fail. The incoming records the index already tagged
+   * count as well, as one of them and one that waits for the merged lookup can match the same row. See
+   * {@link HoodieWriteConfig#UPSERT_FAIL_ON_MULTIPLE_MATCHES}.
    */
   private static <R> HoodieData<HoodieRecord<R>> distinctLocatedRecordsFailingOnMultipleMatches(
       HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations, int parallelism) {
     return incomingRecordsAndLocations
-        .filter(p -> p.getRight().isPresent())
+        .filter(p -> p.getRight().isPresent() || p.getLeft().isCurrentLocationKnown())
         .mapToPair(p -> {
-          HoodieRecordGlobalLocation location = p.getRight().get();
-          Set<Pair<String, String>> locations = new HashSet<>();
-          locations.add(Pair.of(location.getPartitionPath(), location.getFileId()));
-          return Pair.of(p.getLeft().getRecordKey(), Pair.of(p.getLeft(), Pair.of(1L, locations)));
+          HoodieRecord<R> record = p.getLeft();
+          boolean forMergedLookup = p.getRight().isPresent();
+          HoodieRecordLocation location = forMergedLookup ? p.getRight().get() : record.getCurrentLocation();
+          String partitionPath = forMergedLookup ? p.getRight().get().getPartitionPath() : record.getPartitionPath();
+          Map<Pair<Pair<String, String>, Long>, Long> rowMatches = new HashMap<>();
+          rowMatches.put(Pair.of(Pair.of(partitionPath, location.getFileId()), location.getPosition()), 1L);
+          return Pair.of(record.getRecordKey(), Pair.of(forMergedLookup ? Option.of(record) : Option.<HoodieRecord<R>>empty(), rowMatches));
         })
         .reduceByKey((left, right) -> {
-          Set<Pair<String, String>> locations = new HashSet<>(left.getRight().getRight());
-          locations.addAll(right.getRight().getRight());
-          return Pair.of(left.getLeft(), Pair.of(left.getRight().getLeft() + right.getRight().getLeft(), locations));
+          Map<Pair<Pair<String, String>, Long>, Long> rowMatches = new HashMap<>(left.getRight());
+          right.getRight().forEach((row, matches) -> rowMatches.merge(row, matches, Long::sum));
+          return Pair.of(left.getLeft().isPresent() ? left.getLeft() : right.getLeft(), rowMatches);
         }, parallelism)
         .map(p -> {
-          Pair<Long, Set<Pair<String, String>>> counts = p.getRight().getRight();
-          if (counts.getLeft() > counts.getRight().size()) {
-            Pair<String, String> location = counts.getRight().iterator().next();
-            throw BaseWriteHelper.multipleMatchesException(p.getLeft(), location.getLeft(), location.getRight());
+          for (Map.Entry<Pair<Pair<String, String>, Long>, Long> rowMatches : p.getRight().getRight().entrySet()) {
+            if (rowMatches.getValue() > 1) {
+              Pair<String, String> fileGroup = rowMatches.getKey().getLeft();
+              throw BaseWriteHelper.multipleMatchesException(p.getLeft(), fileGroup.getLeft(), fileGroup.getRight());
+            }
           }
           return p.getRight().getLeft();
-        });
+        })
+        .filter(Option::isPresent)
+        .map(Option::get);
   }
 
   /**
@@ -650,6 +658,14 @@ public class HoodieIndexUtils {
             return Collections.singletonList(merged.newInstance(existing.getKey())).iterator();
           }
         });
+    if (updatedConfig.shouldFailUpsertOnMultipleMatches()) {
+      // The check leaves one incoming record per key. Merged with each row of a key that a file group holds more
+      // than once, it gives a record per row, which the check after tagging would take for more than one incoming
+      // record. The write of a file group keeps one record per key, so keep one per file group.
+      taggedUpdatingRecords = taggedUpdatingRecords.distinctWithKey(
+          r -> Pair.of(Pair.of(r.getRecordKey(), r.getPartitionPath()), r.isCurrentLocationKnown() ? r.getCurrentLocation().getFileId() : ""),
+          updatedConfig.getGlobalIndexReconcileParallelism());
+    }
     return taggedUpdatingRecords.union(taggedNewRecords);
   }
 
