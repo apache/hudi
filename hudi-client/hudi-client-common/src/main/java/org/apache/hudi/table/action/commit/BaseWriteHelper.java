@@ -77,7 +77,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         taggedRecords = tag(dedupedRecords, context, table);
         if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
             && table.getConfig().isSparkSqlMergeIntoReadingTarget()) {
-          taggedRecords = mergeLocatedSqlMergeIntoRecords(taggedRecords, table, configuredShuffleParallelism);
+          taggedRecords = mergeLocatedSqlMergeIntoRecords(taggedRecords, instantTime, context, table, configuredShuffleParallelism);
         }
       }
 
@@ -99,7 +99,8 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
    * matches, for a write that appends updates to log files, which evaluates the clauses of a located record
    * without that record. See {@link HoodieWriteConfig#SPARK_SQL_MERGE_INTO_READS_TARGET_KEY}.
    */
-  protected I mergeLocatedSqlMergeIntoRecords(I taggedRecords, HoodieTable<T, I, K, O> table, int configuredShuffleParallelism) {
+  protected I mergeLocatedSqlMergeIntoRecords(I taggedRecords, String instantTime, HoodieEngineContext context,
+                                              HoodieTable<T, I, K, O> table, int configuredShuffleParallelism) {
     throw new HoodieNotSupportedException(
         HoodieWriteConfig.SPARK_SQL_MERGE_INTO_READS_TARGET_KEY + " is not supported by " + this.getClass().getName());
   }

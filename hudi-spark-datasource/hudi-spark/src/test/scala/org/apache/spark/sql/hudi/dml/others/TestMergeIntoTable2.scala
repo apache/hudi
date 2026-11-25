@@ -25,9 +25,12 @@ import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
+import org.apache.spark.scheduler.{SparkListener, SparkListenerTaskEnd}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.slf4j.LoggerFactory
+
+import java.util.concurrent.atomic.AtomicLong
 
 class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   private val log = LoggerFactory.getLogger(getClass)
@@ -1023,6 +1026,291 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | when not matched then insert *
          """.stripMargin)
       checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1n", 11.0), Seq(2, "a2n", 21.0))
+    }
+  }
+
+  // Under commit time ordering a source record of a key deleted in the log is inserted at the location of the deleted
+  // row. Under event time ordering the delete has the ordering value of the source record, and such a record is not
+  // written, as the insert could lose to the deleted row, or the statement is refused with the bucket index, which
+  // also locates new keys.
+  Seq("SIMPLE", "BUCKET").foreach { indexType =>
+    Seq(true, false).foreach { commitTimeOrdering =>
+      test(s"Test MergeInto with target fields in a condition on mor table with $indexType index and "
+        + s"${if (commitTimeOrdering) "commit" else "event"} time ordering after a delete in the log") {
+        withTempDir { tmp =>
+          withSQLConf("hoodie.index.type" -> indexType, "hoodie.bucket.index.num.buckets" -> "1") {
+            val mergeMode = if (commitTimeOrdering) ", recordMergeMode = 'COMMIT_TIME_ORDERING'" else ""
+            // The statement that deletes id 1 and the ordering value of its source record
+            Seq(("merge", 50L), ("merge", 200L), ("sql", 0L)).foreach { case (delete, deleteOrdering) =>
+              val tableName = generateTableName
+              spark.sql(
+                s"""
+                   | create table $tableName (
+                   |  id int,
+                   |  name string,
+                   |  price double,
+                   |  ts long
+                   | ) using hudi
+                   | tblproperties (
+                   |  type = 'mor',
+                   |  primaryKey = 'id',
+                   |  preCombineField = 'ts'$mergeMode
+                   | )
+                   | location '${tmp.getCanonicalPath}/$tableName'
+                 """.stripMargin)
+              spark.sql(s"insert into $tableName select 1, 'a1', 10.0D, 100L union all select 2, 'a2', 20.0D, 100L")
+              if (delete == "sql") {
+                spark.sql(s"delete from $tableName where id = 1")
+              } else {
+                spark.sql(
+                  s"""
+                     | merge into $tableName t
+                     | using (select 1 as id, 'a1d' as name, 10.0D as price, ${deleteOrdering}L as ts) s
+                     | on t.id = s.id
+                     | when matched and t.price < 15 then delete
+                   """.stripMargin)
+              }
+              // Under event time ordering a delete with a lower ordering value than the row loses to it
+              val deleted = commitTimeOrdering || delete == "sql" || deleteOrdering > 100L
+              checkAnswer(s"select id, name, price from $tableName order by id")(
+                (if (deleted) Seq.empty else Seq(Seq(1, "a1", 10.0))) :+ Seq(2, "a2", 20.0): _*)
+              val reinsert =
+                s"""
+                   | merge into $tableName t
+                   | using (select 1 as id, 'a1n' as name, 5.0D as price, 50L as ts) s
+                   | on t.id = s.id
+                   | when matched and t.price < 15 then update set *
+                   | when not matched then insert *
+                 """.stripMargin
+              if (deleted && indexType == "BUCKET" && !commitTimeOrdering) {
+                checkExceptionContain(reinsert)("is only supported with commit time ordering")
+              } else if (deleted) {
+                spark.sql(reinsert)
+                val expected = (if (commitTimeOrdering) Seq(Seq(1, "a1n", 5.0)) else Seq.empty) :+ Seq(2, "a2", 20.0)
+                checkAnswer(s"select id, name, price from $tableName order by id")(expected: _*)
+                withSQLConf(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1") {
+                  spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
+                }
+                spark.sql(s"refresh table $tableName")
+                checkAnswer(s"select id, name, price from $tableName order by id")(expected: _*)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // The read of such a record gives it the default ordering value, which has another type than the source's
+  Seq("SIMPLE", "GLOBAL_SIMPLE").foreach { indexType =>
+    Seq((", recordMergeMode = 'COMMIT_TIME_ORDERING'", "100L"), ("", "cast(null as bigint)")).foreach { case (mergeMode, existing) =>
+      test(s"Test MergeInto with target fields in a condition deletes a record read without an ordering value ($existing) on mor table"
+        + s" with $indexType index") {
+        withTempDir { tmp =>
+          withSQLConf("hoodie.index.type" -> indexType) {
+            val tableName = generateTableName
+            spark.sql(
+              s"""
+                 | create table $tableName (
+                 |  id int,
+                 |  price double,
+                 |  ts long
+                 | ) using hudi
+                 | tblproperties (
+                 |  type = 'mor',
+                 |  primaryKey = 'id',
+                 |  preCombineField = 'ts'$mergeMode
+                 | )
+                 | location '${tmp.getCanonicalPath}'
+               """.stripMargin)
+            spark.sql(s"insert into $tableName select 1, 10.0D, $existing union all select 2, 20.0D, $existing")
+            spark.sql(
+              s"""
+                 | merge into $tableName t
+                 | using (select 1 as id, 10.0D as price, 50L as ts) s
+                 | on t.id = s.id
+                 | when matched and t.price < 15 then delete
+               """.stripMargin)
+            checkAnswer(s"select id, price from $tableName")(Seq(2, 20.0))
+          }
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto with target fields and an insert clause on mor table with BUCKET index needs commit time ordering") {
+    withTempDir { tmp =>
+      withSQLConf("hoodie.index.type" -> "BUCKET", "hoodie.bucket.index.num.buckets" -> "1") {
+        Seq(true, false).foreach { commitTimeOrdering =>
+          val tableName = generateTableName
+          val mergeMode = if (commitTimeOrdering) ", recordMergeMode = 'COMMIT_TIME_ORDERING'" else ""
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               | ) using hudi
+               | tblproperties (
+               |  type = 'mor',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'$mergeMode
+               | )
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName select 1, 'a1', 10.0D, 100L")
+          // id 9 is a new key in the existing bucket
+          val statement =
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'a1m' as name, 11.0D as price, 200L as ts union all select 9, 'a9', 90.0D, 200L) s
+               | on t.id = s.id
+               | when matched and t.price < 15 then update set *
+               | when not matched then insert *
+             """.stripMargin
+          if (commitTimeOrdering) {
+            spark.sql(statement)
+            checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1m", 11.0), Seq(9, "a9", 90.0))
+          } else {
+            checkExceptionContain(statement)("is only supported with commit time ordering")
+            checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1", 10.0))
+          }
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto with target fields on mor table whose partitions hold the same bucket file ID") {
+    withTempDir { tmp =>
+      // The file ID of a bucket is the same in each partition under non-blocking concurrency control
+      withSQLConf("hoodie.index.type" -> "BUCKET", "hoodie.bucket.index.num.buckets" -> "1",
+        "hoodie.write.concurrency.mode" -> "NON_BLOCKING_CONCURRENCY_CONTROL",
+        "hoodie.clean.failed.writes.policy" -> "LAZY",
+        "hoodie.write.lock.provider" -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider") {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  price double,
+             |  dt string
+             | ) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id'
+             | )
+             | partitioned by(dt)
+             | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 10.0, 'd1'), (1, 20.0, 'd2')")
+        val timeline = createMetaClient(spark, tmp.getCanonicalPath).getActiveTimeline
+        val lastInstant = timeline.getCommitsTimeline.filterCompletedInstants.lastInstant.get
+        assertResult(1)(timeline.readCommitMetadata(lastInstant).getFileIdAndRelativePaths.size)
+
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 1.0 as price, 'd1' as dt union all select 1, 2.0, 'd2') s
+             | on t.id = s.id and t.dt = s.dt
+             | when matched then update set price = t.price + s.price
+           """.stripMargin)
+        checkAnswer(s"select id, price, dt from $tableName order by dt")(Seq(1, 11.0, "d1"), Seq(1, 22.0, "d2"))
+      }
+    }
+  }
+
+  test("Test MergeInto with target fields in a condition packs inserts into small base files on mor table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double
+           | ) using hudi
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id'
+           | )
+           | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10.0)")
+      def merge(source: String): Unit = spark.sql(
+        s"""
+           | merge into $tableName t
+           | using ($source) s
+           | on t.id = s.id
+           | when matched and t.price < 15 then update set name = concat(t.name, s.name), price = s.price
+           | when not matched then insert *
+         """.stripMargin)
+      def checkFileGroups(expected: Int): Unit =
+        checkAnswer(s"select count(distinct split(_hoodie_file_name, '_')[0]) from $tableName")(Seq(expected))
+
+      // An inline compaction would leave the file group of id 1 without log files, and take inserts again
+      withSQLConf(HoodieCompactionConfig.INLINE_COMPACT.key -> "false") {
+        (2 to 4).foreach(id => merge(s"select $id as id, 'a$id' as name, ${id * 10}.0 as price"))
+        checkFileGroups(1)
+
+        // The file group of id 1 takes an update, so id 5 goes to another one, which then takes id 6
+        merge("select 1 as id, 'm' as name, 11.0 as price union all select 5, 'a5', 50.0")
+        merge("select 6 as id, 'a6' as name, 60.0 as price")
+      }
+      checkAnswer(s"select id, name, price from $tableName order by id")(
+        Seq(1, "a1m", 11.0), Seq(2, "a2", 20.0), Seq(3, "a3", 30.0), Seq(4, "a4", 40.0), Seq(5, "a5", 50.0), Seq(6, "a6", 60.0))
+      checkAnswer(s"select count(distinct split(_hoodie_file_name, '_')[0]) from $tableName where id in (5, 6)")(Seq(1))
+      checkAnswer(s"select count(distinct split(_hoodie_file_name, '_')[0]) from $tableName where id < 5")(Seq(1))
+    }
+  }
+
+  test("Test MergeInto with target fields reads the source once and shuffles only matched rows of the table") {
+    withTempDir { tmp =>
+      // The bucket index tags without a shuffle, and without an ordering field the source rows are not combined
+      withSQLConf("hoodie.index.type" -> "BUCKET", "hoodie.bucket.index.num.buckets" -> "1") {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  price double
+             | ) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id'
+             | )
+             | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select cast(id as int), cast(10 as double) from range(0, 1000, 1, 1)")
+
+        val evaluated = spark.sparkContext.longAccumulator("evaluatedSourceRows")
+        spark.udf.register("count_source_row", (price: Double) => {
+          evaluated.add(1)
+          price
+        })
+        val shuffled = new AtomicLong()
+        val listener = new SparkListener {
+          override def onTaskEnd(taskEnd: SparkListenerTaskEnd): Unit =
+            Option(taskEnd.taskMetrics).foreach(metrics => shuffled.addAndGet(metrics.shuffleWriteMetrics.recordsWritten))
+        }
+        spark.sparkContext.addSparkListener(listener)
+        try {
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select cast(id as int) as id, count_source_row(cast(1 as double) + id * 0) as price from range(0, 10, 1, 1)) s
+               | on t.id = s.id
+               | when matched then update set price = t.price + s.price
+             """.stripMargin)
+          spark.sparkContext.listenerBus.waitUntilEmpty()
+        } finally {
+          spark.sparkContext.removeSparkListener(listener)
+        }
+        checkAnswer(s"select count(*), sum(price) from $tableName")(Seq(1000, 10010.0))
+        // The write may also probe the source for a first row
+        assert(evaluated.value < 20, s"The 10 source rows were evaluated ${evaluated.value} times")
+        assert(shuffled.get < 500, s"${shuffled.get} records were shuffled for 10 source rows")
+      }
     }
   }
 

@@ -936,6 +936,20 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     checkInsertingActions(insertingActions, props)
     checkDeletingActions(deletingActions, props)
     checkMatchedConditions()
+    checkInsertsOfReadTargetStatement(props)
+  }
+
+  /**
+   * A write that reads the target records cannot tell a new key that the bucket index locates in an existing bucket
+   * from a key deleted there, and writes neither unless records are ordered by commit time.
+   */
+  private def checkInsertsOfReadTargetStatement(props: Map[String, String]): Unit = {
+    if (readsTargetRecordsOnWrite && insertingActions.nonEmpty
+      && !props.get(HoodieWriteConfig.RECORD_MERGE_MODE.key).contains(RecordMergeMode.COMMIT_TIME_ORDERING.name)
+      && props.get(HoodieIndexConfig.INDEX_TYPE.key).contains(HoodieIndex.IndexType.BUCKET.name)) {
+      throw new HoodieNotSupportedException("A WHEN NOT MATCHED clause of a MERGE INTO whose WHEN MATCHED clauses refer to "
+        + "fields of the target table is only supported with commit time ordering on a merge-on-read table with the bucket index.")
+    }
   }
 
   /**
