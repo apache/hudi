@@ -145,9 +145,71 @@ GATEWAY_SPARK_CONNECT_URI='sc://localhost:15002' \
 Use Helm `sqlBackend: spark-connect` and `sparkConnect.uri/catalog/schema`,
 or apply the chart's `values-spark-connect.yaml` overlay. An optional
 `sparkConnect.existingSecret` supplies the URI via `sparkConnect.uriSecretKey`.
-`/ready` reports a `spark-connect` check (cached SELECT 1) and the LLM check;
-`/v1/info`, Agent prompts, MCP tool descriptions, and the UI reflect the selected
-backend. Connection credentials are omitted from `/v1/info`.
+
+### Connect with a token and TLS
+
+First [enable authentication on the Spark endpoint](../hudi-lakehouse/charts/hudi-spark-connect/README.md#authentication-and-tls).
+The shared token authenticates the gateway to Spark, not end users to the gateway.
+
+1. **Set the endpoint and token** in the agent gateway Helm values. Use the TLS
+   hostname on the server certificate and a Secret in the gateway namespace that
+   holds Spark's shared token. For an external gRPC gateway, use its host and port.
+
+   ```yaml
+   sqlBackend: spark-connect
+   sparkConnect:
+     uri: "sc://hudi-spark-connect.hudi-lakehouse.svc:15002/;use_ssl=true"
+   extraEnv:
+     - name: SPARK_CONNECT_AUTHENTICATE_TOKEN
+       valueFrom:
+         secretKeyRef:
+           name: spark-connect-auth
+           key: token
+   ```
+
+2. **Private CA (optional).** Skip this step if the gateway already trusts the
+   endpoint certificate's issuer. Otherwise, put the CA's public PEM bundle
+   (`ca.crt`) and this `Dockerfile` in an empty directory. Set `FROM` to your
+   current gateway image.
+
+   ```dockerfile
+   FROM hudi-lakehouse-agent-gateway:0.1.0
+   COPY --chmod=0444 ca.crt /etc/ssl/certs/spark-connect-ca.pem
+   ENV GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=/etc/ssl/certs/spark-connect-ca.pem
+   ```
+
+   From that directory, build and push to your cluster's registry:
+
+   ```bash
+   docker build -t my.registry/team/hudi-agent-gateway:0.1.0-private-ca .
+   docker push my.registry/team/hudi-agent-gateway:0.1.0-private-ca
+   ```
+
+   Set `image.repository` and `image.tag` in the gateway values to match.
+
+3. **Upgrade and verify.** Upgrade the agent gateway release with these values.
+   Its `/ready` response should report `spark-connect` as healthy after `SELECT 1`.
+
+### Verify from a PySpark script or notebook
+
+Set `SPARK_CONNECT_AUTHENTICATE_TOKEN` in the **script or kernel process's own
+environment**, and configure the same CA trust there. PySpark sends the token
+automatically; keep it out of the URI and notebook code. The query should return `1`.
+
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.remote("sc://hudi-spark-connect.hudi-lakehouse.svc:15002/;use_ssl=true").getOrCreate()
+try:
+    print(spark.sql("SELECT 1").first())
+finally:
+    spark.stop()
+```
+
+### Gateway behavior and limits
+
+`/ready` also reports LLM status. `/v1/info` shows the selected backend but omits
+connection credentials.
 
 `query_lakehouse` accepts Spark SQL with backtick identifiers and enforces the
 same single-SELECT/AST/LIMIT policy. `list_tables` uses SHOW TABLES and reports
@@ -176,9 +238,8 @@ server interruption RPC, but network
 failures and races with operation startup mean cancellation remains best-effort.
 A timeout does not prove Spark stopped. Hung RPCs can delay session cleanup;
 worker pools shut down without waiting, and Python cannot forcibly terminate
-worker threads. Restart the process if all eight slots remain stuck. Connect
-URIs can use `/;use_ssl=true;token=...` for an appropriately configured endpoint;
-the chart itself has no authentication or TLS. Gateway tools expose no DML;
+worker threads. Restart the process if all eight slots remain stuck.
+Gateway tools expose no DML;
 direct Superset/Zeppelin writes have their own
 [tutorials and limitations](../hudi-lakehouse/charts/hudi-spark-connect/README.md#spark-connect-client-tutorials).
 

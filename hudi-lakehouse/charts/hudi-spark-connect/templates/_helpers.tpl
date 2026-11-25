@@ -71,3 +71,15 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/part-of: hudi-lakehouse
 {{- end -}}
+
+{{/* Kubelet TCP probes target the Pod IP. Probe a loopback-only driver from inside its container. */}}
+{{- define "hudi-spark-connect.listenerProbe" -}}
+{{- if .Values.tls.existingSecret -}}
+exec:
+  command: ["python3", "-c", "import socket; socket.create_connection(('127.0.0.1', 15002), 2).close()"]
+timeoutSeconds: 3
+{{- else -}}
+tcpSocket:
+  port: connect
+{{- end -}}
+{{- end -}}

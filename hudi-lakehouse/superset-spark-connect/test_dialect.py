@@ -64,8 +64,21 @@ class DialectTest(unittest.TestCase):
             self.assertEqual(connect.call_args.kwargs["driver"], "spark")
             engine.dispose()
 
+    def test_bearer_uses_adbc_password_not_driver_uri(self):
+        url = make_url("sparkconnect://:test%40%3A%2Fkey@host:443/db?auth_type=token&tls=true")
+        args, options = self.dialect.create_connect_args(url)
+        self.dialect.dbapi = MagicMock()
+        self.dialect.connect(*args, **options)
+        self.dialect.dbapi.connect.assert_called_once_with(driver="spark", autocommit=True, db_kwargs={
+            "uri": "spark://host:443?auth_type=token&tls=true&api=connect", "password": "test@:/key"})
+
     def test_credentials_and_protocol_rejected(self):
-        for url in ("sparkconnect://u:p@host", "sparkconnect://host?api=thrift"):
+        for url in ("sparkconnect://u:p@host", "sparkconnect://host?api=thrift",
+                    "sparkconnect://host?auth_type=token&tls=true",
+                    "sparkconnect://:p@host?auth_type=token&tls=false",
+                    "sparkconnect://:p@host?auth_type=token&tls=true&validateservercertificate=false",
+                    "sparkconnect://:p@host?auth_type=token&tls=true&host=other-host",
+                    "sparkconnect://host?token=p", "sparkconnect://host?password=p"):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 self.dialect.create_connect_args(make_url(url))
 

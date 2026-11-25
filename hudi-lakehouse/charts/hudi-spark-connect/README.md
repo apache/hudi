@@ -95,10 +95,75 @@ writable container layer as well. Node disk pressure can evict the pod before th
 volume reaches its limit. Scratch data is lost with the pod; this is not table storage.
 In cluster mode, size executor scratch separately; this setting applies only to the driver.
 
-The service has no authentication or TLS. Keep it on a trusted network:
-any client that can connect can read and write using the server's storage credentials.
-In Kubernetes executor mode, this trust also extends to the driver's ServiceAccount
-permissions, including creating executor pods through the Kubernetes API.
+## Authentication and TLS
+
+The quickstart accepts anonymous plaintext connections. Keep it on a trusted network.
+For an authenticated endpoint, Spark checks a shared bearer token on every RPC.
+Choose where clients connect over TLS:
+
+| TLS endpoint | Chart values | Where Spark listens |
+| --- | --- | --- |
+| Chart sidecar | Set `auth.existingSecret` and `tls.existingSecret` | Loopback only; the Service exposes the sidecar on port `15002` by default. |
+| Existing gRPC gateway | Set `auth.existingSecret`; leave `tls.existingSecret` empty | Private ClusterIP Service. Configure the gateway to forward `authorization` over HTTP/2 and protect the plaintext backend connection. |
+
+### 1. Prepare the Secrets
+
+Create the Secrets in the Spark release namespace (`hudi-lakehouse` below).
+Skip a command if your secret manager already provisions the corresponding Secret.
+
+- **Both modes:** Use a strong random token from your secret manager. The file must
+  contain only the token, with no trailing newline. Keep it out of Git and Helm values.
+
+  ```bash
+  kubectl -n hudi-lakehouse create secret generic spark-connect-auth --from-file=token=/path/to/token
+  ```
+
+- **Sidecar only:** Use a certificate whose DNS names include the hostname clients
+  connect to (e.g. `hudi-spark-connect.hudi-lakehouse.svc`). Supply the PEM certificate
+  chain and its matching private key. With an external gateway, configure TLS there instead.
+
+  ```bash
+  kubectl -n hudi-lakehouse create secret tls spark-connect-tls --cert=/path/to/fullchain.pem --key=/path/to/tls.key
+  ```
+
+### 2. Apply the chart values
+
+Save this overlay as `connect-auth.yaml`. For an existing gRPC gateway, omit the
+`tls` block. If your token Secret uses a key other than `token`, set `auth.tokenKey`.
+
+```yaml
+auth:
+  existingSecret: spark-connect-auth
+tls:
+  existingSecret: spark-connect-tls
+```
+
+Apply the overlay **after** your normal deployment values (image, catalog and storage).
+Replace `deployment-values.yaml` with your values file, or add `-f connect-auth.yaml`
+to the [existing install command](#install-against-existing-infrastructure).
+
+```bash
+helm upgrade --install hudi-spark-connect hudi-lakehouse/charts/hudi-spark-connect \
+  -n hudi-lakehouse -f deployment-values.yaml -f connect-auth.yaml --wait --timeout 10m
+```
+
+### 3. Connect and verify
+
+Use the **TLS listener's hostname and port**, not the plaintext backend behind a gateway.
+Give each client the shared token and trust the issuing CA. Verify with `SELECT 1`.
+
+| Client | How to configure the token |
+| --- | --- |
+| [Agent gateway or PySpark](../../../hudi-agent-gateway/README.md#connect-with-a-token-and-tls) | Set `SPARK_CONNECT_AUTHENTICATE_TOKEN` in the client process and `use_ssl=true` in the `sc://` URI. |
+| [Superset](../../superset-spark-connect/README.md#connect-with-a-token-and-tls) | Use the SQLAlchemy password field with `auth_type=token&tls=true`. |
+| [Zeppelin / Foundry ADBC](../../superset-spark-connect/QUICKSTART.md#connect-zeppelin-with-a-token-and-tls) | Pass the token as the ADBC database `password`, separate from the driver URI. |
+
+- **`UNAUTHENTICATED`:** Check that the client received the same token as the driver and that any gateway forwards the `authorization` header.
+- **Certificate verification failure:** Check the hostname and client CA trust; do not disable verification.
+- **Rotation:** After changing a Secret, restart the Spark Deployment (and any client using the token from an environment variable). Reconnect with the updated credentials.
+
+**What the shared token protects**: Spark rejects requests without a valid token. All authenticated clients use the same driver storage credentials;
+the token does not provide per-user permissions or tenant isolation. It does not protect the Spark UI or History Server.
 
 ## Hudi writer defaults and table services
 

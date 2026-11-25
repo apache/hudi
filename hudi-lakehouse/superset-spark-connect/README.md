@@ -60,6 +60,8 @@ PyArrow 16.1.0 was also checked with ADBC manager 1.12.0 and Foundry Spark ADBC
 CRUD/MERGE and chart-data tests passed. This does not establish compatibility
 with every PyArrow version in the range or unrelated Superset connectors.
 
+## Connect to the local quickstart
+
 Restart Superset after installation. Configure the database with a URI such as:
 
 ```text
@@ -69,15 +71,39 @@ sparkconnect://localhost:15002/default?api=connect&auth_type=none&tls=false
 `localhost` is relative to the Superset process. For an in-cluster client use
 `hudi-spark-connect.hudi-lakehouse.svc:15002`; for a host client, use the
 port-forward in the chart README. This URI is only for a trusted local network.
-The adapter currently rejects credentials in the URL; authenticated endpoints and
-catalog selection have not been validated. Its URI path selects the Spark schema.
+The URI path (`/default`) selects the Spark schema.
+
+## Connect with a token and TLS
+
+1. **Trust the endpoint.** Use the sidecar's Service DNS name and port, or the
+   external gRPC gateway's TLS address. Install your private CA (if used) in the
+   OS trust store of **each Superset web and worker runtime**.
+2. **Configure the database in Superset over HTTPS.** Leave the username empty
+   and supply the shared token in the SQLAlchemy **password** field. Set
+   `api=connect`, `auth_type=token`, and `tls=true`. If entering a URI, percent-encode
+   the password once. The following is a template; never put the token in a query
+   parameter, shell command, or notebook.
+
+   ```text
+   sparkconnect://:<percent-encoded-token>@hudi-spark-connect.hudi-lakehouse.svc:15002/default?api=connect&auth_type=token&tls=true
+   ```
+
+3. **Verify.** Test the saved connection, then select it in SQL Lab and run
+   `SELECT 1`. Keep server certificate verification enabled.
+
+Superset masks the password; the adapter passes it separately to Foundry as
+`db_kwargs["password"]`, not in the driver URI. Spark sees one shared credential,
+not individual Superset users.
+
+## Driver behavior and validation
+
 The adapter always loads the `spark` driver installed by the Superset operator.
 The URI query parameter `driver` is rejected, including `driver=spark`; database
 connections cannot select another native library. Install drivers only in trusted,
 operator-controlled locations. Do not put credentials in query
 parameters, which can appear in logs.
 
-Use `superset test-db -c '{}'` with the URI to check dialect compatibility. In SQL Lab,
+For the anonymous local URI, `superset test-db -c '{}'` can check dialect compatibility. In SQL Lab,
 select the schema and table, run a grouped query, then create a dataset and chart.
 To test direct writes, enable **Allow DML** on a disposable database connection,
 execute INSERT, UPDATE and DELETE against a uniquely named test table, and run a
@@ -89,7 +115,12 @@ Foundry 0.2.1 combination did not support parameter binding. Do not interpolate
 untrusted values into SQL. Driver errors or disconnects can occur after a write
 commits; inspect the table and timeline before retrying. Unsupported complex Spark
 types are reported as unknown SQLAlchemy types. Query cancellation, large results,
-authentication, concurrency and dashboard behaviour require separate validation.
+concurrency and dashboard behaviour require separate validation.
+
+A local Superset 6.1.0 API check saved the token in the SQLAlchemy password field
+and reloaded the connection by database ID. The database API masked the password.
+Using that saved connection, SQL Lab returned `1` for `SELECT 1 AS value` over
+verified TLS through HAProxy to Spark Connect 4.1.3 with Foundry ADBC 0.2.1.
 
 Offline contract tests and an opt-in live test:
 

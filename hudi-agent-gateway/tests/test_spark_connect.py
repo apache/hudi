@@ -168,10 +168,19 @@ async def test_pyspark_failures_close_session(settings, failure):
         assert session.closed.is_set()
 
 
-async def test_pyspark_query_error_is_actionable_and_redacted(settings):
-    s = spark_settings(settings).model_copy(
-        update={"spark_connect_uri": "sc://localhost:15002/;token=secret%20token"}
-    )
+@pytest.mark.parametrize("in_uri", [True, False])
+async def test_pyspark_query_error_is_actionable_and_redacted(settings, monkeypatch, in_uri):
+    from pyspark.sql.connect.client import DefaultChannelBuilder
+
+    uri = "sc://spark.example:443/;use_ssl=true"
+    if in_uri:
+        uri += ";token=secret%20token"
+        monkeypatch.delenv("SPARK_CONNECT_AUTHENTICATE_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("SPARK_CONNECT_AUTHENTICATE_TOKEN", "secret token")
+    s = GatewaySettings(**{**spark_settings(settings).model_dump(), "spark_connect_uri": uri})
+    builder = DefaultChannelBuilder(s.spark_connect_uri)
+    assert builder.use_ssl and builder.token == "secret token"
     session = Session()
     session.error = PySparkException(
         f"TABLE_NOT_FOUND at {s.spark_connect_uri}: secret token"
@@ -180,6 +189,7 @@ async def test_pyspark_query_error_is_actionable_and_redacted(settings):
         with pytest.raises(QueryError, match="TABLE_NOT_FOUND") as caught:
             await client.execute("SELECT * FROM absent", timeout=1, max_rows=1)
         assert "secret" not in str(caught.value)
+        assert caught.value.__suppress_context__
 
 
 async def test_pyspark_describe_uses_schema_without_collecting(settings):

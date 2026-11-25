@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -182,6 +183,8 @@ class SparkConnectClient:
             raise
         except PySparkException as e:
             message = str(e).replace(self._settings.spark_connect_uri, "[Spark Connect endpoint]")
+            if token := os.environ.get("SPARK_CONNECT_AUTHENTICATE_TOKEN"):
+                message = message.replace(token, "[redacted]")
             uri = urlparse("http" + self._settings.spark_connect_uri[2:])
             # URI parameters can contain tokens or custom authentication headers.
             for parameter in uri.params.split(";"):
@@ -190,9 +193,10 @@ class SparkConnectClient:
                     message = message.replace(value, "[redacted]").replace(
                         unquote(value), "[redacted]"
                     )
-            raise QueryError(message[:2000]) from e
+            # Do not include the unsanitized error in a formatted traceback.
+            raise QueryError(message[:2000]) from None
         except Exception as e:
-            raise QueryError(f"Spark Connect query failed ({type(e).__name__})") from e
+            raise QueryError(f"Spark Connect query failed ({type(e).__name__})") from None
 
     async def ping(self, timeout: float = 5.0, cache_seconds: float = 10.0) -> bool:
         if self._ping_cache is not None and time.monotonic() - self._ping_cache[0] < cache_seconds:

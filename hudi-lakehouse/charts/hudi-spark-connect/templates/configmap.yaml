@@ -16,10 +16,13 @@
 
 {{- $uri := required "catalog.metastoreUri is required (use an external Hive Metastore)" .Values.catalog.metastoreUri -}}
 {{- $warehouse := required "catalog.warehouse is required (use durable object storage)" .Values.catalog.warehouse -}}
+{{- if and .Values.tls.existingSecret (not .Values.auth.existingSecret) -}}
+{{- fail "tls.existingSecret requires auth.existingSecret; TLS alone does not authenticate clients" -}}
+{{- end -}}
 {{- $conf := dict
   "spark.master" (include "hudi-spark-connect.master" .)
   "spark.driver.memory" .Values.spark.driverMemory
-  "spark.connect.grpc.binding.address" "0.0.0.0"
+  "spark.connect.grpc.binding.address" (ternary "127.0.0.1" "0.0.0.0" (not (empty .Values.tls.existingSecret)))
   "spark.connect.grpc.binding.port" "15002"
   "spark.sql.catalogImplementation" "hive"
   "spark.sql.runSQLOnFiles" "false"
@@ -40,6 +43,9 @@
 {{- range $key, $value := .Values.spark.extraConf -}}
 {{- if and (hasPrefix "k8s://" (include "hudi-spark-connect.master" $)) (has $key (list "spark.driver.host" "spark.kubernetes.driver.pod.name")) -}}
 {{- fail (printf "%s is managed by the chart in Kubernetes mode" $key) -}}
+{{- end -}}
+{{- if eq $key "spark.connect.authenticate.token" -}}
+{{- fail "use auth.existingSecret for the Spark Connect token" -}}
 {{- end -}}
 {{- if hasKey $conf $key -}}
 {{- fail (printf "%s is managed by the chart; use the corresponding value instead" $key) -}}
@@ -87,6 +93,19 @@ metadata:
   labels:
     {{- include "hudi-spark-connect.labels" . | nindent 4 }}
 data:
+  {{- if .Values.tls.existingSecret }}
+  haproxy.cfg: |
+    global
+      ssl-load-extra-del-ext
+    defaults
+      mode tcp
+      timeout connect 5s
+      timeout client 0
+      timeout server 0
+    listen spark-connect
+      bind :15443 ssl crt /tls/tls.crt ssl-min-ver TLSv1.2 alpn h2
+      server driver 127.0.0.1:15002
+  {{- end }}
   spark-defaults.conf: |
     {{- range $key, $value := $conf }}
     {{ $key }} {{ include "hudi-spark-connect.propertyValue" $value }}

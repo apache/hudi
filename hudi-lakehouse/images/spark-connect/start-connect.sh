@@ -21,6 +21,10 @@ set -euo pipefail
 if [[ "${1:-}" == "executor" ]]; then
   exec /opt/entrypoint.sh "$@"
 fi
+if [[ ${SPARK_CONNECT_AUTHENTICATE_TOKEN+x} && -z ${SPARK_CONNECT_AUTHENTICATE_TOKEN:-} ]]; then
+  echo "Spark Connect authentication requires a non-empty token" >&2
+  exit 1
+fi
 # spark-submit replaces itself with the JVM; no daemon/background process,
 # so Kubernetes termination signals reach the Connect server.
 exec /opt/spark/bin/spark-submit \

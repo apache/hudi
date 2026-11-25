@@ -165,10 +165,12 @@ helm upgrade --install hudi-spark-connect hudi-lakehouse/charts/hudi-spark-conne
   --wait --timeout 10m
 ```
 
-The endpoint is exposed through a ClusterIP Service without authentication or
-TLS; use it on a trusted network. See the [chart installation guide](charts/hudi-spark-connect/README.md#install-against-existing-infrastructure)
-for storage, credentials, and resource settings, and the [ADBC client guide](charts/hudi-spark-connect/README.md#connect-and-validate-with-adbc)
-for connection setup and CRUD/restart validation.
+The default ClusterIP Service accepts anonymous plaintext connections. Keep it
+on a trusted network. For other deployments:
+
+- [Configure authentication and TLS](charts/hudi-spark-connect/README.md#authentication-and-tls): choose the chart sidecar or an existing gRPC gateway, provision Secrets, and verify the client connection.
+- [Configure storage and catalog access](charts/hudi-spark-connect/README.md#install-against-existing-infrastructure).
+- [Validate ADBC reads, writes, and persistence](charts/hudi-spark-connect/README.md#connect-and-validate-with-adbc).
 
 ## Gateway and BI clients on Spark Connect
 

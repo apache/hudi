@@ -74,19 +74,32 @@ class SparkConnectDialect(default.DefaultDialect):
     def create_connect_args(self, url):
         if not url.host:
             raise ValueError("Spark Connect host is required")
-        if url.username or url.password:
-            raise ValueError("Credentials in SQLAlchemy URL are not supported")
         options = dict(url.query)
+        if any(key.lower() in {"password", "token"} for key in options):
+            raise ValueError("Do not put credentials in URI query parameters")
         if "driver" in options:
             raise ValueError("The driver URI parameter is not supported; install the 'spark' driver on the server")
         options.setdefault("api", "connect")
         options.setdefault("auth_type", "none")
         if options["api"] != "connect":
             raise ValueError("Only api=connect is supported")
+        db_kwargs = {}
+        if options["auth_type"] == "token":
+            if url.username or not url.password:
+                raise ValueError("Token authentication requires only a password (the bearer token)")
+            if (options.get("tls") != "true"
+                    or options.get("validateservercertificate", "true") != "true"):
+                raise ValueError("Token authentication requires tls=true and verified server certificates")
+            if set(options) - {"api", "auth_type", "tls", "catalog", "validateservercertificate"}:
+                raise ValueError("Unsupported query parameter for token authentication")
+            # Foundry 0.2.1 reads the ADBC database password for Spark Connect token auth.
+            db_kwargs["password"] = url.password
+        elif url.username or url.password:
+            raise ValueError("Credentials require auth_type=token")
         host = f"[{url.host}]" if ":" in url.host else url.host
         authority = f"{host}:{url.port or 15002}"
-        uri = f"spark://{authority}?{urlencode(options)}"
-        return [], {"driver": "spark", "db_kwargs": {"uri": uri}, "autocommit": True,
+        db_kwargs["uri"] = f"spark://{authority}?{urlencode(options)}"
+        return [], {"driver": "spark", "db_kwargs": db_kwargs, "autocommit": True,
                     "_schema": unquote(url.database) if url.database else None}
 
     def connect(self, *args, **kwargs):
