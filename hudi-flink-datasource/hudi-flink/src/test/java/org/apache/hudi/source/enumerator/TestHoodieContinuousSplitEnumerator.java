@@ -636,6 +636,40 @@ public class TestHoodieContinuousSplitEnumerator {
   }
 
   @Test
+  public void testUndiscoveredCommitsAreRefreshedAfterSplitsArePublished() {
+    CapturingMetricGroup lagMetricGroup = new CapturingMetricGroup();
+    MockSplitEnumeratorContext metricContext = new MockSplitEnumeratorContext(mockMetricGroup(lagMetricGroup));
+    AtomicInteger pendingSplitsWhenUndiscoveredRefreshed = new AtomicInteger(-1);
+    splitDiscover.setOnUndiscoveredCommits(() -> pendingSplitsWhenUndiscoveredRefreshed.set(splitProvider.pendingSplitCount()));
+    splitDiscover.setUndiscoveredCommits(Collections.singletonList("20231201130000000"));
+    splitDiscover.setNextBatch(new HoodieContinuousSplitBatch(
+        Arrays.asList(split1, split2), "20231201000000000", "20231201120000000"));
+    enumerator = new HoodieContinuousSplitEnumerator(
+        TABLE_NAME, metricContext, splitProvider, splitDiscover, scanContext, Option.empty());
+    enumerator.start();
+
+    metricContext.executeAsyncCallbacks();
+
+    assertEquals(2, pendingSplitsWhenUndiscoveredRefreshed.get());
+    assertEquals(1L, lagMetricGroup.gauge("undiscoveredCommits"));
+  }
+
+  @Test
+  public void testDiscoveryProceedsWhenUndiscoveredCommitsFail() {
+    MockSplitEnumeratorContext metricContext = new MockSplitEnumeratorContext(mockMetricGroup(new CapturingMetricGroup()));
+    splitDiscover.setThrowOnUndiscoveredCommits(true);
+    splitDiscover.setNextBatch(new HoodieContinuousSplitBatch(
+        Arrays.asList(split1, split2), "20231201000000000", "20231201120000000"));
+    enumerator = new HoodieContinuousSplitEnumerator(
+        TABLE_NAME, metricContext, splitProvider, splitDiscover, scanContext, Option.empty());
+    enumerator.start();
+
+    metricContext.executeAsyncCallbacks();
+
+    assertEquals(2, splitProvider.pendingSplitCount());
+  }
+
+  @Test
   public void testLagMetricsCountSplitsAddedBack() {
     CapturingMetricGroup lagMetricGroup = new CapturingMetricGroup();
     MockSplitEnumeratorContext metricContext = new MockSplitEnumeratorContext(mockMetricGroup(lagMetricGroup));
@@ -701,6 +735,8 @@ public class TestHoodieContinuousSplitEnumerator {
     private final Map<String, HoodieSourceSplitLagInfo> lagInfos = new HashMap<>();
     private boolean throwOnLagInfo = false;
     private Runnable onLagInfo = () -> { };
+    private boolean throwOnUndiscoveredCommits = false;
+    private Runnable onUndiscoveredCommits = () -> { };
 
     public void setNextBatch(HoodieContinuousSplitBatch batch) {
       this.nextBatch = batch;
@@ -708,6 +744,14 @@ public class TestHoodieContinuousSplitEnumerator {
 
     public void setUndiscoveredCommits(List<String> undiscoveredCommits) {
       this.undiscoveredCommits = undiscoveredCommits;
+    }
+
+    public void setThrowOnUndiscoveredCommits(boolean throwOnUndiscoveredCommits) {
+      this.throwOnUndiscoveredCommits = throwOnUndiscoveredCommits;
+    }
+
+    public void setOnUndiscoveredCommits(Runnable onUndiscoveredCommits) {
+      this.onUndiscoveredCommits = onUndiscoveredCommits;
     }
 
     public List<Pair<String, Boolean>> getUndiscoveredCommitsQueries() {
@@ -760,6 +804,10 @@ public class TestHoodieContinuousSplitEnumerator {
 
     @Override
     public List<String> getUndiscoveredCommits(String offset, boolean reloadTimeline) {
+      onUndiscoveredCommits.run();
+      if (throwOnUndiscoveredCommits) {
+        throw new RuntimeException("Mock exception while querying undiscovered commits");
+      }
       undiscoveredCommitsQueries.add(Pair.of(offset, reloadTimeline));
       return undiscoveredCommits;
     }

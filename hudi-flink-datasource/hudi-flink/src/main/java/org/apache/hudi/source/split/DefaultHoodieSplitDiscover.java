@@ -46,6 +46,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -102,18 +104,28 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
     if (reloadTimeline) {
       metaClient.reloadActiveTimeline();
     }
+    // filter by completion time before applying user skip configs, so skipClustering and
+    // skipInsertOverwrite do not read replace-commit metadata for already-consumed commits
+    String endCommit = scanContext.getConf().get(FlinkOptions.READ_END_COMMIT);
+    HoodieTimeline candidateTimeline = metaClient.getCommitsAndCompactionTimeline()
+        .filterCompletedInstants()
+        .filter(instant -> {
+          String completionTime = instant.getCompletionTime();
+          return completionTime != null
+              && completionTime.compareTo(offset) > 0
+              && (endCommit == null || compareTimestamps(completionTime, LESSER_THAN_OR_EQUALS, endCommit));
+        });
+    if (candidateTimeline.empty()) {
+      return Collections.emptyList();
+    }
     HoodieTimeline timeline = IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(
         metaClient,
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(),
+        candidateTimeline,
         scanContext.isSkipCompaction(),
         scanContext.isSkipClustering(),
         scanContext.isSkipInsertOverwrite());
-    // commits completed after the end commit are never read
-    String endCommit = scanContext.getConf().get(FlinkOptions.READ_END_COMMIT);
     return timeline.getInstantsAsStream()
         .map(HoodieInstant::getCompletionTime)
-        .filter(completionTime -> completionTime != null && completionTime.compareTo(offset) > 0)
-        .filter(completionTime -> endCommit == null || compareTimestamps(completionTime, LESSER_THAN_OR_EQUALS, endCommit))
         .sorted()
         .collect(Collectors.toList());
   }
@@ -167,10 +179,14 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
     metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
         .filter(instant -> instantTimes.contains(instant.requestedTime()))
         .forEach(instant -> completionTimes.put(instant.requestedTime(), instant.getCompletionTime()));
-    Map<String, HoodieSourceSplitLagInfo> lagInfos = new HashMap<>();
+    Map<Collection<String>, HoodieSourceSplitLagInfo> lagInfoByRange = new IdentityHashMap<>();
+    Map<String, HoodieSourceSplitLagInfo> lagInfos = new HashMap<>(splits.size());
     for (HoodieSourceSplit split : splits) {
       Collection<String> rangeCommits = HoodieSourceSplitLagInfo.getRangeCommits(split);
-      lagInfos.put(split.splitId(), new HoodieSourceSplitLagInfo(rangeCommits, getOldestCompletionTime(rangeCommits, completionTimes), 0L, 0L));
+      HoodieSourceSplitLagInfo lagInfo = lagInfoByRange.computeIfAbsent(
+          rangeCommits,
+          commits -> new HoodieSourceSplitLagInfo(commits, getOldestCompletionTime(commits, completionTimes), 0L, 0L));
+      lagInfos.put(split.splitId(), lagInfo);
     }
     return lagInfos;
   }
@@ -218,9 +234,15 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
   }
 
   private static Set<String> getRangeCommits(Collection<HoodieSourceSplit> splits) {
-    return splits.stream()
-        .flatMap(split -> HoodieSourceSplitLagInfo.getRangeCommits(split).stream())
-        .collect(Collectors.toSet());
+    Set<Collection<String>> seenRanges = Collections.newSetFromMap(new IdentityHashMap<>());
+    Set<String> commits = new HashSet<>();
+    for (HoodieSourceSplit split : splits) {
+      Collection<String> rangeCommits = HoodieSourceSplitLagInfo.getRangeCommits(split);
+      if (seenRanges.add(rangeCommits)) {
+        commits.addAll(rangeCommits);
+      }
+    }
+    return commits;
   }
 
   /**
@@ -244,10 +266,17 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
   }
 
   private static Set<String> getExactMatchCommits(Collection<HoodieSourceSplit> splits) {
-    return splits.stream()
-        .filter(DefaultHoodieSplitDiscover::isExactMatch)
-        .flatMap(split -> HoodieSourceSplitLagInfo.getRangeCommits(split).stream())
-        .collect(Collectors.toSet());
+    Set<Collection<String>> seenRanges = Collections.newSetFromMap(new IdentityHashMap<>());
+    Set<String> commits = new HashSet<>();
+    for (HoodieSourceSplit split : splits) {
+      if (isExactMatch(split)) {
+        Collection<String> rangeCommits = HoodieSourceSplitLagInfo.getRangeCommits(split);
+        if (seenRanges.add(rangeCommits)) {
+          commits.addAll(rangeCommits);
+        }
+      }
+    }
+    return commits;
   }
 
   private static boolean isExactMatch(HoodieSourceSplit split) {

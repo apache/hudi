@@ -31,11 +31,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.AbstractCollection;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -219,6 +223,48 @@ class TestFlinkStreamReadLagMetrics {
     assertEquals(0L, gauge("readLagSeconds"));
   }
 
+  @Test
+  void testSharedCommitRangeIsWalkedOncePerBatch() {
+    CountingCollection<String> sharedRange = new CountingCollection<>(Arrays.asList(COMMIT_1, COMMIT_2));
+    Map<String, HoodieSourceSplitLagInfo> batch = new HashMap<>();
+    batch.put("split-1", new HoodieSourceSplitLagInfo(sharedRange, COMPLETION_1, 10L, 100L));
+    batch.put("split-2", new HoodieSourceSplitLagInfo(sharedRange, COMPLETION_1, 10L, 100L));
+    batch.put("split-3", new HoodieSourceSplitLagInfo(sharedRange, COMPLETION_1, 10L, 100L));
+
+    metrics.addSplits(batch);
+
+    assertEquals(1, sharedRange.getIterationCount());
+    assertEquals(3L, gauge("pendingSplits"));
+    assertEquals(2L, gauge("inFlightCommits"));
+    assertEquals(30L, gauge("pendingRecords"));
+    assertEquals(300L, gauge("pendingBytes"));
+    assertEquals(7200L, gauge("readLagSeconds"));
+
+    CountingCollection<String> updatedRange = new CountingCollection<>(Collections.singletonList(COMMIT_2));
+    Map<String, HoodieSourceSplitLagInfo> updates = new HashMap<>();
+    updates.put("split-1", new HoodieSourceSplitLagInfo(updatedRange, COMPLETION_2, 20L, 200L));
+    updates.put("split-2", new HoodieSourceSplitLagInfo(updatedRange, COMPLETION_2, 20L, 200L));
+    updates.put("split-3", new HoodieSourceSplitLagInfo(updatedRange, COMPLETION_2, 20L, 200L));
+
+    metrics.updateSplits(updates);
+
+    assertEquals(2, sharedRange.getIterationCount());
+    assertEquals(1, updatedRange.getIterationCount());
+    assertEquals(1L, gauge("inFlightCommits"));
+    assertEquals(60L, gauge("pendingRecords"));
+    assertEquals(600L, gauge("pendingBytes"));
+    assertEquals(3600L, gauge("readLagSeconds"));
+
+    metrics.finishSplits(Arrays.asList("split-1", "split-2", "split-3"));
+
+    assertEquals(2, updatedRange.getIterationCount());
+    assertEquals(0L, gauge("pendingSplits"));
+    assertEquals(0L, gauge("inFlightCommits"));
+    assertEquals(0L, gauge("pendingRecords"));
+    assertEquals(0L, gauge("pendingBytes"));
+    assertEquals(0L, gauge("readLagSeconds"));
+  }
+
   private long gauge(String name) {
     return (Long) metricGroup.gauges.get(name).getValue();
   }
@@ -267,6 +313,30 @@ class TestFlinkStreamReadLagMetrics {
     @Override
     public Clock withZone(ZoneId zone) {
       throw new UnsupportedOperationException();
+    }
+  }
+
+  private static class CountingCollection<T> extends AbstractCollection<T> {
+    private final List<T> delegate;
+    private final AtomicInteger iterations = new AtomicInteger();
+
+    private CountingCollection(List<T> delegate) {
+      this.delegate = delegate;
+    }
+
+    int getIterationCount() {
+      return iterations.get();
+    }
+
+    @Override
+    public Iterator<T> iterator() {
+      iterations.incrementAndGet();
+      return delegate.iterator();
+    }
+
+    @Override
+    public int size() {
+      return delegate.size();
     }
   }
 }

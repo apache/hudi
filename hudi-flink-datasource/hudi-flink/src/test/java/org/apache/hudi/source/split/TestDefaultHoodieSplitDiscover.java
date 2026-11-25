@@ -42,6 +42,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -57,6 +59,7 @@ import java.util.TreeSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -458,8 +461,14 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     Map<String, HoodieSourceSplitLagInfo> lagInfos = discover.getRangeLagInfo(splits);
 
     assertFalse(splits.isEmpty());
+    HoodieSourceSplitLagInfo firstLagInfo = null;
     for (HoodieSourceSplit split : splits) {
       HoodieSourceSplitLagInfo lagInfo = lagInfos.get(split.splitId());
+      if (firstLagInfo == null) {
+        firstLagInfo = lagInfo;
+      } else {
+        assertSame(firstLagInfo, lagInfo);
+      }
       assertEquals(new TreeSet<>(Arrays.asList(commits.get(1).requestedTime(), commits.get(2).requestedTime())),
           new TreeSet<>(lagInfo.getReadCommits()));
       assertEquals(commits.get(1).getCompletionTime(), lagInfo.getOldestCommitCompletionTime());
@@ -490,6 +499,38 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     List<String> undiscovered = discover.getUndiscoveredCommits(null, true);
 
     assertTrue(undiscovered.isEmpty());
+  }
+
+  @Test
+  void testGetUndiscoveredCommitsFiltersByOffsetBeforeReadingReplaceCommitMetadata() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    List<HoodieInstant> commits = getCompletedCommits();
+    assertEquals(2, commits.size());
+
+    // Create an already-consumed replacecommit with unreadable metadata before commits.get(0)'s completion time.
+    // Filtering by offset first must avoid reading its metadata even when clustering/insert-overwrite skipping is on.
+    HoodieInstant consumedReplace = metaClient.getInstantGenerator().createNewInstant(
+        HoodieInstant.State.COMPLETED,
+        HoodieTimeline.REPLACE_COMMIT_ACTION,
+        "20000101000000000",
+        "20000101000000001");
+    StoragePath replaceFile = new StoragePath(
+        metaClient.getTimelinePath(),
+        metaClient.getInstantFileNameGenerator().getFileName(consumedReplace));
+    try (OutputStream out = metaClient.getStorage().create(replaceFile, true)) {
+      out.write("corrupt-metadata".getBytes(StandardCharsets.UTF_8));
+    }
+
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
+        createScanContextWithSkipOptions(conf, false, true, true));
+
+    List<String> undiscovered = discover.getUndiscoveredCommits(commits.get(0).getCompletionTime(), true);
+
+    assertEquals(Collections.singletonList(commits.get(1).getCompletionTime()), undiscovered);
   }
 
   // Helper methods

@@ -32,6 +32,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -110,37 +111,70 @@ public class FlinkStreamReadLagMetrics extends HoodieFlinkMetrics {
    * that are already tracked are ignored.
    */
   public synchronized void addSplits(Map<String, HoodieSourceSplitLagInfo> lagInfos) {
+    Map<Collection<String>, Integer> commitRangeCounts = new IdentityHashMap<>();
+    Map<String, Integer> completionTimeCounts = new HashMap<>();
     lagInfos.forEach((splitId, lagInfo) -> {
       if (pendingSplits.putIfAbsent(splitId, lagInfo) == null) {
-        add(lagInfo);
+        commitRangeCounts.merge(lagInfo.getReadCommits(), 1, Integer::sum);
+        if (lagInfo.getOldestCommitCompletionTime() != null) {
+          completionTimeCounts.merge(lagInfo.getOldestCommitCompletionTime(), 1, Integer::sum);
+        }
+        pendingRecords += lagInfo.getEstimatedRecords();
+        pendingBytes += lagInfo.getEstimatedBytes();
       }
     });
+    addCounts(commitRangeCounts, completionTimeCounts);
   }
 
   /**
    * Replaces the lag info of the splits that are still tracked, keyed by split id.
    */
   public synchronized void updateSplits(Map<String, HoodieSourceSplitLagInfo> lagInfos) {
+    Map<Collection<String>, Integer> removedCommitRanges = new IdentityHashMap<>();
+    Map<String, Integer> removedCompletionTimes = new HashMap<>();
+    Map<Collection<String>, Integer> addedCommitRanges = new IdentityHashMap<>();
+    Map<String, Integer> addedCompletionTimes = new HashMap<>();
     lagInfos.forEach((splitId, lagInfo) -> {
       HoodieSourceSplitLagInfo previous = pendingSplits.get(splitId);
       if (previous != null) {
-        remove(previous);
+        removedCommitRanges.merge(previous.getReadCommits(), 1, Integer::sum);
+        if (previous.getOldestCommitCompletionTime() != null) {
+          removedCompletionTimes.merge(previous.getOldestCommitCompletionTime(), 1, Integer::sum);
+        }
+        pendingRecords -= previous.getEstimatedRecords();
+        pendingBytes -= previous.getEstimatedBytes();
+
         pendingSplits.put(splitId, lagInfo);
-        add(lagInfo);
+        addedCommitRanges.merge(lagInfo.getReadCommits(), 1, Integer::sum);
+        if (lagInfo.getOldestCommitCompletionTime() != null) {
+          addedCompletionTimes.merge(lagInfo.getOldestCommitCompletionTime(), 1, Integer::sum);
+        }
+        pendingRecords += lagInfo.getEstimatedRecords();
+        pendingBytes += lagInfo.getEstimatedBytes();
       }
     });
+    removeCounts(removedCommitRanges, removedCompletionTimes);
+    addCounts(addedCommitRanges, addedCompletionTimes);
   }
 
   /**
    * Stops tracking the splits whose records were all emitted. Splits that are not tracked are ignored.
    */
   public synchronized void finishSplits(Collection<String> splitIds) {
+    Map<Collection<String>, Integer> removedCommitRanges = new IdentityHashMap<>();
+    Map<String, Integer> removedCompletionTimes = new HashMap<>();
     for (String splitId : splitIds) {
       HoodieSourceSplitLagInfo lagInfo = pendingSplits.remove(splitId);
       if (lagInfo != null) {
-        remove(lagInfo);
+        removedCommitRanges.merge(lagInfo.getReadCommits(), 1, Integer::sum);
+        if (lagInfo.getOldestCommitCompletionTime() != null) {
+          removedCompletionTimes.merge(lagInfo.getOldestCommitCompletionTime(), 1, Integer::sum);
+        }
+        pendingRecords -= lagInfo.getEstimatedRecords();
+        pendingBytes -= lagInfo.getEstimatedBytes();
       }
     }
+    removeCounts(removedCommitRanges, removedCompletionTimes);
   }
 
   /**
@@ -196,25 +230,21 @@ public class FlinkStreamReadLagMetrics extends HoodieFlinkMetrics {
     return pendingBytes;
   }
 
-  private void add(HoodieSourceSplitLagInfo lagInfo) {
-    lagInfo.getReadCommits().forEach(commit -> inFlightCommits.merge(commit, 1, Integer::sum));
-    if (lagInfo.getOldestCommitCompletionTime() != null) {
-      oldestCompletionTimes.merge(lagInfo.getOldestCommitCompletionTime(), 1, Integer::sum);
-    }
-    pendingRecords += lagInfo.getEstimatedRecords();
-    pendingBytes += lagInfo.getEstimatedBytes();
+  private void addCounts(Map<Collection<String>, Integer> commitRangeCounts, Map<String, Integer> completionTimeCounts) {
+    commitRangeCounts.forEach((commits, count) ->
+        commits.forEach(commit -> inFlightCommits.merge(commit, count, Integer::sum)));
+    completionTimeCounts.forEach((completionTime, count) ->
+        oldestCompletionTimes.merge(completionTime, count, Integer::sum));
   }
 
-  private void remove(HoodieSourceSplitLagInfo lagInfo) {
-    lagInfo.getReadCommits().forEach(commit -> decrement(inFlightCommits, commit));
-    if (lagInfo.getOldestCommitCompletionTime() != null) {
-      decrement(oldestCompletionTimes, lagInfo.getOldestCommitCompletionTime());
-    }
-    pendingRecords -= lagInfo.getEstimatedRecords();
-    pendingBytes -= lagInfo.getEstimatedBytes();
+  private void removeCounts(Map<Collection<String>, Integer> commitRangeCounts, Map<String, Integer> completionTimeCounts) {
+    commitRangeCounts.forEach((commits, count) ->
+        commits.forEach(commit -> decrement(inFlightCommits, commit, count)));
+    completionTimeCounts.forEach((completionTime, count) ->
+        decrement(oldestCompletionTimes, completionTime, count));
   }
 
-  private static void decrement(Map<String, Integer> counts, String key) {
-    counts.computeIfPresent(key, (k, count) -> count > 1 ? count - 1 : null);
+  private static void decrement(Map<String, Integer> counts, String key, int delta) {
+    counts.computeIfPresent(key, (k, count) -> count > delta ? count - delta : null);
   }
 }
