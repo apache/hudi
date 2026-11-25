@@ -1954,7 +1954,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
 
       if (gteqSpark3_5) {
-        // a record key field that the merge condition does not match on is checked as well
+        // every record key field is checked, including one of a composite record key
         val compositeKeyTable = generateTableName
         spark.sql(
           s"""
@@ -1969,7 +1969,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $compositeKeyTable values (1, 1, 10)")
         checkExceptionContain(
           s"""
-             |merge into $compositeKeyTable t using (select 2 as id, 4294967297L as k, 40 as v) s on t.id = s.id
+             |merge into $compositeKeyTable t using (select 2 as id, 4294967297L as k, 40 as v) s
+             |on t.id = s.id and t.k = s.k
              |when not matched then insert (id, k, v) values (s.id, cast(s.k as int), s.v)
            """.stripMargin)("overflow")
         checkAnswer(s"select id, k, v from $compositeKeyTable")(Seq(1, 1, 10))
@@ -2300,6 +2301,31 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
           })("CAST_INVALID_INPUT")
           checkAnswer(s"select id, value from $tableName order by id")(Seq(1, "bad"), Seq(2, "5"))
         }
+      }
+    }
+  }
+
+  test("Test MergeInto With A Source Key Column The Merge Condition Does Not Match On") {
+    withTempDir { tmp =>
+      for (tableType <- Seq("cow", "mor");
+           source <- Seq("select 2L as id, 1L as match_id, 99 as v", "select 2 as id, 1 as match_id, 99 as v");
+           updateClause <- Seq("update set v = s.v", "update set *")) {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 10), (2, 20)")
+        // the source column id would render the record key 2, while the merge condition matches id 1
+        checkExceptionContain(
+          s"merge into $tableName t using ($source) s on t.id = s.match_id when matched then $updateClause")(
+          "Invalid MERGE INTO matching condition")
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 10), Seq(2, 20))
       }
     }
   }

@@ -527,6 +527,23 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           else acc :+ association
         }
 
+    // The record key is rendered from the source column named after a record key field when there is one,
+    // so that column has to be the one the merge condition matches the field on
+    if (hasPrimaryKey()) {
+      recordKeyAttributeToConditionExpression
+        .filter { case (keyAttr, _) => hoodieCatalogTable.primaryKeys.exists(resolver(_, keyAttr.name)) }
+        .foreach { case (keyAttr, expr) =>
+          inputPlanAttributes.find(attr => resolver(attr.name, keyAttr.name)).foreach { sourceAttr =>
+            stripCasts(expr) match {
+              case attr: Attribute if attr.exprId == sourceAttr.exprId =>
+              case matchedOn =>
+                throw new HoodieAnalysisException(s"Invalid MERGE INTO matching condition: the record key field " +
+                  s"'${keyAttr.name}' is matched on ${matchedOn.sql}, while the source column '${sourceAttr.name}' supplies the record key")
+            }
+          }
+        }
+    }
+
     val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
       case (keyAttr, _) => inputPlanAttributes.exists(attr => resolver(keyAttr.name, attr.name))
     }
@@ -1451,6 +1468,11 @@ object MergeIntoHoodieTableCommand {
   def stripCasting(expr: Expression): Expression = expr match {
     case EqualTo(MatchCast(leftExpr, leftTargetType, _, _), MatchCast(rightExpr, rightTargetType, _, _))
       if leftTargetType.sameType(rightTargetType) => EqualTo(leftExpr, rightExpr)
+    case _ => expr
+  }
+
+  private def stripCasts(expr: Expression): Expression = expr match {
+    case MatchCast(child, _, _, _) => stripCasts(child)
     case _ => expr
   }
 
