@@ -36,7 +36,7 @@ import org.apache.comet.serde.operator.HudiBaseFileScanSerde
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.PlanExpression
-import org.apache.spark.sql.comet.{CometHudiNativeScanExec, ScanListings, SerializedPlan}
+import org.apache.spark.sql.comet.{CometHudiNativeScanExec, SerializedPlan}
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
 import org.apache.spark.sql.execution.datasources.{FileFormat, FilePartition, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFileGroupReaderBasedFileFormat, ParquetOptions}
@@ -363,6 +363,10 @@ object HudiCometScanProvider extends SparkAdapterSupport {
 
   private val MaxListingsPerTimeline = 32
 
+  /** The partition directories `scan` selects, through the Spark version's adapter. */
+  def selectedPartitionDirectories(scan: FileSourceScanExec): Seq[PartitionDirectory] =
+    sparkAdapter.getSparkPartitionedFileUtils.selectedPartitionDirectories(scan)
+
   /** The partitions `scanExec` lists without its data filters: a superset of what it reads. */
   def eligibilityListing(
       scanExec: FileSourceScanExec,
@@ -370,7 +374,7 @@ object HudiCometScanProvider extends SparkAdapterSupport {
     val unfiltered = scanExec.copy(dataFilters = Nil)
     val queryTimestamp = scanExec.relation.fileFormat match {
       case format: HoodieFileGroupReaderBasedFileFormat => format.getQueryTimestamp
-      case _ => return ScanListings.partitionDirectories(unfiltered)
+      case _ => return selectedPartitionDirectories(unfiltered)
     }
     // Timelines compare by identity, and the file index lists from the one its meta client holds.
     val timeline = fileIndex.metaClient.getActiveTimeline
@@ -395,7 +399,7 @@ object HudiCometScanProvider extends SparkAdapterSupport {
     if (cached != null && (cached._1.get eq fileIndex)) {
       cached._2
     } else {
-      val listed = ScanListings.partitionDirectories(unfiltered)
+      val listed = selectedPartitionDirectories(unfiltered)
       byKey.put(key, (new WeakReference(fileIndex), listed))
       listed
     }

@@ -25,6 +25,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hadoop.fs.FileStatus
 import org.apache.spark.paths.SparkPath
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.execution.FileSourceScanExec
 
 /**
  * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] for Spark 3.5.
@@ -64,5 +65,9 @@ object HoodieSpark35PartitionedFileUtils extends HoodieSparkPartitionedFileUtils
 
   override def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory = {
     PartitionDirectory(internalRow, statuses.toArray)
+  }
+
+  override def selectedPartitionDirectories(scan: FileSourceScanExec): Seq[PartitionDirectory] = {
+    scan.selectedPartitions.toSeq
   }
 }

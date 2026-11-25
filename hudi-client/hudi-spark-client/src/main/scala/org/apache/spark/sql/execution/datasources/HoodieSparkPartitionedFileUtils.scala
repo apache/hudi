@@ -23,6 +23,7 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.execution.FileSourceScanExec
 
 /**
  * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] to adapt to type changes.
@@ -86,4 +87,11 @@ trait HoodieSparkPartitionedFileUtils extends Serializable {
    * SPARK-43039 FileIndex#PartitionDirectory refactored in Spark 3.5.0
    */
   def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory
+
+  /**
+   * Gets the partition directories a file scan selects, with each file's status and metadata as
+   * listed. `FileSourceScanExec#selectedPartitions` is an array of [[PartitionDirectory]] up to
+   * Spark 3.5 and a `ScanFileListing` from Spark 4.0.
+   */
+  def selectedPartitionDirectories(scan: FileSourceScanExec): Seq[PartitionDirectory]
 }
