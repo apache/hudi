@@ -133,12 +133,10 @@ case class CometHudiNativeScanExec(
     postedExecutionId = executionId
   }
 
-  /** The partitions the scan lists; Spark leaves the runtime filters out of that listing. */
-  @transient private lazy val listedPartitions: Seq[PartitionDirectory] =
-    HudiCometScanProvider.selectedPartitionDirectories(originalPlan)
-
   /** The listed partitions the resolved runtime filters keep, as Spark's own file scan prunes. */
   private def prunedPartitions: Seq[PartitionDirectory] = {
+    // Spark leaves the runtime filters out of the scan's listing.
+    val listedPartitions = HudiCometScanProvider.selectedPartitionDirectories(originalPlan)
     if (runtimeFilters.isEmpty) {
       listedPartitions
     } else {

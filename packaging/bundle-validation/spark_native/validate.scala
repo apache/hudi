@@ -225,8 +225,8 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
     spark.read.format("hudi").load(nullPartitions).selectExpr("uuid", "fare"))
   // The JVM read appends partition values parsed back from the path, which holds a timestamp
   // as epoch microseconds. Without ANSI casts they parse into wrong values or nulls; with them
-  // (the Spark 4 default) the cast fails while the read is planned, whether or not the native
-  // scan is enabled. Once the JVM read succeeds there, compare it as without ANSI casts.
+  // (the Spark 4 default) the cast fails while the file index lists partitions, before the
+  // native scan rule sees the plan, so enabling the native scan fails the same way.
   val timestampPartition = writeV8("native_scan_timestamp_partition_v8", "COPY_ON_WRITE", Overwrite,
     rows(0, 60).withColumn("partitionpath",
       org.apache.spark.sql.functions.expr("timestamp_micros((ts % 3) * 1000000 + 123456)")), "upsert")
