@@ -1390,7 +1390,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
         s"""
            |merge into $tableName h0
            |using (select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2025-07-29' as day, 12 as hh) s0
-           |on h0.id = s0.id
+           |on h0.id = s0.id and h0.name = s0.name
            |when matched then update set *
            |""".stripMargin)
       checkAnswer(query)(
