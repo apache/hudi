@@ -495,7 +495,8 @@ public final class HoodieSchemaUtils {
    *
    * @param originalSchema the source schema
    * @param fieldNames     the list of field names to include in the projection
-   * @return new HoodieSchema containing only the specified fields
+   * @return new HoodieSchema containing only the specified fields, with the name, namespace, doc and
+   *         schema-level properties of the original schema
    * @throws IllegalArgumentException if schema is null or not a record type
    * @since 1.2.0
    */
@@ -517,7 +518,7 @@ public final class HoodieSchemaUtils {
       }
     }
 
-    return HoodieSchema.createRecord(originalSchema.getName(), originalSchema.getNamespace().orElse(null), originalSchema.getDoc().orElse(null), projectedFields);
+    return createNewSchemaFromFieldsWithReference(originalSchema, projectedFields);
   }
 
   /**

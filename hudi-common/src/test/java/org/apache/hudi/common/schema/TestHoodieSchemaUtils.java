@@ -1138,6 +1138,26 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
+  public void testGenerateProjectionSchemaPreservesSchemaLevelProps() {
+    // Schema-level object props must survive projection, as they already do for the other record-rebuilding
+    // helpers here (removeFields, pruneDataSchema, addMetadataFields, appendFieldsToSchema, mergeSchemas).
+    HoodieSchema originalSchema = HoodieSchema.parse("{\"type\": \"record\", \"name\": \"testrec\", \"namespace\": \"example.ns\","
+        + " \"doc\": \"record doc\", \"custom.schema.prop\": \"value\", \"fields\": ["
+        + "{\"name\": \"timestamp\", \"type\": \"double\"}, {\"name\": \"_row_key\", \"type\": \"string\"},"
+        + "{\"name\": \"non_pii_col\", \"type\": \"string\"}]}");
+
+    HoodieSchema projected = HoodieSchemaUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "non_pii_col"));
+    assertEquals("value", projected.getProp("custom.schema.prop"));
+    assertEquals(Arrays.asList("_row_key", "non_pii_col"),
+        projected.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+    assertEquals("example.ns.testrec", projected.getFullName());
+    assertEquals(Option.of("record doc"), projected.getDoc());
+
+    // Callers such as MERGE INTO pass the projection on as a string, so the prop must survive a round trip.
+    assertEquals("value", HoodieSchema.parse(projected.toString()).getProp("custom.schema.prop"));
+  }
+
+  @Test
   public void testGenerateProjectionSchemaIgnoresDefaultLocale() {
     // Under tr-TR, String#toLowerCase() maps an upper-case I to dotless-i (U+0131), so a default-locale lowercase
     // on one side of the lookup and Locale.ROOT on the other (HiveHoodieReaderContext) cannot match for any name
