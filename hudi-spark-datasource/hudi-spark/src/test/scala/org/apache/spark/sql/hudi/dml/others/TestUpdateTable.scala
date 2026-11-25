@@ -830,4 +830,25 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test Update Table Refuses An Assignment To A Record Key Field Nested In A Struct") {
+    if (gteqSpark3_5) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  s struct<c1:int, c2:int>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (primaryKey = 's.c1', type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, named_struct('c1', 1, 'c2', 2)")
+        checkExceptionContain(s"update $tableName set s.c1 = 9 where id = 1")(
+          "Detected disallowed assignment clause in UPDATE statement for record key field `s.c1`")
+        checkAnswer(s"select id, s from $tableName")(Seq(1, Row(1, 2)))
+      }
+    }
+  }
 }
