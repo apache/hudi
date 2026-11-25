@@ -39,6 +39,9 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSpa
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, NoSuchTableException}
+import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.connector.catalog.CatalogManager
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog
@@ -237,22 +240,21 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   /**
    * Drops the tables a test left behind. Per-suite mode owns the whole catalog. Shared mode shares the
-   * external catalog with every other suite in the JVM, so it drops only this suite's generateTableName
-   * tables plus any table whose name is not of that form (fixed names and temp views); under serial
-   * execution those can only come from the test that just ran. Fixed names are renamed in a later step.
+   * external catalog with every other suite in the JVM and those suites may be mid-test, so it drops
+   * only the tables whose name carries this suite's generateTableName prefix, plus its own temp views.
    */
-  private def dropSuiteTables(): Unit = {
+  protected def dropSuiteTables(): Unit = {
     val catalog = spark.sessionState.catalog
     catalog.listDatabases().foreach { db =>
-      val tables = catalog.listTables(db)
-      val toDrop = if (sharedSessionEnabled) tables.filter(table => ownsTable(table.table)) else tables
+      val tables = ignoringConcurrentDrops(Seq.empty[TableIdentifier])(catalog.listTables(db))
+      val toDrop = if (sharedSessionEnabled) tables.filter(table => ownsTable(catalog, table)) else tables
       toDrop.foreach { table =>
         if (sharedSessionEnabled && !catalog.isTempView(table)) {
           // Shared mode keeps one index map per table; drop this table's entry with the table.
           Try(new StoragePath(catalog.getTableMetadata(table).location))
             .foreach(path => HoodieInMemoryHashIndex.clear(path))
         }
-        catalog.dropTable(table, true, true)
+        ignoringConcurrentDrops(())(catalog.dropTable(table, true, true))
       }
     }
     if (sharedSessionEnabled) {
@@ -264,12 +266,24 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   /**
-   * Shared mode: a table is this suite's if its name starts with this suite's prefix, or if it does not start with
-   * any suite's generated name. A prefix match, not a full one, so a name built from a generated one
-   * (`${tableName}_ro`, `${generateTableName}_timestamp_type`) stays with the suite that generated it.
+   * Shared mode: another suite may drop its own database between this suite listing it and using it, so
+   * a missing database or table yields the fallback. Any other failure, and every failure in per-suite
+   * mode, propagates.
    */
-  private def ownsTable(name: String): Boolean = {
-    name.startsWith(tableNamePrefix) || !HoodieSparkSqlTestBase.GENERATED_TABLE_NAME.matcher(name).lookingAt()
+  private def ignoringConcurrentDrops[T](fallback: => T)(body: => T): T = {
+    try {
+      body
+    } catch {
+      case _: NoSuchDatabaseException | _: NoSuchTableException if sharedSessionEnabled => fallback
+    }
+  }
+
+  /**
+   * Shared mode: a table is this suite's if generateTableName produced its name (derived names such as
+   * `s"${generateTableName}_pt"` keep the prefix), or if it is a temp view, which is session-scoped.
+   */
+  private def ownsTable(catalog: SessionCatalog, table: TableIdentifier): Boolean = {
+    catalog.isTempView(table) || table.table.startsWith(tableNamePrefix)
   }
 
   protected lazy val tableNamePrefix: String = s"h${getClass.getSimpleName.toLowerCase}_"
@@ -597,9 +611,6 @@ object HoodieSparkSqlTestBase {
 
   // Read side held by every suite for its whole run, write side by an ExclusiveSuite for its whole run.
   val suiteLock = new ReentrantReadWriteLock(true)
-
-  // Table names produced by generateTableName (without a database prefix); names built from one start with it.
-  private[common] val GENERATED_TABLE_NAME: Pattern = Pattern.compile("h[a-z0-9]+_[0-9]+")
 
   private[common] lazy val sharedWarehouse: File = {
     val dir = Utils.createTempDir()
