@@ -20,12 +20,14 @@ package org.apache.hudi.sink.clustering;
 
 import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -96,7 +98,7 @@ class TestClusteringOperator {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
     conf.set(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT, 2048L);
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
-    HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+    HoodieFlinkTable table = mockNativeTable();
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     when(writeClient.getHoodieTable()).thenReturn(table);
 
@@ -139,7 +141,7 @@ class TestClusteringOperator {
     conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
     conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
-    HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+    HoodieFlinkTable table = mockNativeTable();
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     when(writeClient.getHoodieTable()).thenReturn(table);
 
@@ -183,7 +185,7 @@ class TestClusteringOperator {
   void testReadAndWriteRecordsFromBaseFiles() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
-    HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+    HoodieFlinkTable table = mockNativeTable();
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     HoodieStorage storage = mock(HoodieStorage.class);
     HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
@@ -239,7 +241,7 @@ class TestClusteringOperator {
   void testCloseReaderAndWriterWhenWritingFails() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
-    HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+    HoodieFlinkTable table = mockNativeTable();
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     HoodieStorage storage = mock(HoodieStorage.class);
     HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
@@ -295,13 +297,14 @@ class TestClusteringOperator {
   void testReadAndWriteRecordsFromFileSliceWithLogs() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
-    HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+    HoodieFlinkTable table = mockNativeTable();
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     org.apache.hudi.common.table.read.HoodieRecordReader<RowData> recordReader =
         mock(org.apache.hudi.common.table.read.HoodieRecordReader.class);
     RowData row = mock(RowData.class);
     when(writeClient.getHoodieTable()).thenReturn(table);
+    when(metaClient.getTableFormat()).thenReturn(new NativeTableFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
     when(table.getMetaClient()).thenReturn(metaClient);
     when(recordReader.getClosableIterator()).thenReturn(
         ClosableIterator.wrap(Collections.singletonList(row).iterator()));
@@ -358,7 +361,7 @@ class TestClusteringOperator {
     // that rolls the clustering instant back.
     conf.set(FlinkOptions.CLUSTERING_SORT_COLUMNS, "f_map");
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
-    HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+    HoodieFlinkTable table = mockNativeTable();
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     when(writeClient.getHoodieTable()).thenReturn(table);
     Throwable[] failure = new Throwable[1];
@@ -413,7 +416,7 @@ class TestClusteringOperator {
     // Padded on purpose: the config list is user-written ("a, b"), and the operator trims each name before lookup.
     conf.set(FlinkOptions.CLUSTERING_SORT_COLUMNS, " " + TestConfigurations.ROW_TYPE.getFieldNames().get(0) + " ");
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
-    HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+    HoodieFlinkTable table = mockNativeTable();
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     HoodieStorage storage = mock(HoodieStorage.class);
     HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
@@ -483,5 +486,16 @@ class TestClusteringOperator {
     groupInfo.setOperations(operations);
     groupInfo.setNumOutputGroups(1);
     return new ClusteringPlanEvent(instant, groupInfo, Map.of());
+  }
+
+  /**
+   * A mocked table whose meta client loads the native table format, which the operator checks when it opens.
+   */
+  private static HoodieFlinkTable mockNativeTable() {
+    HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableFormat()).thenReturn(new NativeTableFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
+    when(table.getMetaClient()).thenReturn(metaClient);
+    return table;
   }
 }
