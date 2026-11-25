@@ -267,6 +267,15 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
       }
     }
 
+    if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ && config.shouldWritePartialUpdates()
+        && !table.getIndex().canIndexLogFiles()) {
+      // The merge that packs inserts into a small base file takes every record of its file group, and would take
+      // the partial updates this write makes to the records of the file for full records
+      Set<String> updatedFileIds = workloadProfile.getWorkloadStat(partitionPath).getUpdateLocationToCount().keySet();
+      return smallFileLocations.stream()
+          .filter(smallFile -> !updatedFileIds.contains(smallFile.location.getFileId()))
+          .collect(Collectors.toList());
+    }
     return smallFileLocations;
   }
 
