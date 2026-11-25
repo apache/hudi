@@ -748,8 +748,11 @@ object DataSourceWriteOptions {
       + "than a single unconditional DELETE, and shuffles the incoming records by record key after the index lookup. "
       + "When off, the source rows that match the same target row are combined into one update, by the ordering "
       + "fields of the table, or in no defined order without them. Unless set, the check is on only for a table of a "
-      + "non-native table format, so a MERGE INTO on a native table keeps combining such source rows. A table with "
-      + "the bucket index does not run the check.")
+      + "non-native table format, so a MERGE INTO on a native table keeps combining such source rows. On a table "
+      + "with a record key, the check is not supported with the bucket index, the partitioned record level index and an "
+      + "index class: a statement fails when this is set to true, and runs without the check when it is not set. Setting "
+      + "it to true also fails a statement with insert clauses whose only matched clause is a conditional delete, on a "
+      + "merge-on-read table without ordering fields and with a SIMPLE or BLOOM index.")
 
   val NONE_INSERT_DUP_POLICY = "none"
   val DROP_INSERT_DUP_POLICY = "drop"

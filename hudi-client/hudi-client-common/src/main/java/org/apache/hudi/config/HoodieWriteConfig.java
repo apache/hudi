@@ -546,8 +546,9 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "instead of combining them into one update. Incoming records with a key the table does not hold yet are "
           + "still combined as " + COMBINE_BEFORE_UPSERT.key() + " sets. Spark SQL MERGE INTO turns this on for a "
           + "statement with a WHEN MATCHED clause on a table of a non-native table format by default, see "
-          + "hoodie.spark.sql.merge.into.cardinality.check. The bucket index locates new keys by their bucket, so the "
-          + "check does not run with it.");
+          + "hoodie.spark.sql.merge.into.cardinality.check. The check does not run with the bucket index, which locates "
+          + "new keys by their bucket, and with the partitioned record level index, which locates a key in each "
+          + "partition that holds it.");
 
   public static final ConfigProperty<String> COMBINE_BEFORE_DELETE = ConfigProperty
       .key("hoodie.combine.before.delete")

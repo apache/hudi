@@ -596,11 +596,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_ORIGINAL_AVRO_PAYLOAD -> hoodieCatalogTable.tableConfig.getPayloadClass
     )
 
-    val checksCardinality = shouldCheckCardinality(parameters)
-    writeParams += HoodieWriteConfig.UPSERT_FAIL_ON_MULTIPLE_MATCHES.key -> checksCardinality.toString
-    if (checksCardinality) {
+    val asksForCheck = asksForCardinalityCheck(parameters)
+    writeParams += HoodieWriteConfig.UPSERT_FAIL_ON_MULTIPLE_MATCHES.key ->
+      (asksForCheck && indexSupportsCardinalityCheck(parameters)).toString
+    if (asksForCheck) {
       // The check combines the source records of a key the table does not hold only with this on, which a table
-      // without ordering fields leaves off
+      // without ordering fields leaves off. Without the check, it keeps them from becoming two rows of the key.
       writeParams += HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key -> "true"
     }
 
@@ -631,7 +632,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * is on only for a table of a non-native table format, as a native table combined such source rows before it. The
    * format is the one the table loads, which is native for a name that no table format implementation answers to.
    */
-  private def shouldCheckCardinality(parameters: Map[String, String]): Boolean = {
+  private def asksForCardinalityCheck(parameters: Map[String, String]): Boolean = {
     parameters.get(MERGE_INTO_CARDINALITY_CHECK.key).map(_.toBoolean).getOrElse(
       hoodieCatalogTable.metaClient.getTableFormat.getName != NativeTableFormat.TABLE_FORMAT) &&
       (mergeInto.matchedActions match {
@@ -640,6 +641,54 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         case _ => true
       })
   }
+
+  /**
+   * Whether the index of the write locates a source record only at the target records it matches. The write of a table
+   * without a record key takes the locations from the join. An index class takes precedence over the index type, and
+   * whether it supports the check is not known. The index types listed do not, see
+   * [[HoodieIndex#locatesOnlyMatchingRecords]].
+   */
+  private def indexSupportsCardinalityCheck(parameters: Map[String, String]): Boolean =
+    !hasPrimaryKey() ||
+      (indexClass(parameters).isEmpty && !Seq(HoodieIndex.IndexType.BUCKET, HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
+        .exists(indexType => parameters.get(HoodieIndexConfig.INDEX_TYPE.key).contains(indexType.name)))
+
+  private def indexClass(parameters: Map[String, String]): Option[String] =
+    parameters.get(HoodieIndexConfig.INDEX_CLASS_NAME.key).filter(_.nonEmpty)
+
+  /**
+   * Fails a statement that sets the check when the write cannot run it, or when the upsert that the check needs would
+   * not insert a source record that matches no target record.
+   */
+  private def checkCardinalityCheckSupported(parameters: Map[String, String]): Unit = {
+    if (parameters.get(MERGE_INTO_CARDINALITY_CHECK.key).exists(_.toBoolean) && asksForCardinalityCheck(parameters)) {
+      val unsupported = if (!indexSupportsCardinalityCheck(parameters)) {
+        Some(indexClass(parameters).map(name => s"with the index class $name")
+          .getOrElse(s"with the index type ${parameters(HoodieIndexConfig.INDEX_TYPE.key)}"))
+      } else if (upsertMissesInsertsOfDeletedKeys(parameters)) {
+        Some("for a statement with insert clauses whose only matched clause is a conditional delete, on a merge-on-read table "
+          + "without ordering fields and with a SIMPLE or BLOOM index")
+      } else {
+        None
+      }
+      unsupported.foreach { reason =>
+        throw new HoodieNotSupportedException(s"${MERGE_INTO_CARDINALITY_CHECK.key} is not supported $reason. "
+          + "Set it to false to run the MERGE INTO without the check.")
+      }
+    }
+  }
+
+  /**
+   * Whether asking for the check makes an upsert of a statement whose upsert would not insert a source record that
+   * matches no target record. On a merge-on-read table, the simple and bloom indexes locate a key deleted in a log
+   * file, and the append to the log files then evaluates the matched clauses on the source record. The global indexes
+   * read the located records and find the key deleted.
+   */
+  private def upsertMissesInsertsOfDeletedKeys(parameters: Map[String, String]): Boolean =
+    targetTableType == MOR_TABLE_TYPE_OPT_VAL && hasPrimaryKey() && updatingActions.isEmpty && insertingActions.nonEmpty &&
+      StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava)) &&
+      Seq(HoodieIndex.IndexType.SIMPLE, HoodieIndex.IndexType.BLOOM).exists(
+        _.name == parameters.getOrElse(HoodieIndexConfig.INDEX_TYPE.key, HoodieIndex.IndexType.SIMPLE.name))
 
   private def isPartialUpdateActionForMOR(parameters: Map[String, String]) = {
     (evaluatesMatchedClausesOnSourceOnly
@@ -663,7 +712,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private def getOperationType(parameters: Map[String, String]) = {
     // The cardinality check runs on the records an upsert locates
     if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava)) && updatingActions.isEmpty
-      && !shouldCheckCardinality(parameters)) {
+      && !asksForCardinalityCheck(parameters)) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL
@@ -974,6 +1023,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     checkDeletingActions(deletingActions, props)
     checkMatchedConditions()
     checkInsertsOfReadTargetStatement(props)
+    checkCardinalityCheckSupported(props)
   }
 
   /**

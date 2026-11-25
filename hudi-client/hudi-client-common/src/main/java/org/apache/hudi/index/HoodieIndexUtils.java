@@ -676,7 +676,8 @@ public class HoodieIndexUtils {
     // completely new records
     HoodieData<HoodieRecord<R>> taggedNewRecords = incomingRecordsAndLocations.filter(p -> !p.getRight().isPresent()).map(Pair::getLeft);
     // the records found in existing base files
-    HoodieData<HoodieRecord<R>> untaggedUpdatingRecords = updatedConfig.shouldFailUpsertOnMultipleMatches()
+    boolean failOnMultipleMatches = updatedConfig.shouldFailUpsertOnMultipleMatches() && hoodieTable.getIndex().locatesOnlyMatchingRecords();
+    HoodieData<HoodieRecord<R>> untaggedUpdatingRecords = failOnMultipleMatches
         ? distinctLocatedRecordsFailingOnMultipleMatches(incomingRecordsAndLocations, updatedConfig.getGlobalIndexReconcileParallelism())
         : incomingRecordsAndLocations.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
             .distinctWithKey(HoodieRecord::getRecordKey, updatedConfig.getGlobalIndexReconcileParallelism());
@@ -724,7 +725,7 @@ public class HoodieIndexUtils {
             return Collections.singletonList(merged.newInstance(existing.getKey())).iterator();
           }
         });
-    if (updatedConfig.shouldFailUpsertOnMultipleMatches()) {
+    if (failOnMultipleMatches) {
       // The check leaves one incoming record per key. Merged with each row of a key that a file group holds more
       // than once, it gives a record per row, which the check after tagging would take for more than one incoming
       // record. The write of a file group keeps one record per key, so keep one per file group.

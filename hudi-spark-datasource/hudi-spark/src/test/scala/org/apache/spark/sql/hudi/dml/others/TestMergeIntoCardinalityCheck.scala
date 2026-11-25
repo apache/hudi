@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions.MERGE_INTO_CARDINALITY_CHECK
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.exception.HoodieMultipleMatchesException
+import org.apache.hudi.exception.{HoodieMultipleMatchesException, HoodieNotSupportedException}
 
 import org.apache.spark.SparkRuntimeException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -302,6 +302,203 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
           }
           checkAnswer(s"select id, name, ts from $tableName order by id")(
             Seq(1, "a1", 1000), Seq(7, "a7", 1000), Seq(8, "a8", 1000))
+        }
+      }
+    }
+  }
+
+  Seq("SIMPLE", "BLOOM").foreach { indexType =>
+    test(s"Test MERGE INTO cardinality check with a conditional delete and an insert clause on a mor table ($indexType index)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf("hoodie.index.type" -> indexType) {
+          createTable(tableName, tmp.getCanonicalPath, "mor", "primaryKey = 'id'",
+            "'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'", "'hoodie.table.format' = 'test-format'")
+          spark.sql(s"insert into $tableName values (1, 'a1', 1000), (2, 'a2', 1000), (4, 'a4', 1000)")
+          // The delete goes to a log file, while the base file still holds id 1
+          spark.sql(s"delete from $tableName where id = 1")
+          val mergeStatement =
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 'b1' as name, 1001 as ts union all select 2, 'del', 1001
+               |  union all select 3, 'b3', 1001 union all select 4, 'keep', 1001) s on t.id = s.id
+               |when matched and s.name = 'del' then delete
+               |when not matched then insert *
+             """.stripMargin
+          withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+            val e = intercept[HoodieNotSupportedException](spark.sql(mergeStatement))
+            assert(e.getMessage.contains(s"${MERGE_INTO_CARDINALITY_CHECK.key} is not supported for a statement"), e.getMessage)
+          }
+          checkAnswer(s"select id, name, ts from $tableName order by id")(Seq(2, "a2", 1000), Seq(4, "a4", 1000))
+          // With the default for the table format, the statement is an upsert that applies the delete. Id 1 is left out,
+          // as the upsert does not insert a key deleted in a log file.
+          spark.sql(mergeStatement)
+          checkAnswer(s"select id, name, ts from $tableName where id <> 1 order by id")(Seq(3, "b3", 1001), Seq(4, "a4", 1000))
+        }
+      }
+    }
+  }
+
+  test("Test MERGE INTO cardinality check with a conditional delete and a global index on a mor table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE", MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+        createTable(tableName, tmp.getCanonicalPath, "mor", "primaryKey = 'id'", "'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'")
+        spark.sql(s"insert into $tableName values (1, 'a1', 1000), (2, 'a2', 1000)")
+        // The delete goes to a log file, and the index finds the key deleted
+        spark.sql(s"delete from $tableName where id = 1")
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'b1' as name, 1001 as ts union all select 3, 'b3', 1001) s on t.id = s.id
+             |when matched and s.name = 'del' then delete
+             |when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, ts from $tableName order by id")(
+          Seq(1, "b1", 1001), Seq(2, "a2", 1000), Seq(3, "b3", 1001))
+      }
+    }
+  }
+
+  // (table type, index type). The record level index is not built, so it falls back to the simple index.
+  Seq(("cow", "BUCKET"), ("cow", "RECORD_LEVEL_INDEX"), ("mor", "BUCKET")).foreach { case (tableType, indexType) =>
+    test(s"Test MERGE INTO with the default check and an index that does not support it ($tableType, $indexType index)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf("hoodie.index.type" -> indexType, "hoodie.parquet.small.file.limit" -> "0") {
+          createTable(tableName, tmp.getCanonicalPath, tableType, "primaryKey = 'id'",
+            "'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'", "'hoodie.table.format' = 'test-format'",
+            "hoodie.bucket.index.num.buckets = '1'")
+          spark.sql(s"insert into $tableName values (1, 'a1', 1000), (2, 'a2', 1000)")
+          // The statement is an upsert without the check, which applies the delete
+          spark.sql(
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 'del' as name, 1001 as ts union all select 1, 'del', 1002) s on t.id = s.id
+               |when matched and s.name = 'del' then delete
+             """.stripMargin)
+          checkAnswer(s"select id, name, ts from $tableName")(Seq(2, "a2", 1000))
+          // The source rows of a new key are combined into one insert
+          spark.sql(
+            s"""
+               |merge into $tableName t
+               |using (select 7 as id, 'x' as name, 1001 as ts union all select 7, 'y', 1001) s on t.id = s.id
+               |when matched then update set *
+               |when not matched then insert *
+             """.stripMargin)
+          checkAnswer(s"select id, count(1) from $tableName group by id order by id")(Seq(2, 1), Seq(7, 1))
+        }
+      }
+    }
+  }
+
+  // The write of a table without a record key does not use the index type
+  test("Test MERGE INTO cardinality check on a table without a record key and the record level index type") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      withSQLConf("hoodie.index.type" -> "RECORD_LEVEL_INDEX", MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+        createTable(tableName, tmp.getCanonicalPath, "cow", "'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'")
+        spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+        assertCardinalityViolation(
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1002) s on t.id = s.id
+             |when matched then update set *
+           """.stripMargin)
+        checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "a1", 1000))
+      }
+    }
+  }
+
+  test("Test MERGE INTO cardinality check with an index class") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      createTable(tableName, tmp.getCanonicalPath, "cow", "primaryKey = 'id'", "preCombineField = 'ts'")
+      spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+      val indexClass = "org.apache.hudi.index.bucket.HoodieSimpleBucketIndex"
+      withSQLConf("hoodie.index.type" -> "SIMPLE", "hoodie.index.class" -> indexClass, MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+        val e = intercept[HoodieNotSupportedException](spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'b1' as name, 1001 as ts) s on t.id = s.id
+             |when matched then update set *
+           """.stripMargin))
+        assert(e.getMessage.contains(
+          s"${MERGE_INTO_CARDINALITY_CHECK.key} is not supported with the index class $indexClass"), e.getMessage)
+      }
+      checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "a1", 1000))
+    }
+  }
+
+  test("Test MERGE INTO cardinality check with a key in two partitions") {
+    withTempDir { tmp =>
+      // (index type, whether the check supports it)
+      Seq(("SIMPLE", true), ("RECORD_LEVEL_INDEX", false)).foreach { case (indexType, supported) =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  ts int,
+             |  dt string
+             |) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.index.type = '$indexType',
+             |  hoodie.metadata.record.level.index.enable = '${!supported}'
+             | )
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 1000, 'p1'), (1, 'a2', 1000, 'p2')")
+        val mergeStatement =
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'x' as name, 1001 as ts, 'p1' as dt union all select 1, 'y', 1001, 'p2') s
+             |on t.id = s.id and t.dt = s.dt
+             |when matched then update set *
+           """.stripMargin
+        withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+          if (supported) {
+            spark.sql(mergeStatement)
+            checkAnswer(s"select id, name, ts, dt from $tableName")(Seq(1, "x", 1001, "p1"), Seq(1, "y", 1001, "p2"))
+          } else {
+            val e = intercept[HoodieNotSupportedException](spark.sql(mergeStatement))
+            assert(e.getMessage.contains(
+              s"${MERGE_INTO_CARDINALITY_CHECK.key} is not supported with the index type $indexType"), e.getMessage)
+            checkAnswer(s"select id, name, ts, dt from $tableName")(Seq(1, "a1", 1000, "p1"), Seq(1, "a2", 1000, "p2"))
+          }
+        }
+      }
+    }
+  }
+
+  Seq("BUCKET", "RECORD_LEVEL_INDEX").foreach { indexType =>
+    test(s"Test MERGE INTO cardinality check with an index that does not support it ($indexType index)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        createTable(tableName, tmp.getCanonicalPath, "cow", "primaryKey = 'id'", "preCombineField = 'ts'",
+          "'hoodie.table.format' = 'test-format'")
+        withSQLConf("hoodie.index.type" -> indexType) {
+          spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+          val mergeStatement =
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1002) s on t.id = s.id
+               |when matched then update set *
+             """.stripMargin
+          withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+            val e = intercept[HoodieNotSupportedException](spark.sql(mergeStatement))
+            assert(e.getMessage.contains(
+              s"${MERGE_INTO_CARDINALITY_CHECK.key} is not supported with the index type $indexType"), e.getMessage)
+          }
+          checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "a1", 1000))
+          // Off unless set, also for a table of a non-native table format: the source rows are combined
+          spark.sql(mergeStatement)
+          checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "c1", 1002))
         }
       }
     }

@@ -46,7 +46,6 @@ import org.apache.hudi.exception.HoodieMultipleMatchesException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.bucket.HoodieBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -114,11 +113,10 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
   }
 
   private static boolean shouldFailOnMultipleMatches(HoodieTable<?, ?, ?, ?> table, WriteOperationType operationType) {
-    // A bucket index locates every record of an existing bucket, including one with a new key
     return operationType == WriteOperationType.UPSERT
         && table.getConfig().shouldFailUpsertOnMultipleMatches()
         && table.getIndex().requiresTagging(operationType)
-        && !(table.getIndex() instanceof HoodieBucketIndex);
+        && table.getIndex().locatesOnlyMatchingRecords();
   }
 
   /**

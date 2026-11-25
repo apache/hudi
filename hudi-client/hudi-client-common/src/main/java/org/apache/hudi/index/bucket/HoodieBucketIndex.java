@@ -151,6 +151,12 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   }
 
   @Override
+  public boolean locatesOnlyMatchingRecords() {
+    // Every record of an existing bucket is located, including one with a new key
+    return false;
+  }
+
+  @Override
   public boolean isImplicitWithStorage() {
     return true;
   }
