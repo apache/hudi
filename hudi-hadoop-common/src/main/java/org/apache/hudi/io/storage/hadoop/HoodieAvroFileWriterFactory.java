@@ -188,12 +188,14 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   /**
    * Defaults the Parquet list layout of a table whose format is not native to the standard three-level layout,
    * which the Spark row writer also writes by default and which can hold a null array element, unlike the legacy
-   * two-level layout parquet-avro defaults to. The layout the storage configuration sets wins, then the one the
-   * write config asks for; native tables keep the parquet-avro default.
+   * two-level layout parquet-avro defaults to. As in the Spark row writer, an explicit
+   * {@link HoodieStorageConfig#PARQUET_WRITE_LEGACY_FORMAT_ENABLED} wins, then the layout the storage configuration
+   * sets, then the one the write config asks for; native tables keep the parquet-avro default.
    */
   private static StorageConfiguration withListLayout(StorageConfiguration storageConf, HoodieConfig config) {
     if (NativeTableFormat.TABLE_FORMAT.equalsIgnoreCase(config.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
-        || storageConf.getString(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE).isPresent()) {
+        || (!config.contains(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED)
+            && storageConf.getString(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE).isPresent())) {
       return storageConf;
     }
     StorageConfiguration listLayoutStorageConf = storageConf.newInstance();

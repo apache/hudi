@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.HoodieParquetConfigInjector;
@@ -79,6 +80,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -112,6 +114,21 @@ public class ParquetUtils extends FileFormatUtils {
   public static boolean isLegacyListFormatConfigured(HoodieConfig config) {
     return Boolean.parseBoolean(config.getStringOrDefault(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED, "false"))
         || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
+  }
+
+  /**
+   * Returns the configs of the given config that choose the Parquet list layout a writer of a Parquet log block
+   * writes: the table format and the legacy list layout settings, see {@link #isLegacyListFormatConfigured}.
+   */
+  public static Map<String, String> getListLayoutConfigs(HoodieConfig config) {
+    Map<String, String> configs = new HashMap<>();
+    for (String key : Arrays.asList(HoodieTableConfig.TABLE_FORMAT.key(),
+        HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE)) {
+      if (config.contains(key)) {
+        configs.put(key, config.getString(key));
+      }
+    }
+    return configs;
   }
 
   /**

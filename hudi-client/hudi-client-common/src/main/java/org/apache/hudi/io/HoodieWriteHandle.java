@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.FormatMetaColumn;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -112,6 +114,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    */
   protected final boolean isSecondaryIndexStatsStreamingWritesEnabled;
   protected List<HoodieIndexDefinition> secondaryIndexDefns = Collections.emptyList();
+  // The write config with the table format of the table, see getFileWriterConfig
+  private HoodieConfig fileWriterConfig;
 
   @Getter(AccessLevel.PROTECTED)
   private boolean closed = false;
@@ -263,6 +267,23 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
     return new StoragePath(path,
         FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()));
+  }
+
+  /**
+   * Returns the config of the file writers of the handle: the write config, naming the table format of the table when
+   * the write config does not, as a file writer derives defaults of a non-native table format from it.
+   */
+  protected HoodieConfig getFileWriterConfig() {
+    if (fileWriterConfig == null) {
+      HoodieTableConfig tableConfig = hoodieTable.getMetaClient().getTableConfig();
+      if (config.contains(HoodieTableConfig.TABLE_FORMAT) || !tableConfig.contains(HoodieTableConfig.TABLE_FORMAT)) {
+        fileWriterConfig = config;
+      } else {
+        fileWriterConfig = new HoodieConfig(TypedProperties.copy(config.getProps()));
+        fileWriterConfig.setValue(HoodieTableConfig.TABLE_FORMAT, tableConfig.getString(HoodieTableConfig.TABLE_FORMAT));
+      }
+    }
+    return fileWriterConfig;
   }
 
   /**

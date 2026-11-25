@@ -22,9 +22,15 @@ import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
@@ -53,6 +59,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -85,7 +92,12 @@ class TestHoodieAvroParquetListLayout {
         Arguments.of(NON_NATIVE_FORMAT, none, none, true),
         Arguments.of(NON_NATIVE_FORMAT, Collections.singletonMap(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "true"), none, false),
         Arguments.of(NON_NATIVE_FORMAT, none, Collections.singletonMap(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "true"), false),
-        Arguments.of(NON_NATIVE_FORMAT, none, Collections.singletonMap(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "true"), false));
+        Arguments.of(NON_NATIVE_FORMAT, none, Collections.singletonMap(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "true"), false),
+        // An explicit hoodie.parquet.writelegacyformat.enabled wins over the storage configuration, as in the Spark row writer
+        Arguments.of(NON_NATIVE_FORMAT, Collections.singletonMap(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"),
+            Collections.singletonMap(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "true"), false),
+        Arguments.of(NON_NATIVE_FORMAT, Collections.singletonMap(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "true"),
+            Collections.singletonMap(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "false"), true));
   }
 
   @ParameterizedTest
@@ -133,6 +145,30 @@ class TestHoodieAvroParquetListLayout {
 
     assertEquals("list", repeatedListFieldName(path));
     assertEquals(Collections.singletonList(values), readValues(storage, path));
+  }
+
+  @Test
+  void testListLayoutOfParquetLogBlock() throws Exception {
+    HoodieStorage storage = HoodieTestUtils.getStorage(tmpDir.toString());
+    HoodieConfig config = HoodieStorageConfig.newBuilder().build();
+    config.setValue(HoodieTableConfig.TABLE_FORMAT, NON_NATIVE_FORMAT);
+    List<List<Integer>> values = Arrays.asList(Arrays.asList(1, null, 3), Collections.<Integer>singletonList(null));
+    List<HoodieRecord> records = new ArrayList<>();
+    for (int i = 0; i < values.size(); i++) {
+      records.add(new HoodieAvroIndexedRecord(new HoodieKey(String.valueOf(i), ""), record(i, values.get(i))));
+    }
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, SCHEMA.toString());
+    HoodieParquetDataBlock block = new HoodieParquetDataBlock(records, header, "_row_key", "gzip", 0.1, true,
+        ParquetUtils.getListLayoutConfigs(config));
+
+    StoragePath path = new StoragePath(tmpDir.resolve("list_layout_log_block.parquet").toString());
+    try (OutputStream outputStream = new FileOutputStream(path.toString())) {
+      block.getContentBytes(storage).writeTo(outputStream);
+    }
+
+    assertEquals("list", repeatedListFieldName(path));
+    assertEquals(values, readValues(storage, path));
   }
 
   private static GenericRecord record(int key, List<Integer> values) {
