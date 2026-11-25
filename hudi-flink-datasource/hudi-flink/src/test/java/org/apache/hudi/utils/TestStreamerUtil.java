@@ -201,6 +201,17 @@ class TestStreamerUtil {
   }
 
   @Test
+  void testInitTableKeepsTableFormatConfigs() throws IOException {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    String formatConfigKey = HoodieTableConfig.TABLE_FORMAT.key() + ".example.catalog";
+    conf.setString(formatConfigKey, "value1");
+
+    HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
+
+    assertEquals("value1", metaClient.getTableConfig().getProps().getProperty(formatConfigKey));
+  }
+
+  @Test
   void testInitInsertTableStorageLayout() throws IOException {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.OPERATION, "insert");
@@ -263,6 +274,8 @@ class TestStreamerUtil {
     configs.put("hoodie.timeline.history.path", "history");
     if (partitioned) {
       configs.put("hoodie.table.partition.fields", "p0,p1");
+      configs.put("hoodie.datasource.write.partitionpath.timestamp.fractional.seconds",
+          String.valueOf(version.greaterThanOrEquals(HoodieTableVersion.TEN)));
     }
     if (version.lesserThan(HoodieTableVersion.EIGHT)) {
       configs.put("hoodie.timeline.layout.version", "1");

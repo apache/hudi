@@ -166,6 +166,13 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
 
   protected Boolean isDelete;
 
+  /**
+   * The record of another file group this record replaces, set when a write moves the new version of a record to
+   * another file group and the table format declares format meta columns.
+   */
+  @Getter
+  protected ReplacedRecord replacedRecord;
+
   public HoodieRecord(HoodieKey key, T data) {
     this(key, data, null, Option.empty());
   }
@@ -212,6 +219,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
     this.ignoreIndexUpdate = record.ignoreIndexUpdate;
+    this.replacedRecord = record.replacedRecord;
   }
 
   public abstract HoodieRecord<T> newInstance();
@@ -318,6 +326,13 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return this.ignoreIndexUpdate;
   }
 
+  /**
+   * Sets the record of another file group this record replaces, see {@link ReplacedRecord}.
+   */
+  public void setReplacedRecord(ReplacedRecord replacedRecord) {
+    this.replacedRecord = replacedRecord;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -408,6 +423,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     kryo.writeObjectOrNull(output, isDelete, Boolean.class);
     kryo.writeClassAndObject(output, orderingValue);
     kryo.writeClassAndObject(output, metaData == null ? null : metaData.orElse(null));
+    kryo.writeObjectOrNull(output, replacedRecord, ReplacedRecord.class);
   }
 
   /**
@@ -427,6 +443,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.isDelete = kryo.readObjectOrNull(input, Boolean.class);
     this.orderingValue = (Comparable<?>) kryo.readClassAndObject(input);
     this.metaData = Option.ofNullable((Map<String, String>) kryo.readClassAndObject(input));
+    this.replacedRecord = kryo.readObjectOrNull(input, ReplacedRecord.class);
 
     // NOTE: We're always seal object after deserialization
     this.sealed = true;

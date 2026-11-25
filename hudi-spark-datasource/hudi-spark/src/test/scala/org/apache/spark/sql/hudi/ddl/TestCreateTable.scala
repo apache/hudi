@@ -173,6 +173,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       "hoodie.datasource.write.drop.partition.columns" -> "false",
       "hoodie.datasource.write.hive_style_partitioning" -> "true",
       "hoodie.datasource.write.partitionpath.urlencode" -> "false",
+      "hoodie.datasource.write.partitionpath.timestamp.fractional.seconds" ->
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN).toString,
       "hoodie.archivelog.folder" -> "archived",
       "hoodie.timeline.path" -> "timeline",
       "hoodie.timeline.history.path" -> "history")
@@ -886,7 +888,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
            | location '$parentPath/$tableName1'
      """.stripMargin)
       spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      withSQLConf("hoodie.datasource.insert.dup.policy" -> "none") {
+        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      }
 
       val roTableName1 = tableName1 + "_ro"
       checkExceptionContain(
@@ -1431,7 +1435,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
         s"""
            |merge into $tableName h0
            |using (select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2025-07-29' as day, 12 as hh) s0
-           |on h0.id = s0.id
+           |on h0.id = s0.id and h0.name = s0.name
            |when matched then update set *
            |""".stripMargin)
       checkAnswer(query)(
@@ -2230,7 +2234,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
            | location '$parentPath/$tableName1'
      """.stripMargin)
       spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      withSQLConf("hoodie.datasource.insert.dup.policy" -> "none") {
+        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      }
       spark.sql(s"drop table $tableName1")
 
       checkExceptionContain(

@@ -36,6 +36,13 @@ object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     }
   }
 
+  override def hasNotMatchedBySourceActions(plan: LogicalPlan): Boolean = {
+    plan match {
+      case mergeInto: MergeIntoTable => mergeInto.notMatchedBySourceActions.nonEmpty
+      case _ => false
+    }
+  }
+
   override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case s@ScanOperation(_, _, _,

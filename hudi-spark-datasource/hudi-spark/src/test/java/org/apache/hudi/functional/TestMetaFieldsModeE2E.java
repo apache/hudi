@@ -166,6 +166,7 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL());
     options.put("hoodie.write.record.merge.custom.implementation.classes", "org.apache.hudi.DefaultSparkRecordMerger");
     options.put(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key(), "true");
+    options.put(DataSourceWriteOptions.INSERT_DUP_POLICY().key(), DataSourceWriteOptions.NONE_INSERT_DUP_POLICY());
     options.put("hoodie.parquet.small.file.limit", "10485760");
 
     writeSampleAndGetTableConfig(options, basePath());

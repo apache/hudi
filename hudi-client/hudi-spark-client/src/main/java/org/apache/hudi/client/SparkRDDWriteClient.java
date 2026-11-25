@@ -238,6 +238,11 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
+  protected boolean writesPreppedRecordsAsDeletesAndInserts(WriteOperationType writeOperationType) {
+    return writeOperationType == WriteOperationType.UPSERT_PREPPED || writeOperationType == WriteOperationType.DELETE_PREPPED;
+  }
+
+  @Override
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.INSERT, Option.ofNullable(instantTime));

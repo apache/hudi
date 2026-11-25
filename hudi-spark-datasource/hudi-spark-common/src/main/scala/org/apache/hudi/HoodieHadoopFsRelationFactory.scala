@@ -211,9 +211,6 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
   private lazy val shouldUseRecordPosition: Boolean = checkIfPositionalMergingEnabled()
 
-  private lazy val queryTimestamp: Option[String] =
-    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.requestedTime))
-
   private lazy val timeline: HoodieTimeline =
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
@@ -247,7 +244,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     val tableConfig = metaClient.getTableConfig
     new HoodieFileGroupReaderBasedFileFormat(basePath.toString,
       HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt),
-      tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
+      tableConfig.getTableName, specifiedQueryTimestamp, getMandatoryFields, isMOR, isBootstrap,
       isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,
       tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat, getInstantRange, Some(metaClient), isCDC)
   }

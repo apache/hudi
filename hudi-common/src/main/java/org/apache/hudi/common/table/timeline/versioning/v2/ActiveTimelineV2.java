@@ -397,8 +397,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, inflightInstant.requestedTime());
-    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
-    return commitInstant;
+    return transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
   }
 
   @Override
@@ -407,8 +406,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, DELTA_COMMIT_ACTION, inflightInstant.requestedTime());
-    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
-    return commitInstant;
+    return transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
   }
 
   //-----------------------------------------------------------------

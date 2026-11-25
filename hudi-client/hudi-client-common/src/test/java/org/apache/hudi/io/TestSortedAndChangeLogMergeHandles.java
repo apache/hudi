@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -386,6 +388,7 @@ public class TestSortedAndChangeLogMergeHandles {
       when(metaClient.getBasePath()).thenReturn(new StoragePath("/tmp"));
       when(metaClient.getTableConfig()).thenReturn(tableConfig);
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+      when(metaClient.getTableFormat()).thenReturn(new NativeTableFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
       when(tableConfig.getProps()).thenReturn(new TypedProperties());
       when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.TEN);
       when(tableConfig.getMetaFieldsMode()).thenReturn(MetaFieldsMode.ALL);

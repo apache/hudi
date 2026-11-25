@@ -19,7 +19,10 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.FormatMetaColumn;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -30,20 +33,24 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.ReplacedRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.read.DeleteContext;
+import org.apache.hudi.common.table.read.FormatMetaColumnHandler;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -81,6 +88,12 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    */
   protected final HoodieSchema writeSchema;
   protected final HoodieSchema writeSchemaWithMetaFields;
+  // The format meta columns that follow the columns of the table in writeSchemaWithMetaFields
+  protected final List<FormatMetaColumn> formatMetaColumns;
+  // The data schema with the format meta columns, and the handler that sets their values on a record written as new
+  // or changed, see appendFormatMetaColumnValues
+  private HoodieSchema writeSchemaWithFormatMetaColumns;
+  private FormatMetaColumnHandler<T> formatMetaColumnsOnWrite;
   protected final HoodieRecordMerger recordMerger;
   protected final DeleteContext deleteContext;
 
@@ -101,6 +114,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    */
   protected final boolean isSecondaryIndexStatsStreamingWritesEnabled;
   protected List<HoodieIndexDefinition> secondaryIndexDefns = Collections.emptyList();
+  // The write config with the table format of the table, see getFileWriterConfig
+  private HoodieConfig fileWriterConfig;
 
   @Getter(AccessLevel.PROTECTED)
   private boolean closed = false;
@@ -121,13 +136,15 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.writeSchema = HoodieSchemaCache.intern(overriddenSchema.orElseGet(() -> getWriteSchema(config)));
-    this.writeSchemaWithMetaFields = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()));
+    this.preserveMetadata = preserveMetadata;
+    this.formatMetaColumns = getFormatMetaColumns();
+    this.writeSchemaWithMetaFields = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(
+        HoodieSchemaUtils.appendFormatMetaColumns(writeSchema, formatMetaColumns), config.allowOperationMetadataField()));
     this.timer = HoodieTimer.start();
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
     this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
-    this.preserveMetadata = preserveMetadata;
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
@@ -167,6 +184,71 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   }
 
   /**
+   * Returns the format meta columns this handle stores in the file it writes, after the columns of the table,
+   * see {@link org.apache.hudi.common.HoodieTableFormat#getFormatMetaColumns()}. There are none unless the
+   * handle stores them in that file. Called from the constructor, after the write schema is set.
+   */
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    return Collections.emptyList();
+  }
+
+  /**
+   * Sets the handler of the format meta columns that gives the values of a record written as new or changed. A handle
+   * that writes the records of a file group reader sets the handler of the reader, so that a record the reader
+   * returns as a changed version of a record of the base file gets the values on update for that record.
+   */
+  protected void setFormatMetaColumnsOnWrite(FormatMetaColumnHandler<T> formatMetaColumnsOnWrite) {
+    this.formatMetaColumnsOnWrite = formatMetaColumnsOnWrite;
+  }
+
+  /**
+   * Returns the record context of the records this handle writes as new or changed, which sets their format meta
+   * columns.
+   */
+  protected RecordContext<T> getRecordContextForFormatMetaColumns() {
+    return (RecordContext<T>) hoodieTable.getRecordContextForWrite();
+  }
+
+  /**
+   * Returns the data schema with the format meta columns, which {@link #appendFormatMetaColumnValues} gives its records.
+   */
+  protected HoodieSchema getWriteSchemaWithFormatMetaColumns() {
+    if (writeSchemaWithFormatMetaColumns == null) {
+      writeSchemaWithFormatMetaColumns = HoodieSchemaUtils.appendFormatMetaColumns(writeSchema, formatMetaColumns);
+    }
+    return writeSchemaWithFormatMetaColumns;
+  }
+
+  /**
+   * Appends the format meta columns to a record written as new or changed, with their values on update or on write:
+   * the values on update for the values resolved for the record of another file group it replaces when it carries
+   * them, see {@link HoodieRecord#getReplacedRecord()}, and the values the handler of the format meta columns gives
+   * for its key otherwise.
+   *
+   * @param recordKey key of the record
+   * @param record    the record
+   * @param schema    schema of the record, without the format meta columns
+   * @param props     properties of the write
+   * @return the record in the schema of {@link #getWriteSchemaWithFormatMetaColumns()}
+   */
+  protected HoodieRecord<T> appendFormatMetaColumnValues(String recordKey, HoodieRecord<T> record, HoodieSchema schema, Properties props) {
+    HoodieSchema targetSchema = getWriteSchemaWithFormatMetaColumns();
+    if (formatMetaColumnsOnWrite == null) {
+      formatMetaColumnsOnWrite = FormatMetaColumnHandler.create(getRecordContextForFormatMetaColumns(), formatMetaColumns,
+          hoodieTable.getMetaClient(), Option.empty(), instantTime).get();
+    }
+    ReplacedRecord replacedRecord = record.getReplacedRecord();
+    Object[] replacedValues = replacedRecord == null ? null : replacedRecord.getFormatMetaColumnValues();
+    HoodieRecord<T> newRecord = record.rewriteRecordWithNewSchema(schema, props, targetSchema);
+    T data = newRecord.getData();
+    T result = replacedValues != null
+        ? formatMetaColumnsOnWrite.setNonNullValuesOnUpdate(data, targetSchema, replacedValues)
+        : formatMetaColumnsOnWrite.setNonNullValuesOnWrite(recordKey, data, targetSchema);
+    ValidationUtils.checkState(result == data, "The format meta columns of a record have to be updated in place");
+    return newRecord;
+  }
+
+  /**
    * Generate a write token based on the currently running spark task and its place in the spark dag.
    */
   private String makeWriteToken() {
@@ -185,6 +267,23 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
     return new StoragePath(path,
         FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()));
+  }
+
+  /**
+   * Returns the config of the file writers of the handle: the write config, naming the table format of the table when
+   * the write config does not, as a file writer derives defaults of a non-native table format from it.
+   */
+  protected HoodieConfig getFileWriterConfig() {
+    if (fileWriterConfig == null) {
+      HoodieTableConfig tableConfig = hoodieTable.getMetaClient().getTableConfig();
+      if (config.contains(HoodieTableConfig.TABLE_FORMAT) || !tableConfig.contains(HoodieTableConfig.TABLE_FORMAT)) {
+        fileWriterConfig = config;
+      } else {
+        fileWriterConfig = new HoodieConfig(TypedProperties.copy(config.getProps()));
+        fileWriterConfig.setValue(HoodieTableConfig.TABLE_FORMAT, tableConfig.getString(HoodieTableConfig.TABLE_FORMAT));
+      }
+    }
+    return fileWriterConfig;
   }
 
   /**

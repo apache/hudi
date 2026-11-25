@@ -451,6 +451,13 @@ object DataSourceWriteOptions {
   val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
 
   /**
+   * Config key with boolean value that indicates whether a prepped record written during a Spark SQL UPDATE may
+   * hold partition values other than those of the partition it was read from, so that the write moves it to the
+   * partition of its values.
+   */
+  val SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY = "_hoodie.spark.sql.writes.prepped.moves.records";
+
+  /**
    * May be derive partition path from incoming df if not explicitly set.
    *
    * @param optParams Parameters to be translated
@@ -737,6 +744,20 @@ object DataSourceWriteOptions {
       + "in MOR tables with Spark SQL MERGE INTO statement. The data blocks containing partial "
       + "updates have a schema with a subset of fields compared to the full schema of the table.")
 
+  val MERGE_INTO_CARDINALITY_CHECK: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.spark.sql.merge.into.cardinality.check")
+    .noDefaultValue("true for a table of a non-native table format (hoodie.table.format other than native), "
+      + "false otherwise")
+    .markAdvanced()
+    .sinceVersion("1.3.0")
+    .withDocumentation("Whether a Spark SQL MERGE INTO statement fails when more than one source row matches the same "
+      + "target row, as the SQL standard requires. The check applies to a statement with a WHEN MATCHED clause other "
+      + "than a single unconditional DELETE, and shuffles the incoming records by record key after the index lookup. "
+      + "When off, the source rows that match the same target row are combined into one update, by the ordering "
+      + "fields of the table, or in no defined order without them. Unless set, the check is on only for a table of a "
+      + "non-native table format, so a MERGE INTO on a native table keeps combining such source rows. A table with "
+      + "the bucket index does not run the check.")
+
   val NONE_INSERT_DUP_POLICY = "none"
   val DROP_INSERT_DUP_POLICY = "drop"
   val FAIL_INSERT_DUP_POLICY = "fail"
@@ -747,11 +768,16 @@ object DataSourceWriteOptions {
     .withValidValues(NONE_INSERT_DUP_POLICY, DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY)
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("**Note** This is only applicable to Spark SQL writing.<br />When operation type is set to \"insert\", users can optionally enforce a dedup policy. This policy will be employed "
-      + " when records being ingested already exists in storage. Default policy is none and no action will be taken. Another option is to choose " +
-      " \"drop\", on which matching records from incoming will be dropped and the rest will be ingested. Third option is \"fail\" which will " +
-      "fail the write operation when same records are re-ingested. In other words, a given record as deduced by the key generation policy " +
-      "can be ingested only once to the target table of interest.")
+    .withDocumentation("**Note** This is only applicable to Spark SQL and Spark datasource writing.<br />When operation type is set to \"insert\", "
+      + "this policy decides what happens to incoming records whose record key the table already holds. \"none\" takes no action and keeps "
+      + "the duplicates. \"drop\" drops the matching incoming records and ingests the rest. \"fail\" fails the write when an incoming "
+      + "record key is already in the table, or appears more than once in the incoming records unless hoodie.combine.before.insert "
+      + "combines them. In other words, a given record as deduced by the key generation policy can be ingested only once to the target table "
+      + "of interest. When the policy is not set, a native table and a table without a record key keep the duplicates, and a table "
+      + "of a non-native table format (hoodie.table.format) with a record key fails the write when a record key appears more than "
+      + "once in the incoming records unless hoodie.combine.before.insert combines them. It also fails on a record key the table "
+      + "already holds only with the record level index once it is built; with any other index set \"fail\" to check the incoming "
+      + "record keys against the table.")
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
@@ -847,7 +873,9 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("Controls whether spark sql prepped update and delete are enabled.")
+    .withDocumentation("Controls whether spark sql prepped update and delete are enabled. Merge-on-read tables "
+      + "with hoodie.write.updates.as.deletes.and.inserts enabled do not use prepped update and delete when they "
+      + "have a primary key, and always use them when they have none.")
 
   val OVERWRITE_MODE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.overwrite.mode")

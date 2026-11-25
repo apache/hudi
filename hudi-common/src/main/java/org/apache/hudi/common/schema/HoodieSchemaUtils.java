@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
@@ -38,6 +39,7 @@ import org.apache.avro.generic.GenericData;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -642,6 +644,43 @@ public final class HoodieSchemaUtils {
    */
   public static HoodieSchema appendFieldsToSchema(HoodieSchema schema, List<HoodieSchemaField> newFields) {
     return appendFieldsToSchemaBase(schema, newFields, false);
+  }
+
+  /**
+   * Appends the metadata columns an external table format declares, see
+   * {@code HoodieTableFormat#getFormatMetaColumns}, at the end of the given schema, in their order. Returns the
+   * given schema as is when the table format declares none.
+   *
+   * @param schema  the schema to append the columns to
+   * @param columns the metadata columns of the table format, or an empty list
+   * @return the schema ending with the columns
+   * @throws IllegalArgumentException if a column is not a nullable long or int with a null default, has the name of
+   *                                  a Hudi meta field, or if two columns, or a column and a field of the schema,
+   *                                  have the same name
+   */
+  public static HoodieSchema appendFormatMetaColumns(HoodieSchema schema, List<FormatMetaColumn> columns) {
+    if (columns.isEmpty()) {
+      return schema;
+    }
+    List<HoodieSchemaField> newFields = new ArrayList<>(columns.size());
+    Set<String> names = new HashSet<>();
+    for (FormatMetaColumn column : columns) {
+      HoodieSchemaField field = column.field();
+      ValidationUtils.checkArgument(field.isNullable() && field.hasDefaultValue() && toJavaDefaultValue(field) == null,
+          () -> "A format meta column has to be nullable and default to null, got: " + field);
+      // The writers set the values of the columns in place, which an engine row supports for fixed-width types only
+      HoodieSchemaType type = field.schema().getNonNullType().getType();
+      ValidationUtils.checkArgument(type == HoodieSchemaType.LONG || type == HoodieSchemaType.INT,
+          () -> "A format meta column has to be of type long or int, got: " + field);
+      ValidationUtils.checkArgument(!isMetadataField(field.name()),
+          () -> "The format meta column " + field.name() + " has the name of a Hudi meta field");
+      ValidationUtils.checkArgument(schema.getField(field.name()).isEmpty() && names.add(field.name()),
+          () -> "The format meta column " + field.name() + " has the name of another field: " + schema + ", " + columns);
+      HoodieSchemaField newField = createNewSchemaField(field);
+      field.getObjectProps().forEach(newField::addProp);
+      newFields.add(newField);
+    }
+    return appendFieldsToSchema(schema, newFields);
   }
 
   /**

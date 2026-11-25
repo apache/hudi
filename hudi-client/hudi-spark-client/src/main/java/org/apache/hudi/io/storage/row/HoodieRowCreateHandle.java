@@ -19,8 +19,11 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.SparkFileFormatInternalRecordContext;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieInternalRow;
+import org.apache.hudi.common.FormatMetaColumn;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,6 +32,8 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -42,12 +47,19 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.catalyst.expressions.JoinedRow;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
@@ -80,6 +92,10 @@ public class HoodieRowCreateHandle implements Serializable {
   protected final HoodieInternalRowFileWriter fileWriter;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
+  // The values on write of the format meta columns appended to each row, and the row that appends them, both null
+  // when the handle writes no format meta columns of its own
+  private final InternalRow formatMetaColumnValues;
+  private final JoinedRow rowWithFormatMetaColumns;
 
   public HoodieRowCreateHandle(HoodieTable table,
                                HoodieWriteConfig writeConfig,
@@ -132,6 +148,23 @@ public class HoodieRowCreateHandle implements Serializable {
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);
     writeStatus.setStat(new HoodieWriteStat());
+    List<FormatMetaColumn> formatMetaColumns = getFormatMetaColumns(table, structType, shouldPreserveHoodieMetadata);
+    if (formatMetaColumns.isEmpty()) {
+      this.formatMetaColumnValues = null;
+      this.rowWithFormatMetaColumns = null;
+    } else {
+      HoodieSchema columnsSchema = HoodieSchemaUtils.appendFormatMetaColumns(
+          HoodieSchema.createRecord("format_meta_columns", null, null, Collections.emptyList()), formatMetaColumns);
+      for (StructField field : HoodieInternalRowUtils.getCachedSchema(columnsSchema).fields()) {
+        structType = structType.add(field);
+      }
+      RecordContext<InternalRow> recordContext = SparkFileFormatInternalRecordContext.getFieldAccessorInstance();
+      this.formatMetaColumnValues = new GenericInternalRow(formatMetaColumns.stream()
+          .map(column -> column.valueOnWrite(instantTime))
+          .map(value -> value instanceof Comparable ? recordContext.convertValueToEngineType((Comparable) value) : value)
+          .toArray());
+      this.rowWithFormatMetaColumns = new JoinedRow();
+    }
     try {
       HoodiePartitionMetadata partitionMetadata =
           new HoodiePartitionMetadata(
@@ -150,6 +183,27 @@ public class HoodieRowCreateHandle implements Serializable {
     }
 
     log.info("New handle created for partition: {} with fileId {}", partitionPath, fileId);
+  }
+
+  /**
+   * Returns the format meta columns the table format declares, which the handle stores with their values on write in
+   * the rows it writes as new. There are none for a handle that preserves the metadata of its rows or whose rows
+   * already have the columns, as it writes the rows of a rewrite that carries their values over, such as a clustering.
+   */
+  private static List<FormatMetaColumn> getFormatMetaColumns(HoodieTable table, StructType structType, boolean shouldPreserveHoodieMetadata) {
+    if (shouldPreserveHoodieMetadata || table.isMetadataTable()) {
+      return Collections.emptyList();
+    }
+    List<FormatMetaColumn> columns = table.getMetaClient().getTableFormat().getFormatMetaColumns();
+    return columns.isEmpty() || Arrays.asList(structType.fieldNames()).contains(columns.get(0).field().name())
+        ? Collections.emptyList() : columns;
+  }
+
+  /**
+   * Returns the row with the values on write of the format meta columns appended, if the handle writes them.
+   */
+  private InternalRow withFormatMetaColumns(InternalRow row) {
+    return rowWithFormatMetaColumns == null ? row : rowWithFormatMetaColumns.apply(row, formatMetaColumnValues);
   }
 
   /**
@@ -197,7 +251,7 @@ public class HoodieRowCreateHandle implements Serializable {
       // The remaining meta columns stay null — Parquet stores nulls as definition-level flags
       // (zero data bytes).
       InternalRow updatedRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, row, true);
-      fileWriter.writeRow(updatedRow);
+      fileWriter.writeRow(withFormatMetaColumns(updatedRow));
       writeStatus.markSuccess((HoodieRecordDelegate) null, Option.empty());
     } catch (Exception e) {
       writeStatus.setGlobalError(e);
@@ -227,7 +281,7 @@ public class HoodieRowCreateHandle implements Serializable {
       metaFields[4] = fileName;
       InternalRow updatedRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, row, true);
       try {
-        fileWriter.writeRow(recordKey, updatedRow);
+        fileWriter.writeRow(recordKey, withFormatMetaColumns(updatedRow));
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]
         //       in cases when successful records' writes are being tracked
         HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()
@@ -250,7 +304,7 @@ public class HoodieRowCreateHandle implements Serializable {
     try {
       // TODO make sure writing w/ and w/o meta fields is consistent (currently writing w/o
       //      meta-fields would fail if any record will, while when writing w/ meta-fields it won't)
-      fileWriter.writeRow(row);
+      fileWriter.writeRow(withFormatMetaColumns(row));
       // when metafields disabled, we do not need to track individual records
       writeStatus.markSuccess((HoodieRecordDelegate) null, Option.empty());
     } catch (Exception e) {

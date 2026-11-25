@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_WRITES_PREPPED_KEY
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.keygen.KeyGenUtils
 
@@ -26,12 +26,13 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.plans.QueryPlan
-import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, Filter, LogicalPlan, Project, UpdateTable}
+import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, Filter, LocalRelation, LogicalPlan, Project, UpdateTable}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.isSparkSqlOptimizedWrite
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 
@@ -51,15 +52,21 @@ case class DeleteHoodieTableCommand(catalogTable: HoodieCatalogTable, query: Log
 
   override def run(sparkSession: SparkSession, queryPlan: SparkPlan): Seq[Row] = {
     val tableId = catalogTable.table.qualifiedName
-    logInfo(s"Executing 'DELETE FROM' command for $tableId")
-    val df = sparkSession.internalCreateDataFrame(queryPlan.execute(), queryPlan.schema)
-    val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
-    if (success && commitInstantTime.isPresent) {
-      updateCommitMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
-      DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
+    if (DeleteHoodieTableCommand.deletesNothing(query)) {
+      // The optimizer reduced the condition to false or null, so no row can match: like a data source v2 table
+      // deleting with an always-false filter, write nothing rather than an empty commit.
+      logInfo(s"Skipping 'DELETE FROM' command for $tableId as its condition is always false")
+    } else {
+      logInfo(s"Executing 'DELETE FROM' command for $tableId")
+      val df = sparkSession.internalCreateDataFrame(queryPlan.execute(), queryPlan.schema)
+      val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
+      if (success && commitInstantTime.isPresent) {
+        updateCommitMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
+        DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
+      }
+      sparkSession.catalog.refreshTable(tableId)
+      logInfo(s"Finished executing 'DELETE FROM' command for $tableId")
     }
-    sparkSession.catalog.refreshTable(tableId)
-    logInfo(s"Finished executing 'DELETE FROM' command for $tableId")
     Seq.empty[Row]
   }
 
@@ -68,11 +75,19 @@ case class DeleteHoodieTableCommand(catalogTable: HoodieCatalogTable, query: Log
 
 object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieConfig{
 
+  /**
+   * Whether the optimized input of a DELETE is an empty local relation, which is what the optimizer turns a filter
+   * whose condition folds to false or null into.
+   */
+  private def deletesNothing(optimizedQuery: LogicalPlan): Boolean = optimizedQuery match {
+    case relation: LocalRelation => relation.data.isEmpty
+    case _ => false
+  }
+
   def inputPlan(sparkSession: SparkSession, dft: DeleteFromTable, catalogTable: HoodieCatalogTable): (LogicalPlan, Map[String, String]) = {
     val condition = sparkAdapter.extractDeleteCondition(dft)
 
-    val config = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val config = if (isSparkSqlOptimizedWrite(sparkSession.sessionState.conf, catalogTable)) {
       buildHoodieDeleteTableConfig(catalogTable, sparkSession) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
     } else {
       buildHoodieDeleteTableConfig(catalogTable, sparkSession)
@@ -90,8 +105,7 @@ object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieC
 
     val requiredCols = recordKeys ++ conditionColumns
 
-    val targetLogicalPlan = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val targetLogicalPlan = if (isSparkSqlOptimizedWrite(sparkSession.sessionState.conf, catalogTable)) {
       tryPruningDeleteRecordSchema(dft.table, requiredCols)
     } else {
       stripMetaFieldAttributes(dft.table)

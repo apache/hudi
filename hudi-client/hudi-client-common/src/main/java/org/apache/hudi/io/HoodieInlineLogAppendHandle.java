@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -354,7 +355,8 @@ public class HoodieInlineLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
             keyField,
             writeConfig.getParquetCompressionCodec(),
             writeConfig.getParquetCompressionRatio(),
-            writeConfig.parquetDictionaryEnabled());
+            writeConfig.parquetDictionaryEnabled(),
+            ParquetUtils.getListLayoutConfigs(getFileWriterConfig()));
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }

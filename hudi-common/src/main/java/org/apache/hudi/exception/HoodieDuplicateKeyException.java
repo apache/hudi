@@ -26,4 +26,8 @@ public class HoodieDuplicateKeyException extends HoodieException {
   public HoodieDuplicateKeyException(String duplicateKey) {
     super("Duplicate key found for insert statement, key is: " + duplicateKey);
   }
+
+  public HoodieDuplicateKeyException(String duplicateKey, String detail) {
+    super("Duplicate key found for insert statement, key is: " + duplicateKey + ". " + detail);
+  }
 }

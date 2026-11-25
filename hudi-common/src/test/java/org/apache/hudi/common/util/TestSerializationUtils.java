@@ -19,7 +19,11 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.model.ReplacedRecord;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -35,6 +39,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -83,6 +88,23 @@ public class TestSerializationUtils {
     // NOTE: Here we assert that Kryo doesn't optimize out the fully-qualified class-name
     //       and always writes it out
     assertEquals(ByteBuffer.wrap(firstBytes), ByteBuffer.wrap(secondBytes));
+  }
+
+  @Test
+  void testRecordWithReplacedRecordSerDe() throws IOException {
+    HoodieRecordGlobalLocation location = new HoodieRecordGlobalLocation("partition", "001", "file1", 3L);
+    HoodieRecord<?> record = new HoodieAvroIndexedRecord(new HoodieKey("key", "other_partition"), null);
+    assertNull(((HoodieRecord<?>) SerializationUtils.deserialize(SerializationUtils.serialize(record))).getReplacedRecord());
+
+    record.setReplacedRecord(new ReplacedRecord(location));
+    ReplacedRecord unresolved = ((HoodieRecord<?>) SerializationUtils.deserialize(SerializationUtils.serialize(record))).getReplacedRecord();
+    assertEquals(location, unresolved.getLocation());
+    assertNull(unresolved.getFormatMetaColumnValues());
+
+    record.setReplacedRecord(record.getReplacedRecord().withFormatMetaColumnValues(new Object[] {7L, null, "value"}));
+    ReplacedRecord resolved = ((HoodieRecord<?>) SerializationUtils.deserialize(SerializationUtils.serialize(record))).getReplacedRecord();
+    assertEquals(location, resolved.getLocation());
+    assertArrayEquals(new Object[] {7L, null, "value"}, resolved.getFormatMetaColumnValues());
   }
 
   private <T> void verifyObject(T expectedValue) throws IOException {

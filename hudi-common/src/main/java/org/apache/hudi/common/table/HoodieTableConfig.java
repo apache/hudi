@@ -79,6 +79,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -429,6 +430,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
   public static final ConfigProperty<String> SLASH_SEPARATED_DATE_PARTITIONING = KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING;
+  public static final ConfigProperty<String> TIMESTAMP_PARTITION_FRACTIONAL_SECONDS = KeyGeneratorOptions.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS;
 
   public static final List<ConfigProperty<String>> PERSISTED_CONFIG_LIST = Arrays.asList(
       TIMESTAMP_TYPE_FIELD,
@@ -446,7 +448,8 @@ public class HoodieTableConfig extends HoodieConfig {
       KEY_GENERATOR_CLASS_NAME.key(),
       KEY_GENERATOR_TYPE.key(),
       // records what the data of a table at any version carries, so it must survive on older versions too
-      COMPLEX_KEYGEN_ENCODING.key()
+      COMPLEX_KEYGEN_ENCODING.key(),
+      TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()
   ));
 
   public static final ConfigProperty<String> TABLE_CHECKSUM = ConfigProperty
@@ -852,14 +855,19 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public HoodieTableFormat getTableFormat(TimelineLayoutVersion layoutVersion) {
     String tableFormat = getStringOrDefault(TABLE_FORMAT);
-    if (!tableFormat.equals(NativeTableFormat.TABLE_FORMAT)) {
+    if (!tableFormat.equalsIgnoreCase(NativeTableFormat.TABLE_FORMAT)) {
       ServiceLoader<HoodieTableFormat> loader = ServiceLoader.load(HoodieTableFormat.class);
+      List<String> foundFormats = new ArrayList<>();
+      foundFormats.add(NativeTableFormat.TABLE_FORMAT);
       for (HoodieTableFormat tableFormatImpl : loader) {
-        if (getString(TABLE_FORMAT).equals(tableFormatImpl.getName())) {
+        if (tableFormat.equalsIgnoreCase(tableFormatImpl.getName())) {
           tableFormatImpl.init(props);
           return tableFormatImpl;
         }
+        foundFormats.add(tableFormatImpl.getName());
       }
+      throw new HoodieException(String.format("Table format '%s' set by %s matches none of the table formats found %s; "
+          + "add the jar that provides it to the classpath", tableFormat, TABLE_FORMAT.key(), foundFormats));
     }
     return new NativeTableFormat(layoutVersion);
   }

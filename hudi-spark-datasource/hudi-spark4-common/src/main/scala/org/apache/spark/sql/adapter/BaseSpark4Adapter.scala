@@ -22,6 +22,7 @@ import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
+import org.apache.hudi.exception.HoodieMultipleMatchesException
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
 
@@ -44,6 +45,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.classic.ColumnConversions
+import org.apache.spark.sql.errors.QueryExecutionErrors
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.{OrcColumnarBatchReader, SparkOrcReaderBase}
@@ -431,5 +433,14 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
       // Defensive copies: Spark iterators reuse row instances and VariantVal exposes its backing arrays.
       new VariantShreddingSchemaInferrer.VariantSample(variantVal.getValue.clone(), variantVal.getMetadata.clone())
     }
+  }
+
+  /**
+   * A Spark 4 MERGE INTO fails with the violation itself.
+   */
+  override def mergeCardinalityViolation(multipleMatches: HoodieMultipleMatchesException): Throwable = {
+    val violation = QueryExecutionErrors.mergeCardinalityViolationError()
+    violation.addSuppressed(multipleMatches)
+    violation
   }
 }

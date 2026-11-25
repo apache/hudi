@@ -20,10 +20,11 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.{DataSourceReadOptions, HoodieSchemaConversionUtils, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.NativeTableFormat
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.table.timeline.TimelineUtils.parseDateFromInstantTime
@@ -53,6 +54,13 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 
 object HoodieSqlCommonUtils extends SparkAdapterSupport {
+
+  /**
+   * Whether the table is of a non-native table format, see [[HoodieTableConfig.TABLE_FORMAT]]. This is the format
+   * the table loads, which is native for a name that no table format implementation answers to, such as NATIVE.
+   */
+  def isNonNativeTableFormat(sparkSession: SparkSession, table: CatalogTable): Boolean =
+    !NativeTableFormat.TABLE_FORMAT.equals(new HoodieCatalogTable(sparkSession, table).metaClient.getTableFormat.getName)
   // NOTE: {@code SimpleDataFormat} is NOT thread-safe
   // TODO replace w/ DateTimeFormatter
   private val defaultDateFormat =

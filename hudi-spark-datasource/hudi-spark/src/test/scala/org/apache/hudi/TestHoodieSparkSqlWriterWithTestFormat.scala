@@ -30,6 +30,7 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.tableformat.TestTableFormat
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -289,6 +290,42 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
   }
 
   /**
+   * Test case for an upsert that gives records another partition: the index of a partitioned table of a non-native
+   * format with a record key defaults to a global one, which moves them, unless an index type is set.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testUpsertMovesRecordsAcrossPartitions(defaultIndex: Boolean): Unit = {
+    // The test format keeps the completed instants by base path, which a read qualifies
+    val tablePath = s"file:$tempBasePath"
+    val tableOpts = commonTableModifier
+      .updated("path", tablePath)
+      .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .updated(HoodieTableConfig.TABLE_FORMAT.key, "test-format")
+      .updated(TestTableFormat.METADATA_TABLE_ENABLED, "true") ++
+      (if (defaultIndex) Map.empty else Map(HoodieIndexConfig.INDEX_TYPE.key -> "SIMPLE"))
+
+    val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(DataSourceTestUtils.getStructTypeExampleSchema)
+    val df = spark.createDataFrame(sc.parallelize(convertRowListToSeq(DataSourceTestUtils.generateRandomRows(30))), structType)
+      .dropDuplicates("_row_key")
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableOpts, df)
+    val recordCount = df.count()
+    val stayingCount = df.where(s"partition = '${HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH}'").count()
+    assertTrue(stayingCount < recordCount)
+
+    val movedDf = df.withColumn("partition", org.apache.spark.sql.functions.lit(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH))
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableOpts, movedDf)
+
+    val partitionPaths = spark.read.format("hudi").load(tablePath).select("_hoodie_partition_path").collect().map(_.getString(0))
+    if (defaultIndex) {
+      assertEquals(recordCount, partitionPaths.length)
+      assertEquals(Set(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), partitionPaths.toSet)
+    } else {
+      assertEquals(2 * recordCount - stayingCount, partitionPaths.length)
+    }
+  }
+
+  /**
    * Test case for insert dataset without partitioning field
    */
   @Test
@@ -537,6 +574,24 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
       .mode(SaveMode.Append).save(tablePath1)
+  }
+
+  @Test
+  def testTableFormatConfigsKeptAtTableCreation(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val formatConfigKey = s"${HoodieTableConfig.TABLE_FORMAT.key}.test-format.catalog"
+    val (tableName, tablePath) = ("hoodie_table_format_configs", s"$tempBasePath" + "_1")
+    Seq((1, "a1", 1000L)).toDF("id", "name", "ts").write.format("hudi")
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
+      .option(HoodieTableConfig.TABLE_FORMAT.key, "test-format")
+      .option(formatConfigKey, "value1")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .mode(SaveMode.Overwrite).save(tablePath)
+
+    assertEquals("value1", TestTableFormat.getInitProperties(tableName).getProperty(formatConfigKey))
+    assertEquals("value1", createMetaClient(spark, tablePath).getTableConfig.getProps.getProperty(formatConfigKey))
   }
 
   @Test

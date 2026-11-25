@@ -71,7 +71,7 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase {
   }
 
   test("Test enable hoodie.merge.allow.duplicate.on.inserts when write") {
-    withSQLConf("hoodie.datasource.write.operation" -> "insert") {
+    withSQLConf("hoodie.datasource.write.operation" -> "insert", "hoodie.datasource.insert.dup.policy" -> "none") {
       Seq("mor", "cow").foreach { tableType =>
         withTempDir { tmp =>
           val tableName = generateTableName
@@ -114,56 +114,57 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test INSERT INTO preserves duplicates by default") {
+  test("Test INSERT INTO preserves duplicates with the none duplicate policy") {
     spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
-    spark.sessionState.conf.unsetConf(DataSourceWriteOptions.INSERT_DUP_POLICY.key())
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
     spark.sessionState.conf.unsetConf("hoodie.sql.bulk.insert.enable")
     spark.sessionState.conf.unsetConf("hoodie.merge.allow.duplicate.on.inserts")
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      spark.sql(
-        s"""
-           |CREATE TABLE $tableName (
-           |  id BIGINT,
-           |  ts BIGINT,
-           |  v STRING
-           |) USING hudi
-           |TBLPROPERTIES (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           |)
-           |location '${tmp.getCanonicalPath}/$tableName'
-           |""".stripMargin)
+    withSQLConf(DataSourceWriteOptions.INSERT_DUP_POLICY.key() -> DataSourceWriteOptions.NONE_INSERT_DUP_POLICY) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |CREATE TABLE $tableName (
+             |  id BIGINT,
+             |  ts BIGINT,
+             |  v STRING
+             |) USING hudi
+             |TBLPROPERTIES (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             |)
+             |location '${tmp.getCanonicalPath}/$tableName'
+             |""".stripMargin)
 
-      // Insert initial batch with same-batch duplicates
-      spark.sql(
-        s"""
-           |INSERT INTO $tableName VALUES
-           |  (1, 1000, 'a'),
-           |  (1, 1001, 'a_dup'),
-           |  (2, 1002, 'b')
-           |""".stripMargin)
+        // Insert initial batch with same-batch duplicates
+        spark.sql(
+          s"""
+             |INSERT INTO $tableName VALUES
+             |  (1, 1000, 'a'),
+             |  (1, 1001, 'a_dup'),
+             |  (2, 1002, 'b')
+             |""".stripMargin)
 
-      // Verify both duplicates are present (id=1 appears twice)
-      checkAnswer(s"SELECT id, ts, v FROM $tableName ORDER BY id, ts")(
-        Seq(1, 1000, "a"),
-        Seq(1, 1001, "a_dup"),
-        Seq(2, 1002, "b")
-      )
+        // Verify both duplicates are present (id=1 appears twice)
+        checkAnswer(s"SELECT id, ts, v FROM $tableName ORDER BY id, ts")(
+          Seq(1, 1000, "a"),
+          Seq(1, 1001, "a_dup"),
+          Seq(2, 1002, "b")
+        )
 
-      // Insert another batch with another duplicate for id=1
-      spark.sql(s"INSERT INTO $tableName VALUES (1, 1003, 'a_again'), (3, 1004, 'c')")
+        // Insert another batch with another duplicate for id=1
+        spark.sql(s"INSERT INTO $tableName VALUES (1, 1003, 'a_again'), (3, 1004, 'c')")
 
-      // Verify all three duplicates for id=1 are present
-      checkAnswer(s"SELECT id, ts, v FROM $tableName ORDER BY id, ts")(
-        Seq(1, 1000, "a"),
-        Seq(1, 1001, "a_dup"),
-        Seq(1, 1003, "a_again"),
-        Seq(2, 1002, "b"),
-        Seq(3, 1004, "c")
-      )
+        // Verify all three duplicates for id=1 are present
+        checkAnswer(s"SELECT id, ts, v FROM $tableName ORDER BY id, ts")(
+          Seq(1, 1000, "a"),
+          Seq(1, 1001, "a_dup"),
+          Seq(1, 1003, "a_again"),
+          Seq(2, 1002, "b"),
+          Seq(3, 1004, "c")
+        )
+      }
     }
   }
 

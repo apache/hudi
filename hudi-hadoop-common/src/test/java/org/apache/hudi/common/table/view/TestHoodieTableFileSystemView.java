@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
@@ -60,6 +61,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -89,6 +91,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -102,6 +105,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -420,6 +424,49 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     FileSlice fileSlice = fileSlices.get(0);
     assertEquals(commitTime1, fileSlice.getBaseInstantTime());
     assertEquals(2, fsView.getAllFileGroups(partitionPath).count());
+  }
+
+  /**
+   * A table of a non-native table format can hold data files that Hudi did not name; the view leaves
+   * them out. A native table lists every data file of a partition as a base file, so such a file fails
+   * the listing there.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"native", "test-format"})
+  void testDataFileHudiDidNotName(String tableFormat) throws Exception {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.TABLE_FORMAT.key(), tableFormat);
+    basePath = tempDir.resolve(tableFormat).toString();
+    metaClient = HoodieTestUtils.init(basePath, getTableType(), properties);
+    assertEquals(tableFormat, metaClient.getTableFormat().getName());
+
+    String partitionPath = "2016/05/01";
+    new File(basePath + "/" + partitionPath).mkdirs();
+    String commitTime = "1";
+    String hudiFileName = FSUtils.makeBaseFileName(commitTime, TEST_WRITE_TOKEN, UUID.randomUUID().toString(), BASE_FILE_EXTENSION);
+    new File(basePath + "/" + partitionPath + "/" + hudiFileName).createNewFile();
+    String foreignFileName = "part-00000-" + UUID.randomUUID() + "-c000" + BASE_FILE_EXTENSION;
+    new File(basePath + "/" + partitionPath + "/" + foreignFileName).createNewFile();
+    saveAsComplete(metaClient.getActiveTimeline(),
+        INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime), new HoodieCommitMetadata());
+    // The test table format reports an instant as completed only once its commit hook recorded it
+    metaClient.getTableFormat().commit(new HoodieCommitMetadata(),
+        INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, commitTime), null, metaClient, null);
+    refreshFsView();
+
+    if (NativeTableFormat.TABLE_FORMAT.equals(tableFormat)) {
+      assertListingFailsOnDataFileHudiDidNotName(partitionPath);
+    } else {
+      assertEquals(Collections.singletonList(hudiFileName),
+          roView.getLatestBaseFiles(partitionPath).map(HoodieBaseFile::getFileName).collect(Collectors.toList()));
+      assertEquals(1, fsView.getAllFileGroups(partitionPath).count());
+    }
+  }
+
+  protected void assertListingFailsOnDataFileHudiDidNotName(String partitionPath) {
+    Exception exception = assertThrows(Exception.class, () -> roView.getLatestBaseFiles(partitionPath).count());
+    assertTrue(exception instanceof InvalidHoodiePathException || exception.getCause() instanceof InvalidHoodiePathException,
+        "a native table must list the data file Hudi did not name but got: " + exception);
   }
 
   @Test

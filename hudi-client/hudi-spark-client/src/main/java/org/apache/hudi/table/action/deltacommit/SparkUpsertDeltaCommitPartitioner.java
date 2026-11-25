@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -53,6 +54,17 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
 
   @Override
   protected List<SmallFile> getSmallFiles(String partitionPath) {
+    if (config.shouldWriteUpdatesAsDeletesAndInserts()) {
+      // Small-file handling routes records into existing file groups through merges or log
+      // appends, but this write mode requires updates to append positional deletes and inserts
+      // to land in base files of file groups chosen by the insert partitioner
+      return Collections.emptyList();
+    }
+    if (config.isSparkSqlMergeIntoReadingTarget()) {
+      // The located records of the statement are already merged with the records they match, and the merge that
+      // packs inserts into a small base file would evaluate them as source records of the statement once more
+      return Collections.emptyList();
+    }
     // Init here since this class (and member variables) might not have been initialized
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
 
@@ -101,6 +113,13 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
       return Collections.emptyList();
     }
 
+    // The merge that packs inserts into a small base file takes every record of its file group, and would take
+    // the partial updates this write makes to the records of the file for full records. Such files are left out
+    // before the candidates are limited, so that the next smallest files take the inserts.
+    Set<String> partiallyUpdatedFileIds = config.shouldWritePartialUpdates()
+        ? profile.getWorkloadStat(partitionPath).getUpdateLocationToCount().keySet()
+        : Collections.emptySet();
+
     // If we cannot index log files, then we choose the smallest parquet file in the partition and add inserts to
     // it. Doing this overtime for a partition, we ensure that we handle small file issues
     return table.getSliceView()
@@ -110,7 +129,8 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
                   // NOTE: We can not pad slices with existing log-files w/o compacting these,
                   //       hence skipping
                   fileSlice.getLogFiles().count() < 1
-                  && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit())
+                  && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit()
+                  && !partiallyUpdatedFileIds.contains(fileSlice.getFileId()))
           .sorted(Comparator.comparing(fileSlice -> fileSlice.getBaseFile().get().getFileSize()))
           .limit(config.getSmallFileGroupCandidatesLimit())
           .collect(Collectors.toList());

@@ -70,6 +70,9 @@ public abstract class JavaExecutionStrategy<T>
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(
       HoodieClusteringPlan clusteringPlan, HoodieSchema schema, String instantTime) {
+    if (!writesFormatMetaColumns()) {
+      checkNoFormatMetaColumns();
+    }
     // execute clustering for each group and collect WriteStatus
     List<WriteStatus> writeStatusList = new ArrayList<>();
     clusteringPlan.getInputGroups().forEach(
@@ -102,6 +105,15 @@ public abstract class JavaExecutionStrategy<T>
       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
 
   /**
+   * Returns whether {@link #performClusteringWithRecordList} writes the format meta columns of the records it is
+   * given, see {@link #setFormatMetaColumnsWriteSchema}. Clustering fails before writing for a table format that
+   * declares format meta columns when it does not.
+   */
+  protected boolean writesFormatMetaColumns() {
+    return false;
+  }
+
+  /**
    * Create {@link BulkInsertPartitioner} based on strategy params.
    *
    * @param strategyParams Strategy parameters containing columns to sort the data by when clustering.
@@ -128,7 +140,7 @@ public abstract class JavaExecutionStrategy<T>
       HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
       boolean preserveHoodieMetadata, String instantTime) {
     List<HoodieRecord<T>> inputRecords = readRecordsForGroup(clusteringGroup, instantTime);
-    HoodieSchema readerSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(getWriteConfig().getSchema()));
+    HoodieSchema readerSchema = addMetaFieldsAndFormatMetaColumns(HoodieSchema.parse(getWriteConfig().getSchema()));
     List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
         .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
         .collect(Collectors.toList());

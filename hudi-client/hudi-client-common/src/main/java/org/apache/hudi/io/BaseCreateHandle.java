@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -76,6 +77,22 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setStat(new HoodieWriteStat());
     this.path = makeNewPath(partitionPath);
+  }
+
+  /**
+   * Returns the format meta columns the table format declares, which a handle that writes records as new stores
+   * with their values on write, or on update for a record that replaces a record of another file group. There are
+   * none for the metadata table, and none for a handle that preserves the metadata of its records or whose write
+   * schema already has the columns, as it writes the records of a rewrite that carries their values over, such as a
+   * clustering.
+   */
+  @Override
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    if (preserveMetadata || hoodieTable.isMetadataTable()) {
+      return Collections.emptyList();
+    }
+    List<FormatMetaColumn> columns = hoodieTable.getMetaClient().getTableFormat().getFormatMetaColumns();
+    return columns.isEmpty() || writeSchema.getField(columns.get(0).field().name()).isPresent() ? Collections.emptyList() : columns;
   }
 
   /**
@@ -168,6 +185,10 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
       }
       fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, config.getProps());
     } else {
+      if (!formatMetaColumns.isEmpty()) {
+        record = appendFormatMetaColumnValues(record.getRecordKey(), record, schema, config.getProps());
+        schema = getWriteSchemaWithFormatMetaColumns();
+      }
       // rewrite the record to include metadata fields in schema, and the values will be set later.
       record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
       if (isSecondaryIndexStatsStreamingWritesEnabled) {

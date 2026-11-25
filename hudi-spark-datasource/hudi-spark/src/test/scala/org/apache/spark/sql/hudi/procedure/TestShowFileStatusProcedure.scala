@@ -268,7 +268,8 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
         withSQLConf(
           "hoodie.clean.commits.retained" -> "2",
           "hoodie.keep.min.commits" -> "3",
-          "hoodie.keep.max.commits" -> "4"
+          "hoodie.keep.max.commits" -> "4",
+          "hoodie.datasource.insert.dup.policy" -> "none"
         ) {
           spark.sql(
             s"""

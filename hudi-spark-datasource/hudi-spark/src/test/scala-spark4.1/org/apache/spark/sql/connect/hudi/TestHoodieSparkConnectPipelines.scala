@@ -94,6 +94,7 @@ class TestHoodieSparkConnectPipelines extends FunSuite with BeforeAndAfterAll {
     withPipeline { (dir, database) =>
       write(dir, "flows.sql", Seq("insert", "upsert").map { operation =>
         s"""SET spark.hoodie.datasource.write.operation=$operation;
+           |SET spark.hoodie.datasource.insert.dup.policy=none;
            |CREATE STREAMING TABLE ${operation}_events USING hudi
            |TBLPROPERTIES ('type'='cow', 'primaryKey'='id', 'preCombineField'='ts')
            |AS SELECT * FROM STREAM input_events;

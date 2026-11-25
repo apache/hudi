@@ -36,6 +36,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.JavaLazyInsertIterable;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
@@ -90,8 +91,10 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
+  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> taggedRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
+    List<HoodieRecord<T>> inputRecords = HoodieIndexUtils.tagMissingRecordPositionsIfNeeded(
+        HoodieListData.eager(taggedRecords), operationType, config, table).collectAsList();
 
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());

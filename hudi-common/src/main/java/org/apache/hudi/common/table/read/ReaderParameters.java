@@ -24,6 +24,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.util.Collections;
+import java.util.Set;
+
 /**
  * Parameters for how the reader should process the FileGroup while reading.
  */
@@ -49,6 +52,9 @@ public class ReaderParameters {
   // considers the log records which are inflight.
   @Builder.Default
   private final boolean inflightInstantsAllowed = false;
+  // Names of the format meta columns that are read from the base file in addition to the columns of the table
+  @Builder.Default
+  private final Set<String> formatMetaColumns = Collections.emptySet();
 
   public boolean shouldUseRecordPosition() {
     return shouldUseRecordPosition;

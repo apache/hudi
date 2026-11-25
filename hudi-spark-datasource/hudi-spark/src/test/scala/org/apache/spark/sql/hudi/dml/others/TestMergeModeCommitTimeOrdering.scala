@@ -98,6 +98,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
       withSparkSqlSessionConfigWithCondition(
         ("hoodie.merge.small.file.group.candidates.limit" -> "0", true),
         ("hoodie.spark.sql.insert.into.operation" -> "upsert", setUpsertOperation),
+        ("hoodie.datasource.insert.dup.policy" -> "none", !setUpsertOperation),
         // TODO(HUDI-8820): enable MDT after supporting MDT with table version 6
         ("hoodie.metadata.enable" -> "false", tableVersion.toInt == 6)
       ) {

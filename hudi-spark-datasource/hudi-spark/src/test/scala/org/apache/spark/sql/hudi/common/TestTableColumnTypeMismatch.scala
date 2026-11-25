@@ -543,7 +543,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
           "ts" -> "long"
         ),
         sourceSchema = Seq(
-          "id" -> "long", // mismatched type
+          "id" -> "double", // mismatched type
           "name" -> "string",
           "price" -> "int",
           "ts" -> "long"
@@ -552,7 +552,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         primaryKey = "id",
         orderingFields = "ts",
         tableType = "mor",
-        expectedErrorPattern = "Primary key data type mismatch between source table and target table. Target table uses IntegerType for column 'id', source table uses LongType for 's0.id'"
+        expectedErrorPattern = "Primary key data type mismatch between source table and target table. Target table uses IntegerType for column 'id', source table uses DoubleType for 's0.id'"
       ),
       TypeMismatchTestCase(
         description = "Precombine field type mismatch",

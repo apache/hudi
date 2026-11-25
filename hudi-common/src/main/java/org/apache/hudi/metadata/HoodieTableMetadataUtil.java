@@ -674,9 +674,8 @@ public class HoodieTableMetadataUtil {
    * - When usePartitionInKey is false: Groups by metadata record key only
    * <p>
    * The reduce logic prefers non-deleted records over deleted ones to properly handle movements.
-   * For Record Level Index: When both records are non-deleted (indicating duplicate inserts for
-   * the same key), an exception is thrown since this represents an invalid state.
-   * For Secondary Index: When both records are non-deleted, the later record (record2) is preferred.
+   * When both records are non-deleted (the same key written twice in one write), an exception is
+   * thrown since the index holds one entry per key.
    *
    * @param metadataRecords   {@link HoodieData} of metadata table index records to be reduced by keys
    * @param parallelism       parallelism for the reduce-by operation
@@ -708,8 +707,10 @@ public class HoodieTableMetadataUtil {
         return record1;
       } else {
         // Both records are non-deleted
-        throw new HoodieIOException("Two HoodieRecord updates to the index is seen for same record key " + record2.getRecordKey() + ", record 1 : "
-            + record1 + ", record 2 : " + record2);
+        throw new HoodieMetadataException(String.format("Key %s appears more than once in this write for metadata partition %s, "
+            + "which holds one entry per key. Deduplicate the input before writing: set hoodie.combine.before.insert=true "
+            + "for insert and bulk_insert, or use upsert with hoodie.combine.before.upsert=true.",
+            record2.getRecordKey(), record2.getPartitionPath()));
       }
     }, parallelism).values();
   }

@@ -19,8 +19,10 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -34,6 +36,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.table.read.FormatMetaColumnHandler;
 import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -193,7 +196,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       fileWriter = HoodieFileWriterFactory.getFileWriter(
           instantTime, newFilePath, hoodieTable.getStorage(),
 
-          config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
+          getFileWriterConfig(), writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
     } catch (IOException io) {
       log.error("Error in update task at commit {}", instantTime, io);
       writeStatus.setGlobalError(io);
@@ -204,6 +207,41 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
   protected HoodieRecord.HoodieRecordType getRecordType() {
     return recordMerger.getRecordType();
+  }
+
+  /**
+   * Fails if the table format declares format meta columns, as this handle does not carry them over to the file it
+   * writes. A handle that carries them over overrides this method.
+   */
+  @Override
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    return checkNoFormatMetaColumns();
+  }
+
+  /**
+   * Fails if the table format declares format meta columns, and returns no format meta columns otherwise.
+   */
+  protected final List<FormatMetaColumn> checkNoFormatMetaColumns() {
+    if (!hoodieTable.isMetadataTable()) {
+      FormatMetaColumn.checkNotDeclared(hoodieTable.getMetaClient().getTableFormat(), getClass());
+    }
+    return Collections.emptyList();
+  }
+
+  /**
+   * Returns the format meta columns the table format declares, none for the metadata table.
+   */
+  protected List<FormatMetaColumn> getTableFormatMetaColumns() {
+    return hoodieTable.isMetadataTable() ? Collections.emptyList() : hoodieTable.getMetaClient().getTableFormat().getFormatMetaColumns();
+  }
+
+  /**
+   * Returns a handler of the format meta columns of the records read from the file group, empty without format meta
+   * columns. Fails if the table format cannot resolve their values for the base file.
+   */
+  protected Option<FormatMetaColumnHandler<T>> createFormatMetaColumnHandler() {
+    return FormatMetaColumnHandler.create(readerContext.getRecordContext(), formatMetaColumns, hoodieTable.getMetaClient(),
+        Option.ofNullable(baseFileToMerge), instantTime);
   }
 
   /**
@@ -440,10 +478,19 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
           : record;
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, props);
     } else {
+      if (!formatMetaColumns.isEmpty()) {
+        record = appendFormatMetaColumnValues(key.getRecordKey(), record, schema, props);
+        schema = getWriteSchemaWithFormatMetaColumns();
+      }
       // rewrite the record to include metadata fields in schema, and the values will be set later.
       record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
       fileWriter.writeWithMetadata(key, record, writeSchemaWithMetaFields, props);
     }
+  }
+
+  @Override
+  protected RecordContext<T> getRecordContextForFormatMetaColumns() {
+    return readerContext.getRecordContext();
   }
 
   protected void writeIncomingRecords() throws IOException {

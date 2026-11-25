@@ -22,11 +22,13 @@ package org.apache.spark.sql.hudi.dml.others
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.tableformat.TestTableFormat
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -34,8 +36,10 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField}
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.slf4j.LoggerFactory
+
+import scala.collection.JavaConverters._
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
   private val log = LoggerFactory.getLogger(getClass)
@@ -469,6 +473,111 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
               Seq(4, 1, "partition=2023-10-01"),
               Seq(7, 1, "partition=2023-10-01"))
           }
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto with global index into a small file group of a MOR table") {
+    withTempDir { tmp =>
+      for (indexType <- Seq("GLOBAL_SIMPLE", "GLOBAL_BLOOM"); mergeMode <- Seq("COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING")) {
+        withSQLConf("hoodie.index.type" -> indexType) {
+          val targetTable = generateTableName
+          spark.sql(
+            s"""
+               | create table $targetTable (id int, name string, price double, ts long) using hudi
+               | tblproperties (type = 'mor', primaryKey = 'id', orderingFields = 'ts', 'hoodie.record.merge.mode' = '$mergeMode')
+               | location '${tmp.getCanonicalPath}/$targetTable'
+             """.stripMargin)
+          spark.sql(s"insert into $targetTable values (1, 'a1', 10.0, 1000), (2, 'a2', 20.0, 1000), (3, 'a3', 30.0, 1000)")
+          // The updates and the insert share the small file group, so they go through the merge handle
+          spark.sql(
+            s"""
+               | merge into $targetTable t using (
+               |   select 1 as id, 'a1m' as name, 5.0D as price, 2000L as ts
+               |   union all select 2, 'a2m', 6.0D, 2000L
+               |   union all select 3, 'a3m', 7.0D, 500L
+               |   union all select 4, 'a4', 40.0D, 2000L) s
+               | on t.id = s.id
+               | when matched then update set id = s.id, name = s.name, price = s.price + 1, ts = s.ts
+               | when not matched then insert *
+             """.stripMargin)
+          // Event-time ordering keeps the current version of id 3, whose ordering value is higher
+          val expectedId3 = if (mergeMode == "EVENT_TIME_ORDERING") Seq(3, "a3", 30.0, 1000) else Seq(3, "a3m", 8.0, 500)
+          checkAnswer(s"select id, name, price, ts from $targetTable order by id")(
+            Seq(1, "a1m", 6.0, 2000), Seq(2, "a2m", 7.0, 2000), expectedId3, Seq(4, "a4", 40.0, 2000))
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto with global index into a small file group of a MOR table with format meta columns") {
+    withTempDir { tmp =>
+      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE") {
+        val targetTable = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
+        spark.sql(
+          s"""
+             | create table $targetTable (id int, name string, price double, ts long) using hudi
+             | tblproperties (type = 'mor', primaryKey = 'id', orderingFields = 'ts',
+             |   '${HoodieTableConfig.TABLE_FORMAT.key}' = 'test-format', '${TestTableFormat.INSTANT_TIME_COLUMN_ENABLED}' = 'true')
+             | location '$tablePath'
+           """.stripMargin)
+        spark.sql(s"insert into $targetTable values (1, 'a1', 10.0, 1000), (2, 'a2', 20.0, 1000)")
+        val metaClient = createMetaClient(spark, tablePath)
+        assertEquals(2, metaClient.getTableFormat.getFormatMetaColumns.size)
+        val insertInstant = metaClient.getActiveTimeline.lastInstant().get().requestedTime
+        // The update and the insert share the small file group, so they go through the merge handle
+        spark.sql(
+          s"""
+             | merge into $targetTable t using (
+             |   select 1 as id, 'a1m' as name, 5.0D as price, 2000L as ts
+             |   union all select 3, 'a3', 30.0D, 2000L) s
+             | on t.id = s.id
+             | when matched then update set id = s.id, name = s.name, price = s.price + 1, ts = s.ts
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, ts from $targetTable order by id")(
+          Seq(1, "a1m", 6.0, 2000), Seq(2, "a2", 20.0, 1000), Seq(3, "a3", 30.0, 2000))
+        metaClient.reloadActiveTimeline()
+        val mergeInstant = metaClient.getActiveTimeline.lastInstant().get().requestedTime
+        val baseFiles = metaClient.getStorage.listDirectEntries(new StoragePath(tablePath)).asScala
+          .map(_.getPath.getName).filter(name => name.endsWith(".parquet") && name.contains(mergeInstant))
+        assertEquals(1, baseFiles.size, "the merge rewrites the small base file")
+        val instantTimes = spark.read.parquet(s"$tablePath/${baseFiles.head}")
+          .select("id", TestTableFormat.FIRST_INSTANT_TIME_COLUMN, TestTableFormat.INSTANT_TIME_COLUMN).collect()
+          .map(row => row.getInt(0) -> (row.get(1).toString, row.get(2).toString)).toMap
+        // The updated record keeps the first instant time of the record it replaces
+        assertEquals(Map(1 -> (insertInstant, mergeInstant), 2 -> (insertInstant, insertInstant), 3 -> (mergeInstant, mergeInstant)), instantTimes)
+      }
+    }
+  }
+
+  test("Test MergeInto with global index moving a record into a small file group") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE") {
+          val targetTable = generateTableName
+          spark.sql(
+            s"""
+               | create table $targetTable (id int, name string, price double, ts long, dt string) using hudi
+               | tblproperties (type = '$tableType', primaryKey = 'id', orderingFields = 'ts')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}/$targetTable'
+             """.stripMargin)
+          spark.sql(s"insert into $targetTable values (1, 'a1', 10.0, 1000, 'p1'), (2, 'a2', 20.0, 1000, 'p2')")
+          // The moved record and the new one are inserted into the small file group of partition p2
+          spark.sql(
+            s"""
+               | merge into $targetTable t using (
+               |   select 1 as id, 'a1m' as name, 5.0D as price, 2000L as ts, 'p2' as dt
+               |   union all select 3, 'a3', 30.0D, 2000L, 'p2') s
+               | on t.id = s.id
+               | when matched then update set id = s.id, name = s.name, price = s.price + 1, ts = s.ts, dt = s.dt
+               | when not matched then insert *
+             """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $targetTable order by id")(
+            Seq(1, "a1m", 6.0, 2000, "p2"), Seq(2, "a2", 20.0, 1000, "p2"), Seq(3, "a3", 30.0, 2000, "p2"))
         }
       }
     }
@@ -1767,6 +1876,43 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | when matched then update set *
              | when not matched then insert *
        """.stripMargin)
+      }
+    }
+  }
+
+  test("Test MergeInto with not matched by source clause") {
+    // Spark parses the clause since 3.4
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts int
+             | ) using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000), (2, 'a2', 20.0, 1000)")
+
+        Seq("delete", "update set price = 0.0").foreach { action =>
+          checkExceptionContain(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'a1n' as name, 11.0 as price, 1001 as ts) s
+               | on t.id = s.id
+               | when matched then update set *
+               | when not matched by source then $action
+             """.stripMargin)("WHEN NOT MATCHED BY SOURCE clause is not supported in MERGE INTO statement on a Hudi table")
+        }
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000), Seq(2, "a2", 20.0, 1000))
       }
     }
   }

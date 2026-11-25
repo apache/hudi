@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -238,6 +239,13 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
    * Returns a list of small files in the given partition path.
    */
   protected List<SmallFile> getSmallFiles(String partitionPath) {
+    if (config.shouldWriteUpdatesAsDeletesAndInserts()
+        && table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
+      // Small-file handling routes records into existing file groups through merges or log
+      // appends, but this write mode requires updates to append positional deletes and inserts
+      // to land in base files of file groups chosen by the insert partitioner
+      return Collections.emptyList();
+    }
 
     // smallFiles only for partitionPath
     List<SmallFile> smallFileLocations = new ArrayList<>();
@@ -259,6 +267,15 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
       }
     }
 
+    if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ && config.shouldWritePartialUpdates()
+        && !table.getIndex().canIndexLogFiles()) {
+      // The merge that packs inserts into a small base file takes every record of its file group, and would take
+      // the partial updates this write makes to the records of the file for full records
+      Set<String> updatedFileIds = workloadProfile.getWorkloadStat(partitionPath).getUpdateLocationToCount().keySet();
+      return smallFileLocations.stream()
+          .filter(smallFile -> !updatedFileIds.contains(smallFile.location.getFileId()))
+          .collect(Collectors.toList());
+    }
     return smallFileLocations;
   }
 

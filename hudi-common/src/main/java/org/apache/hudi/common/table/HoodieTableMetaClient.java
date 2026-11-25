@@ -1046,6 +1046,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String partitionValueExtractorClass;
     private String keyGeneratorType;
     private Boolean slashSeparatedDatePartitioning;
+    private Boolean timestampPartitionFractionalSeconds;
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
@@ -1251,6 +1252,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public TableBuilder setTimestampPartitionFractionalSeconds(Boolean timestampPartitionFractionalSeconds) {
+      this.timestampPartitionFractionalSeconds = timestampPartitionFractionalSeconds;
+      return this;
+    }
+
     public TableBuilder setPartitionValueExtractorClass(String partitionValueExtractorClass) {
       this.partitionValueExtractorClass = partitionValueExtractorClass;
       return this;
@@ -1335,6 +1341,21 @@ public class HoodieTableMetaClient implements Serializable {
           }
         }
       }
+      return setTableFormatConfigs(props);
+    }
+
+    /**
+     * Keeps the {@code hoodie.table.format.*} settings among the given properties. Settings of a
+     * pluggable table format are its own to interpret; they must reach {@link HoodieTableFormat#init}
+     * through the table config from the very first commit on.
+     */
+    public TableBuilder setTableFormatConfigs(Map<?, ?> props) {
+      String tableFormatPrefix = HoodieTableConfig.TABLE_FORMAT.key() + ".";
+      props.forEach((key, value) -> {
+        if (key instanceof String && ((String) key).startsWith(tableFormatPrefix) && value != null) {
+          this.others.put(key, String.valueOf(value));
+        }
+      });
       return this;
     }
 
@@ -1363,6 +1384,7 @@ public class HoodieTableMetaClient implements Serializable {
           }
         }
       }
+      setTableFormatConfigs(properties);
 
       if (hoodieConfig.contains(HoodieTableConfig.DATABASE_NAME)) {
         setDatabaseName(hoodieConfig.getString(HoodieTableConfig.DATABASE_NAME));
@@ -1468,6 +1490,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING)) {
         setSlashSeparatedDatePartitioning(hoodieConfig.getBoolean(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS)) {
+        setTimestampPartitionFractionalSeconds(hoodieConfig.getBoolean(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS));
       }
       if (hoodieConfig.contains(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS)) {
         setPartitionValueExtractorClass(hoodieConfig.getString(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS));
@@ -1591,6 +1616,16 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != partitionFields) {
         tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, partitionFields);
+      }
+      if (null != timestampPartitionFractionalSeconds) {
+        ValidationUtils.checkArgument(!timestampPartitionFractionalSeconds || tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN),
+            () -> HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key() + "=true needs table version 10 or later, since an older "
+                + "writer truncates the fractional seconds of a TIMESTAMP partition value; the table is created at version " + tableVersion.versionCode());
+        tableConfig.setValue(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS, Boolean.toString(timestampPartitionFractionalSeconds));
+      } else if (StringUtils.nonEmpty(partitionFields)) {
+        // Recorded even when false, so a later change of the default never changes the table's layout
+        tableConfig.setValue(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS,
+            Boolean.toString(tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN)));
       }
       if (null != recordKeyFields) {
         tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, recordKeyFields);

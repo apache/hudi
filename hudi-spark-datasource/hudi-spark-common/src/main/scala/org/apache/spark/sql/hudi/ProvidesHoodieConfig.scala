@@ -17,15 +17,15 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex, HoodieWriterUtils}
 import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig}
-import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
-import org.apache.hudi.common.util.{ConfigUtils, HoodieTableConfigUtils, ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{ConfigUtils, HoodieTableConfigUtils, PartitionPathEncodeUtils, ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, NonPartitionedExtractor}
@@ -35,16 +35,17 @@ import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
+import org.apache.hudi.table.action.commit.BaseWriteHelper
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, IsNull, Literal}
 import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{extractSparkPrefixedHoodieConfigs, filterHoodieConfigs, isUsingHiveCatalog}
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{buildOverridingOpts, buildOverridingOptsForDelete, combineOptions, getPartitionPathFieldWriteConfig}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{buildOverridingOpts, buildOverridingOptsForDelete, combineOptions, getPartitionPathFieldWriteConfig, validateUpdatesAsDeletesAndInserts}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.PARTITION_OVERWRITE_MODE
@@ -258,6 +259,10 @@ trait ProvidesHoodieConfig extends Logging {
       Map()
     }
 
+    if (operation == UPSERT_OPERATION_OPT_VAL) {
+      validateUpdatesAsDeletesAndInserts(sparkSession.sessionState.conf, hoodieCatalogTable)
+    }
+
     val staticOverwritePartitionPathOptions = staticOverwritePartitionPathOpt match {
       case Some(staticOverwritePartitionPath) =>
         Map(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS.key() -> staticOverwritePartitionPath)
@@ -306,19 +311,17 @@ trait ProvidesHoodieConfig extends Logging {
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
+  /**
+   * An unset duplicate policy is left to the writer, which fails an insert of duplicate record keys into a table
+   * with a record key, except in the legacy insert mode flow, where the insert mode decides.
+   */
   def getDropDupsConfig(useLegacyInsertModeFlow: Boolean, incomingParams: Map[String, String]): Map[String, String] = {
+    val insertDupPolicyOpt = incomingParams.get(INSERT_DUP_POLICY.key())
     if (!useLegacyInsertModeFlow) {
-      Map(DataSourceWriteOptions.INSERT_DUP_POLICY.key() -> incomingParams.getOrElse(DataSourceWriteOptions.INSERT_DUP_POLICY.key(),
-        DataSourceWriteOptions.INSERT_DUP_POLICY.defaultValue()),
-        if (incomingParams.contains(DataSourceWriteOptions.INSERT_DUP_POLICY.key()) &&
-          incomingParams(DataSourceWriteOptions.INSERT_DUP_POLICY.key()) == DROP_INSERT_DUP_POLICY) {
-          DataSourceWriteOptions.INSERT_DROP_DUPS.key() -> "true"
-        } else {
-          DataSourceWriteOptions.INSERT_DROP_DUPS.key() -> "false"
-        }
-      )
+      insertDupPolicyOpt.map(INSERT_DUP_POLICY.key() -> _).toMap +
+        (INSERT_DROP_DUPS.key() -> insertDupPolicyOpt.contains(DROP_INSERT_DUP_POLICY).toString)
     } else {
-      Map()
+      Map(INSERT_DUP_POLICY.key() -> insertDupPolicyOpt.getOrElse(NONE_INSERT_DUP_POLICY))
     }
   }
 
@@ -368,8 +371,12 @@ trait ProvidesHoodieConfig extends Logging {
       val staticPartitionValues = partitionSpec.filter(p => p._2.isDefined).mapValues(_.get)
       val predicates = staticPartitionValues.map { case (k, v) =>
         val partition = AttributeReference(k, partitionNameToType(k))()
-        val value = HoodieSqlCommonUtils.castIfNeeded(Literal.create(v), partitionNameToType(k))
-        EqualTo(partition, value)
+        if (v.isEmpty || v == PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH) {
+          // the default partition, whose value reads back as null
+          IsNull(partition)
+        } else {
+          EqualTo(partition, HoodieSqlCommonUtils.castIfNeeded(Literal.create(v), partitionNameToType(k)))
+        }
       }.toSeq
       Option(fileIndex.getPartitionPaths(predicates).map(_.getPath).mkString(","))
     } else {
@@ -522,7 +529,7 @@ object ProvidesHoodieConfig {
     //          5. Global DFS properties
     //          6. (Feature-specific) Default values
     val allConfs = sqlConf.getAllConfs
-    filterNullValues(defaultOpts) ++
+    HoodieWriterUtils.withDefaultIndexOfTableFormat(filterNullValues(defaultOpts) ++
       DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
       // NOTE: Catalog table provided t/h `TBLPROPERTIES` clause might contain Spark SQL specific
       //       properties that need to be mapped into Hudi's conventional ones
@@ -530,7 +537,7 @@ object ProvidesHoodieConfig {
       tableConfig.getProps.asScala.toMap ++
       extractSparkPrefixedHoodieConfigs(allConfs) ++
       filterHoodieConfigs(allConfs) ++
-      filterNullValues(overridingOpts)
+      filterNullValues(overridingOpts))
   }
 
   /**
@@ -571,6 +578,38 @@ object ProvidesHoodieConfig {
       DFSPropertiesConfiguration.getGlobalProps.getString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(),
         HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue.toString)
     ).toBoolean
+
+  /**
+   * Whether Spark SQL UPDATE and DELETE write prepped records located through their meta fields. A merge-on-read
+   * table writing updates as deletes and inserts looks the records of a table with a primary key up through the
+   * index instead, and always writes prepped records for a table without one, whose rows only their meta fields
+   * locate.
+   */
+  def isSparkSqlOptimizedWrite(sqlConf: SQLConf, catalogTable: HoodieCatalogTable): Boolean =
+    if (writesUpdatesAsDeletesAndInserts(sqlConf, catalogTable)) {
+      !BaseWriteHelper.hasRecordKeyFields(catalogTable.tableConfig)
+    } else {
+      sqlConf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true"
+    }
+
+  /**
+   * Refuses a statement that upserts into a merge-on-read table without a primary key in the update-as-delete-insert
+   * write mode before it does any work, as the write client would. See [[BaseWriteHelper.keylessTableNotSupported]].
+   */
+  def validateUpdatesAsDeletesAndInserts(sqlConf: SQLConf, catalogTable: HoodieCatalogTable): Unit = {
+    if (writesUpdatesAsDeletesAndInserts(sqlConf, catalogTable) && !BaseWriteHelper.hasRecordKeyFields(catalogTable.tableConfig)) {
+      throw BaseWriteHelper.keylessTableNotSupported()
+    }
+  }
+
+  /**
+   * Whether a write to the table routes each update as a positional delete plus an insert, see
+   * [[HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS]].
+   */
+  def writesUpdatesAsDeletesAndInserts(sqlConf: SQLConf, catalogTable: HoodieCatalogTable): Boolean =
+    catalogTable.tableType == HoodieTableType.MERGE_ON_READ && java.lang.Boolean.parseBoolean(
+      combineOptions(catalogTable, catalogTable.tableConfig, sqlConf, defaultOpts = Map.empty)
+        .getOrElse(HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key, "false"))
 
   private def filterNullValues(opts: Map[String, String]): Map[String, String] =
     opts.filter { case (_, v) => v != null }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -25,23 +26,27 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.tableformat.TestTableFormat;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +55,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -124,6 +130,35 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig.create(storage, metaPath, properties);
     cfgPath = new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     backupCfgPath = new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"test-format", "TEST-FORMAT", "Test-Format"})
+  void testGetTableFormatMatchesNameIgnoringCase(String configuredName) {
+    HoodieTableConfig config = new HoodieTableConfig();
+    config.setValue(HoodieTableConfig.TABLE_FORMAT, configuredName);
+    assertTrue(config.getTableFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION) instanceof TestTableFormat);
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(strings = {"native", "NATIVE"})
+  void testGetTableFormatResolvesNative(String configuredName) {
+    HoodieTableConfig config = new HoodieTableConfig();
+    if (configuredName != null) {
+      config.setValue(HoodieTableConfig.TABLE_FORMAT, configuredName);
+    }
+    assertTrue(config.getTableFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION) instanceof NativeTableFormat);
+  }
+
+  @Test
+  void testGetTableFormatFailsOnUnknownName() {
+    HoodieTableConfig config = new HoodieTableConfig();
+    config.setValue(HoodieTableConfig.TABLE_FORMAT, "missing-format");
+    HoodieException exception = assertThrows(HoodieException.class,
+        () -> config.getTableFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
+    assertEquals("Table format 'missing-format' set by hoodie.table.format matches none of the table formats found "
+        + "[native, test-format]; add the jar that provides it to the classpath", exception.getMessage());
   }
 
   @Test
@@ -438,6 +473,46 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
         "the recorded encoding must survive on a " + tableVersion + " table");
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
+  void testTimestampPartitionFractionalSecondsSurvivesConfigVersionDropping(HoodieTableVersion tableVersion) {
+    // loading the table keeps the layout its partition paths were written in, at any table version
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS, "true");
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion.versionCode()));
+
+    HoodieTableConfig.dropInvalidConfigs(config);
+
+    assertEquals("true", config.getString(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS));
+  }
+
+  @Test
+  void testNewTableRecordsTimestampPartitionFractionalSeconds() {
+    assertEquals("true", newTableProps(HoodieTableVersion.TEN, "ts", null)
+        .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+    // a table created at an older version keeps the layout the writers of that version produce
+    assertEquals("false", newTableProps(HoodieTableVersion.NINE, "ts", null)
+        .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+    assertEquals("false", newTableProps(HoodieTableVersion.TEN, "ts", false)
+        .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+    // an older writer truncates the fractional seconds, so a table created at an older version cannot keep them
+    assertThrows(IllegalArgumentException.class, () -> newTableProps(HoodieTableVersion.NINE, "ts", true));
+    assertEquals("false", newTableProps(HoodieTableVersion.NINE, "ts", false)
+        .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+    assertFalse(newTableProps(HoodieTableVersion.TEN, null, null)
+        .containsKey(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+  }
+
+  private static Properties newTableProps(HoodieTableVersion tableVersion, String partitionFields, Boolean fractionalSeconds) {
+    return HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName("test-table")
+        .setTableVersion(tableVersion)
+        .setPartitionFields(partitionFields)
+        .setTimestampPartitionFractionalSeconds(fractionalSeconds)
+        .build();
+  }
+
   private static Stream<Arguments> tableVersionsAndMetaFieldsModes() {
     return Stream.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, HoodieTableVersion.TEN)
         .flatMap(version -> Arrays.stream(MetaFieldsMode.values())
@@ -497,7 +572,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(47, configProperties.size());
+    assertEquals(48, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());

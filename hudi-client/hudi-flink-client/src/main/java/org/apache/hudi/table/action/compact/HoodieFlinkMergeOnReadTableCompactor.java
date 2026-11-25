@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -72,6 +73,8 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
                                    TaskContextSupplier taskContextSupplier,
                                    HoodieReaderContext<?> readerContext,
                                    HoodieTable table) throws IOException {
+    // The Flink record context cannot set the values of format meta columns
+    FormatMetaColumn.checkNotDeclared(table.getMetaClient().getTableFormat(), getClass());
     String maxInstantTime = getMaxInstantTime(table.getMetaClient());
     log.info("Compact using file group reader based compaction, operation: {}.", operation);
     return compact(

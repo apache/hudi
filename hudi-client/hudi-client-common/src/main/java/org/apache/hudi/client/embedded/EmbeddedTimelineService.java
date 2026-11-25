@@ -184,7 +184,7 @@ public class EmbeddedTimelineService {
     this.serviceConfig = timelineServiceConfBuilder.build();
 
     server = timelineServiceCreator.create(storageConf.newInstance(), serviceConfig, viewManager);
-    serverPort = server.startService();
+    serverPort = server.startService(hostAddr);
     log.info("Started embedded timeline server at {}:{}", hostAddr, serverPort);
   }
 

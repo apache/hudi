@@ -29,11 +29,13 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.tableformat.TestTableFormat;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +44,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
@@ -131,6 +135,35 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
       // verify output
       assertOutput(writeStatus, size, fileId, partitionPath, instantTime, totalInputRows, fileNames, fileAbsPaths, populateMetaFields);
     }
+  }
+
+  /**
+   * A table format with format meta columns gets them appended to every row the handle writes, with their values on
+   * write, unless the rows already have them, as the rows of a clustering do.
+   */
+  @Test
+  void testRowCreateHandleAppendsFormatMetaColumnsWithTheirValuesOnWrite() throws Exception {
+    metaClient = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(metaClient.getTableConfig().getProps())
+        .setTableFormat("test-format")
+        .set(Collections.singletonMap(TestTableFormat.INSTANT_TIME_COLUMN_ENABLED, "true"))
+        .initTable(storageConf.newInstance(), basePath + "_format");
+    HoodieWriteConfig config = SparkDatasetTestUtils.getConfigBuilder(basePath + "_format", timelineServicePort).build();
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
+    HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, config, partitionPath, UUID.randomUUID().toString(), "001",
+        RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
+    Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, 10, partitionPath, false);
+    WriteStatus writeStatus = writeAndGetWriteStatus(inputRows, handle);
+    assertFalse(writeStatus.hasErrors());
+
+    Dataset<Row> result = sqlContext.read().parquet(basePath + "_format/" + writeStatus.getStat().getPath());
+    assertEquals(Arrays.asList(SparkDatasetTestUtils.STRUCT_TYPE.fieldNames()),
+        Arrays.asList(result.schema().fieldNames()).subList(0, SparkDatasetTestUtils.STRUCT_TYPE.fieldNames().length));
+    assertEquals(SparkDatasetTestUtils.STRUCT_TYPE.fieldNames().length + 2, result.schema().fieldNames().length);
+    List<Row> values = result.select(TestTableFormat.INSTANT_TIME_COLUMN, TestTableFormat.FIRST_INSTANT_TIME_COLUMN).collectAsList();
+    assertEquals(10, values.size());
+    values.forEach(row -> assertEquals(RowFactory.create(1L, 1L), row));
   }
 
   /**

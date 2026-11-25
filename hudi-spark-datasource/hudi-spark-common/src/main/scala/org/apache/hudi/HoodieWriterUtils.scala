@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.NativeTableFormat
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.RecordMergeMode.CUSTOM
@@ -27,10 +28,11 @@ import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, M
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{RECORD_MERGE_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
+import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -92,6 +94,28 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(normalizedParams)
+  }
+
+  /**
+   * Defaults the index of a partitioned table with a record key whose table format is not native to
+   * [[HoodieIndex.IndexType.GLOBAL_SIMPLE]], which moves a record whose update gives it another partition, as
+   * [[HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE]] is on by default. An index type or class
+   * named by the parameters wins.
+   *
+   * @param parameters write parameters, holding the table configs of an existing table.
+   */
+  def withDefaultIndexOfTableFormat(parameters: Map[String, String]): Map[String, String] = {
+    def isSet(keys: String*): Boolean = keys.exists(key => !isNullOrEmpty(parameters.getOrElse(key, null)))
+
+    val tableFormat = parameters.getOrElse(HoodieTableConfig.TABLE_FORMAT.key, HoodieTableConfig.TABLE_FORMAT.defaultValue)
+    if (!NativeTableFormat.TABLE_FORMAT.equalsIgnoreCase(tableFormat)
+      && !isSet(HoodieIndexConfig.INDEX_TYPE.key, HoodieIndexConfig.INDEX_CLASS_NAME.key)
+      && isSet(HoodieTableConfig.RECORDKEY_FIELDS.key, RECORDKEY_FIELD.key)
+      && isSet(HoodieTableConfig.PARTITION_FIELDS.key, PARTITIONPATH_FIELD.key)) {
+      parameters + (HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.GLOBAL_SIMPLE.name)
+    } else {
+      parameters
+    }
   }
 
   /**
@@ -292,6 +316,14 @@ object HoodieWriterUtils {
     }
     // If Overwrite is set as save mode, we don't need to do table config validation.
     if (!isOverWriteMode) {
+      // A table without the property writes truncated paths, so a row with fractional seconds would land
+      // under a different partition path than its earlier versions. A persisted value is held by the diff below.
+      val fractionalSecondsKey = HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key
+      if (null != tableConfig && !tableConfig.contains(fractionalSecondsKey)
+        && params.get(fractionalSecondsKey).exists(_.equalsIgnoreCase("true"))) {
+        throw new HoodieException(s"$fractionalSecondsKey can only be set when a table is created: this table"
+          + " writes TIMESTAMP partition paths truncated to whole seconds.")
+      }
       val resolver = spark.sessionState.conf.resolver
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>

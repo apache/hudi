@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 /**
  * Records based {@link FileGroupRecordBuffer} which takes in a map of records to be merged with a base file of interest.
@@ -53,6 +54,7 @@ import java.util.List;
  */
 public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordBufferLoader<T> {
   private static final StreamingFileGroupRecordBufferLoader INSTANCE = new StreamingFileGroupRecordBufferLoader<>();
+  private static final String EXPRESSION_PAYLOAD_CLASS = "org.apache.spark.sql.hudi.command.payload.ExpressionPayload";
 
   static <T> StreamingFileGroupRecordBufferLoader<T> getInstance() {
     return INSTANCE;
@@ -63,8 +65,17 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             List<String> orderingFieldNames, TableState tableState,
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    HoodieSchema recordSchema = HoodieSchemaCache.intern(getRecordSchema(readerContext, props));
+    boolean isExpressionPayload = isExpressionPayload(readerContext, props);
+    HoodieSchema tableRecordSchema = HoodieSchemaCache.intern(getTableRecordSchema(readerContext, readerParameters));
+    HoodieSchema recordSchema = isExpressionPayload ? HoodieSchemaCache.intern(HoodieSchema.parse(props.getString("hoodie.payload.record.schema"))) : tableRecordSchema;
     readerContext.getSchemaHandler().setSchemaForUpdates(recordSchema);
+    // A MERGE INTO with a global index merges a matched record with its current version while tagging it. The result
+    // carries the table's payload in the table schema and is final: it is buffered in this schema, which the
+    // ExpressionPayload merger and update processor take as a row to keep rather than an input to evaluate. The
+    // schema has the format meta columns the reader reads, so the record is projected onto it.
+    HoodieSchema mergedRecordSchema = isExpressionPayload
+        ? HoodieSchemaCache.intern(HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequiredSchema()))
+        : recordSchema;
     HoodieTableConfig tableConfig = tableState.getTableConfig();
     Option<PartialUpdateMode> partialUpdateModeOpt = tableConfig.getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDeletes(), fileGroupUpdateCallback, props);
@@ -81,11 +92,24 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
     DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, recordSchema);
+    DeleteContext mergedRecordDeleteContext = isExpressionPayload ? DeleteContext.fromRecordSchema(props, tableRecordSchema) : deleteContext;
+    UnaryOperator<T> mergedRecordProjection = mergedRecordSchema == tableRecordSchema
+        ? UnaryOperator.identity() : recordContext.projectRecord(tableRecordSchema, mergedRecordSchema);
+    Integer mergedRecordSchemaId = recordContext.encodeSchema(mergedRecordSchema);
     while (recordIterator.hasNext()) {
       HoodieRecord<T> hoodieRecord = recordIterator.next();
       try {
-        BufferedRecord<T> bufferedRecord = BufferedRecords.fromHoodieRecord(hoodieRecord, recordSchema, recordContext, props, orderingFieldsArray,
-            deleteContext);
+        boolean isMergedRecord = isExpressionPayload
+            && (hoodieRecord.getData() == null || !EXPRESSION_PAYLOAD_CLASS.equals(hoodieRecord.getData().getClass().getName()));
+        BufferedRecord<T> bufferedRecord;
+        if (isMergedRecord) {
+          BufferedRecord<T> tableRecord = BufferedRecords.fromHoodieRecord(hoodieRecord, tableRecordSchema, recordContext, props, orderingFieldsArray,
+              mergedRecordDeleteContext);
+          bufferedRecord = new BufferedRecord<>(tableRecord.getRecordKey(), tableRecord.getOrderingValue(),
+              tableRecord.isEmpty() ? null : mergedRecordProjection.apply(tableRecord.getRecord()), mergedRecordSchemaId, tableRecord.getHoodieOperation());
+        } else {
+          bufferedRecord = BufferedRecords.fromHoodieRecord(hoodieRecord, recordSchema, recordContext, props, orderingFieldsArray, deleteContext);
+        }
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {
         throw new HoodieIOException("Failed to process next buffered record", e);
@@ -94,13 +118,18 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     return Pair.of(recordBuffer, Collections.emptyList());
   }
 
-  private static <T> HoodieSchema getRecordSchema(HoodieReaderContext<T> readerContext, TypedProperties props) {
+  private static <T> boolean isExpressionPayload(HoodieReaderContext<T> readerContext, TypedProperties props) {
     Option<Pair<String, String>> payloadClasses = readerContext.getPayloadClasses(props);
-    if (payloadClasses.isPresent() && payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
-      String schemaStr = props.getString("hoodie.payload.record.schema");
-      return HoodieSchema.parse(schemaStr);
-    } else {
-      return HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
-    }
+    return payloadClasses.isPresent() && payloadClasses.get().getRight().equals(EXPRESSION_PAYLOAD_CLASS);
+  }
+
+  /**
+   * Returns the schema of a record in the table schema, which is the requested schema without the meta fields and
+   * without the format meta columns, which only the base file stores.
+   */
+  private static <T> HoodieSchema getTableRecordSchema(HoodieReaderContext<T> readerContext, ReaderParameters readerParameters) {
+    HoodieSchema recordSchema = HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
+    return readerParameters.getFormatMetaColumns().isEmpty()
+        ? recordSchema : HoodieSchemaUtils.removeFields(recordSchema, readerParameters.getFormatMetaColumns());
   }
 }
