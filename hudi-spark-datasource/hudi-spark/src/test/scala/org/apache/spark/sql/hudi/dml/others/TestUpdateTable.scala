@@ -22,7 +22,8 @@ package org.apache.spark.sql.hudi.dml.others
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.HoodieSparkUtils.{gteqSpark3_4, gteqSpark3_5}
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.config.HoodieReaderConfig
+import org.apache.hudi.common.model.{HoodieRecordMerger, HoodieTableType}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
@@ -30,6 +31,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.{AnalysisException, Row}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.procedure.CustomSparkRecordMergerForClustering
 import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestUpdateTable extends HoodieSparkSqlTestBase {
@@ -621,6 +623,89 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         }
       }
     })
+  }
+
+  test("Test Update Table moves a record across partitions only when its update applies under event time ordering") {
+    withTempDir { tmp =>
+      // A table without a record key, and one with a record key and a global index that moves records
+      Seq("cow", "mor").flatMap(tableType => Seq((tableType, ""), (tableType, "primaryKey = 'id', 'hoodie.index.type' = 'GLOBAL_SIMPLE',")))
+        .foreach { case (tableType, keyProps) =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (id int, name string, ts long, dep string) using hudi
+               | tblproperties (type = '$tableType', $keyProps preCombineField = 'ts')
+               | partitioned by (dep)
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 100, 'd1'), (2, 'a2', 100, 'd1')")
+          val unchanged = Seq(Seq(1, "a1", 100L, "d1", "dep=d1"), Seq(2, "a2", 100L, "d1", "dep=d1"))
+
+          withSQLConf(HoodieCompactionConfig.INLINE_COMPACT.key -> "false") {
+            // An update with a lower ordering value than the record leaves it as it is, whether or not it also gives
+            // the record another partition
+            spark.sql(s"update $tableName set ts = 90, name = 'a1u' where id = 1")
+            checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName order by id")(unchanged: _*)
+            spark.sql(s"update $tableName set ts = 90, name = 'a1u', dep = 'd2' where id = 1")
+            checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName order by id")(unchanged: _*)
+
+            // A statement that applies the update of id 2 only, which it moves
+            spark.sql(s"update $tableName set ts = if(id = 1, 90, 110), name = concat(name, 'u'), dep = 'd2' where id in (1, 2)")
+          }
+          val expected = Seq(Seq(1, "a1", 100L, "d1", "dep=d1"), Seq(2, "a2u", 110L, "d2", "dep=d2"))
+          checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName order by id")(expected: _*)
+          if (tableType == "mor") {
+            compactAndCheck(tableName)
+            checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName order by id")(expected: _*)
+          }
+        }
+    }
+  }
+
+  test("Test Update Table keeps a record in its partition when its update has a lower nested ordering value") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, attributes struct<ts: long, src: string>, dep string) using hudi
+             | tblproperties (type = '$tableType', orderingFields = 'attributes.ts')
+             | partitioned by (dep)
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, 'a1', named_struct('ts', 100L, 'src', 's1'), 'd1'")
+
+        withSQLConf(HoodieCompactionConfig.INLINE_COMPACT.key -> "false") {
+          // A lower nested ordering value leaves the record as it is, as the same update without a partition change does
+          spark.sql(s"update $tableName set attributes = named_struct('ts', 90L, 'src', 's2'), name = 'a1u', dep = 'd2' where id = 1")
+        }
+        checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(Seq(1, "a1", 100L, "d1", "dep=d1"))
+      }
+    }
+  }
+
+  test("Test Update Table refuses to move a record across partitions when a custom merger decides whether its update applies") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, ts long, dep string) using hudi
+           | tblproperties (
+           |   type = 'cow',
+           |   orderingFields = 'ts',
+           |   'hoodie.write.record.merge.mode' = 'CUSTOM',
+           |   'hoodie.write.record.merge.strategy.id' = '${HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID}',
+           |   '${HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY}' = '${classOf[CustomSparkRecordMergerForClustering].getName}')
+           | partitioned by (dep)
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 100, 'd1')")
+
+      checkExceptionContain(s"update $tableName set ts = 110, dep = 'd2' where id = 1")(
+        s"UPDATE cannot change the partition field(s) `dep` of table `spark_catalog.default.$tableName` under the " +
+          "CUSTOM merge mode, as it cannot tell whether the merge applies the update to a record.")
+      checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName")(Seq(1, "a1", 100L, "d1", "dep=d1"))
+    }
   }
 
   test("Test UPDATE on VECTOR column preserves custom-type metadata") {

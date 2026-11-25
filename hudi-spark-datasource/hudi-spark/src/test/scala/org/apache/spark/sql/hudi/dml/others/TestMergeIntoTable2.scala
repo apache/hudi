@@ -2368,4 +2368,94 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test MergeInto deletes by record key from a source without the partition field through a global index that keeps records in their partition") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, ts long, dep string) using hudi
+           | tblproperties (type = 'cow', primaryKey = 'id', preCombineField = 'ts', 'hoodie.index.type' = 'GLOBAL_SIMPLE',
+           |   '${HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE.key}' = 'false')
+           | partitioned by (dep)
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd2')")
+
+      spark.sql(
+        s"""
+           | merge into $tableName t
+           | using (select 1 as id, 20L as ts) s
+           | on t.id = s.id
+           | when matched then delete
+         """.stripMargin)
+      checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(2, "a2", 10L, "d2"))
+    }
+  }
+
+  test("Test MergeInto and Update move a record across partitions of a table with a record key and a global index") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, dep string) using hudi
+             | tblproperties (type = '$tableType', primaryKey = 'id', 'hoodie.index.type' = 'GLOBAL_SIMPLE')
+             | partitioned by (dep)
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 'd1'), (2, 'a2', 'd1'), (3, 'a3', 'd2'), (4, 'a4', 'd2')")
+
+        // id 1 takes the partition the source names, id 2 one other than the source value it is looked up under
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1m' as name, 'd2' as dep, 'd2' as new_dep
+             |   union all select 2, 'a2m', 'd1', 'd3' union all select 4, 'a4m', 'd2', 'd2') s
+             | on t.id = s.id
+             | when matched and s.id = 1 then update set *
+             | when matched and s.id = 2 then update set id = s.id, name = s.name, dep = s.new_dep
+             | when matched and s.id = 4 then update set id = s.id, name = s.name, dep = s.new_dep
+           """.stripMargin)
+        spark.sql(s"update $tableName set dep = 'd1', name = 'a3u' where id = 3")
+        val expected = Seq(Seq(1, "a1m", "d2"), Seq(2, "a2m", "d3"), Seq(3, "a3u", "d1"), Seq(4, "a4m", "d2"))
+        checkPartitionedRows(tableName, "dep")(expected: _*)
+        if (tableType == "mor") {
+          compactAndCheck(tableName)
+          checkPartitionedRows(tableName, "dep")(expected: _*)
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto and Update refuse to move a record of a table with a record key and an index that does not move records") {
+    withTempDir { tmp =>
+      // The record index moves records only with hoodie.record.index.update.partition.path on
+      Seq("SIMPLE", "RECORD_INDEX").foreach { indexType =>
+        withSQLConf("hoodie.index.type" -> indexType,
+          HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> (indexType == "RECORD_INDEX").toString) {
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (id int, name string, dep string) using hudi
+               | tblproperties (primaryKey = 'id')
+               | partitioned by (dep)
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 'd1')")
+          checkExceptionContain(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'a1m' as name, 'd1' as dep, 'd9' as new_dep) s
+               | on t.id = s.id
+               | when matched then update set id = s.id, name = s.name, dep = s.new_dep
+             """.stripMargin)(
+            "Detected disallowed assignment clause in MERGE INTO statement for partition field `dep`")
+          checkExceptionContain(s"update $tableName set dep = 'd9' where id = 1")(
+            "Detected disallowed assignment clause in UPDATE statement for partition field `dep`")
+          checkPartitionedRows(tableName, "dep")(Seq(1, "a1", "d1"))
+        }
+      }
+    }
+  }
 }
