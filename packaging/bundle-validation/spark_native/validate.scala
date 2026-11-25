@@ -90,7 +90,6 @@ probe("mor", morLeft, morRight)
 if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   var failures = 0
   var checksRun = 0
-  var checksSkipped = 0
   val expectedChecks = 84
   def check(label: String, condition: Boolean, detail: => String): Unit = {
     checksRun += 1
@@ -224,18 +223,31 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
   // query projects, so the table stays on the JVM scan.
   compare("default partition", expectNative = false)(
     spark.read.format("hudi").load(nullPartitions).selectExpr("uuid", "fare"))
-  // The JVM read appends partition values parsed back from the path; a
-  // timestamp's path form keeps milliseconds and follows the JVM time zone.
-  // On Spark 4 the JVM read itself cannot parse that path form back while planning,
-  // so the shape is checked on Spark 3 only.
-  if (spark.version.startsWith("3.")) {
-    val timestampPartition = writeV8("native_scan_timestamp_partition_v8", "COPY_ON_WRITE", Overwrite,
-      rows(0, 60).withColumn("partitionpath",
-        org.apache.spark.sql.functions.expr("timestamp_micros((ts % 3) * 1000000 + 123456)")), "upsert")
-    compare("timestamp partition column", expectNative = false)(
-      spark.read.format("hudi").load(timestampPartition).selectExpr("uuid", "partitionpath", "fare"))
+  // The JVM read appends partition values parsed back from the path, which holds a timestamp
+  // as epoch microseconds. Without ANSI casts they parse into wrong values or nulls; with them
+  // (the Spark 4 default) the cast fails while the read is planned, whether or not the native
+  // scan is enabled. Once the JVM read succeeds there, compare it as without ANSI casts.
+  val timestampPartition = writeV8("native_scan_timestamp_partition_v8", "COPY_ON_WRITE", Overwrite,
+    rows(0, 60).withColumn("partitionpath",
+      org.apache.spark.sql.functions.expr("timestamp_micros((ts % 3) * 1000000 + 123456)")), "upsert")
+  def timestampPartitionRead =
+    spark.read.format("hudi").load(timestampPartition).selectExpr("uuid", "partitionpath", "fare")
+  if (!spark.conf.get("spark.sql.ansi.enabled").toBoolean) {
+    compare("timestamp partition column", expectNative = false)(timestampPartitionRead)
   } else {
-    checksSkipped += 2
+    val castFailure = "` to `TimestampType` for partition column `partitionpath`"
+    for (native <- Seq(false, true)) {
+      spark.conf.set("spark.comet.scan.hudi.enabled", native.toString)
+      val failure = scala.util.Try(timestampPartitionRead.collect()).failed.toOption
+      spark.conf.set("spark.comet.scan.hudi.enabled", "false")
+      val causes = failure.toList.flatMap(e =>
+        Iterator.iterate(e)(_.getCause).takeWhile(_ != null).map(_.toString).toList)
+      check(s"timestamp partition column read ${if (native) "with" else "without"} the native scan " +
+        "fails to cast the path value under ANSI casts",
+        causes.exists(c => c.startsWith("java.lang.RuntimeException: Failed to cast value `") &&
+          c.endsWith(castFailure)),
+        if (failure.isEmpty) "the read succeeded" else causes.mkString("\n"))
+    }
   }
   // A column added after the base files were written is null-filled from the table schema.
   val evolved = writeV8("native_scan_mor_evolved_v8", "MERGE_ON_READ", Overwrite, rows(0, 300), "upsert")
@@ -677,8 +689,8 @@ if (sys.env.get("NATIVE_HUDI_SCAN").contains("1")) {
     r => r.scans == 1 && r.asParquet == 0)(
     spark.read.format("hudi").option("as.of.instant", firstInstant).load(nativeCow).selectExpr("uuid", "fare", "ts"))
 
-  if (failures > 0 || checksRun != expectedChecks - checksSkipped) {
-    println(s"::error::native hudi scan probes: failures=$failures checksRun=$checksRun expected=$expectedChecks skipped=$checksSkipped")
+  if (failures > 0 || checksRun != expectedChecks) {
+    println(s"::error::native hudi scan probes: failures=$failures checksRun=$checksRun expected=$expectedChecks")
     System.exit(1)
   }
 }
