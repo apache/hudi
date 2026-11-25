@@ -122,18 +122,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
         handleInsertPartition(instantTime, partition, records.iterator(), partitioner).forEachRemaining(writeStatuses::addAll);
       }
     });
-    updateIndex(writeStatuses, result);
     updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
     return result;
-  }
-
-  protected List<WriteStatus> updateIndex(List<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result) {
-    Instant indexStartTime = Instant.now();
-    // Update the index back
-    List<WriteStatus> statuses = table.getIndex().updateLocation(HoodieListData.eager(writeStatuses), context, table).collectAsList();
-    result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
-    result.setWriteStatuses(statuses);
-    return statuses;
   }
 
   @Override
