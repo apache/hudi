@@ -44,6 +44,9 @@ import scala.collection.JavaConverters._
 /**
  * Base class for testing HoodieBackedTableMetadata index lookup functionality.
  * Provides shared setup and common test utilities.
+ *
+ * Runs alone (ExclusiveSuite): setup and teardown unpersist every RDD of the shared SparkContext and the
+ * tests assert the context holds none, which neighbouring suites would break.
  */
 abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkSqlTestBase with ExclusiveSuite {
 

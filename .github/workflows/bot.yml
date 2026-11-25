@@ -1085,13 +1085,16 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
-      - name: Java FTB - Spark
+      # -DskipUTs=false also runs the Scala suites of scala-other-2's packages that build their
+      # own SparkContext (about two minutes) in the same invocation. The shared-session suites of
+      # the same packages run in scala-other-2.
+      - name: Java FTB - Spark, Scala UT - remaining packages, own SparkContext
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -DskipUTs=false $SCALA_TEST_OTHERS2_FILTER -Dhudi.scalatest.tagsToExclude=org.apache.hudi.functional.SparkSQLCoreFlow,org.apache.spark.sql.hudi.common.SharedSessionSuite
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
@@ -1339,6 +1342,7 @@ jobs:
           flags: spark-scala-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # sharedSession + parallel: the HoodieSparkSqlTestBase suites of these packages (tag SharedSessionSuite) share one SparkContext and run two at a time; the other suites of the same packages run in test-spark-java17-ftb
   test-spark-java17-scala-other-2:
     if: *route
     needs: changes
@@ -1383,14 +1387,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2 -DtagsToInclude=org.apache.spark.sql.hudi.common.SharedSessionSuite
       - name: Scala FT - Spark (remaining packages)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false -Dhudi.spark.test.sharedSession=true -Dhudi.scalatest.parallel=true -Dhudi.scalatest.threads=2 -DtagsToInclude=org.apache.spark.sql.hudi.common.SharedSessionSuite
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
