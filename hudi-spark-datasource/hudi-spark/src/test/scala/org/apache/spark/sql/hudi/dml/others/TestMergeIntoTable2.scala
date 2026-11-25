@@ -1611,7 +1611,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |   CAST(49 AS INT),
                |   CAST(2 AS BIGINT)
                |) s
-               |ON t.price = s.price
+               |ON t.id = s.id
                |WHEN MATCHED THEN UPDATE SET
                |    t.id = s.id,
                |    t.name = s.name,

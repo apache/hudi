@@ -226,8 +226,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           expressionSet.remove((attr, expr))
           (attr, expr)
       }
-      if (resolving.isEmpty && rk._1.equals("primaryKey")
-        && sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false") == "true") {
+      // A record key field nested in a struct cannot be named in the ON condition, so it is taken
+      // from the source as is
+      if (resolving.isEmpty && rk._1.equals("primaryKey") && !rk._2.contains(".")) {
         throw new HoodieAnalysisException(s"Hudi tables with record key are required to match on all record key columns. Column: '${rk._2}' not found")
       }
       resolving
