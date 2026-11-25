@@ -56,7 +56,7 @@ import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignment
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
-import org.apache.spark.sql.types.{BooleanType, MapType, StructField, StructType}
+import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
 
@@ -517,10 +517,19 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       case Assignment(assigned: Attribute, value) if attributeEquals(assigned, attr) => castIfNeeded(value, attr.dataType)
     }.getOrElse(attr)
 
+    // A matched record holds the values the merge condition equates its columns to
+    val equatedValues = splitConjunctivePredicates(mergeInto.mergeCondition).collect {
+      case EqualTo(left, right) => Seq(left, right)
+      case EqualNullSafe(left, right) => Seq(left, right)
+    }
+
+    def keepsValue(attr: Attribute, value: Expression): Boolean = value.semanticEquals(attr) ||
+      equatedValues.exists(sides => sides.exists(_.semanticEquals(attr)) && sides.exists(_.semanticEquals(value)))
+
     val conditions = updatingActions.map(_.condition.getOrElse(Literal.TrueLiteral))
     val changesPartition = updatingActions.map { action =>
       partitionAttrs.map(attr => updated(action, attr) -> attr)
-        .collect { case (value, attr) if !value.semanticEquals(attr) => Not(EqualNullSafe(value, attr)): Expression }
+        .collect { case (value, attr) if !keepsValue(attr, value) => Not(EqualNullSafe(value, attr)): Expression }
         .reduceOption(Or).getOrElse(Literal.FalseLiteral)
     }
     if (changesPartition.forall(_ == Literal.FalseLiteral)) {
@@ -545,7 +554,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val withMoves = Project(joinData.output :+ moves, joinData)
 
       // Source records of a matched record, spreading the ones that match no record by their values
-      val hashableCols = incomingDataCols.filterNot(_.dataType.existsRecursively(_.isInstanceOf[MapType]))
+      val hashableCols = incomingDataCols.filter(col => new Murmur3Hash(Seq(col)).checkInputDataTypes().isSuccess)
       val targetRecord = Seq(recordKeyCol, partitionPathCol,
         if (hashableCols.isEmpty) Literal(0) else If(IsNull(recordKeyCol), new Murmur3Hash(hashableCols), Literal(0)))
       val window = WindowSpecDefinition(targetRecord, Seq.empty, UnspecifiedFrame)

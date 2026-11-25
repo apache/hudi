@@ -664,22 +664,52 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test Update Table keeps a record in its partition when its update has a lower nested ordering value") {
     withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             | create table $tableName (id int, name string, attributes struct<ts: long, src: string>, dep string) using hudi
-             | tblproperties (type = '$tableType', orderingFields = 'attributes.ts')
-             | partitioned by (dep)
-             | location '${tmp.getCanonicalPath}/$tableName'
-           """.stripMargin)
-        spark.sql(s"insert into $tableName select 1, 'a1', named_struct('ts', 100L, 'src', 's1'), 'd1'")
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, attributes struct<ts: long, src: string>, dep string) using hudi
+           | tblproperties (type = 'cow', orderingFields = 'attributes.ts')
+           | partitioned by (dep)
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName select 1, 'a1', named_struct('ts', 100L, 'src', 's1'), 'd1'")
 
-        withSQLConf(HoodieCompactionConfig.INLINE_COMPACT.key -> "false") {
-          // A lower nested ordering value leaves the record as it is, as the same update without a partition change does
-          spark.sql(s"update $tableName set attributes = named_struct('ts', 90L, 'src', 's2'), name = 'a1u', dep = 'd2' where id = 1")
+      // A lower nested ordering value leaves the record as it is, as the same update without a partition change does
+      spark.sql(s"update $tableName set attributes = named_struct('ts', 90L, 'src', 's2'), name = 'a1u', dep = 'd2' where id = 1")
+      checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(Seq(1, "a1", 100L, "d1", "dep=d1"))
+
+      spark.sql(s"update $tableName set attributes = named_struct('ts', 110L, 'src', 's2'), name = 'a1u', dep = 'd2' where id = 1")
+      checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(Seq(1, "a1u", 110L, "d2", "dep=d2"))
+    }
+  }
+
+  test("Test Update Table refuses to move a record of a merge-on-read table with a nested ordering field") {
+    withTempDir { tmp =>
+      val globalIndexProps = "primaryKey = 'id', 'hoodie.index.type' = 'GLOBAL_SIMPLE', 'hoodie.simple.index.update.partition.path' = 'true',"
+      Seq(("", "true"), (globalIndexProps, "true"), (globalIndexProps, "false")).foreach { case (keyProps, optimizedWrites) =>
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key -> optimizedWrites) {
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (id int, name string, attributes struct<ts: long, src: string>, dep string) using hudi
+               | tblproperties (type = 'mor', $keyProps orderingFields = 'attributes.ts')
+               | partitioned by (dep)
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName select 1, 'a1', named_struct('ts', 100L, 'src', 's1'), 'd1'")
+
+          checkExceptionContain(
+            s"update $tableName set attributes = named_struct('ts', 110L, 'src', 's2'), dep = 'd2' where id = 1")(
+            s"UPDATE cannot change the partition field(s) `dep` of merge-on-read table `spark_catalog.default.$tableName`, " +
+              "as its nested ordering field(s) `attributes.ts` cannot be written with the delete of a moved record.")
+          checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(
+            Seq(1, "a1", 100L, "d1", "dep=d1"))
+
+          // An update that changes no partition field is not refused
+          spark.sql(s"update $tableName set attributes = named_struct('ts', 110L, 'src', 's2'), name = 'a1u' where id = 1")
+          checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(
+            Seq(1, "a1u", 110L, "d1", "dep=d1"))
         }
-        checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(Seq(1, "a1", 100L, "d1", "dep=d1"))
       }
     }
   }

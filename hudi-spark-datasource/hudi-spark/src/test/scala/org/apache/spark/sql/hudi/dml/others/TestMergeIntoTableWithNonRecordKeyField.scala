@@ -19,17 +19,20 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
+import org.apache.hudi.{HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
-import org.apache.hudi.ScalaAssertionSupport
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
+import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertTrue
 
 import java.io.File
+
+import java.util.concurrent.ConcurrentHashMap
 
 class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
@@ -632,6 +635,79 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
       assertTrue(createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName").getTableConfig
         .isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
       checkExceptionContain(deleteWithLowerOrderingValue(tableName))("A WHEN MATCHED DELETE clause is only supported with commit time ordering")
+    }
+  }
+
+  test("Test MergeInto looks for records to move in a pkless table unless the merge condition holds their partition") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, dep string) using hudi
+           | tblproperties (type = 'cow')
+           | partitioned by (dep)
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 'd1'), (2, 'a2', 'd1')")
+      // Whether the merge counts the source records of a matched record in a window, for the records it may move
+      def countsMatches(condition: String, name: String): Boolean = {
+        val operators = ConcurrentHashMap.newKeySet[String]()
+        val listener = new SparkListener {
+          override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit =
+            stageSubmitted.stageInfo.rddInfos.flatMap(_.scope).foreach(scope => operators.add(scope.name))
+        }
+        spark.sparkContext.addSparkListener(listener)
+        try {
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, '$name' as name, 'd1' as dep, 'd1' as old_dep) s
+               | on $condition
+               | when matched then update set id = s.id, name = s.name, dep = s.dep
+             """.stripMargin)
+          spark.sparkContext.listenerBus.waitUntilEmpty()
+        } finally {
+          spark.sparkContext.removeSparkListener(listener)
+        }
+        checkPartitionedRows(tableName, "dep")(Seq(1, name, "d1"), Seq(2, "a2", "d1"))
+        operators.contains("Window")
+      }
+
+      assertResult(true)(countsMatches("t.id = s.id", "b1"))
+      assertResult(false)(countsMatches("t.id = s.id and t.dep = s.dep", "c1"))
+      assertResult(false)(countsMatches("s.dep <=> t.dep and t.id = s.id", "d1"))
+      // The condition equates the partition column to another value than the one the clause assigns
+      assertResult(true)(countsMatches("t.id = s.id and t.dep = s.old_dep", "e1"))
+    }
+  }
+
+  test("Test MergeInto moves a matched record of a pkless table with a Variant column") {
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, v variant, dep string) using hudi
+           | tblproperties (type = 'cow')
+           | partitioned by (dep)
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"""insert into $tableName values (1, 'a1', parse_json('{"k":1}'), 'd1'), (2, 'a2', parse_json('{"k":2}'), 'd1')""")
+      spark.sql(
+        s"""
+           | merge into $tableName t
+           | using (select 1 as id, 'a1m' as name, parse_json('{"k":10}') as v, 'd2' as dep
+           |   union all select 2, 'a2m', parse_json('{"k":20}'), 'd1'
+           |   union all select 3, 'a3', parse_json('{"k":30}'), 'd1') s
+           | on t.id = s.id
+           | when matched then update set *
+           | when not matched then insert *
+         """.stripMargin)
+      checkPartitionedRows(tableName, "dep")(Seq(1, "a1m", "d2"), Seq(2, "a2m", "d1"), Seq(3, "a3", "d1"))
+      checkAnswer(s"select id, cast(v as string) from $tableName order by id")(
+        Seq(1, "{\"k\":10}"), Seq(2, "{\"k\":20}"), Seq(3, "{\"k\":30}"))
+    }
+  }
 
   test("Test MergeInto moves a matched record of a pkless cow table with an ordering field only when its update applies") {
     withTempDir { tmp =>

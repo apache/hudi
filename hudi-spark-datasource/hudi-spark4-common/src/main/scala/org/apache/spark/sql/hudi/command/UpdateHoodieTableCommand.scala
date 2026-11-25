@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY, SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY}
+import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY, SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY}
 import org.apache.hudi.common.config.RecordMergeMode
 
 import org.apache.spark.internal.Logging
@@ -163,6 +163,24 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
   }
 
   /**
+   * Refuses to move a record of a merge-on-read table with a nested ordering field: the move deletes the record
+   * where it was read, and a delete log holds the ordering fields of the table as top-level columns.
+   */
+  private def validateMovedRecordsAreDeletable(catalogTable: HoodieCatalogTable,
+                                               resolver: Resolver,
+                                               targetAttrs: Seq[Attribute]): Unit = {
+    val nestedFields = catalogTable.orderingFields.asScala.toSeq
+      .filterNot(field => targetAttrs.exists(attr => resolver(attr.name, field)))
+    if (catalogTable.tableTypeName == MOR_TABLE_TYPE_OPT_VAL && nestedFields.nonEmpty
+      && catalogTable.tableConfig.getRecordMergeMode != RecordMergeMode.COMMIT_TIME_ORDERING) {
+      val partitionFields = catalogTable.partitionFields.map(field => s"`$field`").mkString(", ")
+      throw new HoodieAnalysisException(s"UPDATE cannot change the partition field(s) $partitionFields of merge-on-read " +
+        s"table `${catalogTable.table.qualifiedName}`, as its nested ordering field(s) " +
+        s"${nestedFields.map(field => s"`$field`").mkString(", ")} cannot be written with the delete of a moved record.")
+    }
+  }
+
+  /**
    * The target attribute holding the ordering field `field` and the extraction of the field's value from a value of
    * that attribute, following a nested field (`a.b`) into structs. None when the field does not resolve.
    */
@@ -250,7 +268,11 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
     val partitionAttrs = hoodieCatalogTable.partitionFields.flatMap { field =>
       ut.table.output.find(attr => resolver(attr.name, field))
     }
-    val movesRecord = if (optimizedWrites && partitionAttrs.exists(attr => !updatedValue(attr).semanticEquals(attr))) {
+    val changesPartition = partitionAttrs.exists(attr => !updatedValue(attr).semanticEquals(attr))
+    if (changesPartition) {
+      validateMovedRecordsAreDeletable(hoodieCatalogTable, resolver, ut.table.output)
+    }
+    val movesRecord = if (optimizedWrites && changesPartition) {
       Some(movesOnlyAppliedUpdates(hoodieCatalogTable, resolver, ut.table.output, updatedValue))
     } else {
       None
