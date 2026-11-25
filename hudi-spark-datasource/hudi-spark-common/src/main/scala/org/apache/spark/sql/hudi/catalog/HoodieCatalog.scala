@@ -28,6 +28,8 @@ import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator}
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.storage.StoragePath
 
@@ -56,6 +58,7 @@ import java.util
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.util.Try
 
 class HoodieCatalog extends DelegatingCatalogExtension
   with HoodieCatalogColumnsSupport
@@ -316,7 +319,8 @@ class HoodieCatalog extends DelegatingCatalogExtension
    * ...) can't be changed through the catalog, since the catalog would no longer match the table.
    */
   private def catalogPropertyChangesToApply(table: CatalogTable, changes: Seq[TableChange]): Seq[TableChange] = {
-    lazy val tableConfig = HoodieCatalogTable(spark, table).tableConfig
+    lazy val hoodieTable = HoodieCatalogTable(spark, table)
+    lazy val tableConfig = hoodieTable.tableConfig
     val properties = table.properties
     lazy val sqlProperties = HoodieOptionConfig.makeOptionsCaseInsensitive(properties)
     def catalogValue(key: String): Option[String] =
@@ -328,10 +332,12 @@ class HoodieCatalog extends DelegatingCatalogExtension
         HoodieOptionConfig.mapToTableConfig(set.property, set.value) match {
           case Some((tableConfigKey, value)) =>
             val persisted = HoodieOptionConfig.getTableConfigValue(tableConfig, tableConfigKey)
-            // An absent partition-fields property denotes an unpartitioned table. Do not infer other write defaults.
-            val emptyPartitionFields = tableConfigKey == HoodieTableConfig.PARTITION_FIELDS.key && persisted.isEmpty && value.isEmpty
-            // Catalog properties may be stale; even an unchanged catalog value must agree with hoodie.properties.
-            if (!persisted.contains(value) && !emptyPartitionFields) {
+            val matches = if (tableConfigKey == HoodieTableConfig.PARTITION_FIELDS.key) {
+              partitionPropertyMatches(hoodieTable, set.property, value)
+            } else {
+              persisted.contains(value)
+            }
+            if (!matches) {
               throw new HoodieAnalysisException(s"Can't set ${set.property} to '${set.value}' on Hudi table " +
                 s"${table.identifier}: it is persisted in hoodie.properties as $tableConfigKey " +
                 s"(current value: ${persisted.getOrElse("unset")}) and can't be changed by altering the table.")
@@ -359,6 +365,26 @@ class HoodieCatalog extends DelegatingCatalogExtension
           TableChange.setProperty(key, value)
       }
       set ++ removed
+    }
+  }
+
+  private def partitionPropertyMatches(table: HoodieCatalogTable, key: String, value: String): Boolean = {
+    val config = table.tableConfig
+    val persisted = HoodieTableConfig.getPartitionFieldPropForKeyGenerator(config).orElse("")
+    val writeKey = DataSourceWriteOptions.PARTITIONPATH_FIELD.key
+    val legacyCustomWriteOption = key == writeKey && persisted.nonEmpty &&
+      !persisted.contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX) &&
+      HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.KEY_GENERATOR_TYPE.key).contains(KeyGeneratorType.CUSTOM.name())
+    if (legacyCustomWriteOption) {
+      // Older writers persisted only the names. Spark SQL takes their types from the catalog write option.
+      // Check both sources, so a stale catalog entry cannot override the fields on disk.
+      table.catalogProperties.get(writeKey).contains(value) && Try {
+        val fields = value.split(BaseKeyGenerator.FIELD_SEPARATOR, -1)
+          .map(field => CustomAvroKeyGenerator.getPartitionFieldAndKeyType(field.trim))
+        fields.forall(_.getRight.isPresent) && fields.map(_.getLeft).sameElements(config.getPartitionFields.get())
+      }.getOrElse(false)
+    } else {
+      value == persisted
     }
   }
 

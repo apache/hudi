@@ -130,6 +130,17 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
   }
 
   @Test
+  def testAvroClassReplayOnTablePersistingSparkKeyGenerator(): Unit = {
+    val config = new HoodieTableConfig()
+    config.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, KeyGeneratorType.COMPLEX.getClassName)
+    Seq("hoodie.datasource.write.keygenerator.class" -> KeyGeneratorType.COMPLEX_AVRO.getClassName,
+      "hoodie.datasource.write.keygenerator.type" -> "complex_avro").foreach { case (key, value) =>
+      val (tableKey, requested) = HoodieOptionConfig.mapToTableConfig(key, value).get
+      assertEquals(Some(requested), HoodieOptionConfig.getTableConfigValue(config, tableKey))
+    }
+  }
+
+  @Test
   def testMapToTableConfigLeavesWriteAndCustomPropertiesMutable(): Unit = {
     Seq("hoodie.table.services.enabled", "hoodie.table.services.incremental.enabled",
       "hoodie.table.service.manager.enabled", "hoodie.table.custom.setting", "some.key").foreach { key =>

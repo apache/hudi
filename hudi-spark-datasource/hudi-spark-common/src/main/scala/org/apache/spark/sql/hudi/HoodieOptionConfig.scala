@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceWriteOptions, HoodieWriterUtils}
 import org.apache.hudi.common.avro.HoodieAvroUtils.getRootLevelFieldName
 import org.apache.hudi.common.config.ConfigProperty
 import org.apache.hudi.common.model.HoodieTableType
@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{ConfigUtils, ValidationUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType
@@ -156,6 +157,11 @@ object HoodieOptionConfig {
     HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key,
     HoodieWriteConfig.KEYGENERATOR_TYPE.key -> HoodieTableConfig.KEY_GENERATOR_TYPE.key)
 
+  private val sparkKeyGeneratorTypes: Map[String, String] = KeyGeneratorType.values().iterator
+    .filterNot(_ == KeyGeneratorType.USER_PROVIDED)
+    .map { typ => typ.name() -> KeyGeneratorType.fromClassName(convertToSparkKeyGenerator(typ.getClassName)).name() }
+    .toMap
+
   private lazy val caseInsensitiveSqlOptionKeys: Map[String, String] =
     sqlOptionKeyToWriteConfigKey.keys.map(key => key.toLowerCase(Locale.ROOT) -> key).toMap
 
@@ -212,16 +218,19 @@ object HoodieOptionConfig {
   }
 
   /**
-   * Map a SQL option, data source write config or table config, given by key and value, to the table config
-   * it is persisted as in hoodie.properties. Returns None if it is not persisted as a table config.
+   * Map a SQL option, data source write config or table config to its persisted key and a value normalized
+   * for comparison with hoodie.properties. Returns None for properties outside the table config.
    */
   def mapToTableConfig(key: String, value: String): Option[(String, String)] = {
     val sqlKey = writeConfigKeyToSqlOptionKey.getOrElse(key, canonicalizeSqlOptionKey(key))
     sqlOptionKeyToTableConfigKey.get(sqlKey).orElse(identityWriteConfigKeys.get(key)).orElse(tableConfigKeys.get(key)).map { tableKey =>
       val tableValue = if (tableKey == HoodieTableConfig.TYPE.key) {
         sqlOptionValueToHoodieConfigValue.getOrElse(value.toLowerCase(Locale.ROOT), value.toUpperCase(Locale.ROOT))
+      } else if (tableKey == HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) {
+        convertToSparkKeyGenerator(value)
       } else if (tableKey == HoodieTableConfig.KEY_GENERATOR_TYPE.key) {
-        value.toUpperCase(Locale.ROOT)
+        val typeName = value.toUpperCase(Locale.ROOT)
+        sparkKeyGeneratorTypes.getOrElse(typeName, typeName)
       } else {
         value
       }
@@ -229,19 +238,28 @@ object HoodieOptionConfig {
     }
   }
 
-  /** Read persisted values, including the class/type representations of a key generator, without write defaults. */
+  /** Resolve both representations from the persisted generator, using the same Avro conversions as the catalog. */
+  private def keyGeneratorConfig(tableConfig: HoodieTableConfig): Map[String, String] =
+    Option(tableConfig.getKeyGeneratorClassName).map { className =>
+      val sparkClass = convertToSparkKeyGenerator(className)
+      Map(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key -> sparkClass,
+        HoodieTableConfig.KEY_GENERATOR_TYPE.key -> KeyGeneratorType.fromClassName(sparkClass).name())
+    }.getOrElse(Map.empty)
+
+  /** Read persisted values without supplying write defaults. */
   private[hudi] def getTableConfigValue(tableConfig: HoodieTableConfig, key: String): Option[String] = {
-    val persisted = tableConfigProperties.get(key)
-      .flatMap(config => Option(ConfigUtils.getStringWithAltKeys(tableConfig.getProps, config, null: String)))
-      .flatMap(value => mapToTableConfig(key, value).map(_._2))
-    persisted.orElse {
-      key match {
-        case k if k == HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key =>
-          Option(tableConfig.getKeyGeneratorClassName)
-        case k if k == HoodieTableConfig.KEY_GENERATOR_TYPE.key =>
-          Option(tableConfig.getKeyGeneratorClassName).map(KeyGeneratorType.fromClassName(_).name())
-        case _ => None
+    if (key == HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key || key == HoodieTableConfig.KEY_GENERATOR_TYPE.key) {
+      keyGeneratorConfig(tableConfig).get(key)
+    } else {
+      // After upgrade the original payload may be recorded under the legacy payload key.
+      val persistedKey = if (tableConfig.contains(HoodieTableConfig.VERSION)) {
+        HoodieWriterUtils.getKeyInTableConfig(key, tableConfig)
+      } else {
+        key
       }
+      tableConfigProperties.get(persistedKey)
+        .flatMap(config => Option(ConfigUtils.getStringWithAltKeys(tableConfig.getProps, config, null: String)))
+        .flatMap(value => mapToTableConfig(key, value).map(_._2))
     }
   }
 
