@@ -868,8 +868,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .collect().map(row => row.getInt(0) -> FSUtils.getFileId(row.getString(1))).toMap
     val allFileGroups = fileGroupOfId.values.toSet
     assertEquals(4, allFileGroups.size)
-    // An update adds a log file on MOR; "opt" stays all null in the first file group
-    spark.createDataFrame(spark.sparkContext.parallelize(Seq(row(10, null, 1L)), 1), schema).write.format("hudi")
+    // An update adds a log file on MOR holding the only non-null "opt" of the first file group
+    spark.createDataFrame(spark.sparkContext.parallelize(Seq(row(10, Long.box(10), 1L)), 1), schema).write.format("hudi")
       .options(writeOpts).option(OPERATION.key, UPSERT_OPERATION_OPT_VAL).mode(SaveMode.Append).save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     spark.sqlContext.setConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Strict.value)
@@ -889,7 +889,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
         val fileIndex = HoodieFileIndex(spark, metaClient, Option.empty, queryOpts ++ Map(
           HoodieMetadataConfig.ENABLE.key -> "true",
           DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-          HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE.key -> mode), NoopCache)
+          HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE.key -> mode), NoopCache,
+          includeLogFiles = tableType == HoodieTableType.MERGE_ON_READ)
         val filter = HoodieCatalystExpressionUtils.resolveExpr(spark, predicate, fileIndex.schema)
         assertEquals(expectedPartitions, fileIndex.prunePartitionsAndGetFileSlices(Seq(filter), Seq.empty)._2
           .map(_._1.get.getPath).toSet, s"$predicate partitions in $mode mode")
