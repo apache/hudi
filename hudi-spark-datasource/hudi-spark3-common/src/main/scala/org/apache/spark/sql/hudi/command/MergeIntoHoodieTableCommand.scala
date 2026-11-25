@@ -41,7 +41,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, Matc
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, BoundReference, CaseWhen, Cast, CreateNamedStruct, EqualNullSafe, EqualTo, Expression, GetStructField, GreaterThanOrEqual, If, IsNotNull, IsNull, Literal, NamedExpression, Not, Or, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, BoundReference, CaseWhen, Coalesce, Cast, CreateNamedStruct, EqualNullSafe, EqualTo, Expression, GetStructField, GreaterThanOrEqual, If, IsNotNull, IsNull, Literal, NamedExpression, Not, Or, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -59,6 +59,7 @@ import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, IntegerType,
 import java.util.Base64
 
 import scala.collection.JavaConverters._
+import scala.collection.immutable.ListMap
 import scala.util.Try
 
 /**
@@ -406,6 +407,23 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private val insertingActions: Seq[InsertAction] = mergeInto.notMatchedActions.collect { case u: InsertAction => u}
   private val deletingActions: Seq[DeleteAction] = mergeInto.matchedActions.collect { case u: DeleteAction => u}
 
+  /**
+   * Conditions and assignments of the updating actions. The payload checks every updating action
+   * before the deleting one, so an updating action written after the deleting action also requires
+   * the delete condition not to hold, as only the first matched clause that holds applies.
+   */
+  private lazy val updatingConditionsAndAssignments: Seq[(Option[Expression], Seq[Assignment])] = {
+    val deletingActionIndex = mergeInto.matchedActions.indexWhere(_.isInstanceOf[DeleteAction])
+    mergeInto.matchedActions.zipWithIndex.collect {
+      case (update: UpdateAction, index) if deletingActionIndex >= 0 && index > deletingActionIndex =>
+        val deleteCondition = deletingActions.head.condition.getOrElse(Literal.TrueLiteral)
+        val notDeleted = Not(Coalesce(Seq(deleteCondition, Literal.FalseLiteral)))
+        (Some(update.condition.map(And(_, notDeleted)).getOrElse(notDeleted)), update.assignments)
+      case (update: UpdateAction, _) =>
+        (update.condition, update.assignments)
+    }
+  }
+
   private def hasPrimaryKey(): Boolean = {
     hoodieCatalogTable.tableConfig.getRecordKeyFields.isPresent
   }
@@ -564,7 +582,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       case Assignment(assigned: Attribute, value) if attributeEquals(assigned, attr) => castIfNeeded(value, attr.dataType)
     }.getOrElse(attr)
 
-    val conditions = updatingActions.map(_.condition.getOrElse(Literal.TrueLiteral))
+    val conditions = updatingConditionsAndAssignments.map(_._1.getOrElse(Literal.TrueLiteral))
     val changesPartition = updatingActions.map { action =>
       partitionAttrs.map(attr => updated(action, attr) -> attr)
         .collect { case (value, attr) if !value.semanticEquals(attr) => Not(EqualNullSafe(value, attr)): Expression }
@@ -749,7 +767,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
         // NOTE: For updating clause we allow partial assignments, where only some of the fields of the target
         //       table's records are updated (w/ the missing ones keeping their existing values)
-        serializeConditionalAssignments(updatingActions.map(a => (clauseCondition(a.condition), a.assignments)),
+        serializeConditionalAssignments(updatingConditionsAndAssignments.map { case (condition, assignments) => (clauseCondition(condition), assignments) },
           parameters,
           partialAssignmentMode = Some(PartialAssignmentMode.ORIGINAL_VALUE),
           keepUpdatedFieldsOnly = writePartialUpdates),
@@ -975,9 +993,15 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
             }
 
           boundCondition -> boundAssignmentExprs
-      }.toMap
+      }
+    // The payload applies the first clause whose condition holds, so keep the clauses in the order
+    // written, keeping the first of the clauses that share a condition
+    val orderedConditionalAssignments = boundConditionalAssignments.foldLeft(ListMap.empty[Expression, Seq[Alias]]) {
+      case (clauses, (condition, assignments)) =>
+        if (clauses.contains(condition)) clauses else clauses + (condition -> assignments)
+    }
 
-    boundConditionalAssignments
+    orderedConditionalAssignments
   }
 
   /**

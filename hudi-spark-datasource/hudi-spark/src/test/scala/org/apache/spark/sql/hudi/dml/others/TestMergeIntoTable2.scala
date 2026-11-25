@@ -2108,4 +2108,79 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test MergeInto applies the first matched clause that holds, in the order written") {
+    val deleteClause = "when matched and s.flag in ('both', 'delete') then delete"
+    val updateClause = "when matched and s.flag in ('both', 'update') then update set " +
+      "id = s.id, name = s.name, price = s.price, ts = s.ts"
+    for (tableType <- Seq("cow", "mor"); deleteFirst <- Seq(true, false)) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (type = '$tableType', primaryKey = 'id', preCombineField = 'ts')
+             | location '${tmp.getCanonicalPath}'
+             |""".stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000), (2, 'a2', 20, 1000), (3, 'a3', 30, 1000)")
+        val clauses = if (deleteFirst) s"$deleteClause $updateClause" else s"$updateClause $deleteClause"
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (
+             |  select 1 as id, 'u1' as name, 11D as price, 1001L as ts, 'both' as flag
+             |  union all select 2, 'u2', 22D, 1001L, 'update'
+             |  union all select 3, 'u3', 33D, 1001L, 'delete'
+             |) s
+             |on t.id = s.id
+             |$clauses
+             |""".stripMargin)
+        val updatedFirstRow = if (deleteFirst) Seq.empty else Seq(Seq(1, "u1", 11.0, 1001))
+        checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+          updatedFirstRow :+ Seq(2, "u2", 22.0, 1001): _*)
+      }
+    }
+  }
+
+  test("Test MergeInto applies the first of several matched update clauses that holds") {
+    def updateClause(condition: String, name: String): String =
+      s"when matched and $condition then update set id = s.id, name = '$name', price = s.price, ts = s.ts"
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (type = '$tableType', primaryKey = 'id', preCombineField = 'ts')
+             | location '${tmp.getCanonicalPath}'
+             |""".stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000)")
+        val clauses = Seq(
+          updateClause("s.flag = 'a'", "c1"),
+          updateClause("s.flag = 'x'", "c2"),
+          updateClause("s.flag = 'x'", "c3"),
+          updateClause("s.price > 1", "c4"),
+          updateClause("s.price > 2", "c5"),
+          updateClause("s.price > 3", "c6"))
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 11D as price, 1001L as ts, 'x' as flag) s
+             |on t.id = s.id
+             |${clauses.mkString("\n")}
+             |""".stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName")(Seq(1, "c2", 11.0, 1001))
+      }
+    }
+  }
 }
