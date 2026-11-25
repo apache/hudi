@@ -21,11 +21,11 @@ package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
+import org.apache.hudi.HoodieSparkUtils.{gteqSpark3_4, gteqSpark3_5}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.{AnalysisException, Row}
@@ -588,6 +588,41 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Update Table moves a record to the partition it gives it in a table without a record key") {
+    withRecordType()(withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, dep string) using hudi
+             | tblproperties (type = '$tableType')
+             | partitioned by (dep)
+             | location '$tablePath'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 'd1'), (2, 'a2', 'd1'), (3, 'a3', 'd2')")
+
+        // The compaction is left to the end of the test
+        withSQLConf(HoodieCompactionConfig.INLINE_COMPACT.key -> "false") {
+          // id 1 moves to a new partition and id 2 to one that holds a record, id 3 stays
+          spark.sql(s"update $tableName set dep = 'd3', name = 'a1u' where id = 1")
+          spark.sql(s"update $tableName set dep = 'd2' where id = 2")
+          spark.sql(s"update $tableName set name = 'a3u' where id = 3")
+          checkPartitionedRows(tableName, "dep")(Seq(1, "a1u", "d3"), Seq(2, "a2", "d2"), Seq(3, "a3u", "d2"))
+
+          // A statement that moves some of the records it updates
+          spark.sql(s"update $tableName set dep = if(id = 2, 'd1', dep), name = concat(name, 'v') where id in (1, 2)")
+        }
+        val expected = Seq(Seq(1, "a1uv", "d3"), Seq(2, "a2v", "d1"), Seq(3, "a3u", "d2"))
+        checkPartitionedRows(tableName, "dep")(expected: _*)
+        if (tableType == "mor") {
+          compactAndCheck(tableName)
+          checkPartitionedRows(tableName, "dep")(expected: _*)
+        }
+      }
+    })
+  }
+
   test("Test UPDATE on VECTOR column preserves custom-type metadata") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -676,6 +711,123 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, payload from $tableName")(
         Seq(1L, Row("OUT_OF_LINE", null, Row("blobs/updated", 10L, 100L, true)))
       )
+    }
+  }
+
+  test("Test Update Table With Nested Field Assignments") {
+    withTempDir { tmp =>
+      Seq(("cow", "primaryKey = 'id',"), ("mor", "primaryKey = 'id',"), ("cow", "")).foreach { case (tableType, keyProp) =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  s struct<c1:int, c2:struct<a:array<int>, m:map<string, string>>>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, named_struct('c1', 2, 'c2', named_struct('a', array(1, 2), 'm', map('a', 'b')))")
+        spark.sql(s"insert into $tableName select 2, null")
+
+        if (gteqSpark3_5) {
+          spark.sql(s"update $tableName set s.c1 = -2, s.c2.a = array(-1, -2), s.c2.m = map('k', 'v') where id = 1")
+          spark.sql(s"update $tableName set s.c1 = 5 where id = 2")
+          checkAnswer(s"select id, s from $tableName order by id")(
+            Seq(1, Row(-2, Row(Seq(-1, -2), Map("k" -> "v")))),
+            Seq(2, Row(5, null)))
+
+          spark.sql(s"update $tableName set s.c1 = null, s.c2 = null where id = 1")
+          checkAnswer(s"select id, s from $tableName order by id")(
+            Seq(1, Row(null, null)),
+            Seq(2, Row(5, null)))
+
+          checkExceptionContain(s"update $tableName set id = 3, s.c1 = 1, id = 4")("Multiple assignments for 'id'")
+          checkExceptionContain(
+            s"update $tableName set s.c1 = 1, s = named_struct('c1', 1, 'c2', null)")("Conflicting assignments for 's'")
+
+          // the fields of a struct value are matched by name
+          checkExceptionContain(s"update $tableName set s = struct(7, named_struct('a', array(7), 'm', map('x', 'y'))) where id = 2")(
+            "Cannot find data for the output column `s`.`c1`")
+          spark.sql(s"update $tableName set s = named_struct('c2', named_struct('m', map('x', 'y'), 'a', array(7)), 'c1', 7) where id = 2")
+          checkAnswer(s"select id, s from $tableName where id = 2")(Seq(2, Row(7, Row(Seq(7), Map("x" -> "y")))))
+        } else {
+          checkExceptionContain(s"update $tableName set s.c1 = 5 where id = 2")(
+            "Assigning a nested field requires Spark 3.5 or later")
+        }
+      }
+    }
+  }
+
+  test("Test Update Table Applies Store Assignment Policy") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v int not null,
+           |  s struct<n1:int not null, n2:struct<dn1:int, dn2:int>>
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (primaryKey = 'id', type = 'cow')
+         """.stripMargin)
+      spark.sql(s"insert into $tableName select 1, 10, named_struct('n1', 1, 'n2', named_struct('dn1', 3, 'dn2', 4))")
+
+      if (gteqSpark3_5) {
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "ansi") {
+          checkExceptionContain(s"update $tableName set v = 'str'")("Cannot safely cast `v` \"STRING\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set s.n1 = 'str'")("Cannot safely cast `s`.`n1` \"STRING\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set s = named_struct('n1', 1)")(
+            "Cannot find data for the output column `s`.`n2`")
+          checkExceptionContain(s"update $tableName set s.n2 = named_struct('dn3', 1, 'dn1', 2)")(
+            "Cannot find data for the output column `s`.`n2`.`dn2`")
+          checkExceptionContain(s"update $tableName set s.n1 = null")("value appeared in non-nullable field")
+          spark.sql(s"update $tableName set v = cast(20 as bigint), s.n2 = named_struct('dn2', 6, 'dn1', 5)")
+        }
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "strict") {
+          checkExceptionContain(s"update $tableName set v = cast(30 as bigint)")("Cannot safely cast `v` \"BIGINT\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set v = null")("Cannot safely cast `v` \"VOID\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set s.n1 = null")("Cannot safely cast `s`.`n1` \"VOID\" to \"INT\"")
+        }
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "legacy") {
+          checkExceptionContain(s"update $tableName set s.n2 = struct(5, 6)")(
+            "Cannot find data for the output column `s`.`n2`.`dn1`")
+          // the cast of the legacy policy turns a malformed value into null
+          spark.sql(s"update $tableName set v = 'str'")
+          checkAnswer(s"select id, v from $tableName")(Seq(1, null))
+          spark.sql(s"update $tableName set v = '30'")
+        }
+        checkAnswer(s"select id, v, s from $tableName")(Seq(1, 30, Row(1, Row(5, 6))))
+      } else {
+        spark.sql(s"update $tableName set v = '20'")
+        checkAnswer(s"select id, v from $tableName")(Seq(1, 20))
+      }
+      // the top-level NOT NULL constraint is not kept by the table
+      spark.sql(s"update $tableName set v = cast(null as int)")
+      checkAnswer(s"select id, v from $tableName")(Seq(1, null))
+    }
+  }
+
+  test("Test Update And Delete Refuse Non-Deterministic Conditions") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 10), (2, 20)")
+
+        checkExceptionContain(s"update $tableName set v = -1 where id = 1 and rand() > 0.5")("deterministic expression")
+        checkExceptionContain(s"delete from $tableName where id = 1 and rand() > 0.5")("deterministic expression")
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 10), Seq(2, 20))
+      }
     }
   }
 }

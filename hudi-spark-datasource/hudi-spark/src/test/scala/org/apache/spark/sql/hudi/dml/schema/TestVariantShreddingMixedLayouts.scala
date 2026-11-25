@@ -671,8 +671,12 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     // shredded log; the merged read serves each row from a different physical slot.
     Seq("true", "false").foreach { pushIntoScan =>
       withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+        // The updates write no record positions: a merge by position reads a log block with a strict cast of
+        // the pushed path and fails on the string a with INVALID_VARIANT_CAST, where the merge by key reads it
+        // as try_variant_get asks.
         withVariantTable(s"mor pushVariantIntoScan=$pushIntoScan", "mor",
-          props = Seq("hoodie.compact.inline = 'false'"), recordTypes = Seq(HoodieRecordType.SPARK)) {
+          props = Seq("hoodie.compact.inline = 'false'", "hoodie.write.record.positions = 'false'"),
+          recordTypes = Seq(HoodieRecordType.SPARK)) {
           (tableName, tablePath, leg) =>
           withWriteLayout(Forced("a bigint")) {
             spark.sql(s"insert into $tableName ${variantSourceSql(Seq((0 until 10, ObjA)))}")
@@ -2381,7 +2385,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     val format = new HoodieFileGroupReaderBasedFileFormat(
       "unused", HoodieTableSchema(unusedSchema,
         HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(unusedSchema, "unused", "hoodie.test")),
-      "unused", "000", Seq.empty, isMOR = false, isBootstrap = false, isIncremental = false,
+      "unused", None, Seq.empty, isMOR = false, isBootstrap = false, isIncremental = false,
       "", shouldUseRecordPosition = false, Seq.empty, isMultipleBaseFileFormatsEnabled = false,
       HoodieFileFormat.PARQUET)
 

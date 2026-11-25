@@ -20,6 +20,7 @@
 package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.avro.AvroVariantSampleExtractor;
 import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.avro.VariantShreddingRuntime;
@@ -54,6 +55,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.orc.CompressionKind;
+import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
 
@@ -114,8 +116,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
         ParquetUtils.injectParquetWriterConfigs(path, storage.getConf(), config);
-    StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
     HoodieConfig hoodieConfig = injectedConfigs.getRight();
+    StorageConfiguration storageConfiguration = withListLayout(injectedConfigs.getLeft(), hoodieConfig);
 
     HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema, hoodieConfig, storageConfiguration,
         enableBloomFilter(metaFieldsMode, hoodieConfig, path));
@@ -141,13 +143,14 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     if (!StringUtils.isNullOrEmpty(configInjectorClass)) {
       throw new HoodieException("hoodie.parquet.write.config.injector.class is not supported with streaming writes with parquet");
     }
-    HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema, config, storage.getConf(), false);
+    StorageConfiguration storageConfiguration = withListLayout(storage.getConf(), config);
+    HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema, config, storageConfiguration, false);
     HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
         CompressionCodecName.fromConf(config.getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
         config.getInt(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
         config.getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE),
         config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE), // todo: 1024*1024*1024
-        storage.getConf(), config.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
+        storageConfiguration, config.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         config.getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
     return new HoodieParquetStreamWriter(new FSDataOutputStream(outputStream, null), parquetConfig);
   }
@@ -180,6 +183,23 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getInt(HoodieStorageConfig.ORC_BLOCK_SIZE),
         config.getLong(HoodieStorageConfig.ORC_FILE_MAX_SIZE), filter);
     return new HoodieAvroOrcWriter(instantTime, path, orcConfig, schema, taskContextSupplier);
+  }
+
+  /**
+   * Defaults the Parquet list layout of a table whose format is not native to the standard three-level layout,
+   * which the Spark row writer also writes by default and which can hold a null array element, unlike the legacy
+   * two-level layout parquet-avro defaults to. The layout the storage configuration sets wins, then the one the
+   * write config asks for; native tables keep the parquet-avro default.
+   */
+  private static StorageConfiguration withListLayout(StorageConfiguration storageConf, HoodieConfig config) {
+    if (NativeTableFormat.TABLE_FORMAT.equalsIgnoreCase(config.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
+        || storageConf.getString(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE).isPresent()) {
+      return storageConf;
+    }
+    StorageConfiguration listLayoutStorageConf = storageConf.newInstance();
+    listLayoutStorageConf.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
+        String.valueOf(ParquetUtils.isLegacyListFormatConfigured(config)));
+    return listLayoutStorageConf;
   }
 
   private HoodieAvroWriteSupport getHoodieAvroWriteSupport(HoodieSchema schema,

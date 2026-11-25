@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -46,7 +47,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -57,6 +60,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.storage.StorageLevel;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -75,6 +79,15 @@ import static org.apache.hudi.common.util.CommitUtils.getCheckpointValueAsString
  */
 @Slf4j
 public class DataSourceUtils {
+
+  private static final String UPSERT_HINT = "or write with the upsert operation (hoodie.spark.sql.insert.into.operation=upsert "
+      + "for a Spark SQL INSERT INTO)";
+  private static final String DUPLICATE_EXISTING_KEY_DETAIL = "The table already has a record with this key. "
+      + "Set hoodie.datasource.insert.dup.policy to drop to skip such records or to none to keep the duplicates, " + UPSERT_HINT
+      + " to update them.";
+  private static final String DUPLICATE_INCOMING_KEY_DETAIL = "More than one inserted record has this key. "
+      + "Set hoodie.combine.before.insert to true to combine them or hoodie.datasource.insert.dup.policy to none to keep "
+      + "the duplicates, " + UPSERT_HINT + ".";
 
   public static String getTablePath(HoodieStorage storage,
                                     List<StoragePath> userProvidedPaths) throws IOException {
@@ -260,7 +273,7 @@ public class DataSourceUtils {
 
   /**
    * Drop records already present in the dataset if {@code failOnDuplicates} is {@code false}.
-   * Otherwise, throw a {@link HoodieDuplicateKeyException} if duplicates are found.
+   * Otherwise, throw a {@link HoodieDuplicateKeyException} if duplicates are found in the dataset.
    *
    * @param engineContext the Spark engine context
    * @param incomingHoodieRecords the HoodieRecords to deduplicate
@@ -284,6 +297,98 @@ public class DataSourceUtils {
   }
 
   /**
+   * Fails an insert before it writes, with a {@link HoodieDuplicateKeyException} as the cause, if a record key
+   * repeats among the incoming records, unless {@code hoodie.combine.before.insert} combines them, or, with
+   * {@code lookUpDataset}, is already present in the dataset.
+   *
+   * <p>The check runs as jobs of its own and the write gets the incoming records as they are, in their order
+   * and partitioning. The incoming records are persisted for that at the level the write persists them at, so
+   * that the check and the write read them once, and are released with the resources of the instant.
+   */
+  public static void failOnDuplicates(HoodieSparkEngineContext engineContext,
+                                      JavaRDD<HoodieRecord> incomingHoodieRecords,
+                                      HoodieWriteConfig writeConfig,
+                                      String instantTime,
+                                      boolean lookUpDataset) {
+    boolean checkIncomingRecords = !writeConfig.shouldCombineBeforeInsert();
+    if (!checkIncomingRecords && !lookUpDataset) {
+      return;
+    }
+    boolean persist = incomingHoodieRecords.getStorageLevel() == StorageLevel.NONE();
+    if (persist) {
+      HoodieJavaRDD.of(incomingHoodieRecords).persist(writeConfig.getTaggedRecordStorageLevel(),
+          engineContext, HoodieData.HoodieDataCacheKey.of(writeConfig.getBasePath(), instantTime));
+    }
+    try {
+      if (checkIncomingRecords) {
+        failOnIncomingDuplicates(incomingHoodieRecords, writeConfig);
+      }
+      if (lookUpDataset) {
+        // An index persists the records it tags and releases them once they are tagged, so it gets a view of
+        // the incoming records, which stay persisted for the write
+        handleDuplicates(engineContext, incomingHoodieRecords.map(record -> record), writeConfig, true).count();
+      }
+    } catch (Exception e) {
+      if (persist) {
+        incomingHoodieRecords.unpersist();
+      }
+      throw new HoodieUpsertException("Failed to upsert for commit time " + instantTime, e);
+    }
+  }
+
+  /**
+   * The duplicate handling of an insert into a table with a record key that sets no duplicate policy:
+   * {@link #failOnDuplicates}, where the dataset is looked up only when its index tells whether it holds a
+   * record key, see {@link #indexTellsKeyExists}.
+   */
+  public static void failOnDuplicatesByDefault(HoodieSparkEngineContext engineContext,
+                                               JavaRDD<HoodieRecord> incomingHoodieRecords,
+                                               HoodieWriteConfig writeConfig,
+                                               String instantTime) {
+    failOnDuplicates(engineContext, incomingHoodieRecords, writeConfig, instantTime, indexTellsKeyExists(writeConfig));
+  }
+
+  /**
+   * Whether a location the index gives a record key means that the dataset holds the key. The bucket index
+   * locates any key by its hash, and the indexes that read the keys of the base files do not see the deletes
+   * in the log files of a merge-on-read table, which the record level index does.
+   */
+  private static boolean indexTellsKeyExists(HoodieWriteConfig writeConfig) {
+    if (!StringUtils.isNullOrEmpty(writeConfig.getIndexClass())) {
+      return false;
+    }
+    switch (writeConfig.getIndexType()) {
+      case RECORD_INDEX:
+      case GLOBAL_RECORD_LEVEL_INDEX:
+      case RECORD_LEVEL_INDEX:
+        return true;
+      case SIMPLE:
+      case GLOBAL_SIMPLE:
+      case BLOOM:
+      case GLOBAL_BLOOM:
+        return writeConfig.getTableType() == HoodieTableType.COPY_ON_WRITE;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Fails on the first two incoming records with the same key, in a shuffle of the keys of the records alone.
+   * The records are keyed as the index of the table keys a record: by record key for a global index, and by
+   * record key and partition path otherwise.
+   */
+  private static void failOnIncomingDuplicates(JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig) {
+    boolean isIndexingGlobal = SparkHoodieIndexFactory.isGlobalIndex(writeConfig);
+    records
+        .mapToPair(record -> new Tuple2<Object, String>(
+            isIndexingGlobal ? record.getRecordKey() : record.getKey(), record.getRecordKey()))
+        .reduceByKey((first, second) -> {
+          throw new HoodieDuplicateKeyException(first, DUPLICATE_INCOMING_KEY_DETAIL);
+        }, records.getNumPartitions())
+        .count();
+  }
+
+  /**
    * Determines if a record should be included in the result after deduplication.
    *
    * @param record            The Hoodie record to evaluate.
@@ -296,7 +401,7 @@ public class DataSourceUtils {
     }
     if (failOnDuplicates) {
       // Fail if duplicates are found and the flag is set
-      throw new HoodieDuplicateKeyException(record.getRecordKey());
+      throw new HoodieDuplicateKeyException(record.getRecordKey(), DUPLICATE_EXISTING_KEY_DETAIL);
     }
     return false;
   }

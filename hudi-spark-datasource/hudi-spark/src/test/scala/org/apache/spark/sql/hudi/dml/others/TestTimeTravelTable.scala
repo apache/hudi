@@ -368,7 +368,9 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
       val instant1 = metaClient.getActiveTimeline.getAllCommitsTimeline
         .lastInstant().get().requestedTime
 
-      spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+      withSQLConf("hoodie.datasource.insert.dup.policy" -> "none") {
+        spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+      }
 
       Seq(
         s"select id, name, price, ts from $tableName SYSTEM_TIME AS OF '$instant1'",
@@ -406,7 +408,9 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
       val betweenSeconds = TimeUnit.MILLISECONDS.toSeconds(betweenMillis)
       val betweenDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(betweenMillis))
       Thread.sleep(2000)
-      spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+      withSQLConf("hoodie.datasource.insert.dup.policy" -> "none") {
+        spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+      }
 
       // Spark's native parser produces these timestamp expressions (an integer literal and a
       // string literal); the bridge carries them into the Hudi time-travel resolution, which

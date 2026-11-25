@@ -22,10 +22,10 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
 import org.apache.spark.sql.BaseHoodieCatalystPlanUtils.MatchResolvedTable
-import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.analysis.{DeduplicateRelations, EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
-import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Expression, GetStructField, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.Origin
@@ -186,7 +186,10 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       }
 
       val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
-      val m = mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable)
+      // Resolved apart, a source reading the target table shares its attributes, so `t.id = s.id`
+      // would compare the target with itself: give the source its own, as Spark does.
+      val m = DeduplicateRelations(mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable))
+        .asInstanceOf[MergeIntoTable]
       // END: custom Hudi change
       // If the source table still has unresolved references (e.g. a non-existent
       // column in the source query, or a missing source table), return the
@@ -253,11 +256,20 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
                 resolveAssignments(assignments, m, resolveValuesWithSourceOnly = true))
             case o => o
           }
+          validateNestedFieldAssignments(m.targetTable.output,
+            newMatchedActions.flatMap(catalystPlanUtils.unapplyUpdateAction(_).map(_._2).getOrElse(Nil)))
           val resolvedMergeCondition = resolveExpressionByPlanChildren(m.mergeCondition, m)
           m.copy(mergeCondition = resolvedMergeCondition,
             matchedActions = newMatchedActions,
             notMatchedActions = newNotMatchedActions)
       }
+
+    case ut@UpdateTable(ResolvesToHudiTable(_), assignments, _) if assignments.exists(isOutsideStructFieldPath) =>
+      validateNestedFieldAssignments(ut.table.output, assignments)
+      ut
+
+    case ut@UpdateTable(ResolvesToHudiTable(_), assignments, _) if !ut.resolved =>
+      ut.copy(assignments = assignments.map(sparkAdapter.getCatalystPlanUtils.deferAssignmentCast))
 
     case cmd: CreateIndex if cmd.table.resolved && cmd.columns.exists(_._1.isInstanceOf[UnresolvedFieldName]) =>
       cmd.copy(columns = cmd.columns.map {
@@ -270,6 +282,7 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
                           assignments: Seq[Assignment],
                           mergeInto: MergeIntoTable,
                           resolveValuesWithSourceOnly: Boolean): Seq[Assignment] = {
+    val targetsHudiTable = ResolvesToHudiTable.unapply(mergeInto.targetTable).isDefined
     assignments.map { assign =>
       val resolvedKey = assign.key match {
         case c if !c.resolved =>
@@ -286,8 +299,31 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
           }
         case o => o
       }
-      Assignment(resolvedKey, resolvedValue)
+      val resolved = Assignment(resolvedKey, resolvedValue)
+      if (targetsHudiTable) sparkAdapter.getCatalystPlanUtils.deferAssignmentCast(resolved) else resolved
     }
+  }
+
+  /**
+   * Refuses an assignment to a field nested in a column that is not a struct through Spark's alignment
+   * of the assignments, which Spark's cast of the assigned value to the type of the key would otherwise
+   * turn into a type mismatch of the value.
+   */
+  private def validateNestedFieldAssignments(attrs: Seq[Attribute], assignments: Seq[Assignment]): Unit = {
+    val outsideStructs = assignments.filter(isOutsideStructFieldPath)
+    if (outsideStructs.nonEmpty) {
+      sparkAdapter.getCatalystPlanUtils.resolveRowLevelAssignments(attrs, outsideStructs, isInsert = false)
+    }
+  }
+
+  private def isOutsideStructFieldPath(assignment: Assignment): Boolean = {
+    def isStructFieldPath(expr: Expression): Boolean = expr match {
+      case _: Attribute => true
+      case Alias(child, _) => isStructFieldPath(child)
+      case GetStructField(child, _, _) => isStructFieldPath(child)
+      case _ => false
+    }
+    assignment.key.resolved && !isStructFieldPath(assignment.key)
   }
 
   private def resolveMergeExprOrFail(e: Expression, p: LogicalPlan): Expression = {

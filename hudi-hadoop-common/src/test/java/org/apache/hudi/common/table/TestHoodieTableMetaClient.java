@@ -340,6 +340,8 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     configs.put("hoodie.table.keygenerator.type", "SIMPLE");
     configs.put("hoodie.meta.fields.mode", "ALL");
     configs.put("hoodie.datasource.write.drop.partition.columns", "false");
+    configs.put("hoodie.datasource.write.partitionpath.timestamp.fractional.seconds",
+        String.valueOf(version.greaterThanOrEquals(HoodieTableVersion.TEN)));
     configs.put("hoodie.archivelog.folder", "archived");
     configs.put("hoodie.timeline.path", "timeline");
     configs.put("hoodie.timeline.history.path", "history");
@@ -428,6 +430,8 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     props.setProperty(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
         HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    String formatConfigKey = HoodieTableConfig.TABLE_FORMAT.key() + ".example.catalog";
+    props.setProperty(formatConfigKey, "value1");
 
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
@@ -443,6 +447,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals(metaClient1.getTableConfig().getTableType(), metaClient2.getTableConfig().getTableType());
     assertEquals(metaClient1.getTableConfig().getOrderingFields(), metaClient2.getTableConfig().getOrderingFields());
     assertEquals(HoodieTableConfig.TableStorageLayout.LSM_TREE, metaClient2.getTableConfig().getTableStorageLayout());
+    assertEquals("value1", metaClient2.getTableConfig().getProps().getProperty(formatConfigKey));
     // default table version should be current version
     assertEquals(HoodieTableVersion.current(), metaClient2.getTableConfig().getTableVersion());
   }

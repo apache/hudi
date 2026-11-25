@@ -537,6 +537,17 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " writing to storage. This should be turned off only if you are absolutely certain that there are no duplicates incoming, "
           + " otherwise it can lead to duplicate keys and violate the uniqueness guarantees.");
 
+  public static final ConfigProperty<Boolean> UPSERT_FAIL_ON_MULTIPLE_MATCHES = ConfigProperty
+      .key("hoodie.upsert.fail.on.multiple.matches")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Whether an upsert fails when more than one incoming record matches the same existing record, "
+          + "instead of combining them into one update. Incoming records with a key the table does not hold yet are "
+          + "still combined as " + COMBINE_BEFORE_UPSERT.key() + " sets. Spark SQL MERGE INTO turns this on for a "
+          + "statement with a WHEN MATCHED clause, see hoodie.spark.sql.merge.into.cardinality.check. The bucket index "
+          + "locates new keys by their bucket, so the check does not run with it.");
+
   public static final ConfigProperty<String> COMBINE_BEFORE_DELETE = ConfigProperty
       .key("hoodie.combine.before.delete")
       .defaultValue("true")
@@ -954,6 +965,23 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to write record positions to the block header for data blocks containing updates and delete blocks. "
           + "The record positions can be used to improve the performance of merging records from base and log files.");
 
+  public static final ConfigProperty<Boolean> WRITE_UPDATES_AS_DELETES_AND_INSERTS = ConfigProperty
+      .key("hoodie.write.updates.as.deletes.and.inserts")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled on a merge-on-read table, an upsert routes each update as a positional "
+          + "delete to the record's current file group plus an insert of the new version routed by the insert "
+          + "partitioner, instead of appending an update record to the current file group's log. Log files then "
+          + "carry only positional deletes and every live record stays in a base file, so table formats based on "
+          + "deletion vectors can represent the table exactly. Upserts, inserts and deletes require write table "
+          + "version 8 or higher, " + WRITE_RECORD_POSITIONS.key() + ", the BLOOM, SIMPLE, GLOBAL_BLOOM, "
+          + "GLOBAL_SIMPLE or RECORD_INDEX index (other index types write inserts to log files or do not locate "
+          + "records by base file position, and a custom index class is not supported), and commit-time ordering "
+          + "merge semantics. Prepped inserts and partial updates are not supported on merge-on-read tables, and "
+          + "prepped upserts and deletes only with the Spark write client. Compaction is not scheduled while an "
+          + "earlier delta commit is pending.");
+
   public static final ConfigProperty<String> WRITE_PARTIAL_UPDATE_SCHEMA = ConfigProperty
       .key("hoodie.write.partial.update.schema")
       .defaultValue("")
@@ -1026,6 +1054,20 @@ public class HoodieWriteConfig extends HoodieConfig {
    * operation are already prepped.
    */
   public static final String SPARK_SQL_MERGE_INTO_PREPPED_KEY = "_hoodie.spark.sql.merge.into.prepped";
+
+  /**
+   * Config key with boolean value that indicates whether the matched clauses of a MERGE INTO Spark SQL operation
+   * refer to fields of the target table, so that an upsert that appends updates to the log files of a
+   * merge-on-read table reads the records the source records match to evaluate the clauses.
+   */
+  public static final String SPARK_SQL_MERGE_INTO_READS_TARGET_KEY = "_hoodie.spark.sql.merge.into.reads.target";
+
+  /**
+   * Config key with boolean value that indicates whether an update clause of a MERGE INTO Spark SQL operation gives
+   * a partition field another value than the source value its record is looked up under, so that a global index
+   * that updates the partition path reads the records the source records match to find the partition of each update.
+   */
+  public static final String SPARK_SQL_MERGE_INTO_MOVES_RECORDS_KEY = "_hoodie.spark.sql.merge.into.moves.records";
 
   /**
    * An internal config referring to fileID encoding. 0 refers to UUID based encoding and 1 refers to raw string format(random string).
@@ -1708,6 +1750,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldCombineBeforeUpsert() {
     return getBoolean(COMBINE_BEFORE_UPSERT);
+  }
+
+  public boolean shouldFailUpsertOnMultipleMatches() {
+    return getBoolean(UPSERT_FAIL_ON_MULTIPLE_MATCHES);
   }
 
   public boolean shouldCombineBeforeDelete() {
@@ -2518,6 +2564,18 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldWriteRecordPositions() {
     return getBoolean(WRITE_RECORD_POSITIONS);
+  }
+
+  public boolean shouldWriteUpdatesAsDeletesAndInserts() {
+    return getBoolean(WRITE_UPDATES_AS_DELETES_AND_INSERTS);
+  }
+
+  public boolean isSparkSqlMergeIntoReadingTarget() {
+    return getBooleanOrDefault(SPARK_SQL_MERGE_INTO_READS_TARGET_KEY, false);
+  }
+
+  public boolean isSparkSqlMergeIntoMovingRecords() {
+    return getBooleanOrDefault(SPARK_SQL_MERGE_INTO_MOVES_RECORDS_KEY, false);
   }
 
   public boolean shouldWritePartialUpdates() {
@@ -3836,6 +3894,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteRecordPositionsEnabled(boolean shouldWriteRecordPositions) {
       writeConfig.setValue(WRITE_RECORD_POSITIONS, String.valueOf(shouldWriteRecordPositions));
+      return this;
+    }
+
+    public Builder withWriteUpdatesAsDeletesAndInserts(boolean updatesAsDeletesAndInserts) {
+      writeConfig.setValue(WRITE_UPDATES_AS_DELETES_AND_INSERTS, String.valueOf(updatesAsDeletesAndInserts));
       return this;
     }
 

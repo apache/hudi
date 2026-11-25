@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,6 +35,7 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -96,6 +98,14 @@ public class FlinkCreateHandle<T, I, K, O>
     } catch (IOException e) {
       throw new HoodieException("Error while deleting the INSERT file due to task retry: " + lastDataFileName, e);
     }
+  }
+
+  /**
+   * The Flink writer does not store format meta columns in the base files it creates.
+   */
+  @Override
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    return Collections.emptyList();
   }
 
   @Override

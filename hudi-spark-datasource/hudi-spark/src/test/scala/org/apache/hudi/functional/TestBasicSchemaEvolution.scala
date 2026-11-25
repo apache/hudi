@@ -97,7 +97,9 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
         HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key -> "true",
         DataSourceWriteOptions.RECONCILE_SCHEMA.key -> shouldReconcileSchema.toString,
-        DataSourceWriteOptions.OPERATION.key -> opType
+        DataSourceWriteOptions.OPERATION.key -> opType,
+        // the fifth batch writes the record keys of the fourth again
+        DataSourceWriteOptions.INSERT_DUP_POLICY.key -> DataSourceWriteOptions.NONE_INSERT_DUP_POLICY
       )
 
     def appendData(schema: StructType, batch: Seq[Row], shouldAllowDroppedColumns: Boolean = false): Unit = {

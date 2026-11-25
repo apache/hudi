@@ -116,7 +116,9 @@ class TestStreamingSinkOptions extends HoodieSparkClientTestBase {
     val source = s"$basePath/source"
     storage.createDirectory(new StoragePath(source))
     session.sql(s"SET spark.${OPERATION.key}=insert")
-    val insertQuery = start(session, source, s"$basePath/inserts", s"$basePath/insert_checkpoint", once = false)
+    // The second batch inserts the record key of the first again
+    val insertQuery = start(session, source, s"$basePath/inserts", s"$basePath/insert_checkpoint",
+      Map(INSERT_DUP_POLICY.key -> NONE_INSERT_DUP_POLICY), once = false)
     try {
       session.sql(s"SET spark.${OPERATION.key}=upsert")
       val upsertQuery = start(session, source, s"$basePath/upserts", s"$basePath/upsert_checkpoint", once = false)

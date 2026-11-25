@@ -173,6 +173,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       "hoodie.datasource.write.drop.partition.columns" -> "false",
       "hoodie.datasource.write.hive_style_partitioning" -> "true",
       "hoodie.datasource.write.partitionpath.urlencode" -> "false",
+      "hoodie.datasource.write.partitionpath.timestamp.fractional.seconds" ->
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN).toString,
       "hoodie.archivelog.folder" -> "archived",
       "hoodie.timeline.path" -> "timeline",
       "hoodie.timeline.history.path" -> "history")
@@ -885,7 +887,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
            | location '$parentPath/$tableName1'
      """.stripMargin)
       spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      withSQLConf("hoodie.datasource.insert.dup.policy" -> "none") {
+        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      }
 
       val roTableName1 = tableName1 + "_ro"
       checkExceptionContain(
@@ -2185,7 +2189,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
            | location '$parentPath/$tableName1'
      """.stripMargin)
       spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      withSQLConf("hoodie.datasource.insert.dup.policy" -> "none") {
+        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      }
       spark.sql(s"drop table $tableName1")
 
       checkExceptionContain(

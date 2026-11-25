@@ -21,9 +21,12 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -188,6 +191,46 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
   @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
+  }
+
+  /**
+   * Each delta commit records its own operation type, also when the same client ran a compaction
+   * between the write and its commit, or right before the write.
+   */
+  @Test
+  void testDeltaCommitsRecordTheirOwnOperationTypeAroundCompaction() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    String insertTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, insertTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    Option<String> compactionTime = client.scheduleCompaction(Option.empty());
+    assertTrue(compactionTime.isPresent());
+
+    String upsertTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, upsertTime);
+    List<WriteStatus> statuses = client.upsert(dataGen.generateUniqueUpdates(upsertTime, 10), upsertTime);
+    client.commitCompaction(compactionTime.get(), client.compact(compactionTime.get()), Option.empty());
+    client.commit(upsertTime, statuses);
+
+    String nextUpsertTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, nextUpsertTime);
+    client.commit(nextUpsertTime, client.upsert(dataGen.generateUniqueUpdates(nextUpsertTime, 10), nextUpsertTime));
+
+    assertEquals(WriteOperationType.COMPACT, operationTypeOf(compactionTime.get()));
+    assertEquals(WriteOperationType.UPSERT, operationTypeOf(upsertTime));
+    assertEquals(WriteOperationType.UPSERT, operationTypeOf(nextUpsertTime));
+  }
+
+  private WriteOperationType operationTypeOf(String instantTime) throws Exception {
+    HoodieTimeline completedTimeline = metaClient.reloadActiveTimeline().filterCompletedInstants();
+    HoodieInstant instant = completedTimeline.getInstantsAsStream()
+        .filter(i -> i.requestedTime().equals(instantTime)).findFirst().get();
+    return completedTimeline.readCommitMetadata(instant).getOperationType();
   }
 
   @Test

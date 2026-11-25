@@ -24,14 +24,26 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.DeleteContext;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
@@ -52,6 +64,62 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
   protected HoodieData<HoodieRecord<T>> tag(HoodieData<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context,
                                             HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
     return table.getIndex().tagLocation(dedupedRecords, context, table);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord<T>> updatesAsDeletesAndInserts(HoodieData<HoodieRecord<T>> taggedRecords,
+                                                                   HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+                                                                   int configuredShuffleParallelism) {
+    int parallelism = deduceShuffleParallelism(taggedRecords, configuredShuffleParallelism);
+    HoodieData<HoodieRecord<T>> latestTaggedRecords = taggedRecords
+        // NOTE: the incoming record may hold an instance of [[InternalRow]] pointing into a
+        //       shared, mutable buffer, so it has to be copied before the shuffle
+        .mapToPair(record -> Pair.of(record.getKey(), record.copy()))
+        .reduceByKey(HoodieWriteHelper::latestLocation, parallelism)
+        .map(Pair::getRight);
+    // A located Spark SQL MERGE INTO record is first replaced with what its matched clauses make of the record it
+    // matches, so its new version is inserted as evaluated instead of taking the not-matched clauses on the insert path
+    return splitLocatedRecords(
+        HoodieIndexUtils.mergeLocatedExpressionPayloadRecords(latestTaggedRecords, table.getConfig(), table, parallelism, true), table);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord<T>> splitLocatedRecords(HoodieData<HoodieRecord<T>> locatedRecords,
+                                                            HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
+    HoodieWriteConfig config = table.getConfig();
+    TypedProperties props = config.getProps();
+    final HoodieSchema schema = HoodieSchema.parse(config.getSchema());
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
+    boolean keepReplacedRecords = HoodieIndexUtils.hasFormatMetaColumns(table);
+    return locatedRecords.flatMap(record -> {
+      if (!record.isCurrentLocationKnown() || record.isDelete(deleteContext, props)) {
+        return Collections.singletonList(record).iterator();
+      }
+      HoodieRecord<T> deleteRecord = HoodieDeleteHelper.createDeleteRecord(config, record.getKey());
+      deleteRecord.setIgnoreIndexUpdate(true);
+      HoodieIndexUtils.tagRecord(deleteRecord, record.getCurrentLocation());
+      HoodieRecord<T> insertRecord = record.newInstance(record.getKey());
+      if (keepReplacedRecords) {
+        HoodieIndexUtils.setReplacedRecord(insertRecord, record.getPartitionPath(), record.getCurrentLocation());
+      }
+      return Arrays.asList(deleteRecord, insertRecord).iterator();
+    });
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord<T>> resolveReplacedRecords(HoodieData<HoodieRecord<T>> taggedRecords,
+                                                              HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
+    return HoodieIndexUtils.resolveReplacedRecords(taggedRecords, table);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord<T>> mergeLocatedSqlMergeIntoRecords(HoodieData<HoodieRecord<T>> taggedRecords,
+                                                                        HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+                                                                        int configuredShuffleParallelism) {
+    // A key can still be located through a deleted copy in a base file. The record then keeps its location, as an
+    // insert into another file group would leave the key in two of them
+    return HoodieIndexUtils.mergeLocatedExpressionPayloadRecords(
+        taggedRecords, table.getConfig(), table, deduceShuffleParallelism(taggedRecords, configuredShuffleParallelism), false);
   }
 
   @Override
@@ -78,5 +146,50 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
     }).reduceByKey(
         (previous, next) -> reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, recordContext, deleteContext),
         parallelism).map(Pair::getRight);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord<T>> failOnMultipleMatches(HoodieData<HoodieRecord<T>> taggedRecords, boolean combineNewKeys,
+                                                              HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
+    boolean isIndexingGlobal = table.getIndex().isGlobal();
+    Option<SerializableBiFunction<HoodieRecord<T>, HoodieRecord<T>, HoodieRecord<T>>> newKeyCombiner =
+        combineNewKeys ? Option.of(recordCombiner(table)) : Option.empty();
+    return taggedRecords
+        // NOTE: the incoming record may hold an instance of [[InternalRow]] pointing into a
+        //       shared, mutable buffer, so it has to be copied before the shuffle
+        .mapToPair(record -> Pair.of(isIndexingGlobal ? record.getRecordKey() : record.getKey(), record.copy()))
+        .groupByKey()
+        .values()
+        .flatMap(records -> failOnMultipleMatches(records, newKeyCombiner).iterator());
+  }
+
+  /**
+   * Fails when two of the records with one key are located at the same row, and combines the ones that are not
+   * located with the given combiner, if any. One record can be located at more than one row: a key the
+   * update-as-delete-insert write mode moved keeps a tombstoned copy in its older file group, and a base file can
+   * hold rows with the same key.
+   */
+  private static <T> List<HoodieRecord<T>> failOnMultipleMatches(
+      Iterable<HoodieRecord<T>> records, Option<SerializableBiFunction<HoodieRecord<T>, HoodieRecord<T>, HoodieRecord<T>>> newKeyCombiner) {
+    List<HoodieRecord<T>> result = new ArrayList<>();
+    Set<Pair<String, Long>> matchedRows = new HashSet<>();
+    HoodieRecord<T> combinedNewKeyRecord = null;
+    for (HoodieRecord<T> record : records) {
+      if (record.isCurrentLocationKnown()) {
+        HoodieRecordLocation location = record.getCurrentLocation();
+        if (!matchedRows.add(Pair.of(location.getFileId(), location.getPosition()))) {
+          throw multipleMatchesException(record.getRecordKey(), record.getPartitionPath(), location.getFileId());
+        }
+        result.add(record);
+      } else if (newKeyCombiner.isPresent()) {
+        combinedNewKeyRecord = combinedNewKeyRecord == null ? record : newKeyCombiner.get().apply(combinedNewKeyRecord, record);
+      } else {
+        result.add(record);
+      }
+    }
+    if (combinedNewKeyRecord != null) {
+      result.add(combinedNewKeyRecord);
+    }
+    return result;
   }
 }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -25,7 +26,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.read.FormatMetaColumnHandler;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -38,6 +41,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -71,6 +75,8 @@ import java.util.Map;
 public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
   // a representation of incoming records that tolerates duplicate keys
   private final Iterator<HoodieRecord<T>> recordItr;
+  // Resolves the format meta columns of the records carried over from the base file, created for the first of them
+  private FormatMetaColumnHandler<T> formatMetaColumnHandler;
 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             MergeContext<T> mergeContext, String partitionPath, String fileId,
@@ -80,6 +86,7 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I,
     // an empty iterator (keeping the update count) and keep the real iterator locally.
     super(config, instantTime, hoodieTable, MergeContext.create(mergeContext.getNumUpdates(), Collections.emptyIterator()), partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     this.recordItr = mergeContext.getRecordIterator();
+    checkFormatMetaColumns();
   }
 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,
@@ -87,6 +94,22 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I,
                             HoodieBaseFile baseFile, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, baseFile, taskContextSupplier, Option.empty());
     this.recordItr = keyToNewRecords.values().iterator();
+    checkFormatMetaColumns();
+  }
+
+  @Override
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    return getTableFormatMetaColumns();
+  }
+
+  private void checkFormatMetaColumns() {
+    if (!formatMetaColumns.isEmpty()) {
+      // The values of the format meta columns of a record are resolved from its position in the base file, so every
+      // record of the base file has to be read in the order and with the schema of the file. The new records of the
+      // compaction path keep their metadata and do not get the values on write of the format meta columns.
+      ValidationUtils.checkArgument(!preserveMetadata && !schemaOnReadEnabled && !baseFileToMerge.getBootstrapBaseFile().isPresent(),
+          "Format meta columns cannot be carried over on the compaction path, from a bootstrap base file or with schema evolution on read");
+    }
   }
 
   /**
@@ -97,6 +120,9 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I,
     HoodieSchema oldSchema = metaFieldsMode == MetaFieldsMode.NONE ? writeSchema : writeSchemaWithMetaFields;
     String key = getRecordKey(oldRecord, oldSchema);
     try {
+      if (!formatMetaColumns.isEmpty()) {
+        resolveFormatMetaColumns(oldRecord);
+      }
       // NOTE: We're enforcing preservation of the record metadata to keep existing semantic
       writeToFile(new HoodieKey(key, partitionPath), oldRecord, oldSchema, config.getPayloadConfig().getProps(), true);
     } catch (IOException | RuntimeException e) {
@@ -107,6 +133,20 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I,
       throw new HoodieUpsertException(errMsg, e);
     }
     recordsWritten++;
+  }
+
+  /**
+   * Resolves the format meta columns of the record, which is the next record of the base file and has the schema
+   * {@link #writeSchemaWithMetaFields}.
+   */
+  private void resolveFormatMetaColumns(HoodieRecord<T> oldRecord) {
+    if (formatMetaColumnHandler == null) {
+      // Not created in the constructor, as the reader context of the records may be set after it
+      formatMetaColumnHandler = createFormatMetaColumnHandler().get();
+    }
+    T data = oldRecord.getData();
+    ValidationUtils.checkState(formatMetaColumnHandler.resolveNextBaseFileRecord(data, writeSchemaWithMetaFields) == data,
+        "The format meta columns of a record have to be updated in place");
   }
 
   @Override

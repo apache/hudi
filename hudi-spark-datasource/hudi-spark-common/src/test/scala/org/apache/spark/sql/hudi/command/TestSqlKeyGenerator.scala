@@ -24,11 +24,20 @@ import org.apache.hudi.exception.HoodieKeyException
 import org.apache.hudi.keygen.{KeyGenUtils, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 
-import org.apache.avro.Schema
+import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.generic.GenericData
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
+import org.apache.spark.sql.types.{LongType, StructField, StructType, TimestampType}
+import org.apache.spark.unsafe.types.UTF8String
 import org.joda.time.DateTimeZone
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
+
+import java.sql.Timestamp
+import java.time.Instant
+import java.util.TimeZone
 
 import scala.collection.JavaConverters._
 
@@ -73,8 +82,10 @@ class TestSqlKeyGenerator {
   }
 
   private def keyGenerator(partitionSchema: Option[String] = Some("dt string"),
-                           withRecordKey: Boolean = true): SqlKeyGenerator = {
+                           withRecordKey: Boolean = true,
+                           extraProps: Map[String, String] = Map.empty): SqlKeyGenerator = {
     val props = new TypedProperties()
+    extraProps.foreach { case (k, v) => props.put(k, v) }
     props.put(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, classOf[SimpleKeyGenerator].getName)
     if (withRecordKey) {
       props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, "id")
@@ -118,11 +129,19 @@ class TestSqlKeyGenerator {
     record
   }
 
-  /** Runs `f` with the default timezone pinned, since the timestamp arms format in it. */
+  /**
+   * Runs `f` with the default timezones pinned, since the timestamp arms format in Joda's and the row
+   * delegates print a [[Timestamp]] in the JVM's.
+   */
   private def inUtc[T](f: => T): T = {
     val previousZone = DateTimeZone.getDefault
+    val previousJvmZone = TimeZone.getDefault
     DateTimeZone.setDefault(DateTimeZone.UTC)
-    try f finally DateTimeZone.setDefault(previousZone)
+    TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+    try f finally {
+      DateTimeZone.setDefault(previousZone)
+      TimeZone.setDefault(previousJvmZone)
+    }
   }
 
   @Test
@@ -253,5 +272,100 @@ class TestSqlKeyGenerator {
     record.put("amount", 15.0d)
     assertEquals(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH,
       keyGenerator().getPartitionPath(record))
+  }
+
+  /** 2026-08-11 00:00:00.123456 UTC in microseconds. */
+  private val subSecondMicros = 1786406400123456L
+
+  private val fractionalSeconds = Map(KeyGeneratorOptions.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key -> "true")
+
+  private def fractionalKeyGenerator(extraProps: Map[String, String] = Map.empty): SqlKeyGenerator =
+    keyGenerator(Some("dt timestamp"), extraProps = fractionalSeconds ++ extraProps)
+
+  private val timestampRowSchema = StructType(Seq(StructField("id", LongType), StructField("dt", TimestampType)))
+
+  private def avroRecord(dt: Any): GenericData.Record = {
+    val record = new GenericData.Record(schema)
+    record.put("id", 1L)
+    record.put("dt", dt)
+    record
+  }
+
+  @Test
+  def testTimestampPartitionPathTruncatesWithTheConfigOff(): Unit = inUtc {
+    assertEquals("2026-08-11 00%3A00%3A00", keyGenerator(Some("dt timestamp"),
+      extraProps = Map(KeyGeneratorOptions.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key -> "false"))
+      .getPartitionPath(avroRecord(String.valueOf(subSecondMicros))))
+  }
+
+  @Test
+  def testTimestampPartitionPathKeepsFractionalSecondsOnTheAvroPath(): Unit = inUtc {
+    assertEquals("2026-08-11 00%3A00%3A00.123456",
+      fractionalKeyGenerator().getPartitionPath(avroRecord(String.valueOf(subSecondMicros))))
+    // Trailing zeros of the fraction are dropped and a whole second has no fraction, as Spark renders a timestamp
+    assertEquals("2026-08-11 00%3A00%3A00.12",
+      fractionalKeyGenerator().getPartitionPath(avroRecord(String.valueOf(1786406400120000L))))
+    assertEquals("2026-08-11 00%3A00%3A00", fractionalKeyGenerator().getPartitionPath(avroRecord(timestampMicros)))
+    assertEquals("1969-12-31 23%3A59%3A59.999999", fractionalKeyGenerator().getPartitionPath(avroRecord("-1")))
+  }
+
+  @Test
+  def testTimestampPartitionPathKeepsHiveStylePrefix(): Unit = inUtc {
+    assertEquals("dt=2026-08-11 00%3A00%3A00.123456",
+      fractionalKeyGenerator(Map(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key -> "true"))
+        .getPartitionPath(avroRecord(String.valueOf(subSecondMicros))))
+  }
+
+  /**
+   * With consistent logical timestamps the delegate formats a timestamp-micros field through a
+   * millisecond [[Timestamp]], so the microseconds are read from the record.
+   */
+  @Test
+  def testTimestampPartitionPathKeepsMicrosecondsWithConsistentLogicalTimestamps(): Unit = inUtc {
+    val timestampSchema = SchemaBuilder.record("test_record").fields()
+      .name("id").`type`().longType().noDefault()
+      .name("dt").`type`(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+      .endRecord()
+    val record = new GenericData.Record(timestampSchema)
+    record.put("id", 1L)
+    record.put("dt", subSecondMicros)
+    val consistent = Map(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key -> "true")
+    assertEquals("2026-08-11 00%3A00%3A00.123456", fractionalKeyGenerator(consistent).getPartitionPath(record))
+    assertEquals("2026-08-11 00%3A00%3A00.123456", fractionalKeyGenerator().getPartitionPath(record))
+  }
+
+  /**
+   * The delegate formats an [[InternalRow]] timestamp through a millisecond [[Timestamp]], so the
+   * microseconds are read from the row.
+   */
+  @Test
+  def testTimestampPartitionPathKeepsMicrosecondsOnTheInternalRowPath(): Unit = inUtc {
+    val row = InternalRow(1L, subSecondMicros)
+    assertEquals(UTF8String.fromString("2026-08-11 00%3A00%3A00.123456"),
+      fractionalKeyGenerator().getPartitionPath(row, timestampRowSchema))
+  }
+
+  /** The row delegates hand over `00:00:00.123` or `00:00:00.123456`, which truncate to the second as on the Avro path. */
+  @Test
+  def testTimestampPartitionPathTruncatesASubSecondValueOnTheRowPaths(): Unit = inUtc {
+    assertEquals(UTF8String.fromString("2026-08-11 00%3A00%3A00"),
+      keyGenerator(Some("dt timestamp")).getPartitionPath(InternalRow(1L, subSecondMicros), timestampRowSchema))
+    val timestamp = Timestamp.from(Instant.ofEpochSecond(1786406400L, 123456000L))
+    assertEquals("2026-08-11 00%3A00%3A00", keyGenerator(Some("dt timestamp")).getPartitionPath(
+      new GenericRowWithSchema(Array[Any](1L, timestamp), timestampRowSchema): Row))
+    val record = new GenericData.Record(schema)
+    record.put("id", 1L)
+    record.put("dt", String.valueOf(subSecondMicros))
+    assertEquals("2026-08-11 00%3A00%3A00", keyGenerator(Some("dt timestamp")).getPartitionPath(record))
+  }
+
+  @Test
+  def testTimestampPartitionPathKeepsMicrosecondsOnTheRowPath(): Unit = inUtc {
+    val timestamp = Timestamp.from(Instant.ofEpochSecond(1786406400L, 123456000L))
+    assertEquals("2026-08-11 00%3A00%3A00.123456", fractionalKeyGenerator().getPartitionPath(
+      new GenericRowWithSchema(Array[Any](1L, timestamp), timestampRowSchema): Row))
+    // An Instant is what a row holds with spark.sql.datetime.java8API.enabled
+    assertEquals("2026-08-11 00%3A00%3A00.123456", fractionalKeyGenerator().getPartitionPath(
+      new GenericRowWithSchema(Array[Any](1L, Instant.ofEpochSecond(1786406400L, 123456000L)), timestampRowSchema): Row))
   }
 }

@@ -376,7 +376,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testInsertValueFastPathOnlyForClassSchema() throws IOException {
+  public void testInsertValueFastPathForSchemasWithoutMetaFields() throws IOException {
     HoodieMetadataPayload payload = newBloomFilterPayload();
 
     // The class schema singleton (and no schema) takes the reference-equality fast path and returns the generated record.
@@ -386,17 +386,16 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     assertSame(HoodieMetadataRecord.getClassSchema(), fastPath.getSchema());
     assertInstanceOf(HoodieMetadataRecord.class, payload.getInsertValue(null).get());
 
-    // Any other instance takes the slow path, which fills a GenericRecord at the metadata-field offsets.
+    // A schema with the metadata fields takes the slow path, which fills a GenericRecord at the metadata-field offsets.
     Schema withMetaFields = HoodieSchemaUtils.addMetadataFields(
         HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema())).toAvroSchema();
     assertInstanceOf(GenericData.Record.class, payload.getInsertValue(withMetaFields).get());
 
-    // So an equal but distinct copy of the bare class schema is not usable. It misses the identity check, and the
-    // slow path then writes at the offsets the metadata fields would occupy, which a bare copy does not have:
-    // hence ArrayIndexOutOfBoundsException rather than a wrong-but-returned record.
+    // An equal but distinct copy of the bare class schema, for example one parsed from its string form on an
+    // executor, has no metadata fields either, so it also gets the generated record.
     Schema equalCopy = new Schema.Parser().parse(HoodieMetadataRecord.getClassSchema().toString());
     assertEquals(HoodieMetadataRecord.getClassSchema(), equalCopy);
-    assertThrows(ArrayIndexOutOfBoundsException.class, () -> payload.getInsertValue(equalCopy));
+    assertInstanceOf(HoodieMetadataRecord.class, payload.getInsertValue(equalCopy).get());
   }
 
   @Test

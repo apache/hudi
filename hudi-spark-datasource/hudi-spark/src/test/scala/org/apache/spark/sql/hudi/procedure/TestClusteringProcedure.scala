@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
-import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_DUP_POLICY, NONE_INSERT_DUP_POLICY, OPERATION, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
@@ -1106,6 +1106,8 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       .format("hudi")
       .option(OPERATION.key(), WriteOperationType.INSERT.value())
       .option(RECORDKEY_FIELD.key(), "c1")
+      // the records repeat the record key
+      .option(INSERT_DUP_POLICY.key(), NONE_INSERT_DUP_POLICY)
       .options(options)
       .mode("append").save(location)
   }

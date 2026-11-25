@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -33,9 +34,13 @@ import org.apache.hudi.util.JavaScalaConverters;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.util.Properties;
+
+import scala.Option;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getMetaClientBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -53,6 +58,38 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     TypedProperties properties = TypedProperties.copy(tableConfig.getProps());
     properties.put(HoodieTableConfig.DATABASE_NAME.key(), "databaseFromCatalog");
     Assertions.assertDoesNotThrow(() -> HoodieWriterUtils.validateTableConfig(sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(properties), tableConfig));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      // table format, record key, partition field, index type, index class, keys of the table config, expected index type
+      "test-format,id,dep,,,true,GLOBAL_SIMPLE",
+      "TEST-FORMAT,id,dep,,,false,GLOBAL_SIMPLE",
+      "native,id,dep,,,true,",
+      ",id,dep,,,false,",
+      "test-format,,dep,,,true,",
+      "test-format,id,,,,false,",
+      "test-format,id,dep,SIMPLE,,true,SIMPLE",
+      "test-format,id,dep,RECORD_INDEX,,false,RECORD_INDEX",
+      "test-format,id,dep,,org.example.CustomIndex,true,"})
+  void testDefaultIndexOfTableFormat(String tableFormat, String recordKey, String partitionField, String indexType, String indexClass,
+                                     boolean tableConfigKeys, String expectedIndexType) {
+    Properties properties = new Properties();
+    putIfNotNull(properties, HoodieTableConfig.TABLE_FORMAT.key(), tableFormat);
+    putIfNotNull(properties, tableConfigKeys ? HoodieTableConfig.RECORDKEY_FIELDS.key() : DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKey);
+    putIfNotNull(properties, tableConfigKeys ? HoodieTableConfig.PARTITION_FIELDS.key() : DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitionField);
+    putIfNotNull(properties, HoodieIndexConfig.INDEX_TYPE.key(), indexType);
+    putIfNotNull(properties, HoodieIndexConfig.INDEX_CLASS_NAME.key(), indexClass);
+
+    Option<String> defaulted = HoodieWriterUtils.withDefaultIndexOfTableFormat(JavaScalaConverters.convertJavaPropertiesToScalaMap(properties))
+        .get(HoodieIndexConfig.INDEX_TYPE.key());
+    assertEquals(expectedIndexType, defaulted.isDefined() ? defaulted.get() : null);
+  }
+
+  private static void putIfNotNull(Properties properties, String key, String value) {
+    if (value != null) {
+      properties.put(key, value);
+    }
   }
 
   @Test
@@ -76,6 +113,32 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
         () -> HoodieWriterUtils.validateTableConfig(
             sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(new TypedProperties()), tableConfig));
     assertTrue(ex.getMessage().contains("requires a single partition field"), ex.getMessage());
+  }
+
+  @Test
+  void validateTableConfigHoldsAWriteToTheRecordedTimestampPartitionLayout() throws IOException {
+    String key = HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key();
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "ts");
+    HoodieTableConfig recorded = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, props, "")
+        .initTable(storageConf, tempDir.resolve("fractionalSecondsTable").toString()).getTableConfig();
+    assertEquals("true", recorded.getString(key));
+    HoodieTableConfig truncating = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, props, "")
+        .initTable(storageConf, tempDir.resolve("truncatingTable").toString()).getTableConfig();
+    // As a table created before the property existed
+    truncating.getProps().remove(key);
+
+    for (HoodieTableConfig tableConfig : new HoodieTableConfig[] {recorded, truncating}) {
+      String layout = tableConfig.getStringOrDefault(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS);
+      TypedProperties writeProps = new TypedProperties();
+      writeProps.put(key, layout);
+      Assertions.assertDoesNotThrow(() -> HoodieWriterUtils.validateTableConfig(
+          sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(writeProps), tableConfig));
+      writeProps.put(key, Boolean.toString(!Boolean.parseBoolean(layout)));
+      HoodieException ex = assertThrows(HoodieException.class, () -> HoodieWriterUtils.validateTableConfig(
+          sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(writeProps), tableConfig));
+      assertTrue(ex.getMessage().contains(key), ex.getMessage());
+    }
   }
 
   @Test

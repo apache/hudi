@@ -18,7 +18,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.DataSourceWriteOptions.INSERT_DROP_DUPS
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY}
 import org.apache.hudi.common.avro.{AvroRecordContext, HoodieAvroUtils}
 import org.apache.hudi.common.config.{RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
@@ -107,8 +107,13 @@ object HoodieCreateRecordUtils {
         !preppedSparkSqlWrites
       }
     }
+    // A prepped record of a Spark SQL write that may hold other partition values than the partition it was read
+    // from is moved to the partition the key generator gives it
+    val movesPreppedRecords = preppedSparkSqlWrites &&
+      parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY, "false").toBoolean
+    val sqlMergeIntoWrites = parameters.getOrElse(HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key, "false").toBoolean
     // we can skip key generator for prepped flow
-    val usePreppedInsteadOfKeyGen = preppedSparkSqlWrites || preppedWriteOperation
+    val usePreppedInsteadOfKeyGen = (preppedSparkSqlWrites || preppedWriteOperation) && !movesPreppedRecords
 
     // NOTE: Avro's [[Schema]] can't be effectively serialized by JVM native serialization framework
     //       (due to containing cyclic refs), therefore we have to convert it to string before
@@ -138,10 +143,17 @@ object HoodieCreateRecordUtils {
           val deleteContext = new DeleteContext(mergeProps, writerSchema).withReaderSchema(writerSchema);
 
           // handle dropping partition columns
-          it.map { avroRec =>
+          it.flatMap { avroRec =>
             val isDelete: Boolean = AvroRecordContext.getFieldAccessorInstance.isDeleteRecord(avroRec, deleteContext)
-            val (hoodieKey: HoodieKey, recordLocation: HOption[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
+            val (readKey: HoodieKey, readLocation: HOption[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
               preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto)
+            val movedTo = if (movesPreppedRecords && !isDelete) {
+              Some(keyGenerator.get.getPartitionPath(avroRec)).filter(_ != readKey.getPartitionPath)
+            } else {
+              None
+            }
+            val hoodieKey = movedTo.map(new HoodieKey(readKey.getRecordKey, _)).getOrElse(readKey)
+            val recordLocation = if (movedTo.isDefined) HOption.empty[HoodieRecordLocation]() else readLocation
             val avroRecWithoutMeta: GenericRecord = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
               HoodieAvroUtils.rewriteRecord(avroRec, org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(dataFileSchema).toAvroSchema)
             } else {
@@ -156,13 +168,25 @@ object HoodieCreateRecordUtils {
             val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
               val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
                 consistentLogicalTimestampEnabled, requiresOrderingValue)
+              // The clauses of a Spark SQL MERGE INTO decide on write whether a record that is not flagged as a
+              // delete deletes the record it matches
+              val knownDelete: java.lang.Boolean = if (isDelete || !sqlMergeIntoWrites) isDelete else null
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getPayloadClass, null, recordLocation, isDelete)
+                config.getPayloadClass, null, recordLocation, knownDelete)
             } else {
               HoodieRecordUtils.createHoodieRecord(processedRecord, hoodieKey,
                 config.getPayloadClass, recordLocation, isDelete)
             }
-            hoodieRecord
+            if (movedTo.isDefined) {
+              val deleteRecord = HoodieRecordUtils.generateEmptyAvroRecord(readKey, OrderingValues.getDefault, config.getPayloadClass, null)
+              deleteRecord.setIgnoreIndexUpdate(true)
+              if (readLocation.isPresent) {
+                deleteRecord.setCurrentLocation(readLocation.get)
+              }
+              Iterator[HoodieRecord[_]](deleteRecord, hoodieRecord)
+            } else {
+              Iterator[HoodieRecord[_]](hoodieRecord)
+            }
           }
         }).toJavaRDD()
 
@@ -190,16 +214,30 @@ object HoodieCreateRecordUtils {
           // NOTE: To make sure we properly transform records
           val finalStructTypeRowWriter = getCachedUnsafeRowWriter(sourceStructType, finalStructType)
 
-          it.map { sourceRow =>
-            val (key: HoodieKey, recordLocation: Option[HoodieRecordLocation]) =
+          it.flatMap { sourceRow =>
+            val (readKey: HoodieKey, readLocation: Option[HoodieRecordLocation]) =
               HoodieCreateRecordUtils.getHoodieKeyAndMayBeLocationFromSparkRecord(sparkKeyGenerator, sourceRow, sourceStructType,
                 preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto)
+            val movedTo = if (movesPreppedRecords) {
+              Some(sparkKeyGenerator.get.getPartitionPath(sourceRow, sourceStructType).toString).filter(_ != readKey.getPartitionPath)
+            } else {
+              None
+            }
+            val key = movedTo.map(new HoodieKey(readKey.getRecordKey, _)).getOrElse(readKey)
+            val recordLocation = if (movedTo.isDefined) None else readLocation
             val targetRow = finalStructTypeRowWriter(sourceRow)
             val hoodieSparkRecord = new HoodieSparkRecord(key, targetRow, dataFileStructType, false)
             if (recordLocation.isDefined) {
               hoodieSparkRecord.setCurrentLocation(recordLocation.get)
             }
-            hoodieSparkRecord
+            if (movedTo.isDefined) {
+              val deleteRecord = new HoodieEmptyRecord[InternalRow](readKey, HoodieRecord.HoodieRecordType.SPARK)
+              deleteRecord.setIgnoreIndexUpdate(true)
+              readLocation.foreach(deleteRecord.setCurrentLocation)
+              Iterator[HoodieRecord[_]](deleteRecord, hoodieSparkRecord)
+            } else {
+              Iterator[HoodieRecord[_]](hoodieSparkRecord)
+            }
           }
         }.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]
     }

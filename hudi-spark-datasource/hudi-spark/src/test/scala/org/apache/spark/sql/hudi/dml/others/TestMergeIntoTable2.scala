@@ -20,8 +20,10 @@
 package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
-import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
+import org.apache.hudi.HoodieSparkUtils.gteqSpark3_5
+import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig}
+import org.apache.hudi.config.HoodieWriteConfig.{MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT, WRITE_UPDATES_AS_DELETES_AND_INSERTS}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.Row
@@ -117,6 +119,22 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 22, "2021-03-21")
         )
 
+        // Update data from a field of the target table
+        spark.sql(
+          s"""
+             | merge into $tableName as t0
+             | using (
+             |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
+             | ) as s0
+             | on t0.id = s0.id
+             | when matched and s0.id % 2 = 1 then update set id = s0.id, name = s0.name,
+             |  price = s0.price + t0.price, ts = s0.ts, dt = s0.dt
+         """.stripMargin
+        )
+        checkAnswer(s"select id,name,price,dt from $tableName")(
+          Seq(1, "a1", 32, "2021-03-21")
+        )
+
         // Delete data which matched update-condition
         spark.sql(
           s"""
@@ -134,25 +152,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         checkAnswer(s"select count(1) from $tableName")(
           Seq(0)
         )
-
-        val errorMsg = if (HoodieSparkUtils.gteqSpark4_2)
-          "[INTERNAL_ERROR] Executed command failed. You hit a bug in Spark or the Spark plugins you use. Please, report this bug to the corresponding communities or vendors, and provide the full stack trace. SQLSTATE: XX000"
-        else if (HoodieSparkUtils.gteqSpark4_0)
-          "[INTERNAL_ERROR] Eagerly executed command failed. You hit a bug in Spark or the Spark plugins you use. Please, report this bug to the corresponding communities or vendors, and provide the full stack trace. SQLSTATE: XX000"
-        else
-          "assertion failed: Target table's field(price) cannot be the right-value of the update clause for MOR table."
-
-        checkException(
-          s"""
-             | merge into $tableName as t0
-             | using (
-             |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
-             | ) as s0
-             | on t0.id = s0.id
-             | when matched and s0.id % 2 = 1 then update set id = s0.id, name = s0.name,
-             |  price = s0.price + t0.price, ts = s0.ts, dt = s0.dt
-         """.stripMargin
-        )(errorMsg)
       }
     })
   }
@@ -213,21 +212,28 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
              | location '${tmp.getCanonicalPath}'
          """.stripMargin)
 
-        spark.sql(
+        val mergeStruct = (struct: String) =>
           s"""
              |merge into $tableName h0
              |using (
              |select
              |  1 as id,
              |  'a1' as name,
-             |  struct(1, '10') as s_value,
+             |  $struct as s_value,
              |  split('a0,a1', ',') as a_value,
              |  map('k0', 'v0') as m_value,
              |  1000 as ts
              |) s0
              |on h0.id = s0.id
              |when not matched then insert *
-             |""".stripMargin)
+             |""".stripMargin
+        if (gteqSpark3_5) {
+          // the fields of a struct value are matched by name
+          checkExceptionContain(mergeStruct("struct(1, '10')"))("Cannot find data for the output column `s_value`.`f0`")
+          spark.sql(mergeStruct("named_struct('f1', '10', 'f0', 1)"))
+        } else {
+          spark.sql(mergeStruct("struct(1, '10')"))
+        }
 
         checkAnswer(s"select id, name, s_value, a_value, m_value, ts from $tableName")(
           Seq(1, "a1", Row(1, "10"), Seq("a0", "a1"), Map("k0" -> "v0"), 1000)
@@ -240,7 +246,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
              |select
              |  1 as id,
              |  'a1' as name,
-             |  struct(1, '12') as s_value,
+             |  named_struct('f0', 1, 'f1', '12') as s_value,
              |  split('a0,a1,a2', ',') as a_value,
              |  map('k1', 'v1') as m_value,
              |  1000 as ts
@@ -286,18 +292,21 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         // NOTE: When using star update/insert clauses (ie `insert *` or `update *`) order of the
         //       columns in the source and target table _have to_ match (Spark won't be applying any column
         //       column resolution logic)
-        spark.sql(
-          s"""
-             |merge into $tableName as t0
-             |using (
-             |  select 1 as id, 'a1' as name, 97 as price, 1002 as ts, '2021-05-05' as dt union all
-             |  select 1 as id, 'a2' as name, 98 as price, 1003 as ts, '2021-05-05' as dt union all
-             |  select 2 as id, 'a3' as name, 99 as price, 1001 as ts, '2021-05-05' as dt
-             | ) as s0
-             |on t0.id = s0.id
-             |when matched then update set *
-             |when not matched then insert *
-             |""".stripMargin)
+        // Two source rows match target row 1, which only passes with the cardinality check off
+        withSQLConf(DataSourceWriteOptions.MERGE_INTO_CARDINALITY_CHECK.key -> "false") {
+          spark.sql(
+            s"""
+               |merge into $tableName as t0
+               |using (
+               |  select 1 as id, 'a1' as name, 97 as price, 1002 as ts, '2021-05-05' as dt union all
+               |  select 1 as id, 'a2' as name, 98 as price, 1003 as ts, '2021-05-05' as dt union all
+               |  select 2 as id, 'a3' as name, 99 as price, 1001 as ts, '2021-05-05' as dt
+               | ) as s0
+               |on t0.id = s0.id
+               |when matched then update set *
+               |when not matched then insert *
+               |""".stripMargin)
+        }
 
         checkAnswer(s"select id, name, price, ts, dt from $tableName")(
           Seq(1, "a2", 98.0, 1003, "2021-05-05"),
@@ -731,21 +740,86 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
          """.stripMargin)
       // Insert data
       spark.sql(s"insert into $tableName select 1, 'a1', cast(10.0 as double), 999, '2021-03-21'")
-      spark.sql(
+      val mergePrice = (price: String) =>
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 'a1' as name, 1 as id, '10.1' as price, 1000 as ts, '2021-03-21' as dt
+           |  select 'a1' as name, 1 as id, $price as price, 1000 as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when matched then update set t0.price = s0.price, t0.ts = s0.ts
            | when not matched then insert *
          """.stripMargin
-      )
+      if (gteqSpark3_5) {
+        checkExceptionContain(mergePrice("'10.1'"))("Cannot safely cast `price` \"STRING\" to \"DOUBLE\"")
+        checkAnswer(s"select id,name,price,dt from $tableName")(
+          Seq(1, "a1", 10.0, "2021-03-21")
+        )
+        spark.sql(mergePrice("cast('10.1' as double)"))
+      } else {
+        spark.sql(mergePrice("'10.1'"))
+      }
       checkAnswer(s"select id,name,price,dt from $tableName")(
         Seq(1, "a1", 10.1, "2021-03-21")
       )
     })
+  }
+
+  test("Test Merge Into Applies Store Assignment Policy") {
+    if (gteqSpark3_5) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v int,
+             |  s struct<n1:int not null, n2:struct<dn1:int, dn2:int>>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (primaryKey = 'id', type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, 10, named_struct('n1', 1, 'n2', named_struct('dn1', 3, 'dn2', 4))")
+        spark.sql(
+          """
+            |create or replace temporary view store_assignment_source as
+            |select 1 as id, named_struct('n1', 1) as c2, 'str' as c3, named_struct('dn3', 1, 'dn1', 2) as c4,
+            |  cast(20 as bigint) as c5
+            |union all
+            |select 2, named_struct('n1', 2), 'str', named_struct('dn3', 3, 'dn1', 4), cast(30 as bigint)
+          """.stripMargin)
+        val merge = (action: String) =>
+          s"merge into $tableName t using store_assignment_source s on t.id = s.id when $action"
+
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "ansi") {
+          checkExceptionContain(merge("matched then update set t.s = s.c2"))(
+            "Cannot find data for the output column `s`.`n2`")
+          checkExceptionContain(merge("matched then update set t.s.n1 = s.c3"))(
+            "Cannot safely cast `s`.`n1` \"STRING\" to \"INT\"")
+          checkExceptionContain(merge("matched then update set t.s.n2 = s.c4"))(
+            "Cannot find data for the output column `s`.`n2`.`dn2`")
+          checkExceptionContain(merge("matched then update set t.s.n1 = null"))("value appeared in non-nullable field")
+          checkExceptionContain(merge("not matched then insert (id, v, s) values (s.id, s.c3, null)"))(
+            "Cannot safely cast `v` \"STRING\" to \"INT\"")
+          spark.sql(merge(
+            "matched then update set t.v = s.c5, t.s = named_struct('n2', named_struct('dn2', 6, 'dn1', 5), 'n1', 1)"))
+        }
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "strict") {
+          checkExceptionContain(merge("matched then update set t.v = s.c5"))("Cannot safely cast `v` \"BIGINT\" to \"INT\"")
+          checkExceptionContain(merge("matched then update set t.s.n1 = null"))(
+            "Cannot safely cast `s`.`n1` \"VOID\" to \"INT\"")
+          checkExceptionContain(merge("not matched then insert (id, v, s) values (s.id, s.c5, null)"))(
+            "Cannot safely cast `v` \"BIGINT\" to \"INT\"")
+          checkExceptionContain(merge("not matched then insert (id, v, s) values (s.id, 30, null)"))(
+            "Cannot safely cast `s` \"VOID\" to \"STRUCT<")
+          spark.sql(merge("not matched then insert (id, v, s) values " +
+            "(s.id, 30, named_struct('n1', 3, 'n2', named_struct('dn1', 7, 'dn2', 8)))"))
+        }
+        checkAnswer(s"select id, v, s from $tableName order by id")(
+          Seq(1, 20, Row(1, Row(5, 6))),
+          Seq(2, 30, Row(3, Row(7, 8))))
+      }
+    }
   }
 
   testWithMergeHandles("Test Merge into where manually set DefaultHoodieRecordPayload") {
@@ -921,6 +995,241 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
           }
         }
       }
+    }
+  }
+
+  Seq("cow", "mor").foreach { tableType =>
+    Seq(false, true).foreach { updatesAsDeletesAndInserts =>
+      test(s"Test MergeInto without update clause on $tableType table without ordering field"
+        + s" writing updates as deletes and inserts $updatesAsDeletesAndInserts") {
+        withTempDir { tmp =>
+          withSQLConf(WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() -> updatesAsDeletesAndInserts.toString) {
+            val tableName = generateTableName
+            spark.sql(
+              s"""
+                 | create table $tableName (
+                 |  id int,
+                 |  name string,
+                 |  price double,
+                 |  dt string
+                 | ) using hudi
+                 | tblproperties (
+                 |  type = '$tableType',
+                 |  primaryKey = 'id'
+                 | )
+                 | partitioned by(dt)
+                 | location '${tmp.getCanonicalPath}'
+               """.stripMargin)
+            spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 'p1'), (2, 'a2', 20.0, 'p1'), (3, 'a3', 30.0, 'p1'),"
+              + " (4, 'a4', 40.0, 'p2'), (5, 'a5', 50.0, 'p2')")
+
+            // Delete only with a condition: id 2 fails the condition and id 9 has no match
+            spark.sql(
+              s"""
+                 | merge into $tableName t
+                 | using (select 1 as id, 'p1' as dt, 'del' as op union all select 2, 'p1', 'keep' union all select 9, 'p1', 'del') s
+                 | on t.id = s.id
+                 | when matched and s.op = 'del' then delete
+               """.stripMargin)
+            checkAnswer(s"select id, name, price, dt from $tableName")(
+              Seq(2, "a2", 20.0, "p1"), Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"))
+
+            // Delete only without a condition: id 8 has no match
+            spark.sql(
+              s"""
+                 | merge into $tableName t
+                 | using (select 2 as id, 'p1' as dt union all select 8, 'p2') s
+                 | on t.id = s.id
+                 | when matched then delete
+               """.stripMargin)
+            checkAnswer(s"select id, name, price, dt from $tableName")(
+              Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"))
+
+            // Insert only without a condition: the matched id 3 is neither inserted again nor updated
+            spark.sql(
+              s"""
+                 | merge into $tableName t
+                 | using (select 3 as id, 'a3n' as name, 31.0 as price, 'p1' as dt union all select 6, 'a6', 60.0, 'p2') s
+                 | on t.id = s.id
+                 | when not matched then insert *
+               """.stripMargin)
+            checkAnswer(s"select id, name, price, dt from $tableName")(
+              Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"), Seq(6, "a6", 60.0, "p2"))
+
+            // Insert only with a condition: id 4 is matched, the unmatched id 10 fails the condition, and so do
+            // two of the three source records of the unmatched id 7
+            spark.sql(
+              s"""
+                 | merge into $tableName t
+                 | using (select 4 as id, 'a4n' as name, 71.0 as price, 'p2' as dt union all select 7, 'a7x', 5.0, 'p1'
+                 |  union all select 7, 'a7', 70.0, 'p1' union all select 7, 'a7y', 6.0, 'p1' union all select 10, 'a10', 5.0, 'p1') s
+                 | on t.id = s.id
+                 | when not matched and s.price > 50 then insert *
+               """.stripMargin)
+            checkAnswer(s"select id, name, price, dt from $tableName")(
+              Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"), Seq(6, "a6", 60.0, "p2"),
+              Seq(7, "a7", 70.0, "p1"))
+
+            // Delete and insert: the matched id 3 fails the delete condition and is not inserted again
+            spark.sql(
+              s"""
+                 | merge into $tableName t
+                 | using (select 5 as id, 'a5n' as name, 51.0 as price, 'p2' as dt, 'del' as op
+                 |  union all select 3, 'a3n', 31.0, 'p1', 'keep' union all select 11, 'a11', 110.0, 'p1', 'ins') s
+                 | on t.id = s.id
+                 | when matched and s.op = 'del' then delete
+                 | when not matched then insert (id, name, price, dt) values (s.id, s.name, s.price, s.dt)
+               """.stripMargin)
+            checkAnswer(s"select id, name, price, dt from $tableName")(
+              Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(6, "a6", 60.0, "p2"), Seq(7, "a7", 70.0, "p1"),
+              Seq(11, "a11", 110.0, "p1"))
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Matched clauses that refer to fields of the target table, each with the rows it leaves in a table that holds
+   * ids 1 to 3 with dt p1 and ids 4 and 5 with dt p2. The source of the first three statements has a record
+   * without a match in p1 and only matched records in p2.
+   */
+  private val targetFieldCases: Seq[(String, String, Seq[Seq[Any]])] = Seq(
+    // id 2 fails the condition, and id 4 passes it on another field than id 1
+    ("an update condition",
+      """using (select 1 as id, 'a1m' as name, 11.0 as price, 'p1' as dt union all select 2, 'a2m', 21.0, 'p1'
+        |  union all select 4, 'a4m', 41.0, 'p2' union all select 9, 'a9', 90.0, 'p1') s
+        |on t.id = s.id
+        |when matched and (t.price < 15 or t.name = 'a4') then update set *""".stripMargin,
+      Seq(Seq(1, "a1m", 11.0, "p1"), Seq(2, "a2", 20.0, "p1"), Seq(3, "a3", 30.0, "p1"), Seq(4, "a4m", 41.0, "p2"),
+        Seq(5, "a5", 50.0, "p2"))),
+    // id 2 fails the condition
+    ("a delete condition",
+      """using (select 2 as id, 'p1' as dt union all select 3, 'p1' union all select 5, 'p2' union all select 9, 'p1') s
+        |on t.id = s.id
+        |when matched and t.price > 25 then delete""".stripMargin,
+      Seq(Seq(1, "a1", 10.0, "p1"), Seq(2, "a2", 20.0, "p1"), Seq(4, "a4", 40.0, "p2"))),
+    // id 2 fails both conditions
+    ("update and delete conditions with an insert",
+      """using (select 1 as id, 'a1m' as name, 11.0 as price, 'p1' as dt union all select 2, 'a2m', 21.0, 'p1'
+        |  union all select 3, 'a3m', 31.0, 'p1' union all select 5, 'a5m', 51.0, 'p2' union all select 6, 'a6', 60.0, 'p1') s
+        |on t.id = s.id
+        |when matched and t.price < 20 then update set *
+        |when matched and t.price >= 30 then delete
+        |when not matched then insert *""".stripMargin,
+      Seq(Seq(1, "a1m", 11.0, "p1"), Seq(2, "a2", 20.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(6, "a6", 60.0, "p1"))),
+    ("assigned values",
+      """using (select 3 as id, 1.5 as price, 'p1' as dt union all select 4, 2.5, 'p2') s
+        |on t.id = s.id
+        |when matched then update set price = t.price + s.price, name = concat(t.name, '-', t.dt)""".stripMargin,
+      Seq(Seq(1, "a1", 10.0, "p1"), Seq(2, "a2", 20.0, "p1"), Seq(3, "a3-p1", 31.5, "p1"), Seq(4, "a4-p2", 42.5, "p2"),
+        Seq(5, "a5", 50.0, "p2"))))
+
+  Seq(("SIMPLE", true, targetFieldCases), ("SIMPLE", false, targetFieldCases.slice(2, 3)),
+    ("GLOBAL_SIMPLE", true, targetFieldCases), ("RECORD_INDEX", true, targetFieldCases),
+    ("BUCKET", true, targetFieldCases.slice(2, 3))).foreach { case (indexType, partitioned, cases) =>
+    cases.foreach { case (name, clauses, rows) =>
+      test(s"Test MergeInto with target fields in $name on mor table with $indexType index"
+        + s" on a ${if (partitioned) "partitioned" else "non-partitioned"} table") {
+        withTempDir { tmp =>
+          withSQLConf("hoodie.index.type" -> indexType, "hoodie.bucket.index.num.buckets" -> "2",
+            "hoodie.metadata.global.record.level.index.enable" -> (indexType == "RECORD_INDEX").toString) {
+            val tableName = generateTableName
+            spark.sql(
+              s"""
+                 | create table $tableName (
+                 |  id int,
+                 |  name string,
+                 |  price double,
+                 |  dt string
+                 | ) using hudi
+                 | tblproperties (
+                 |  type = 'mor',
+                 |  primaryKey = 'id'
+                 | )
+                 | ${if (partitioned) "partitioned by(dt)" else ""}
+                 | location '${tmp.getCanonicalPath}'
+               """.stripMargin)
+            spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 'p1'), (2, 'a2', 20.0, 'p1'), (3, 'a3', 30.0, 'p1'),"
+              + " (4, 'a4', 40.0, 'p2'), (5, 'a5', 50.0, 'p2')")
+
+            spark.sql(s"merge into $tableName t $clauses")
+            checkAnswer(s"select id, name, price, dt from $tableName order by id")(rows: _*)
+
+            withSQLConf(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1") {
+              spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
+            }
+            assertResult(1)(createMetaClient(spark, tmp.getCanonicalPath).getActiveTimeline.getCommitTimeline
+              .filterCompletedInstants.countInstants)
+            checkAnswer(s"select id, name, price, dt from $tableName order by id")(rows: _*)
+          }
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto with target fields in a condition on mor table after a delete in the log") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double
+           | ) using hudi
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id'
+           | )
+           | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10.0), (2, 'a2', 20.0)")
+      // The delete goes to a log file, so the index still locates id 1 through the base file
+      spark.sql(s"delete from $tableName where id = 1")
+      spark.sql(
+        s"""
+           | merge into $tableName t
+           | using (select 1 as id, 'a1n' as name, 11.0 as price union all select 2, 'a2n', 21.0) s
+           | on t.id = s.id
+           | when matched and t.price < 25 then update set *
+           | when not matched then insert *
+         """.stripMargin)
+      checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1n", 11.0), Seq(2, "a2n", 21.0))
+    }
+  }
+
+  test("Test MergeInto with a matched condition on a target field refused on mor table without record key") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double
+           | ) using hudi
+           | tblproperties (
+           |  type = 'mor'
+           | )
+           | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10.0), (2, 'a2', 20.0)")
+      // The source records are written with the locations the join with the table gives them, and their matched
+      // clauses are evaluated without the records they match, so the statements are refused before a commit starts
+      val instants = createMetaClient(spark, tmp.getCanonicalPath).getActiveTimeline.getInstants
+      Seq("update set *", "delete").foreach { action =>
+        checkExceptionContain(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1m' as name, 11.0 as price union all select 2, 'a2m', 21.0) s
+             | on t.id = s.id
+             | when matched and t.price < 15 then $action
+           """.stripMargin)(
+          "Target table's field(price) cannot be used in the condition of a WHEN MATCHED clause for MOR table without a record key")
+      }
+      assertResult(instants)(createMetaClient(spark, tmp.getCanonicalPath).getActiveTimeline.getInstants)
+      checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1", 10.0), Seq(2, "a2", 20.0))
     }
   }
 
@@ -1319,6 +1628,482 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             Seq(2, "Jane Doe", 24, 1598972400L),
             Seq(3, "Bob Smith", 14, 1599058800L),
             Seq(4, "Alice Johnson", 49, 2L))
+        }
+      }
+    }
+  }
+
+  Seq(("cow", true, false), ("cow", false, false), ("mor", true, false), ("mor", true, true), ("mor", false, false)).foreach {
+    case (tableType, keyed, updatesAsDeletesAndInserts) =>
+      test(s"Test MergeInto with the target table as source on $tableType table with record key $keyed"
+        + s" writing updates as deletes and inserts $updatesAsDeletesAndInserts") {
+        withTempDir { tmp =>
+          withSQLConf(WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() -> updatesAsDeletesAndInserts.toString) {
+            Seq(false, true).foreach { cached =>
+              val tableName = generateTableName
+              val keyProp = if (keyed) ", primaryKey = 'id'" else ""
+              spark.sql(
+                s"""
+                   | create table $tableName (id int, v string) using hudi
+                   | tblproperties (type = '$tableType' $keyProp)
+                   | location '${tmp.getCanonicalPath}/$tableName'
+                 """.stripMargin)
+              spark.sql(s"insert into $tableName values (1, 'v1'), (2, 'v2')")
+              if (cached) {
+                spark.sql(s"cache table $tableName")
+              }
+              spark.sql(
+                s"""
+                   | merge into $tableName t
+                   | using $tableName s
+                   | on t.id = s.id
+                   | when matched and s.id = 1 then update set id = s.id, v = 'x'
+                   | when not matched then insert *
+                 """.stripMargin)
+              checkAnswer(s"select id, v from $tableName order by id")(Seq(1, "x"), Seq(2, "v2"))
+              if (cached) {
+                spark.sql(s"uncache table $tableName")
+              }
+            }
+          }
+        }
+      }
+  }
+
+  test("Test MergeInto refuses to reassign a partition field of a table with record key and a non-global index") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, dt string) using hudi
+             | tblproperties (type = '$tableType', primaryKey = 'id')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 'p1'), (2, 'a2', 'p1')")
+
+        checkExceptionContain(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1n' as name, 'p1' as dt, 'p9' as new_dt) s
+             | on t.id = s.id
+             | when matched then update set id = s.id, name = s.name, dt = s.new_dt
+           """.stripMargin)(
+          "Detected disallowed assignment clause in MERGE INTO statement for partition field `dt`")
+        // The source value the record is looked up under can still be assigned
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1n' as name, 'p1' as dt) s
+             | on t.id = s.id
+             | when matched then update set *
+           """.stripMargin)
+        checkAnswer(s"select id, name, dt, _hoodie_partition_path from $tableName order by id")(
+          Seq(1, "a1n", "p1", "dt=p1"), Seq(2, "a2", "p1", "dt=p1"))
+      }
+    }
+  }
+
+  test("Test MergeInto With Nested Field Assignments") {
+    withTempDir { tmp =>
+      Seq(("cow", "primaryKey = 'id',"), ("cow", ""), ("mor", "primaryKey = 'id',")).foreach { case (tableType, keyProp) =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  s struct<c1:int, c2:struct<a:array<int>, m:map<string, string>>>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, named_struct('c1', 2, 'c2', named_struct('a', array(1, 2), 'm', map('a', 'b')))")
+        spark.sql(s"insert into $tableName select 2, null")
+        val mergeNested =
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, -2 as c1 union all select 2, 5) s
+             |on t.id = s.id
+             |when matched then update set t.s.c1 = s.c1, t.s.c2.a = array(-1, -2)
+           """.stripMargin
+
+        if (!gteqSpark3_5) {
+          checkExceptionContain(mergeNested)("Assigning a nested field requires Spark 3.5 or later")
+        } else {
+          spark.sql(mergeNested)
+          checkAnswer(s"select id, s from $tableName order by id")(
+            Seq(1, Row(-2, Row(Seq(-1, -2), Map("a" -> "b")))),
+            Seq(2, Row(5, Row(Seq(-1, -2), null))))
+
+          checkExceptionContain(
+            s"""
+               |merge into $tableName t using (select 3 as id) s on t.id = s.id
+               |when not matched then insert (id, s.c1) values (s.id, 1)
+             """.stripMargin)("INSERT assignment keys cannot be nested fields")
+          checkExceptionContain(
+            s"""
+               |merge into $tableName t using (select 1 as id) s on t.id = s.id
+               |when matched then update set t.s.c1 = 1, t.s.c1 = 2
+             """.stripMargin)("Multiple assignments for 's.c1'")
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto And Update Refuse Assignments To A Field Nested In An Array Or A Map") {
+    withTempDir { tmp =>
+      // a nested field assignment needs Spark 3.5
+      Seq("primaryKey = 'id',", "").filter(_ => gteqSpark3_5).foreach { keyProp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  a array<struct<c1:int, c2:int>>,
+             |  m map<string, string>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, array(named_struct('c1', 2, 'c2', 3)), map('k', 'v')")
+        val merge = s"merge into $tableName t using (select 1 as id, -2 as c2) s on t.id = s.id when matched then "
+
+        Seq(
+          merge + "update set t.a.c1 = s.c2",
+          merge + "update set t.a.c1 = array(-2)",
+          merge + "update set t.m.key = 'new_key'",
+          s"update $tableName set a.c1 = 1",
+          s"update $tableName set m.key = 'new_key'").foreach { statement =>
+          checkExceptionContain(statement)("Updating nested fields is only supported for StructType")
+        }
+        checkAnswer(s"select id, a, m from $tableName")(Seq(1, Seq(Row(2, 3)), Map("k" -> "v")))
+      }
+    }
+  }
+
+  test("Test MergeInto Refuses Conditions The Write Cannot Evaluate Per Record") {
+    withTempDir { tmp =>
+      Seq("primaryKey = 'id',", "").foreach { keyProp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 10), (2, 20)")
+        val source = "(select 1 as id, -1 as v union all select 3, -3)"
+
+        checkExceptionContain(
+          s"merge into $tableName t using $source s on t.id = s.id and rand() > 0.5 when matched then delete")(
+          "MERGE operation contains unsupported SEARCH condition. Non-deterministic expressions are not allowed")
+        checkExceptionContain(
+          s"merge into $tableName t using $source s on t.id = s.id when matched and rand() > 0.5 then delete")(
+          "MERGE operation contains unsupported DELETE condition. Non-deterministic expressions are not allowed")
+        checkExceptionContain(
+          s"merge into $tableName t using $source s on t.id = s.id when not matched and rand() > 0.5 then insert *")(
+          "MERGE operation contains unsupported INSERT condition. Non-deterministic expressions are not allowed")
+        checkExceptionContain(
+          s"merge into $tableName t using $source s on t.id = s.id and max(t.id) = 1 when matched then delete")(
+          "MERGE operation contains unsupported SEARCH condition. Aggregates are not allowed")
+        checkExceptionContain(
+          s"""
+             |merge into $tableName t using $source s on t.id = s.id
+             |when matched and t.id < (select max(id) from $source) then update set v = s.v
+           """.stripMargin)("MERGE operation contains unsupported UPDATE condition. Subqueries are not allowed")
+        checkExceptionContain(
+          s"""
+             |merge into $tableName t using $source s on t.id = s.id
+             |when not matched and s.id in (select id from $source) then insert *
+           """.stripMargin)("MERGE operation contains unsupported INSERT condition. Subqueries are not allowed")
+        checkExceptionContain(
+          s"merge into $tableName t using $source s on t.id = s.id when matched and sum(t.id) < 1 then delete")(
+          "MERGE operation contains unsupported DELETE condition. Aggregates are not allowed")
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 10), Seq(2, 20))
+
+        if (keyProp.isEmpty) {
+          // the merge condition of a table without a record key is a join condition, which evaluates a subquery
+          spark.sql(
+            s"""
+               |merge into $tableName t using $source s on t.id = s.id and t.id < (select max(id) from $source)
+               |when matched then update set v = s.v
+               |when not matched then insert *
+             """.stripMargin)
+          checkAnswer(s"select id, v from $tableName order by id")(Seq(1, -1), Seq(2, 20), Seq(3, -3))
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto With A Source Key Of Another Integral Type") {
+    withTempDir { tmp =>
+      // a wider source key type relies on Spark 3.5 casting an inserted value with an ANSI cast
+      for (tableType <- Seq("cow", "mor"); keyProp <- Seq("primaryKey = 'id',", "") if gteqSpark3_5) {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 10), (2, 20)")
+
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 1L as id, 11 as v union all select 3L, 30) s
+             |on t.id = s.id
+             |when matched then update set *
+             |when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 11), Seq(2, 20), Seq(3, 30))
+
+        // a source key out of the range of the key column cannot be inserted, and on a table with a record
+        // key, whose record key is rendered from the source key, it fails the statement
+        val outOfRange = "(select 4294967297L as id, 40 as v)"
+        checkExceptionContain(
+          s"merge into $tableName t using $outOfRange s on t.id = s.id when not matched then insert *")("overflow")
+        if (keyProp.nonEmpty) {
+          checkExceptionContain(
+            s"merge into $tableName t using $outOfRange s on t.id = s.id when matched then update set v = s.v")("overflow")
+          checkExceptionContain(
+            s"""
+               |merge into $tableName t using $outOfRange s on t.id = s.id
+               |when not matched then insert (id, v) values (cast(s.id as int), s.v)
+             """.stripMargin)("overflow")
+          checkExceptionContain(
+            s"""
+               |merge into $tableName t using (select 4294967297L as sid, 40 as v) s on t.id = s.sid
+               |when not matched then insert (id, v) values (cast(s.sid as int), s.v)
+             """.stripMargin)("overflow")
+          // a source that is not a local relation, whose key is only read when the statement runs
+          spark.range(4294967297L, 4294967298L).selectExpr("id", "40 as v").createOrReplaceTempView(s"${tableName}_src")
+          checkExceptionContain(
+            s"merge into $tableName t using ${tableName}_src s on t.id = s.id when matched then update set v = s.v")("overflow")
+          checkExceptionContain(
+            s"merge into $tableName t using ${tableName}_src s on t.id = s.id when not matched then insert *")("overflow")
+        }
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 11), Seq(2, 20), Seq(3, 30))
+
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 2L as sid, 21 as v union all select 4L, 40) s
+             |on t.id = s.sid
+             |when matched then update set id = s.sid, v = s.v
+             |when not matched then insert (id, v) values (s.sid, s.v)
+           """.stripMargin)
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 11), Seq(2, 21), Seq(3, 30), Seq(4, 40))
+      }
+
+      if (gteqSpark3_5) {
+        // a record key field that the merge condition does not match on is checked as well
+        val compositeKeyTable = generateTableName
+        spark.sql(
+          s"""
+             |create table $compositeKeyTable (
+             |  id int,
+             |  k int,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$compositeKeyTable'
+             | tblproperties (primaryKey = 'id,k', type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $compositeKeyTable values (1, 1, 10)")
+        checkExceptionContain(
+          s"""
+             |merge into $compositeKeyTable t using (select 2 as id, 4294967297L as k, 40 as v) s on t.id = s.id
+             |when not matched then insert (id, k, v) values (s.id, cast(s.k as int), s.v)
+           """.stripMargin)("overflow")
+        checkAnswer(s"select id, k, v from $compositeKeyTable")(Seq(1, 1, 10))
+      }
+
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id bigint,
+           |  v int
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (primaryKey = 'id', type = 'cow')
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 10)")
+      spark.sql(
+        s"""
+           |merge into $tableName t
+           |using (select 1 as id, 11 as v union all select 3, 30) s
+           |on t.id = s.id
+           |when matched then update set *
+           |when not matched then insert *
+         """.stripMargin)
+      checkAnswer(s"select id, v from $tableName order by id")(Seq(1L, 11), Seq(3L, 30))
+    }
+  }
+
+  test("Test MergeInto and Update move a record across partitions of a pluggable-format table with a record key") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, dep string) using hudi
+             | tblproperties (type = '$tableType', primaryKey = 'id', 'hoodie.table.format' = 'test-format',
+             |   'hoodie.table.format.test.metadata.table.enabled' = 'true')
+             | partitioned by (dep)
+             | location '$tablePath'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 'd1'), (2, 'a2', 'd1'), (3, 'a3', 'd2'), (4, 'a4', 'd2')")
+
+        // id 1 takes the partition the source names, id 2 one other than the source value it is looked up under
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1m' as name, 'd2' as dep, 'd2' as new_dep
+             |   union all select 2, 'a2m', 'd1', 'd3' union all select 4, 'a4m', 'd2', 'd2') s
+             | on t.id = s.id
+             | when matched and s.id = 1 then update set *
+             | when matched and s.id = 2 then update set id = s.id, name = s.name, dep = s.new_dep
+             | when matched and s.id = 4 then update set id = s.id, name = s.name, dep = s.new_dep
+           """.stripMargin)
+        spark.sql(s"update $tableName set dep = 'd1', name = 'a3u' where id = 3")
+        checkPartitionedRows(tableName, "dep")(
+          Seq(1, "a1m", "d2"), Seq(2, "a2m", "d3"), Seq(3, "a3u", "d1"), Seq(4, "a4m", "d2"))
+        if (tableType == "mor") {
+          compactAndCheck(tableName)
+          checkPartitionedRows(tableName, "dep")(
+            Seq(1, "a1m", "d2"), Seq(2, "a2m", "d3"), Seq(3, "a3u", "d1"), Seq(4, "a4m", "d2"))
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto finds a record that Update moves across partitions through the record index") {
+    withSQLConf("hoodie.index.type" -> "RECORD_INDEX", HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
+      HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true") {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (id int, name string, dep string) using hudi
+               | tblproperties (type = '$tableType', primaryKey = 'id')
+               | partitioned by (dep)
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 'd1'), (2, 'a2', 'd1')")
+          spark.sql(s"update $tableName set dep = 'd2' where id = 1")
+          checkPartitionedRows(tableName, "dep")(Seq(1, "a1", "d2"), Seq(2, "a2", "d1"))
+
+          // The source names the partition id 1 was moved from, and one id 2 moves to
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'a1m' as name, 'd1' as dep union all select 2, 'a2m', 'd3') s
+               | on t.id = s.id
+               | when matched and s.id = 1 then update set id = s.id, name = s.name, dep = t.dep
+               | when matched and s.id = 2 then update set *
+               | when not matched then insert *
+             """.stripMargin)
+          checkPartitionedRows(tableName, "dep")(Seq(1, "a1m", "d2"), Seq(2, "a2m", "d3"))
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto and Update refuse to move a record of a pluggable-format table with a non-global index") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, dep string) using hudi
+             | tblproperties (type = '$tableType', primaryKey = 'id', 'hoodie.table.format' = 'test-format',
+             |   'hoodie.table.format.test.metadata.table.enabled' = 'true', 'hoodie.index.type' = 'SIMPLE')
+             | partitioned by (dep)
+             | location '$tablePath'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 'd1')")
+        checkExceptionContain(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1m' as name, 'd1' as dep, 'd9' as new_dep) s
+             | on t.id = s.id
+             | when matched then update set id = s.id, name = s.name, dep = s.new_dep
+           """.stripMargin)(
+          "Detected disallowed assignment clause in MERGE INTO statement for partition field `dep`")
+        checkExceptionContain(s"update $tableName set dep = 'd9' where id = 1")(
+          "Detected disallowed assignment clause in UPDATE statement for partition field `dep`")
+        checkPartitionedRows(tableName, "dep")(Seq(1, "a1", "d1"))
+      }
+    }
+  }
+
+  test("Test MergeInto With A Merge Condition That Is Always False") {
+    withTempDir { tmp =>
+      for (keyProp <- Seq("", "primaryKey = 'id',"); tableType <- Seq("cow", "mor")) {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, price double) using hudi
+             | tblproperties ($keyProp type = '$tableType')
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0)")
+        def source(ids: Int*): String =
+          ids.map(id => s"select $id as id, 'a$id' as name, ${id * 10.0}D as price").mkString("(", " union all ", ")")
+
+        // No source record matches, so the not-matched clause inserts all of them, the one with the id of the
+        // table included on a table without a record key
+        val ids = if (keyProp.isEmpty) Seq(1, 2, 3) else Seq(2, 3)
+        spark.sql(
+          s"""
+             | merge into $tableName t using ${source(ids: _*)} s on 1 != 1
+             | when matched then update set *
+             | when not matched then insert *
+           """.stripMargin)
+        val inserted = Seq(1, "a1", 10.0) +: ids.map(id => Seq(id, s"a$id", id * 10.0))
+        checkAnswer(s"select id, name, price from $tableName order by id, price")(inserted: _*)
+
+        // The first not-matched clause that accepts a source record inserts it, and no clause may accept it
+        spark.sql(
+          s"""
+             | merge into $tableName t using ${source(5, 6, 7)} s on false
+             | when matched then delete
+             | when not matched and s.id = 5 then insert (id, name) values (s.id, concat(s.name, '-first'))
+             | when not matched and s.id < 7 then insert *
+           """.stripMargin)
+        // Without a not-matched clause the statement writes nothing
+        spark.sql(s"merge into $tableName t using ${source(8)} s on false when matched then delete")
+        val afterClauses = inserted ++ Seq(Seq(5, "a5-first", null), Seq(6, "a6", 60.0))
+        checkAnswer(s"select id, name, price from $tableName order by id, price")(afterClauses: _*)
+
+        if (keyProp.nonEmpty) {
+          // The insert follows the duplicate key policy of an INSERT INTO
+          checkExceptionContain(
+            s"merge into $tableName t using ${source(8, 8)} s on 1 != 1 when not matched then insert *")(
+            "Duplicate key found for insert statement, key is: 8. More than one inserted record has this key.")
+          withSQLConf("hoodie.datasource.insert.dup.policy" -> "none") {
+            spark.sql(s"merge into $tableName t using ${source(6)} s on 1 != 1 when not matched then insert *")
+          }
+          checkAnswer(s"select id, name, price from $tableName order by id, price")(
+            afterClauses :+ Seq(6, "a6", 60.0): _*)
+
+          // Another merge condition that is not an equality on the record key stays refused
+          Seq("true", "t.id > s.id").foreach { condition =>
+            checkExceptionContain(
+              s"merge into $tableName t using ${source(9)} s on $condition when not matched then insert *")(
+              "Currently only equality predicates are supported in MERGE INTO statement on record key table")
+          }
         }
       }
     }

@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
+import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_WRITES_PREPPED_KEY, SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql
@@ -36,6 +36,7 @@ import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, isSparkSqlOptimizedWrite}
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
@@ -55,10 +56,10 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
     val tableId = catalogTable.table.qualifiedName
 
     logInfo(s"Executing 'UPDATE' command for $tableId")
-    val config = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val config = if (isSparkSqlOptimizedWrite(sparkSession.sessionState.conf, catalogTable)) {
       // Set config to show that this is a prepped write.
-      buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
+      buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true") +
+        (SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY -> UpdateHoodieTableCommand.assignsPartitionField(sparkSession, catalogTable, ut).toString)
     } else {
       buildHoodieConfig(catalogTable)
     }
@@ -112,6 +113,29 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
     })
   }
 
+  /**
+   * Whether the write moves a record that the statement gives other partition values to the partition of those
+   * values. With a record key that takes a global index that updates the partition path, as for MERGE INTO. Without
+   * one, the prepped write deletes the record where it was read and inserts it into its new partition.
+   */
+  private def movesRecordsAcrossPartitions(sparkSession: SparkSession, catalogTable: HoodieCatalogTable): Boolean = {
+    if (catalogTable.primaryKeys.isEmpty) {
+      isSparkSqlOptimizedWrite(sparkSession.sessionState.conf, catalogTable)
+    } else {
+      MergeIntoHoodieTableCommand.useGlobalIndex(combineOptions(catalogTable, catalogTable.tableConfig,
+        sparkSession.sessionState.conf, defaultOpts = Map.empty))
+    }
+  }
+
+  private def assignsPartitionField(sparkSession: SparkSession, catalogTable: HoodieCatalogTable, ut: UpdateTable): Boolean = {
+    val resolver = sparkSession.sessionState.conf.resolver
+    val partitionFields = catalogTable.tableConfig.getPartitionFields.orElse(Array.empty)
+    ut.assignments.exists {
+      case Assignment(attr: AttributeReference, _) => partitionFields.exists(resolver(attr.name, _))
+      case _ => false
+    }
+  }
+
   private def catalogTable(sparkSession: SparkSession, ut: UpdateTable): HoodieCatalogTable = {
     sparkAdapter.resolveHoodieTable(ut.table) match {
       case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
@@ -134,14 +158,15 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
       case Assignment(attr: AttributeReference, value) => attr -> value
     }
 
-    // We don't support update queries changing partition column value.
-    validateNoAssignmentsToTargetTableAttr(
-      sparkSession.sessionState.conf.resolver,
-      hoodieCatalogTable.tableConfig.getPartitionFields.orElse(Array.empty),
-      tableId,
-      "partition field",
-      assignedAttributes
-    )
+    if (!movesRecordsAcrossPartitions(sparkSession, hoodieCatalogTable)) {
+      validateNoAssignmentsToTargetTableAttr(
+        sparkSession.sessionState.conf.resolver,
+        hoodieCatalogTable.tableConfig.getPartitionFields.orElse(Array.empty),
+        tableId,
+        "partition field",
+        assignedAttributes
+      )
+    }
 
     // We don't support update queries changing the primary key column value.
     validateNoAssignmentsToTargetTableAttr(
@@ -152,8 +177,7 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
       assignedAttributes
     )
 
-    val filteredOutput = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val filteredOutput = if (isSparkSqlOptimizedWrite(sparkSession.sessionState.conf, hoodieCatalogTable)) {
       ut.table.output
     } else {
       removeMetaFields(ut.table.output)

@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -53,6 +54,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
+import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.crypto.DecryptionPropertiesFactory;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
@@ -101,6 +103,16 @@ import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_
  */
 @Slf4j
 public class ParquetUtils extends FileFormatUtils {
+
+  /**
+   * Whether the write config asks for the legacy two-level Parquet list layout, through
+   * {@link HoodieStorageConfig#PARQUET_WRITE_LEGACY_FORMAT_ENABLED} or {@link AvroWriteSupport#WRITE_OLD_LIST_STRUCTURE}.
+   * Without either the standard three-level layout is written, which can hold a null array element.
+   */
+  public static boolean isLegacyListFormatConfigured(HoodieConfig config) {
+    return Boolean.parseBoolean(config.getStringOrDefault(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED, "false"))
+        || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
+  }
 
   /**
    * Applies built-in injectors followed by the user-defined injector to the configurations used by a Parquet writer.

@@ -22,16 +22,21 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, TableOutputResolver}
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Cast, CheckOverflowInTableInsert, Expression, UnaryExpression, Unevaluable}
+import org.apache.spark.sql.catalyst.expressions.objects.AssertNotNull
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{CreateIndex, DropIndex, HoodieShowIndexes, InsertIntoStatement, Join, JoinHint, LogicalPlan, RefreshIndex}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, CreateIndex, DropIndex, HoodieShowIndexes, InsertIntoStatement, Join, JoinHint, LogicalPlan, RefreshIndex}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand, RepairTableCommand}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.DataType
 
 trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
+
+  import BaseHoodieCatalystPlanUtils.UncastAssignmentValue
 
   /**
    * Un-applies [[ResolvedTable]] that had its signature changed in Spark 3.2
@@ -133,6 +138,78 @@ trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
     }
   }
 
+  override def resolveRowLevelAssignments(attrs: Seq[Attribute],
+                                          assignments: Seq[Assignment],
+                                          isInsert: Boolean): Seq[Assignment] = {
+    // A key that references none of the attributes, as in a MERGE INTO of a table into itself, would
+    // be dropped by the alignment, so such assignments are left to the command as they are
+    val alignable = assignments.forall(_.key.references.exists(ref => attrs.exists(_.semanticEquals(ref))))
+    lazy val aligned = alignRowLevelAssignments(
+      attrs, assignments.map(a => Assignment(trimAliases(a.key), writtenValue(a.value))), isInsert)
+    if (!alignable) {
+      assignments.flatMap(_.value.collectFirst { case uncast: UncastAssignmentValue => uncast }).foreach { uncast =>
+        throw new HoodieAnalysisException(s"Cannot cast `${uncast.child.sql}` of type " +
+          s"${uncast.child.dataType.sql} to ${uncast.dataType.sql}")
+      }
+      assignments
+    } else if (aligned.isDefined) {
+      aligned.get
+        .filter(assignment => assignments.exists(_.key.references.exists(_.semanticEquals(assignment.key))))
+        .map(assignment => assignment.copy(value = trimAlignment(assignment.value)))
+    } else {
+      assignments.find(!_.key.isInstanceOf[Attribute]).foreach { nested =>
+        throw new HoodieAnalysisException(
+          s"Assigning a nested field requires Spark 3.5 or later (provided: `${nested.sql}`)")
+      }
+      assignments
+    }
+  }
+
+  override def deferAssignmentCast(assignment: Assignment): Assignment = assignment.value match {
+    case cast: Cast if isStoreAssignmentCast(cast) && assignment.key.resolved && cast.child.resolved
+      && cast.checkInputDataTypes().isFailure =>
+      assignment.copy(value = UncastAssignmentValue(writtenValue(cast), cast.dataType))
+    case _ => assignment
+  }
+
+  private def trimAliases(expr: Expression): Expression = expr.transformUp { case alias: Alias => alias.child }
+
+  /**
+   * Drops the name the alignment gives a value and the check that reports an overflowing cast with
+   * the name of the column: the commands read the value of a record key, ordering or partition field
+   * as a source attribute or a cast of one, and the cast fails on an overflow by itself.
+   */
+  private def trimAlignment(value: Expression): Expression = value.transformUp {
+    case alias: Alias => alias.child
+    case CheckOverflowInTableInsert(cast, _) => cast
+  }
+
+  /**
+   * Aligns the assignments with the table attributes through Spark's own alignment, one assignment
+   * per attribute; [[None]] for a Spark version without it.
+   */
+  protected def alignRowLevelAssignments(attrs: Seq[Attribute],
+                                         assignments: Seq[Assignment],
+                                         isInsert: Boolean): Option[Seq[Assignment]] = None
+
+  /**
+   * Whether Spark added the cast to the value of an assignment of a table that does not support
+   * row-level operations, to cast the value to the type of the assigned key.
+   */
+  protected def isStoreAssignmentCast(cast: Cast): Boolean = false
+
+  /**
+   * The value of an assignment as written, without the null check and the cast of
+   * [[isStoreAssignmentCast]], so that the alignment checks the written value against the store
+   * assignment policy.
+   */
+  private def writtenValue(value: Expression): Expression = value match {
+    case cast: Cast if isStoreAssignmentCast(cast) => writtenValue(cast.child)
+    case AssertNotNull(child, _) => writtenValue(child)
+    case UncastAssignmentValue(child, _) => child
+    case _ => value
+  }
+
   override def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan] = {
     plan match {
       case insert: InsertIntoStatement =>
@@ -144,6 +221,14 @@ trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
 }
 
 object BaseHoodieCatalystPlanUtils extends SparkAdapterSupport {
+
+  /**
+   * Stands for the value of an assignment that Spark cannot cast to the type of the assigned key,
+   * with that type, until the alignment of the assignments checks the value as written.
+   */
+  case class UncastAssignmentValue(child: Expression, dataType: DataType) extends UnaryExpression with Unevaluable {
+    override protected def withNewChildInternal(newChild: Expression): UncastAssignmentValue = copy(child = newChild)
+  }
 
   /**
    * This is an extractor to accommodate for [[ResolvedTable]] signature change in Spark 3.2

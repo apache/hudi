@@ -151,6 +151,21 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
+  public InternalRow setValue(InternalRow row, int pos, Object value) {
+    // An UnsafeRow is updated in place through the setters of fixed-width types only
+    if (value == null) {
+      row.setNullAt(pos);
+    } else if (value instanceof Long) {
+      row.setLong(pos, (Long) value);
+    } else if (value instanceof Integer) {
+      row.setInt(pos, (Integer) value);
+    } else {
+      row.update(pos, value instanceof Comparable ? convertValueToEngineType((Comparable) value) : value);
+    }
+    return row;
+  }
+
+  @Override
   public HoodieRecord.HoodieRecordType getEngineRecordType() {
     return HoodieRecord.HoodieRecordType.SPARK;
   }

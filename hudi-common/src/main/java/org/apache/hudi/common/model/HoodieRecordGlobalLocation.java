@@ -53,7 +53,7 @@ public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
    * Returns the global record location from local.
    */
   public static HoodieRecordGlobalLocation fromLocal(String partitionPath, HoodieRecordLocation localLoc) {
-    return new HoodieRecordGlobalLocation(partitionPath, localLoc.getInstantTime(), localLoc.getFileId());
+    return new HoodieRecordGlobalLocation(partitionPath, localLoc.getInstantTime(), localLoc.getFileId(), localLoc.getPosition());
   }
 
   /**

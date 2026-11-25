@@ -26,6 +26,7 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.exception.HoodieMultipleMatchesException
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
@@ -623,6 +624,13 @@ trait SparkAdapter extends Serializable {
    * @return A [[HoodieMemoryStream]] wrapper
    */
   def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T]
+
+  /**
+   * The exception a Spark SQL MERGE INTO fails with when more than one source row matches the same target row,
+   * in the shape this Spark version gives its own MERGE_CARDINALITY_VIOLATION error, which Spark 3.5 introduced.
+   * Without the error class, it is the given exception.
+   */
+  def mergeCardinalityViolation(multipleMatches: HoodieMultipleMatchesException): Throwable = multipleMatches
 }
 
 /**

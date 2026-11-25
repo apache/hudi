@@ -22,6 +22,7 @@ import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -166,6 +167,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, false, false);
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.table = writeClient.getHoodieTable();
+    FormatMetaColumn.checkNotDeclared(table.getMetaClient().getTableFormat(), getClass());
 
     this.schema = HoodieSchemaConverter.convertToSchema(
         rowType,

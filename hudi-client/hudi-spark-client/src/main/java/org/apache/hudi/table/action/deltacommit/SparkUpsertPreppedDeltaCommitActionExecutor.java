@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.commit.HoodieWriteHelper;
 
 public class SparkUpsertPreppedDeltaCommitActionExecutor<T>
     extends BaseSparkDeltaCommitActionExecutor<T> {
@@ -41,6 +42,9 @@ public class SparkUpsertPreppedDeltaCommitActionExecutor<T>
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
-    return super.execute(preppedRecords);
+    // The prepped records skip the write helper, which splits the updates the index locates
+    return super.execute(config.shouldWriteUpdatesAsDeletesAndInserts()
+        ? (HoodieData<HoodieRecord<T>>) HoodieWriteHelper.newInstance().preppedUpdatesAsDeletesAndInserts(preppedRecords, table)
+        : preppedRecords);
   }
 }

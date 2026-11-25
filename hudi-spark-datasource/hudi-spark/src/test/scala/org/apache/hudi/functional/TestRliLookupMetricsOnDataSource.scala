@@ -89,9 +89,10 @@ class TestRliLookupMetricsOnDataSource extends RliLookupMetricsTestBase {
     // before the write under test. What remains afterwards is what this commit alone published.
     CapturingMetricsReporter.reset()
 
-    // A plain insert performs no index lookup, so its commit has nothing to report.
-    doWriteAndValidateDataAndRecordIndex(rliOpts, INSERT_OPERATION_OPT_VAL, SaveMode.Append,
-      validate = false, numInserts = 5)
+    // An insert that does not check for duplicate record keys performs no index lookup, so its commit has
+    // nothing to report.
+    doWriteAndValidateDataAndRecordIndex(rliOpts + (INSERT_DUP_POLICY.key -> NONE_INSERT_DUP_POLICY),
+      INSERT_OPERATION_OPT_VAL, SaveMode.Append, validate = false, numInserts = 5)
 
     val counters = rliCountersFromLatestCommit()
     report(s"DataSource ($indexLabel) -- insert after a drained upsert, expecting nothing", counters)

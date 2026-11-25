@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieRecordGlobalLocation {
@@ -34,5 +35,15 @@ class TestHoodieRecordGlobalLocation {
     HoodieRecordGlobalLocation thatLocation =
         new HoodieRecordGlobalLocation(partitionPath, instantTime, fileId, 1L);
     assertTrue(thisLocation.equals(thatLocation));
+  }
+
+  @Test
+  void testFromLocalKeepsPosition() {
+    HoodieRecordGlobalLocation location =
+        HoodieRecordGlobalLocation.fromLocal("any_partition", new HoodieRecordLocation("any_instant_time", "any_file_id", 7L));
+    assertEquals("any_partition", location.getPartitionPath());
+    assertEquals("any_instant_time", location.getInstantTime());
+    assertEquals("any_file_id", location.getFileId());
+    assertEquals(7L, location.getPosition());
   }
 }

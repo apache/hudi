@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.metadata.TableMetadataFactory;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.function.Supplier;
@@ -158,6 +159,15 @@ public interface HoodieTableFormat extends Serializable {
       HoodieEngineContext engineContext,
       HoodieTableMetaClient metaClient,
       FileSystemViewManager viewManager) {
+  }
+
+  /**
+   * Returns the per-row metadata columns this table format declares for base files, see {@link FormatMetaColumn},
+   * or an empty list, the default. A rewrite of a base file stores them after the columns of the table, in this
+   * order, and fails if it cannot carry them over.
+   */
+  default List<FormatMetaColumn> getFormatMetaColumns() {
+    return Collections.emptyList();
   }
 
   /**

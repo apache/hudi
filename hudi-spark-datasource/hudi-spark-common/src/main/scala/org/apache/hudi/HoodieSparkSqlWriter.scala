@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
+import org.apache.hudi.AutoRecordKeyGenerationUtils.{mayBeValidateParamsForAutoGenerationOfRecordKeys, shouldAutoGenerateRecordKeys}
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
 import org.apache.hudi.DataSourceUtils.SparkDataSourceWriteStatusValidator
 import org.apache.hudi.DataSourceWriteOptions._
@@ -59,6 +59,7 @@ import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
+import org.apache.hudi.table.action.commit.BaseWriteHelper
 import org.apache.hudi.util.{SparkConfigUtils, SparkKeyGenUtils}
 import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
 
@@ -304,6 +305,12 @@ class HoodieSparkSqlWriterInternal {
     val preppedSparkSqlMergeInto = parameters.getOrElse(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
     val preppedSparkSqlWrites = parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
     val preppedWriteOperation = canDoPreppedWrites(hoodieConfig, parameters, operation, sourceDf)
+    if (preppedWriteOperation && tableType == HoodieTableType.MERGE_ON_READ
+      && hoodieConfig.getBooleanOrDefault(HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS)) {
+      // The frame can hold a row more than once, or a row another write has replaced since the frame was read, and
+      // each of its records would be split into a delete of that row and an insert
+      throw BaseWriteHelper.keylessTableNotSupported()
+    }
 
     val jsc = new JavaSparkContext(sparkContext)
     if (streamingWritesParamsOpt.map(_.asyncCompactionTriggerFn.isDefined).orElse(Some(false)).get) {
@@ -379,6 +386,12 @@ class HoodieSparkSqlWriterInternal {
           .set(timestampKeyGeneratorConfigs.asJava.asInstanceOf[java.util.Map[String, Object]])
           .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
           .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
+          .setTimestampPartitionFractionalSeconds(
+            if (hoodieConfig.contains(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS)) {
+              hoodieConfig.getBoolean(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS)
+            } else {
+              null
+            })
           .setPartitionMetafileUseBaseFormat(useBaseFormatMetaFile)
           .setShouldDropPartitionColumns(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.DROP_PARTITION_COLUMNS))
           .setCommitTimezone(timelineTimeZone)
@@ -387,6 +400,7 @@ class HoodieSparkSqlWriterInternal {
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .setMultipleBaseFileFormatsEnabled(hoodieConfig.getBoolean(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE))
           .setTableFormat(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
+          .setTableFormatConfigs(hoodieConfig.getProps)
           .setRecordDeleteFieldAndMarker(parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_KEY, null), parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_MARKER, null))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
@@ -408,6 +422,13 @@ class HoodieSparkSqlWriterInternal {
 
       var instantTime: String = null
       tableConfig = tableMetaClient.getTableConfig
+      // The key generator follows the layout the table records, including the one a new table was just given
+      val fractionalSecondsKey = HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key
+      if (!parameters.contains(fractionalSecondsKey) && tableConfig.contains(fractionalSecondsKey)) {
+        val fractionalSeconds = tableConfig.getString(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS)
+        parameters = parameters ++ Map(fractionalSecondsKey -> fractionalSeconds)
+        hoodieConfig.setValue(fractionalSecondsKey, fractionalSeconds)
+      }
 
       val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
 
@@ -608,9 +629,9 @@ class HoodieSparkSqlWriterInternal {
               case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
             }
 
-            // Remove duplicates from incoming records based on existing keys from storage.
-            val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, operation, client)
             try {
+              // Remove duplicates from incoming records based on existing keys from storage.
+              val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, operation, client, instantTime)
               val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
                 preppedSparkSqlWrites || preppedWriteOperation)
               (writeResult, client)
@@ -904,6 +925,7 @@ class HoodieSparkSqlWriterInternal {
           .setComplexKeyGenEncoding(explicitComplexKeyGenEncoding(hoodieConfig))
           .setTableVersion(tableVersion)
           .setTableFormat(tableFormat)
+          .setTableFormatConfigs(hoodieConfig.getProps)
           .setTableStorageLayout(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_STORAGE_LAYOUT))
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(payloadClass)
@@ -1252,7 +1274,8 @@ class HoodieSparkSqlWriterInternal {
           translatedOptsWithMappedTableConfig += (key -> value)
         }
     }
-    val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.parametersWithWriteDefaults(translatedOptsWithMappedTableConfig.toMap)
+    val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.withDefaultIndexOfTableFormat(
+      HoodieWriterUtils.parametersWithWriteDefaults(translatedOptsWithMappedTableConfig.toMap))
     if (!mergedParams.contains(HoodieTableConfig.TYPE.key) && mergedParams.contains(TABLE_TYPE.key)) {
       mergedParams(HoodieTableConfig.TYPE.key) = mergedParams(TABLE_TYPE.key)
     }
@@ -1357,6 +1380,12 @@ object HoodieSparkSqlWriterInternal {
       shouldDropDuplicatesForInserts(hoodieConfig)
   }
 
+  // An insert into a table with a record key that sets no duplicate policy fails on duplicate record keys.
+  def failsOnDuplicatesByDefault(hoodieConfig: HoodieConfig): Boolean = {
+    !hoodieConfig.contains(INSERT_DUP_POLICY) &&
+      !shouldAutoGenerateRecordKeys(hoodieConfig.getProps.asScala.toMap)
+  }
+
   // Check if deduplication is needed.
   def isDeduplicationNeeded(operation: WriteOperationType): Boolean = {
     operation == WriteOperationType.INSERT
@@ -1365,18 +1394,25 @@ object HoodieSparkSqlWriterInternal {
   def handleInsertDuplicates(incomingRecords: JavaRDD[HoodieRecord[_]],
                              hoodieConfig: HoodieConfig,
                              operation: WriteOperationType,
-                             client: SparkRDDWriteClient[_]): JavaRDD[HoodieRecord[_]] = {
-    // If no deduplication is needed, return the incoming records as is
-    if (!isDeduplicationRequired(hoodieConfig) || !isDeduplicationNeeded(operation)) {
+                             client: SparkRDDWriteClient[_],
+                             instantTime: String): JavaRDD[HoodieRecord[_]] = {
+    // Resolve duplicates on the committing client's engine context and config rather than a throwaway
+    // context. The record index lookup this triggers collects its counters into a registry owned by the
+    // context that ran the lookup, and postCommit drains the client's context; a separate context would
+    // strand those counters and the INSERT would publish none. See RecordIndexLookupMetrics.
+    lazy val engineContext = client.getEngineContext.asInstanceOf[HoodieSparkEngineContext]
+    if (!isDeduplicationNeeded(operation)) {
+      incomingRecords
+    } else if (shouldFailWhenDuplicatesFound(hoodieConfig)) {
+      DataSourceUtils.failOnDuplicates(engineContext, incomingRecords, client.getConfig, instantTime, true)
+      incomingRecords
+    } else if (isDeduplicationRequired(hoodieConfig)) {
+      DataSourceUtils.handleDuplicates(engineContext, incomingRecords, client.getConfig, false)
+    } else if (failsOnDuplicatesByDefault(hoodieConfig)) {
+      DataSourceUtils.failOnDuplicatesByDefault(engineContext, incomingRecords, client.getConfig, instantTime)
       incomingRecords
     } else {
-      // Resolve duplicates on the committing client's engine context and config rather than a throwaway
-      // context. The record index lookup this triggers collects its counters into a registry owned by the
-      // context that ran the lookup, and postCommit drains the client's context; a separate context would
-      // strand those counters and the INSERT would publish none. See RecordIndexLookupMetrics.
-      DataSourceUtils.handleDuplicates(
-        client.getEngineContext.asInstanceOf[HoodieSparkEngineContext], incomingRecords,
-        client.getConfig, shouldFailWhenDuplicatesFound(hoodieConfig))
+      incomingRecords
     }
   }
 }

@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.exception.HoodieMultipleMatchesException
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
@@ -35,6 +36,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
+import org.apache.spark.sql.errors.QueryExecutionErrors
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
 import org.apache.spark.sql.execution.datasources.orc.{OrcColumnarBatchReader, SparkOrcReaderBase}
@@ -234,5 +236,14 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
       storageConf.getInt(SQLConf.PARQUET_FILTER_PUSHDOWN_INFILTERTHRESHOLD.key, sqlConf.parquetFilterPushDownInFilterThreshold),
       storageConf.getBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis),
       getRebaseSpec("CORRECTED"))
+  }
+
+  /**
+   * A Spark 3.5 MERGE INTO fails with the violation as the cause of the exception it throws.
+   */
+  override def mergeCardinalityViolation(multipleMatches: HoodieMultipleMatchesException): Throwable = {
+    val violation = QueryExecutionErrors.mergeCardinalityViolationError()
+    violation.addSuppressed(multipleMatches)
+    new HoodieMultipleMatchesException(multipleMatches.getRecordKey, multipleMatches.getMessage, violation)
   }
 }

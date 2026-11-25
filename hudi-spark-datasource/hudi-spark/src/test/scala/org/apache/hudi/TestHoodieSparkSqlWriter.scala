@@ -1103,6 +1103,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val df_with_duplicates = df.union(df)
     df_with_duplicates.write.format("hudi")
       .options(options.updated(DataSourceWriteOptions.OPERATION.key, "insert"))
+      .option(DataSourceWriteOptions.INSERT_DUP_POLICY.key, DataSourceWriteOptions.NONE_INSERT_DUP_POLICY)
       .mode(SaveMode.Overwrite).save(tempBasePath)
     val df_result_2 = spark.read.format("hudi").load(tempBasePath).selectExpr("keyid", "age")
     assert(df_result_2.count() == 20)

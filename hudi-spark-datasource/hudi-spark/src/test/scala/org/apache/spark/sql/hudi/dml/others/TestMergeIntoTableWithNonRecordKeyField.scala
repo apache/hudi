@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
-import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
+import org.apache.hudi.DataSourceWriteOptions.{MERGE_INTO_CARDINALITY_CHECK, SPARK_SQL_OPTIMIZED_WRITES}
 import org.apache.hudi.ScalaAssertionSupport
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -273,7 +273,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
                |""".stripMargin)
 
           val updateStr = if (withPrecombine) "price = s0.price, ts = s0.ts" else "price = s0.price"
-          spark.sql(
+          val mergeStatement =
             s"""
                | merge into $tableName
                | using (
@@ -284,7 +284,14 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
                | on $tableName.name = s0.name
                | when matched then update set $updateStr
                | when not matched then insert *
-         """.stripMargin)
+         """.stripMargin
+          // Both source rows match the target row
+          checkExceptionContain(mergeStatement)(
+            "MERGE statement matched a single row from the target table with multiple rows of the source table")
+          checkAnswer(s"select id, name, price, ts from $tableName")(Seq(1, "a1", 10.0, 100))
+          withSQLConf(MERGE_INTO_CARDINALITY_CHECK.key -> "false") {
+            spark.sql(mergeStatement)
+          }
           if (withPrecombine) {
             checkAnswer(s"select id, name, price, ts from $tableName")(
               Seq(1, "a1", 20.0, 200)
@@ -388,6 +395,201 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
        """.stripMargin)
         val cnt = spark.sql(s"select * from $tableName where id = 1").count()
         assertResult(0)(cnt)
+      }
+    }
+  }
+
+  Seq("cow", "mor").foreach { tableType =>
+    test(s"Test MergeInto without update clause on pkless $tableType table without ordering field") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  dt string
+             | ) using hudi
+             | tblproperties (type = '$tableType')
+             | partitioned by(dt)
+             | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 'p1'), (2, 'a2', 20.0, 'p1'), (3, 'a3', 30.0, 'p1'),"
+          + " (4, 'a4', 40.0, 'p2'), (5, 'a5', 50.0, 'p2')")
+
+        // Delete only with a condition: id 2 fails the condition and id 9 has no match
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'del' as op union all select 2, 'keep' union all select 9, 'del') s
+             | on t.id = s.id
+             | when matched and s.op = 'del' then delete
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(2, "a2", 20.0, "p1"), Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"))
+
+        // Delete only without a condition: id 8 has no match
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 2 as id union all select 8) s
+             | on t.id = s.id
+             | when matched then delete
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"))
+
+        // Insert only without a condition: the matched id 3 is not inserted again, both unmatched id 6 are
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 3 as id, 'a3n' as name, 31.0 as price, 'p1' as dt
+             |  union all select 6, 'a6', 60.0, 'p2' union all select 6, 'a6b', 61.0, 'p2') s
+             | on t.id = s.id
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"), Seq(6, "a6", 60.0, "p2"),
+          Seq(6, "a6b", 61.0, "p2"))
+
+        // Insert only with a condition: id 4 is matched and the unmatched id 10 fails the condition
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 4 as id, 'a4n' as name, 71.0 as price, 'p2' as dt
+             |  union all select 7, 'a7', 70.0, 'p1' union all select 10, 'a10', 5.0, 'p1') s
+             | on t.id = s.id
+             | when not matched and s.price > 50 then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"), Seq(6, "a6", 60.0, "p2"),
+          Seq(6, "a6b", 61.0, "p2"), Seq(7, "a7", 70.0, "p1"))
+
+        // Delete and insert: the matched id 3 fails the delete condition and is not inserted again
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 3 as id, 'a3n' as name, 32.0 as price, 'p1' as dt
+             |  union all select 5, 'a5n', 52.0, 'p2' union all select 11, 'a11', 110.0, 'p1') s
+             | on t.id = s.id
+             | when matched and s.id = 5 then delete
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(6, "a6", 60.0, "p2"), Seq(6, "a6b", 61.0, "p2"),
+          Seq(7, "a7", 70.0, "p1"), Seq(11, "a11", 110.0, "p1"))
+      }
+    }
+  }
+
+  Seq("cow", "mor").foreach { tableType =>
+    test(s"Test MergeInto moves a matched record to the partition its update gives it in pkless $tableType table") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, dep string) using hudi
+             | tblproperties (type = '$tableType')
+             | partitioned by (dep)
+             | location '$tablePath'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 'd1'), (6, 'a6', 'd6'), (7, 'a7', 'd1'), (8, 'a8', 'd1')")
+
+        // id 1 takes the partition the source names, id 7 one its clause assigns, id 8 stays, id 6 is deleted and the
+        // unmatched id 2 is inserted
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 2 as id, 'a2' as name, 'd2' as dep union all select 1, 'a1m', 'd9'
+             |   union all select 6, 'a6', 'd6' union all select 7, 'a7m', 'd1' union all select 8, 'a8m', 'd1') s
+             | on t.id = s.id
+             | when matched and s.id = 1 then update set *
+             | when matched and s.id = 6 then delete
+             | when matched and s.id = 7 then update set id = s.id, name = s.name, dep = 'd8'
+             | when matched and s.id = 8 then update set *
+             | when not matched and s.id = 2 then insert *
+           """.stripMargin)
+        checkPartitionedRows(tableName, "dep")(
+          Seq(1, "a1m", "d9"), Seq(2, "a2", "d2"), Seq(7, "a7m", "d8"), Seq(8, "a8m", "d1"))
+
+        // The moved records are updated in their new partition, and id 7 is moved again by a clause that assigns
+        // the partition field only
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1n' as name, 'd9' as dep union all select 7, 'a7n', 'd8') s
+             | on t.id = s.id
+             | when matched then update set *
+           """.stripMargin)
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'd9' as dep union all select 7, 'd1') s
+             | on t.id = s.id
+             | when matched then update set dep = s.dep
+           """.stripMargin)
+        val expected = Seq(Seq(1, "a1n", "d9"), Seq(2, "a2", "d2"), Seq(7, "a7n", "d1"), Seq(8, "a8m", "d1"))
+        checkPartitionedRows(tableName, "dep")(expected: _*)
+        if (tableType == "mor") {
+          compactAndCheck(tableName)
+          checkPartitionedRows(tableName, "dep")(expected: _*)
+        }
+      }
+    }
+
+    test(s"Test MergeInto deletes a matched record of a pkless $tableType table with an ordering field") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, ts long, dep string) using hudi
+             | tblproperties (type = '$tableType', preCombineField = 'ts')
+             | partitioned by (dep)
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1'), (3, 'a3', 10, 'd1')")
+
+        // id 1 takes the delete clause and id 2 the update clause
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1m' as name, 20L as ts, 'd1' as dep union all select 2, 'a2m', 20L, 'd1') s
+             | on t.id = s.id
+             | when matched and s.id = 2 then update set *
+             | when matched then delete
+           """.stripMargin)
+        checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(2, "a2m", 20L, "d1"), Seq(3, "a3", 10L, "d1"))
+
+        // A statement with a delete clause only
+        spark.sql(s"merge into $tableName t using (select 3 as id, 20L as ts) s on t.id = s.id when matched then delete")
+        checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(2, "a2m", 20L, "d1"))
+      }
+    }
+
+    test(s"Test MergeInto moves a matched record of a pkless $tableType table with an ordering field only when its update applies") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, ts long, dep string) using hudi
+             | tblproperties (type = '$tableType', preCombineField = 'ts')
+             | partitioned by (dep)
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1')")
+
+        // The update of id 1 has a lower ordering value than the record, which stays as it is
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1m' as name, 5L as ts, 'd2' as dep union all select 2, 'a2m', 20L, 'd2') s
+             | on t.id = s.id
+             | when matched then update set *
+           """.stripMargin)
+        checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName order by id")(
+          Seq(1, "a1", 10L, "d1", "dep=d1"), Seq(2, "a2m", 20L, "d2", "dep=d2"))
       }
     }
   }

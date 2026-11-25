@@ -304,6 +304,28 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   /**
+   * Checks the rows (id, name, partition value) of a table with columns id and name, partitioned by one field with
+   * hive-style partition paths, ordered by id: each row must be in the partition path of its value, and a read of
+   * each partition must return its rows only.
+   */
+  protected def checkPartitionedRows(tableName: String, partitionField: String)(expects: Seq[Any]*): Unit = {
+    checkAnswer(s"select id, name, $partitionField, _hoodie_partition_path from $tableName order by id")(
+      expects.map(row => row :+ s"$partitionField=${row(2)}"): _*)
+    expects.groupBy(_(2)).foreach { case (value, rows) =>
+      checkAnswer(s"select id, name from $tableName where $partitionField = '$value' order by id")(rows.map(_.take(2)): _*)
+    }
+  }
+
+  /**
+   * Schedules and runs a compaction of a merge-on-read table and checks that it compacted file groups.
+   */
+  protected def compactAndCheck(tableName: String): Unit = {
+    val compactions = spark.sql(
+      s"call run_compaction(op => 'run', table => '$tableName', options => 'hoodie.compact.inline.max.delta.commits=1')").collect()
+    assertTrue(compactions.nonEmpty && compactions.forall(_.getInt(1) > 0), s"compactions run: ${compactions.mkString(", ")}")
+  }
+
+  /**
    * Analysis-time twin of [[checkNestedExceptionContains(runnable:Runnable)*]]: `spark.sql` is
    * lazy for queries, so this only catches failures raised while the statement is built.
    */
@@ -443,12 +465,13 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
                                                             fieldNameTuples: Seq[(String, String, String)]): String = {
     val fieldNames = fieldNameTuples.sortBy(e => (e._1, e._2))
       .map(e => e._3).mkString("[", ", ", "]")
+    val quotedColumnName = columnName.split('.').map(part => s"`$part`").mkString(".")
     if (HoodieSparkUtils.gteqSpark4_0) {
       "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column, variable, or function parameter with name " +
-        s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
+        s"$quotedColumnName cannot be resolved. Did you mean one of the following? $fieldNames."
     } else if (HoodieSparkUtils.gteqSpark3_5) {
       "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
-        s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
+        s"$quotedColumnName cannot be resolved. Did you mean one of the following? $fieldNames."
     } else {
       s"cannot resolve $columnName in MERGE command given columns $fieldNames" +
         (if (HoodieSparkUtils.gteqSpark3_4) "." else "")

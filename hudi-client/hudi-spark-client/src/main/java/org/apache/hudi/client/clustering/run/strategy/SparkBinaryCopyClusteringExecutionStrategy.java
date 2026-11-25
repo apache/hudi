@@ -79,6 +79,8 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
       HoodieSchema schema,
       String instantTime) {
 
+    // Copying the base files cannot add the format meta columns
+    checkNoFormatMetaColumns();
     List<ClusteringGroupInfo> clusteringGroupInfos = clusteringPlan.getInputGroups()
         .stream()
         .map(ClusteringGroupInfo::create)

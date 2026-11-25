@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -53,6 +55,14 @@ public class HoodieBootstrapHandle<T, I, K, O> extends HoodieCreateHandle<T, I, 
   @Override
   public boolean canWrite(HoodieRecord record) {
     return true;
+  }
+
+  /**
+   * A skeleton file stores only the meta fields, so it gets no format meta columns.
+   */
+  @Override
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    return Collections.emptyList();
   }
 
   private static HoodieSchema createMetadataBootstrapRecordSchema() {

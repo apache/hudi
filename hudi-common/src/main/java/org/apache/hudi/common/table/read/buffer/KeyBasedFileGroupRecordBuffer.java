@@ -41,7 +41,9 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -50,6 +52,12 @@ import java.util.List;
  * {@link #hasNext} method is called.
  */
 public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
+  /**
+   * The deletes already merged with a base record, by record key, without their rows. A base file can hold
+   * more than one record with the same key (an insert does not enforce key uniqueness), and a delete of the
+   * key applies to each of them.
+   */
+  private final Map<String, BufferedRecord<T>> appliedDeletes = new HashMap<>();
 
   public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                        RecordMergeMode recordMergeMode,
@@ -145,7 +153,26 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordContext().getRecordKey(baseRecord, readerSchema);
     BufferedRecord<T> logRecordInfo = records.remove(recordKey);
+    if (logRecordInfo == null) {
+      logRecordInfo = rowlessDelete(appliedDeletes.get(recordKey));
+    } else if (logRecordInfo.isDelete()) {
+      appliedDeletes.put(recordKey, rowlessDelete(logRecordInfo));
+    }
     return hasNextBaseRecord(baseRecord, logRecordInfo);
+  }
+
+  /**
+   * A copy of the delete without its row, as the merge can modify the record it is given.
+   */
+  private static <T> BufferedRecord<T> rowlessDelete(BufferedRecord<T> delete) {
+    return delete == null ? null
+        : new BufferedRecord<>(delete.getRecordKey(), delete.getOrderingValue(), null, null, delete.getHoodieOperation());
+  }
+
+  @Override
+  public void close() {
+    appliedDeletes.clear();
+    super.close();
   }
 
   @Override

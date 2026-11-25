@@ -19,6 +19,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -35,6 +36,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.stream.Stream;
 
 /**
@@ -62,6 +64,12 @@ public class LsmFileGroupReaderBasedMergeHandle<T, I, K, O> extends FileGroupRea
                                             HoodieReaderContext<T> readerContext, String maxInstantTime,
                                             HoodieRecord.HoodieRecordType enginRecordType) {
     super(config, instantTime, hoodieTable, compactionOperation, taskContextSupplier, readerContext, maxInstantTime, enginRecordType);
+  }
+
+  @Override
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    // The LSM file-group reader does not maintain format meta columns
+    return checkNoFormatMetaColumns();
   }
 
   @Override

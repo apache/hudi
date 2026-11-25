@@ -150,8 +150,8 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
   }
 
   /**
-   * When no explicit configs are set, sql write operation is deduced as INSERT
-   * which preserves duplicates by default.
+   * When no explicit configs are set, sql write operation is deduced as INSERT,
+   * which preserves duplicates with the none duplicate policy.
    */
   test("Test sql write operation with INSERT_INTO No explicit configs") {
     withTempDir { tmp =>
@@ -203,7 +203,7 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
   def ingestAndValidateData(tableType: String, tableName: String, tmp: File,
                             expectedOperationtype: WriteOperationType,
                             setOptions: (String, String)*): Unit = {
-    withSQLConf(setOptions: _*) {
+    withSQLConf(setOptions :+ (INSERT_DUP_POLICY.key() -> NONE_INSERT_DUP_POLICY): _*) {
       spark.sql(
         s"""
            |create table $tableName (
@@ -402,15 +402,17 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
            |partitioned by (`day`)
            |location '${tmp.getCanonicalPath}/$targetTable'
            |""".stripMargin)
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
-           |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 10 as `hour`
-           |union
-           |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 11 as `hour`
-           |union
-           |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
-           |""".stripMargin)
+      withSQLConf(INSERT_DUP_POLICY.key() -> NONE_INSERT_DUP_POLICY) {
+        spark.sql(
+          s"""
+             |insert into ${targetTable}
+             |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 10 as `hour`
+             |union
+             |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 11 as `hour`
+             |union
+             |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
+             |""".stripMargin)
+      }
       val stageClassName = classOf[HoodieSparkEngineContext].getSimpleName
       // The SparkContext outlives the suite in shared session mode, so the listener must not.
       val scope = java.util.UUID.randomUUID().toString
@@ -472,7 +474,7 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
   def ingestAndValidateDataNoPrecombine(tableType: String, tableName: String, tmp: File,
                                         expectedOperationtype: WriteOperationType,
                                         setOptions: (String, String)*): Unit = {
-    withSQLConf(setOptions: _*) {
+    withSQLConf(setOptions :+ (INSERT_DUP_POLICY.key() -> NONE_INSERT_DUP_POLICY): _*) {
 
       spark.sql(
         s"""

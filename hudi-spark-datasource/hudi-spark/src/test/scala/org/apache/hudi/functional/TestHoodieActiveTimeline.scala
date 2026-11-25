@@ -279,6 +279,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     inputDF1.write.format("org.apache.hudi")
       .options(eventTimeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.INSERT_DUP_POLICY.key, DataSourceWriteOptions.NONE_INSERT_DUP_POLICY)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)

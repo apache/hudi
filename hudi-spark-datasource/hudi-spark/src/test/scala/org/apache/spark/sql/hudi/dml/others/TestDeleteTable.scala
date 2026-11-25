@@ -20,11 +20,15 @@
 package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getMetaClientAndFileSystemView
+import org.junit.jupiter.api.Assertions.assertFalse
 
 class TestDeleteTable extends HoodieSparkSqlTestBase {
 
@@ -74,6 +78,57 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
             checkAnswer(s"select count(1) from $tableName")(
               Seq(0)
             )
+          }
+        }
+      }
+    }
+  }
+
+  test("Test Delete Table With A Condition That Is Always False") {
+    withTempDir { tmp =>
+      Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+       """.stripMargin)
+
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+            spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000), (2, null, 20, 1000)")
+            def completedCommits(): Int =
+              createMetaClient(spark, tablePath).getActiveTimeline.getCommitsTimeline.filterCompletedInstants().countInstants()
+            val commitsAfterInsert = completedCommits()
+
+            // Conditions that fold to false or null delete nothing and write no commit.
+            Seq("false", "50 <> 50", "1 > null", "name = null").foreach { condition =>
+              spark.sql(s"delete from $tableName where $condition")
+              assertResult(commitsAfterInsert, condition)(completedCommits())
+            }
+            checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+              Seq(1, "a1", 10.0, 1000),
+              Seq(2, null, 20.0, 1000)
+            )
+
+            // A condition evaluated against the rows still commits when it matches none.
+            spark.sql(s"delete from $tableName where id = 3")
+            assertResult(commitsAfterInsert + 1)(completedCommits())
+
+            spark.sql(s"delete from $tableName where 21 = 21")
+            assertResult(commitsAfterInsert + 2)(completedCommits())
+            checkAnswer(s"select count(1) from $tableName")(Seq(0))
           }
         }
       }
@@ -277,6 +332,40 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Delete Table removes every row of a duplicate key") {
+    // An insert with the none duplicate policy keeps rows that share a record key, in the same base file and across file groups
+    Seq(("cow", false), ("mor", false), ("mor", true)).foreach { case (tableType, updatesAsDeletesAndInserts) =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() -> updatesAsDeletesAndInserts.toString,
+          "hoodie.datasource.insert.dup.policy" -> "none") {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  dt string
+               |) using hudi
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'
+               | )
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (0, 'a0', 'p1'), (1, 'a1', 'p1'), (1, 'b1', 'p1'), (1, 'c1', 'p2')")
+          spark.sql(s"insert into $tableName values (1, 'd1', 'p1'), (1, 'e1', 'p2'), (2, 'a2', 'p2')")
+          checkAnswer(s"select count(1) from $tableName where id = 1")(Seq(5))
+
+          spark.sql(s"delete from $tableName where id in (1, 100)")
+          checkAnswer(s"select id, name, dt from $tableName order by id")(
+            Seq(0, "a0", "p1"), Seq(2, "a2", "p2"))
+        }
+      }
+    }
+  }
+
   test("Test Delete Table with op upsert") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
@@ -320,6 +409,48 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select count(1) from $tableName")(
           Seq(0)
         )
+      }
+    }
+  }
+
+  test("Test a cached view of a table reads the rows that a later DML statement writes") {
+    // On Spark 4 the refresh of the table after a write resolves a relation whose options differ from those of
+    // the relation in the cached plan, so it does not find the cached plan and the view is not re-executed
+    assume(HoodieSparkUtils.isSpark3, "A cached plan is not re-executed after a write on Spark 4")
+    withTempDir { tmp =>
+      val statements = Seq(
+        ("delete", (t: String) => s"delete from $t where id = 1", Seq.empty[Seq[Any]]),
+        ("update", (t: String) => s"update $t set name = 'a1u', ts = 1001 where id = 1", Seq(Seq(1, "a1u"))),
+        ("merge", (t: String) =>
+          s"""merge into $t t using (select 1 as id, 'a1m' as name, 10.0 as price, 1001L as ts) s
+             |on t.id = s.id when matched then update set *""".stripMargin, Seq(Seq(1, "a1m"))))
+      Seq("cow", "mor").foreach { tableType =>
+        statements.foreach { case (operation, statement, expectedRows) =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          val viewName = s"${tableName}_view"
+          spark.sql(
+            s"""
+               |create table $tableName (id int, name string, price double, ts long) using hudi
+               | location '$tablePath'
+               | tblproperties (type = '$tableType', primaryKey = 'id', preCombineField = 'ts')
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000), (2, 'a2', 10.0, 1000)")
+          spark.sql(s"select id, name from $tableName where id = 1").createOrReplaceTempView(viewName)
+          spark.sql(s"cache table $viewName")
+          checkAnswer(s"select id, name from $viewName")(Seq(1, "a1"))
+
+          spark.sql(statement(tableName))
+          if (tableType == "mor") {
+            val (_, fsView) = getMetaClientAndFileSystemView(tablePath)
+            assertFalse(fsView.getLatestFileSlices("").findFirst().get().getLogFiles.findAny().isEmpty,
+              s"the $operation must write a log file")
+          }
+          withClue(s"$tableType table, $operation: ") {
+            checkAnswer(s"select id, name from $viewName")(expectedRows: _*)
+          }
+          spark.sql(s"uncache table $viewName")
+        }
       }
     }
   }
