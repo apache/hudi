@@ -32,6 +32,7 @@ import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
+import org.apache.hudi.common.table.log.LogReadAheadStorage;
 import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -44,6 +45,7 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -234,12 +236,41 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
           rec -> readerContext.getRecordContext().seal(requiredSchema, rec));
     } else {
       this.baseFileIterator = iter;
-      Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferLoader.getRecordBuffer(
-          readerContext, storage, inputSplit, orderingFieldNames, tableState, props, readerParameters, readStats, fileGroupUpdateCallback);
+      Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult;
+      LogReadAheadStorage logReadAhead = startLogReadAhead();
+      try {
+        initializationResult = recordBufferLoader.getRecordBuffer(readerContext, logReadAhead != null ? logReadAhead : storage,
+            inputSplit, orderingFieldNames, tableState, props, readerParameters, readStats, fileGroupUpdateCallback);
+      } finally {
+        // The log scan is over once the buffer is loaded
+        if (logReadAhead != null) {
+          logReadAhead.close();
+        }
+      }
       recordBuffer = initializationResult.getLeft();
       validBlockInstants = initializationResult.getRight();
       recordBuffer.setBaseFileIterator(baseFileIterator);
     }
+  }
+
+  /**
+   * Starts reading the log files ahead of the log scan when {@link HoodieReaderConfig#LOG_READ_AHEAD_BYTES} is positive,
+   * or returns null. Reads that only look up some keys (metadata table lookups, key filters) and reads that do not merge
+   * read the logs in line, since they would not use most of what is read ahead.
+   */
+  private LogReadAheadStorage startLogReadAhead() {
+    long windowBytes = props.getLong(HoodieReaderConfig.LOG_READ_AHEAD_BYTES.key(), HoodieReaderConfig.LOG_READ_AHEAD_BYTES.defaultValue());
+    boolean skipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true)
+        .equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
+    // A split built from a record iterator, as for compaction, has no log files to read
+    if (windowBytes <= 0 || inputSplit.hasRecordIterator() || !inputSplit.hasLogFiles() || storage instanceof LogReadAheadStorage
+        || skipMerge || readerContext.getKeyFilterOpt().isPresent() || HoodieTableMetadata.isMetadataTable(tableState.getBasePath())) {
+      return null;
+    }
+    if (props.containsKey(HoodieReaderConfig.LOG_READ_AHEAD_EXECUTOR_BYTES.key())) {
+      LogReadAheadStorage.setExecutorBudget(props.getLong(HoodieReaderConfig.LOG_READ_AHEAD_EXECUTOR_BYTES.key()));
+    }
+    return LogReadAheadStorage.create(storage, inputSplit.getLogFiles(), windowBytes);
   }
 
   private ClosableIterator<T> makeBaseFileIterator() throws IOException {
