@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.util.PartitionPathEncodeUtils
 
 class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
 
@@ -103,6 +104,41 @@ class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
             )
           }
         }
+      }
+    }
+  }
+
+  test("Test push down an equality on an empty partition value matches Spark") {
+    withTempDir { tmp =>
+      val defaultPartition = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
+      for (tableType <- Seq("cow", "mor"); (hiveStyle, urlEncode) <- Seq(("true", "false"), ("true", "true"), ("false", "false"))) {
+        val sparkTable = generateTableName
+        spark.sql(s"create table $sparkTable (id int, p string) using parquet partitioned by (p) location '${tmp.getCanonicalPath}/$sparkTable'")
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (id int, p string) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  type = '$tableType',
+             |  hoodie.datasource.write.hive_style_partitioning = '$hiveStyle',
+             |  hoodie.datasource.write.partitionpath.urlencode = '$urlEncode'
+             | )
+             | partitioned by (p)""".stripMargin)
+        Seq(sparkTable, tableName).foreach(t => spark.sql(s"insert into $t values (1, ''), (2, 'x')"))
+        val clue = s"$tableType, hive style $hiveStyle, url encode $urlEncode"
+        Seq("p = ''", s"p = '$defaultPartition'", "p is null", "id = 1", "p = 'x'").foreach { filter =>
+          val expected = spark.table(sparkTable).where(filter).select("id", "p").collect()
+          assertResult(expected, s"$clue, filter $filter")(
+            spark.read.format("hudi").load(tablePath).where(filter).select("id", "p").collect())
+          assertResult(expected, s"$clue, filter $filter")(spark.table(tableName).where(filter).select("id", "p").collect())
+        }
+        // a static partition spec naming the default partition overwrites it, even with no rows
+        Seq(sparkTable, tableName).foreach(t => spark.sql(s"insert overwrite table $t partition (p = '$defaultPartition') select 3 where 1 = 0"))
+        assertResult(spark.table(sparkTable).select("id", "p").orderBy("id").collect(), clue)(
+          spark.table(tableName).select("id", "p").orderBy("id").collect())
       }
     }
   }
