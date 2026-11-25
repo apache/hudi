@@ -27,7 +27,7 @@ module.exports = {
             items: [
                 'hudi_stack',
                 'timeline',
-                'storage_layouts',
+                'table_format',
                 'write_operations',
                 'table_types',
                 'key_generation',

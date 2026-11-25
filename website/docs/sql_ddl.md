@@ -365,7 +365,7 @@ TBLPROPERTIES (
 ```
 
 Lance also works with MOR tables: Lance files act as base files while Avro log files capture
-incremental changes. See [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) for
+incremental changes. See [Table Format → Lance](table_format.md#lance-base-file-format) for
 configuration, dependencies, and behavior.
 
 ### Create table from an external location

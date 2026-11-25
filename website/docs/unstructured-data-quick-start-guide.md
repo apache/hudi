@@ -257,5 +257,5 @@ plt.savefig("hudi_vector_search_results.png", dpi=150)
 | VECTOR type reference | [VECTOR in SQL DDL](sql_ddl.md#vector) · [SQL DML](sql_dml.md#inserting-vector-columns) · [DataFrame writes](writing_data.md#vector-via-dataframe) · [`hudi_vector_search` in SQL Queries](sql_queries.md#vector-similarity-search) |
 | BLOB type reference | [BLOB in SQL DDL](sql_ddl.md#blob) · [SQL DML](sql_dml.md#inserting-blob-columns) · [DataFrame writes](writing_data.md#blob-via-dataframe) · [`read_blob()` in SQL Queries](sql_queries.md#reading-blob-columns) |
 | VARIANT type | [VARIANT in SQL DDL](sql_ddl.md#variant) · [SQL DML](sql_dml.md#inserting-variant-columns) · [DataFrame writes](writing_data.md#variant-via-dataframe) · [Querying VARIANT](sql_queries.md#querying-variant-columns) |
-| Lance file format | [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) · [DataFrame writes](writing_data.md#lance-base-file-format-via-dataframe) |
+| Lance file format | [Table Format → Lance](table_format.md#lance-base-file-format) · [DataFrame writes](writing_data.md#lance-base-file-format-via-dataframe) |
 | AI lakehouse use cases | [Use Cases → AI Lakehouse](use_cases.md#ai-lakehouse) |
