@@ -474,7 +474,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto with global index into a small file group of a MOR table") {
+  testWithMergeHandles("Test MergeInto with global index into a small file group of a MOR table") {
     withTempDir { tmp =>
       for (indexType <- Seq("GLOBAL_SIMPLE", "GLOBAL_BLOOM"); mergeMode <- Seq("COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING")) {
         withSQLConf("hoodie.index.type" -> indexType) {
@@ -507,7 +507,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto with global index moving a record into a small file group") {
+  testWithMergeHandles("Test MergeInto with global index moving a record into a small file group") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE") {

@@ -26,8 +26,6 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaCache;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -91,7 +89,8 @@ public class BufferedRecordMergerFactory {
       default:
         if (payloadClasses.isPresent()) {
           if (payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
-            return new ExpressionPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, payloadClasses.get().getRight(), readerSchema, props);
+            HoodieSchema mergedRecordSchema = readerContext.getSchemaHandler() == null ? null : readerContext.getSchemaHandler().getMergedRecordSchema();
+            return new ExpressionPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, payloadClasses.get().getRight(), readerSchema, props, mergedRecordSchema);
           } else {
             return new CustomPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, payloadClasses.get().getLeft(), readerSchema, props);
           }
@@ -386,21 +385,19 @@ public class BufferedRecordMergerFactory {
    */
   private static class ExpressionPayloadRecordMerger<T> extends CustomPayloadRecordMerger<T> {
     private final HoodieRecordMerger deltaMerger;
-    private Integer mergedRecordSchemaId;
+    // null when no record is already merged
+    private final Integer mergedRecordSchemaId;
 
     public ExpressionPayloadRecordMerger(RecordContext<T> recordContext, Option<HoodieRecordMerger> recordMerger, String incomingPayloadClass,
-                                         HoodieSchema readerSchema, TypedProperties props) {
+                                         HoodieSchema readerSchema, TypedProperties props, HoodieSchema mergedRecordSchema) {
       super(recordContext, recordMerger, incomingPayloadClass, readerSchema, props);
       this.deltaMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger.get());
+      this.mergedRecordSchemaId = mergedRecordSchema == null ? null : recordContext.encodeSchema(mergedRecordSchema);
     }
 
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-      if (mergedRecordSchemaId == null) {
-        mergedRecordSchemaId = recordContext.encodeSchema(HoodieSchemaCache.intern(HoodieSchemaUtils.removeMetadataFields(readerSchema)));
-      }
-      // A record in the table schema was already merged with its current version by a global index
-      if (newerRecord.getSchemaId() != null && newerRecord.getSchemaId().equals(mergedRecordSchemaId)) {
+      if (mergedRecordSchemaId != null && mergedRecordSchemaId.equals(newerRecord.getSchemaId())) {
         return newerRecord;
       }
       return super.finalMerge(olderRecord, newerRecord);

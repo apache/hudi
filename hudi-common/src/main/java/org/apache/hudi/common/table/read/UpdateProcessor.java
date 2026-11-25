@@ -24,8 +24,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaCache;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -124,8 +122,7 @@ public interface UpdateProcessor<T> {
   class PayloadUpdateProcessor<T> extends StandardUpdateProcessor<T> {
     private final String payloadClass;
     private final Properties properties;
-    // The schema id of the records that a global index already merged with their current version (a Spark SQL
-    // MERGE INTO), which are final; null for other payloads
+    // null for other payloads, and when no record is already merged
     private final Integer mergedRecordSchemaId;
 
     public PayloadUpdateProcessor(HoodieReadStats readStats, HoodieReaderContext<T> readerContext, boolean emitDeletes,
@@ -133,10 +130,8 @@ public interface UpdateProcessor<T> {
       super(readStats, readerContext, emitDeletes);
       this.payloadClass = payloadClass;
       this.properties = properties;
-      this.mergedRecordSchemaId = payloadClass.equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")
-          ? readerContext.getRecordContext().encodeSchema(
-              HoodieSchemaCache.intern(HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequiredSchema())))
-          : null;
+      HoodieSchema mergedRecordSchema = HoodieRecordUtils.isExpressionPayloadClass(payloadClass) ? readerContext.getSchemaHandler().getMergedRecordSchema() : null;
+      this.mergedRecordSchemaId = mergedRecordSchema == null ? null : readerContext.getRecordContext().encodeSchema(mergedRecordSchema);
     }
 
     @Override
