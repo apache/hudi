@@ -23,8 +23,6 @@ import io.trino.cache.EvictableCacheBuilder;
 import io.trino.filesystem.FileIterator;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
-import io.trino.hive.formats.avro.AvroTypeException;
-import io.trino.hive.formats.avro.NativeLogicalTypesAvroTypeBlockHandler;
 import io.trino.metastore.Column;
 import io.trino.metastore.HivePartition;
 import io.trino.metastore.HiveType;
@@ -36,13 +34,19 @@ import io.trino.plugin.hive.avro.AvroHiveFileUtils;
 import io.trino.plugin.hive.util.HiveTypeTranslator;
 import io.trino.plugin.hudi.storage.HudiTrinoStorage;
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.MapType;
+import io.trino.spi.type.RowType;
+import io.trino.spi.type.TimestampWithTimeZoneType;
 import io.trino.spi.type.Type;
+import io.trino.spi.type.TypeOperators;
 import io.trino.spi.type.TypeManager;
 import io.trino.spi.type.VarcharType;
 import org.apache.avro.Schema;
@@ -109,6 +113,7 @@ import static io.trino.plugin.hudi.HudiErrorCode.HUDI_FILESYSTEM_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_META_CLIENT_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_UNSUPPORTED_FILE_FORMAT;
+import static io.trino.spi.type.TimestampType.createTimestampType;
 import static java.lang.Math.toIntExact;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -127,8 +132,9 @@ public final class HudiUtil
             CollectionUtils.createImmutableList(RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD);
 
     private static final Logger log = Logger.get(HudiUtil.class);
-    // Maps Avro schemas (incl. logical types) to Trino types for toColumnHandle. Stateless, so shared.
-    private static final NativeLogicalTypesAvroTypeBlockHandler AVRO_TYPE_HANDLER = new NativeLogicalTypesAvroTypeBlockHandler();
+    // Maps Hudi schemas directly to Trino types for toColumnHandle. Stateless, so shared.
+    private static final TypeOperators TYPE_OPERATORS = new TypeOperators();
+    private static final TrinoTypeMapper TRINO_TYPE_MAPPER = new TrinoTypeMapper(TYPE_OPERATORS);
     private static final Cache<Schema, Map<String, Schema.Field>> SCHEMA_FIELD_CACHE =
             EvictableCacheBuilder.newBuilder()
                     .maximumWeight(10L * 1000L * 1024L) // 10MB
@@ -367,7 +373,7 @@ public final class HudiUtil
     }
 
     /**
-     * Builds a {@link HiveColumnHandle} for a table-schema field, typing it from the field's Avro schema.
+     * Builds a {@link HiveColumnHandle} for a table-schema field, typing it directly from the field's Hudi schema.
      * Used to resolve columns the file-group reader requires for merging but the connector projection does
      * not carry (e.g. {@code _hoodie_commit_time} or a delete-marker column on a narrow query).
      * <p>
@@ -376,7 +382,8 @@ public final class HudiUtil
      * {@link HudiPageSourceProvider#remapColumnIndicesToPhysical} rebuilds every index from the file
      * schema by name), so the ordinal is never used to locate data.
      * <p>
-     * Avro types whose Trino mapping has no Hive counterpart (uuid, time-millis/micros) fail with
+     * UTC-adjusted timestamps become Hive timestamps, which have no time-zone component. Avro types
+     * whose Trino mapping has no Hive counterpart (uuid, time-millis/micros) fail with
      * NOT_SUPPORTED from {@link HiveTypeTranslator#toHiveType}; such columns are equally unreadable
      * through the metastore schema, so this surfaces the same limitation with a clear error.
      */
@@ -384,12 +391,15 @@ public final class HudiUtil
     {
         Type trinoType;
         try {
-            trinoType = AVRO_TYPE_HANDLER.typeFor(field.schema().toAvroSchema());
+            trinoType = TRINO_TYPE_MAPPER.toTypeSystem(field.schema());
         }
-        catch (AvroTypeException e) {
+        catch (TrinoException e) {
             throw new TrinoException(HUDI_SCHEMA_ERROR,
-                    "Failed to map Avro type of column " + field.name() + " to a Trino type", e);
+                    "Failed to map Hudi type of column " + field.name() + " to a Trino type", e);
         }
+        // Hive has no timestamp-with-time-zone type. Match the existing metastore representation,
+        // including timestamps nested inside arrays, maps and rows.
+        trinoType = toHiveCompatibleType(trinoType);
         return new HiveColumnHandle(
                 field.name(),
                 0,
@@ -398,6 +408,27 @@ public final class HudiUtil
                 Optional.empty(),
                 HiveColumnHandle.ColumnType.REGULAR,
                 Optional.empty());
+    }
+
+    private static Type toHiveCompatibleType(Type type)
+    {
+        if (type instanceof TimestampWithTimeZoneType timestamp) {
+            return createTimestampType(timestamp.getPrecision());
+        }
+        if (type instanceof ArrayType array) {
+            return new ArrayType(toHiveCompatibleType(array.getElementType()));
+        }
+        if (type instanceof MapType map) {
+            return new MapType(map.getKeyType(), toHiveCompatibleType(map.getValueType()), TYPE_OPERATORS);
+        }
+        if (type instanceof RowType row) {
+            return RowType.from(row.getFields().stream()
+                    .map(field -> field.getName()
+                            .map(name -> RowType.field(name, toHiveCompatibleType(field.getType())))
+                            .orElseGet(() -> RowType.field(toHiveCompatibleType(field.getType()))))
+                    .toList());
+        }
+        return type;
     }
 
     /**
