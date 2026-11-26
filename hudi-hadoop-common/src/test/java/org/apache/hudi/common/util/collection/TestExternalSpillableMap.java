@@ -55,12 +55,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
@@ -441,6 +443,115 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       records.put(updatedRecord.getRecordKey(), updatedRecord);
 
       assertEquals(records.size(), 101);
+    }
+  }
+
+  /**
+   * Each entry is estimated at 10 bytes and the in-memory budget is 40 bytes (50 * 0.8), so exactly four keys fit in memory.
+   */
+  private ExternalSpillableMap<String, String> newFixedSizeMap(ExternalSpillableMap.DiskMapType diskMapType) throws IOException {
+    SizeEstimator<String> fiveBytes = s -> 5L;
+    return new ExternalSpillableMap<>(50L, basePath, fiveBytes, fiveBytes, diskMapType, new DefaultSerializer<>(), false, TEST_LOGGING_CONTEXT);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ExternalSpillableMap.DiskMapType.class, names = {"BITCASK", "ROCKS_DB"})
+  void testReplaceInMemoryKeyKeepsSizeAccounting(ExternalSpillableMap.DiskMapType diskMapType) throws IOException {
+    try (ExternalSpillableMap<String, String> map = newFixedSizeMap(diskMapType)) {
+      map.put("k0", "v0");
+      map.put("k1", "v1");
+      map.put("k2", null);
+      assertEquals(30L, map.getCurrentInMemoryMapSize());
+
+      map.put("k0", "v0-new");
+      map.put("k1", "v1-new");
+      map.put("k2", "v2");
+      assertEquals(30L, map.getCurrentInMemoryMapSize());
+      assertEquals(3, map.getInMemoryMapNumEntries());
+      assertEquals(0, map.getDiskBasedMapNumEntries());
+      assertEquals("v0-new", map.get("k0"));
+      assertEquals("v1-new", map.get("k1"));
+      assertEquals("v2", map.get("k2"));
+
+      map.put("k2", null);
+      assertEquals(30L, map.getCurrentInMemoryMapSize());
+      assertTrue(map.containsKey("k2"));
+      assertNull(map.get("k2"));
+
+      // The fourth key fills the budget; replacing an in-memory key past the budget keeps it in memory
+      map.put("k3", "v3");
+      assertEquals(40L, map.getCurrentInMemoryMapSize());
+      map.put("k0", "v0-newer");
+      assertEquals(40L, map.getCurrentInMemoryMapSize());
+      assertEquals(4, map.getInMemoryMapNumEntries());
+      assertEquals(0, map.getDiskBasedMapNumEntries());
+      assertEquals("v0-newer", map.get("k0"));
+    }
+  }
+
+  @Test
+  void testPayloadSizeReEstimationCountsNewKeysOnly() throws IOException {
+    AtomicInteger estimates = new AtomicInteger();
+    SizeEstimator<String> keyEstimator = s -> {
+      estimates.incrementAndGet();
+      return 5L;
+    };
+    SizeEstimator<String> valueEstimator = s -> s.startsWith("large") ? 25L : 5L;
+    try (ExternalSpillableMap<String, String> map = new ExternalSpillableMap<>(1_000_000L, basePath, keyEstimator, valueEstimator,
+        ExternalSpillableMap.DiskMapType.BITCASK, new DefaultSerializer<>(), false, TEST_LOGGING_CONTEXT)) {
+      for (int i = 0; i < 100; i++) {
+        map.put("k" + i, "small" + i);
+      }
+      assertEquals(1, estimates.get());
+      assertEquals(1000L, map.getCurrentInMemoryMapSize());
+
+      // Replacing keys never estimates or charges a payload
+      for (int i = 0; i < 100; i++) {
+        map.put("k" + i, "large" + i);
+      }
+      assertEquals(1, estimates.get());
+      assertEquals(1000L, map.getCurrentInMemoryMapSize());
+
+      // The 101st key re-estimates the payload as 0.9 * 10 + 0.1 * 30 = 12 and resizes the map to 100 * 12 + 12
+      map.put("k100", "large100");
+      assertEquals(2, estimates.get());
+      assertEquals(1212L, map.getCurrentInMemoryMapSize());
+      map.put("k101", "large101");
+      assertEquals(2, estimates.get());
+      assertEquals(1224L, map.getCurrentInMemoryMapSize());
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ExternalSpillableMap.DiskMapType.class, names = {"BITCASK", "ROCKS_DB"})
+  void testGetAndReplaceKeyOnDisk(ExternalSpillableMap.DiskMapType diskMapType) throws IOException {
+    try (ExternalSpillableMap<String, String> map = newFixedSizeMap(diskMapType)) {
+      for (int i = 0; i < 6; i++) {
+        map.put("k" + i, "v" + i);
+      }
+      assertEquals(4, map.getInMemoryMapNumEntries());
+      assertEquals(2, map.getDiskBasedMapNumEntries());
+      assertEquals("v4", map.get("k4"));
+      assertEquals("v5", map.get("k5"));
+      assertNull(map.get("missing"));
+
+      // Past the budget, a key on disk is replaced on disk
+      map.put("k4", "v4-new");
+      assertEquals(4, map.getInMemoryMapNumEntries());
+      assertEquals(2, map.getDiskBasedMapNumEntries());
+      assertEquals("v4-new", map.get("k4"));
+      assertEquals(40L, map.getCurrentInMemoryMapSize());
+
+      // Under the budget again, a key on disk moves to memory and leaves the disk map
+      map.remove("k0");
+      assertEquals(30L, map.getCurrentInMemoryMapSize());
+      map.put("k5", "v5-new");
+      assertEquals(40L, map.getCurrentInMemoryMapSize());
+      assertEquals(4, map.getInMemoryMapNumEntries());
+      assertEquals(1, map.getDiskBasedMapNumEntries());
+      assertEquals(5, map.size());
+      assertEquals("v5-new", map.get("k5"));
+      assertEquals("v4-new", map.get("k4"));
     }
   }
 
