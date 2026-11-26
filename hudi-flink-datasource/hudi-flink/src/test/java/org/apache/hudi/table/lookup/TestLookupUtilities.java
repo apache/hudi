@@ -60,8 +60,8 @@ class TestLookupUtilities {
     HoodieLookupFunction function = mock(HoodieLookupFunction.class);
 
     assertInstanceOf(LookupFunctionProvider.class,
-        LookupRuntimeProviderFactory.create(function, false, 1));
+        LookupRuntimeProviderFactory.create(function, false));
     assertInstanceOf(AsyncLookupFunctionProvider.class,
-        LookupRuntimeProviderFactory.create(function, true, 3));
+        LookupRuntimeProviderFactory.create(function, true));
   }
 }

@@ -130,7 +130,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC;
-import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC_THREAD_NUMBER;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_JOIN_CACHE_TTL;
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
@@ -428,7 +427,6 @@ public class HoodieTableSource extends FileIndexReader implements
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext context) {
     Duration duration = conf.get(LOOKUP_JOIN_CACHE_TTL);
     boolean asyncEnabled = conf.get(LOOKUP_ASYNC);
-    int asyncThreadNumber = conf.get(LOOKUP_ASYNC_THREAD_NUMBER);
     return LookupRuntimeProviderFactory.create(
         new HoodieLookupFunction(
             new HoodieLookupTableReader(this::getBatchInputFormat, conf),
@@ -436,7 +434,7 @@ public class HoodieTableSource extends FileIndexReader implements
             getLookupKeys(context.getKeys()),
             duration,
             conf
-        ), asyncEnabled, asyncThreadNumber);
+        ), asyncEnabled);
   }
 
   private DataType getProducedDataType() {

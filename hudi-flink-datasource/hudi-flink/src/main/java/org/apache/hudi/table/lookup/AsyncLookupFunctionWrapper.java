@@ -35,27 +35,25 @@ import java.util.concurrent.Executors;
 public class AsyncLookupFunctionWrapper extends AsyncLookupFunction {
 
   private final LookupFunction function;
-  private final int threadNumber;
 
-  private transient ExecutorService lazyExecutor;
+  private transient ExecutorService executor;
 
-  public AsyncLookupFunctionWrapper(LookupFunction function, int threadNumber) {
+  public AsyncLookupFunctionWrapper(LookupFunction function) {
     this.function = function;
-    this.threadNumber = threadNumber;
   }
 
   @Override
   public void open(FunctionContext context) throws Exception {
     function.open(context);
+    executor = Executors.newSingleThreadExecutor(
+        new ExecutorThreadFactory(Thread.currentThread().getName() + "-async"));
   }
 
   private Collection<RowData> lookup(RowData keyRow) {
     ClassLoader cl = Thread.currentThread().getContextClassLoader();
     Thread.currentThread().setContextClassLoader(AsyncLookupFunctionWrapper.class.getClassLoader());
     try {
-      synchronized (function) {
-        return function.lookup(keyRow);
-      }
+      return function.lookup(keyRow);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     } finally {
@@ -65,23 +63,14 @@ public class AsyncLookupFunctionWrapper extends AsyncLookupFunction {
 
   @Override
   public CompletableFuture<Collection<RowData>> asyncLookup(RowData keyRow) {
-    return CompletableFuture.supplyAsync(() -> lookup(keyRow), executor());
+    return CompletableFuture.supplyAsync(() -> lookup(keyRow), executor);
   }
 
   @Override
   public void close() throws Exception {
+    if (executor != null) {
+      executor.shutdownNow();
+    }
     function.close();
-    if (lazyExecutor != null) {
-      lazyExecutor.shutdownNow();
-      lazyExecutor = null;
-    }
-  }
-
-  private ExecutorService executor() {
-    if (lazyExecutor == null) {
-      lazyExecutor = Executors.newFixedThreadPool(threadNumber,
-          new ExecutorThreadFactory(Thread.currentThread().getName() + "-async"));
-    }
-    return lazyExecutor;
   }
 }
