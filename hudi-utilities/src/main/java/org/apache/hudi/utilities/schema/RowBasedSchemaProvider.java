@@ -45,7 +45,7 @@ public class RowBasedSchemaProvider extends SchemaProvider {
 
   @Override
   public HoodieSchema getSourceHoodieSchema() {
-    return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+    return resolveSourceHoodieSchema(RowBasedSchemaProvider.class, this::rowSchema);
   }
 
   /**
@@ -54,6 +54,10 @@ public class RowBasedSchemaProvider extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getSourceSchema() {
-    return getSourceHoodieSchema().toAvroSchema();
+    return resolveSourceAvroSchema(RowBasedSchemaProvider.class, this::rowSchema);
+  }
+
+  private HoodieSchema rowSchema() {
+    return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
   }
 }

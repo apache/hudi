@@ -312,6 +312,33 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public HoodieSchema getSourceHoodieSchema() {
+    return resolveSourceHoodieSchema(SchemaRegistryProvider.class, this::fetchSourceSchema);
+  }
+
+  /**
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
+  @Override
+  @Deprecated
+  public Schema getSourceSchema() {
+    return resolveSourceAvroSchema(SchemaRegistryProvider.class, this::fetchSourceSchema);
+  }
+
+  @Override
+  public HoodieSchema getTargetHoodieSchema() {
+    return resolveTargetHoodieSchema(SchemaRegistryProvider.class, this::fetchTargetSchema);
+  }
+
+  /**
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   */
+  @Override
+  @Deprecated
+  public Schema getTargetSchema() {
+    return resolveTargetAvroSchema(SchemaRegistryProvider.class, this::fetchTargetSchema);
+  }
+
+  private HoodieSchema fetchSourceSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     try {
       return parseSchemaFromRegistry(registryUrl);
@@ -323,17 +350,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
     }
   }
 
-  /**
-   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
-   */
-  @Override
-  @Deprecated
-  public Schema getSourceSchema() {
-    return getSourceHoodieSchema().toAvroSchema();
-  }
-
-  @Override
-  public HoodieSchema getTargetHoodieSchema() {
+  // Reads the target registry url, falling back to the source registry url, rather than going through the source getter.
+  private HoodieSchema fetchTargetSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     String targetRegistryUrl =
         getStringWithAltKeys(config, HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL, registryUrl);
@@ -346,14 +364,5 @@ public class SchemaRegistryProvider extends SchemaProvider {
           Config.TARGET_SCHEMA_REGISTRY_URL_PROP,
           StringUtils.truncate(targetRegistryUrl, 10, 10)), e);
     }
-  }
-
-  /**
-   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
-   */
-  @Override
-  @Deprecated
-  public Schema getTargetSchema() {
-    return getTargetHoodieSchema().toAvroSchema();
   }
 }

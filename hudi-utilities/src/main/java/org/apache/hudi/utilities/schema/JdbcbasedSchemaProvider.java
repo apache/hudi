@@ -59,11 +59,7 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
 
   @Override
   public HoodieSchema getSourceHoodieSchema() {
-    if (this.sourceSchema != null) {
-      return sourceSchema;
-    }
-
-    return UtilHelpers.getJDBCSchema(options);
+    return resolveSourceHoodieSchema(JdbcbasedSchemaProvider.class, this::fetchSourceSchema);
   }
 
   /**
@@ -72,6 +68,14 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getSourceSchema() {
-    return getSourceHoodieSchema().toAvroSchema();
+    return resolveSourceAvroSchema(JdbcbasedSchemaProvider.class, this::fetchSourceSchema);
+  }
+
+  private HoodieSchema fetchSourceSchema() {
+    if (this.sourceSchema != null) {
+      return sourceSchema;
+    }
+
+    return UtilHelpers.getJDBCSchema(options);
   }
 }

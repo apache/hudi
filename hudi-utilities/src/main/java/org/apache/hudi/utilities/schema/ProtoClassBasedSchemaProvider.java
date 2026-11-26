@@ -81,6 +81,33 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
 
   @Override
   public HoodieSchema getSourceHoodieSchema() {
+    return resolveSourceHoodieSchema(ProtoClassBasedSchemaProvider.class, this::parsedSchema);
+  }
+
+  /**
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
+  @Override
+  @Deprecated
+  public Schema getSourceSchema() {
+    return resolveSourceAvroSchema(ProtoClassBasedSchemaProvider.class, this::parsedSchema);
+  }
+
+  @Override
+  public HoodieSchema getTargetHoodieSchema() {
+    return resolveTargetHoodieSchema(ProtoClassBasedSchemaProvider.class, this::getSourceHoodieSchema);
+  }
+
+  /**
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   */
+  @Override
+  @Deprecated
+  public Schema getTargetSchema() {
+    return resolveTargetAvroSchema(ProtoClassBasedSchemaProvider.class, this::getSourceHoodieSchema);
+  }
+
+  private HoodieSchema parsedSchema() {
     if (schema == null) {
       try {
         HoodieSchema.Parser parser = new HoodieSchema.Parser();
@@ -90,19 +117,5 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
       }
     }
     return schema;
-  }
-
-  /**
-   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
-   */
-  @Override
-  @Deprecated
-  public Schema getSourceSchema() {
-    return getSourceHoodieSchema().toAvroSchema();
-  }
-
-  @Override
-  public HoodieSchema getTargetHoodieSchema() {
-    return getSourceHoodieSchema();
   }
 }

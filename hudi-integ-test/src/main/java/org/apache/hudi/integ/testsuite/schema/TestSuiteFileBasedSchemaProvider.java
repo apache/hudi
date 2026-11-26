@@ -39,8 +39,8 @@ public class TestSuiteFileBasedSchemaProvider extends FilebasedSchemaProvider {
 
   public TestSuiteFileBasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    this.sourceSchema = addSourceOrderingFieldToSchema(HoodieSchema.fromAvroSchema(sourceSchema)).toAvroSchema();
-    this.targetSchema = addSourceOrderingFieldToSchema(HoodieSchema.fromAvroSchema(targetSchema)).toAvroSchema();
+    this.sourceSchema = addSourceOrderingFieldToSchema(sourceSchema);
+    this.targetSchema = addSourceOrderingFieldToSchema(targetSchema);
   }
 
   private HoodieSchema addSourceOrderingFieldToSchema(HoodieSchema schema) {

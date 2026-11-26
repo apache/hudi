@@ -94,7 +94,7 @@ public class HiveSchemaProvider extends SchemaProvider {
 
   @Override
   public HoodieSchema getSourceHoodieSchema() {
-    return sourceHoodieSchema;
+    return resolveSourceHoodieSchema(HiveSchemaProvider.class, () -> sourceHoodieSchema);
   }
 
   /**
@@ -103,7 +103,7 @@ public class HiveSchemaProvider extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getSourceSchema() {
-    return getSourceHoodieSchema().toAvroSchema();
+    return resolveSourceAvroSchema(HiveSchemaProvider.class, () -> sourceHoodieSchema);
   }
 
   /**
@@ -111,7 +111,7 @@ public class HiveSchemaProvider extends SchemaProvider {
    */
   @Override
   public HoodieSchema getTargetHoodieSchema() {
-    return targetHoodieSchema != null ? targetHoodieSchema : getSourceHoodieSchema();
+    return resolveTargetHoodieSchema(HiveSchemaProvider.class, this::targetOrSourceSchema);
   }
 
   /**
@@ -120,6 +120,10 @@ public class HiveSchemaProvider extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getTargetSchema() {
-    return getTargetHoodieSchema().toAvroSchema();
+    return resolveTargetAvroSchema(HiveSchemaProvider.class, this::targetOrSourceSchema);
+  }
+
+  private HoodieSchema targetOrSourceSchema() {
+    return targetHoodieSchema != null ? targetHoodieSchema : getSourceHoodieSchema();
   }
 }

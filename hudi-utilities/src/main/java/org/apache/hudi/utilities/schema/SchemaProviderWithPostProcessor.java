@@ -40,16 +40,12 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
 
   @Override
   public HoodieSchema getSourceHoodieSchema() {
-    HoodieSchema sourceSchema = schemaProvider.getSourceHoodieSchema();
-    return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema))
-        .orElse(sourceSchema);
+    return resolveSourceHoodieSchema(SchemaProviderWithPostProcessor.class, this::processedSourceSchema);
   }
 
   @Override
   public HoodieSchema getTargetHoodieSchema() {
-    HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
-    return schemaPostProcessor.map(processor -> processor.processSchema(targetSchema))
-        .orElse(targetSchema);
+    return resolveTargetHoodieSchema(SchemaProviderWithPostProcessor.class, this::processedTargetSchema);
   }
 
   /**
@@ -58,7 +54,7 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getSourceSchema() {
-    return getSourceHoodieSchema().toAvroSchema();
+    return resolveSourceAvroSchema(SchemaProviderWithPostProcessor.class, this::processedSourceSchema);
   }
 
   /**
@@ -67,7 +63,23 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getTargetSchema() {
-    return getTargetHoodieSchema().toAvroSchema();
+    return resolveTargetAvroSchema(SchemaProviderWithPostProcessor.class, this::processedTargetSchema);
+  }
+
+  private HoodieSchema processedSourceSchema() {
+    return process(schemaProvider.getSourceHoodieSchema());
+  }
+
+  private HoodieSchema processedTargetSchema() {
+    return process(schemaProvider.getTargetHoodieSchema());
+  }
+
+  private HoodieSchema process(HoodieSchema schema) {
+    // A null schema (e.g. a provider that leaves the target to be inferred from the table) stays null.
+    if (schema == null) {
+      return null;
+    }
+    return schemaPostProcessor.map(processor -> processor.processSchema(schema)).orElse(schema);
   }
 
   public SchemaProvider getOriginalSchemaProvider() {

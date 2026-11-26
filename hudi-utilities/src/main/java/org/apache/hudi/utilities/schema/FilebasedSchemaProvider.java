@@ -77,7 +77,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   @Override
   public HoodieSchema getSourceHoodieSchema() {
-    return sourceSchema;
+    return resolveSourceHoodieSchema(FilebasedSchemaProvider.class, () -> sourceSchema);
   }
 
   /**
@@ -86,12 +86,12 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getSourceSchema() {
-    return getSourceHoodieSchema().toAvroSchema();
+    return resolveSourceAvroSchema(FilebasedSchemaProvider.class, () -> sourceSchema);
   }
 
   @Override
   public HoodieSchema getTargetHoodieSchema() {
-    return targetSchema != null ? targetSchema : getSourceHoodieSchema();
+    return resolveTargetHoodieSchema(FilebasedSchemaProvider.class, this::targetOrSourceSchema);
   }
 
   /**
@@ -100,7 +100,12 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getTargetSchema() {
-    return getTargetHoodieSchema().toAvroSchema();
+    return resolveTargetAvroSchema(FilebasedSchemaProvider.class, this::targetOrSourceSchema);
+  }
+
+  private HoodieSchema targetOrSourceSchema() {
+    // Without a target file the source schema is the target, through the getter so a source override is honored.
+    return targetSchema != null ? targetSchema : getSourceHoodieSchema();
   }
 
   private static HoodieSchema readSchemaFromFile(String schemaPath, FileSystem fs, TypedProperties props) {

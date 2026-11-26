@@ -34,7 +34,7 @@ public class SimpleSchemaProvider extends SchemaProvider {
 
   @Override
   public HoodieSchema getSourceHoodieSchema() {
-    return sourceSchema;
+    return resolveSourceHoodieSchema(SimpleSchemaProvider.class, () -> sourceSchema);
   }
 
   /**
@@ -43,6 +43,6 @@ public class SimpleSchemaProvider extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getSourceSchema() {
-    return getSourceHoodieSchema().toAvroSchema();
+    return resolveSourceAvroSchema(SimpleSchemaProvider.class, () -> sourceSchema);
   }
 }
