@@ -27,11 +27,13 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -46,11 +48,14 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.index.HoodieInMemoryHashIndex;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -68,6 +73,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -482,6 +488,73 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
     Map<String, GenericRecord> recordMap = GenericRecordValidationTestUtils.getRecordsMap(config, storageConf, dataGen);
     assertEquals(100, recordMap.size());
     keysUnderCompaction.forEach(record -> assertEquals(nextUpdateTime,
+        recordMap.get(record.getRecordKey()).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()));
+    assertOnlyPositionalDeletes(config, HoodieTableVersion.TEN);
+  }
+
+  /**
+   * The config of a writer or a compactor that runs next to other writers of the table, as an offline compactor does.
+   */
+  private HoodieWriteConfig multiWriterConfig(boolean updatesAsDeletesAndInserts) {
+    return configBuilder(updatesAsDeletesAndInserts, 1)
+        .withWriteTableVersion(HoodieTableVersion.TEN.versionCode())
+        .withAutoUpgradeVersion(false)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .build();
+  }
+
+  /**
+   * A compaction scheduler without the write mode, such as an offline compactor, schedules a compaction of the file
+   * groups an update in the mode is writing positional deletes into. The scheduler's guard is off, so the plan misses
+   * the deletes; the update then fails when it commits, whether the compaction is still pending or already completed,
+   * and a retry after the compaction keeps one live copy of each key.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testCompactionScheduledWithoutTheModeFailsTheUpdate(boolean compactBeforeCommit) throws Exception {
+    initTable(HoodieTableVersion.TEN);
+    HoodieWriteConfig config = multiWriterConfig(true);
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+    String insertTime = WriteClientTestUtils.createNewInstantTime();
+    List<HoodieRecord> inserts = dataGen.generateInserts(insertTime, 100);
+    writeAndCommit(client, insertTime, () -> client.insert(inserts, insertTime));
+    String firstUpdateTime = WriteClientTestUtils.createNewInstantTime();
+    List<HoodieRecord> firstUpdates = dataGen.generateUpdates(firstUpdateTime, inserts.subList(0, 30));
+    writeAndCommit(client, firstUpdateTime, () -> client.upsert(firstUpdates, firstUpdateTime));
+
+    List<HoodieRecord> keysToUpdate = inserts.subList(30, 60);
+    String updateTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, updateTime);
+    List<WriteStatus> statuses = client.upsert(dataGen.generateUpdates(updateTime, keysToUpdate), updateTime);
+
+    String compactionTime;
+    try (HoodieJavaWriteClient compactor = new HoodieJavaWriteClient(context, multiWriterConfig(false))) {
+      Option<String> scheduled = compactor.scheduleCompaction(Option.empty());
+      assertTrue(scheduled.isPresent(), "a scheduler without the write mode does not wait for the pending update");
+      compactionTime = scheduled.get();
+      if (compactBeforeCommit) {
+        compactor.commitCompaction(compactionTime, compactor.compact(compactionTime), Option.empty());
+      }
+    }
+    Exception exception = assertThrows(Exception.class, () -> client.commit(updateTime, statuses));
+    assertTrue(exceptionChainContains(exception, "which compaction " + compactionTime + " requested after the commit started"),
+        "the update must fail when a compaction requested after it misses its deletes but got: " + exception);
+
+    if (!compactBeforeCommit) {
+      client.commitCompaction(compactionTime, client.compact(compactionTime), Option.empty());
+    }
+    String retriedUpdateTime = WriteClientTestUtils.createNewInstantTime();
+    List<HoodieRecord> retriedUpdates = dataGen.generateUpdates(retriedUpdateTime, keysToUpdate);
+    writeAndCommit(client, retriedUpdateTime, () -> client.upsert(retriedUpdates, retriedUpdateTime));
+    String nextUpdateTime = WriteClientTestUtils.createNewInstantTime();
+    List<HoodieRecord> nextUpdates = dataGen.generateUpdates(nextUpdateTime, keysToUpdate);
+    writeAndCommit(client, nextUpdateTime, () -> client.upsert(nextUpdates, nextUpdateTime));
+    Map<String, GenericRecord> recordMap = GenericRecordValidationTestUtils.getRecordsMap(config, storageConf, dataGen);
+    assertEquals(100, recordMap.size());
+    keysToUpdate.forEach(record -> assertEquals(nextUpdateTime,
         recordMap.get(record.getRecordKey()).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()));
     assertOnlyPositionalDeletes(config, HoodieTableVersion.TEN);
   }

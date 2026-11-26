@@ -972,7 +972,9 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "and an upsert or delete that locates a record in a file group with a pending compaction is refused, since "
           + "its positional delete would refer to the base file being compacted, so run compaction inline or at times "
           + "when the writes do not update its file groups. A pending delta commit, including the inflight commit of a "
-          + "crashed writer until it is rolled back, holds off compaction scheduling for the whole table. Small-file "
+          + "crashed writer until it is rolled back, holds off compaction scheduling for the whole table. A delta commit "
+          + "fails when a compaction requested after it started, as by a compactor without this config, covers a file "
+          + "group it wrote positional deletes into. Small-file "
           + "routing is off, so each upsert writes the new versions to new file groups; schedule clustering to combine "
           + "them. Every writer and table service of the table has to set this config.");
 

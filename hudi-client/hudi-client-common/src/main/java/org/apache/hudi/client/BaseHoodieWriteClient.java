@@ -289,6 +289,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
       preCommit(metadata);
+      if (config.shouldWriteUpdatesAsDeletesAndInserts() && HoodieTimeline.DELTA_COMMIT_ACTION.equals(commitActionType)) {
+        BaseWriteHelper.validateNoCompactionRequestedAfterDeletes(createMetaClient(true), instantTime, metadata);
+      }
       if (extraPreCommitFunc.isPresent()) {
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
