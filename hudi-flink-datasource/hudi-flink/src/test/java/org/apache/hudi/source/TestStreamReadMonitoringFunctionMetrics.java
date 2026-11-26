@@ -38,6 +38,7 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.groups.OperatorIOMetricGroup;
 import org.apache.flink.metrics.groups.OperatorMetricGroup;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
+import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.api.operators.StreamSource;
 import org.apache.flink.streaming.util.AbstractStreamOperatorTestHarness;
 import org.apache.flink.streaming.util.CollectingSourceContext;
@@ -126,6 +127,81 @@ public class TestStreamReadMonitoringFunctionMetrics {
       log.info("The issued instant delay is {} seconds for a commit made ten minutes ago", delay);
       assertTrue(delay >= 600 && delay < 660, "The commit was made ten minutes ago, but the delay is " + delay + " seconds");
       assertEquals(committedAt.getEpochSecond(), runtimeContext.gauge("issuedInstant"));
+    }
+  }
+
+  /**
+   * A snapshot taken right after a checkpoint restore, before the restored function has scanned
+   * even once, must still compute the issued instant gauge in the table's real timeline timezone.
+   * At that point the restored {@code issuedInstant} is already set, but this instance's own
+   * {@code metaClient} is not; snapshotState must keep the checkpoint state regardless, and defer
+   * only the gauge update until the table's timezone can actually be resolved.
+   */
+  @Test
+  public void testSnapshotRightAfterRestoreUsesTheRealTimezoneNotTheLocalFallback() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tableDir.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+
+    // The table already has a UTC timeline and a commit from ten minutes ago before either
+    // function instance below is ever constructed.
+    HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
+    Properties utcTimeline = new Properties();
+    utcTimeline.setProperty(HoodieTableConfig.TIMELINE_TIMEZONE.key(), HoodieTimelineTimeZone.UTC.toString());
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), utcTimeline);
+    Instant committedAt = Instant.now().minus(10, ChronoUnit.MINUTES);
+    HoodieTestTable.of(metaClient).addCommit(
+        UTC_INSTANT_FORMAT.format(committedAt),
+        Option.of(UTC_INSTANT_FORMAT.format(committedAt.plusSeconds(1))),
+        Option.of(new HoodieCommitMetadata()));
+
+    // First instance: scan once so it genuinely issues this instant, then snapshot.
+    OperatorSubtaskState state;
+    StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
+    List<MergeOnReadInputSplit> splits = new ArrayList<>();
+    StreamSource<MergeOnReadInputSplit, StreamReadMonitoringFunction> source = new StreamSource<>(function);
+    try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness =
+             new AbstractStreamOperatorTestHarness<>(source, 1, 1, 0)) {
+      harness.setup();
+      function.setRuntimeContext(new GaugeCapturingRuntimeContext());
+      harness.open();
+      function.monitorDirAndForwardSplits(new CollectingSourceContext<>(new Object(), splits));
+      state = harness.snapshot(1, 1);
+    }
+
+    // Second instance: restore that state, then snapshot immediately, before any scan of its own.
+    TimeZone originalZone = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
+    try {
+      StreamReadMonitoringFunction function2 = TestUtils.getMonitorFunc(conf);
+      GaugeCapturingRuntimeContext runtimeContext2 = new GaugeCapturingRuntimeContext();
+      StreamSource<MergeOnReadInputSplit, StreamReadMonitoringFunction> source2 = new StreamSource<>(function2);
+      try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness2 =
+               new AbstractStreamOperatorTestHarness<>(source2, 1, 1, 0)) {
+        harness2.setup();
+        function2.setRuntimeContext(runtimeContext2);
+        harness2.initializeState(state);
+        harness2.open();
+
+        // The restored instant is set, but metaClient has not been resolved yet: the gauge must
+        // stay at its default rather than report a value computed in the wrong fallback zone.
+        harness2.snapshot(2, 2);
+        assertEquals(0L, runtimeContext2.gauge("issuedInstantDelay"),
+            "The gauge must not report a value before the table's real timezone is resolvable");
+
+        // A scan resolves metaClient. Nothing new has committed, so the same restored instant is
+        // reissued, and the next snapshot must now report it using the table's real UTC timeline,
+        // proving the checkpoint-restored instant was never lost while the gauge was held back.
+        List<MergeOnReadInputSplit> splits2 = new ArrayList<>();
+        function2.monitorDirAndForwardSplits(new CollectingSourceContext<>(new Object(), splits2));
+        harness2.snapshot(3, 3);
+
+        long delay = runtimeContext2.gauge("issuedInstantDelay");
+        assertTrue(delay >= 600 && delay < 660,
+            "Once metaClient resolves, the gauge should report the restored instant in the real "
+                + "UTC timeline, not the LOCAL fallback; delay was " + delay + " seconds");
+      }
+    } finally {
+      TimeZone.setDefault(originalZone);
     }
   }
 

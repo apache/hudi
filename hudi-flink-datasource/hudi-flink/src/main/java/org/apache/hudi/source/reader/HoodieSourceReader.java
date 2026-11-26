@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * The reader implementation of Hoodie Source.
@@ -46,9 +47,14 @@ public class HoodieSourceReader<T> extends
         SingleThreadMultiplexSourceReaderBase<HoodieRecordWithPosition<T>, T, HoodieSourceSplit, HoodieSourceSplit> {
   private final FlinkStreamReadMetrics readerMetrics;
 
+  /**
+   * {@code timelineTimeZone} supplies the table's timeline timezone and is called each time an
+   * instant is parsed, so a streaming read planned before the table exists still sees the real
+   * zone once it can be resolved, instead of a value frozen at reader construction time.
+   */
   public HoodieSourceReader(
           String tableName,
-          HoodieTimelineTimeZone timelineTimeZone,
+          Supplier<HoodieTimelineTimeZone> timelineTimeZone,
           RecordEmitter<HoodieRecordWithPosition<T>, T, HoodieSourceSplit> recordEmitter,
           HoodieScanContext scanContext,
           SourceReaderContext context,
@@ -72,7 +78,7 @@ public class HoodieSourceReader<T> extends
   }
 
   private static FlinkStreamReadMetrics createReaderMetrics(
-      SourceReaderContext context, String tableName, HoodieTimelineTimeZone timelineTimeZone) {
+      SourceReaderContext context, String tableName, Supplier<HoodieTimelineTimeZone> timelineTimeZone) {
     FlinkStreamReadMetrics readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName, timelineTimeZone);
     readerMetrics.registerMetrics();
     return readerMetrics;

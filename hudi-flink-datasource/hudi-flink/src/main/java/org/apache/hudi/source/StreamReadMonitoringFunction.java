@@ -323,7 +323,13 @@ public class StreamReadMonitoringFunction
     this.instantState.clear();
     if (this.issuedInstant != null) {
       this.instantState.add(this.issuedInstant);
-      this.readMetrics.setIssuedInstant(this.issuedInstant);
+      // Before the first scan (e.g. a snapshot taken right after a checkpoint restore),
+      // metaClient is still null and the gauge would wrongly parse this instant with the
+      // LOCAL fallback zone instead of the table's real one. The checkpoint state above
+      // does not need the zone, so only the gauge update waits for the table to be known.
+      if (this.metaClient != null) {
+        this.readMetrics.setIssuedInstant(this.issuedInstant);
+      }
     }
     if (this.issuedOffset != null) {
       this.instantState.add(this.issuedOffset);

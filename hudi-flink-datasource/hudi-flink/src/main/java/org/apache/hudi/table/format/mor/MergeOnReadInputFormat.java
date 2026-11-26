@@ -29,7 +29,6 @@ import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -149,6 +148,12 @@ public class MergeOnReadInputFormat
   protected transient HoodieTableMetaClient metaClient;
 
   /**
+   * Whether {@link #open} has reused the meta client {@link #getTimelineTimeZone} built for the
+   * first split, so later splits still get a fresh one on every open as before.
+   */
+  private transient boolean firstSplitOpened = false;
+
+  /**
    * The hoodie write configuration.
    */
   protected transient HoodieWriteConfig writeConfig;
@@ -186,7 +191,12 @@ public class MergeOnReadInputFormat
     this.currentReadCount = 0L;
     this.closed = false;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
-    this.metaClient = StreamerUtil.metaClientForReader(this.conf, hadoopConf);
+    // getTimelineTimeZone() already built this for the first split; reuse it instead of
+    // reading hoodie.properties again. Later splits still get a fresh one, as before.
+    this.metaClient = !this.firstSplitOpened && this.metaClient != null
+        ? this.metaClient
+        : StreamerUtil.metaClientForReader(this.conf, hadoopConf);
+    this.firstSplitOpened = true;
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
     this.iterator = initIterator(split);
     this.tableName = metaClient.getTableConfig().getTableName();
@@ -267,16 +277,16 @@ public class MergeOnReadInputFormat
 
   /**
    * Returns the timeline timezone of the table. A streaming read can start before the table exists, so
-   * the table config is read on first use, and the default is returned while there is no table yet.
+   * the meta client is built on first use and the default is returned while there is no table yet.
+   * {@link #open} reuses this same meta client for the first split instead of building another one.
    */
   public HoodieTimelineTimeZone getTimelineTimeZone() {
     if (timelineTimeZone == null) {
-      Option<HoodieTableConfig> tableConfig = StreamerUtil.getTableConfig(
-          conf.get(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(conf));
-      if (!tableConfig.isPresent()) {
+      this.metaClient = StreamerUtil.metaClientForReader(this.conf, HadoopConfigurations.getHadoopConf(this.conf));
+      if (this.metaClient == null) {
         return HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue();
       }
-      timelineTimeZone = tableConfig.get().getTimelineTimezone();
+      timelineTimeZone = metaClient.getTableConfig().getTimelineTimezone();
     }
     return timelineTimeZone;
   }

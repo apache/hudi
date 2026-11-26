@@ -18,6 +18,8 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.HoodieScanContext;
@@ -63,6 +65,14 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
     }
 
     return incrementalInputSplits.inputHoodieSourceSplits(client, lastInstant, scanContext.isCdcEnabled());
+  }
+
+  @Override
+  public HoodieTimelineTimeZone getTimelineTimeZone() {
+    HoodieTableMetaClient client = getOrCreateMetaClient();
+    return client == null
+        ? HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue()
+        : client.getTableConfig().getTimelineTimezone();
   }
 
   @Nullable

@@ -41,6 +41,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * Abstract class for Hoodie SourceSplit enumerator.
@@ -65,6 +66,19 @@ abstract class AbstractHoodieSplitEnumerator
   AbstractHoodieSplitEnumerator(
       String tableName,
       HoodieTimelineTimeZone timelineTimeZone,
+      SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext,
+      HoodieSplitProvider splitProvider) {
+    this(tableName, () -> timelineTimeZone, enumeratorContext, splitProvider);
+  }
+
+  /**
+   * For a streaming read that can start before the table exists. {@code timelineTimeZone} supplies
+   * the table's real timeline timezone once discovery has found it, instead of a value frozen at
+   * construction time that would otherwise keep the pre-table-exists default forever.
+   */
+  AbstractHoodieSplitEnumerator(
+      String tableName,
+      Supplier<HoodieTimelineTimeZone> timelineTimeZone,
       SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext,
       HoodieSplitProvider splitProvider) {
     this.tableName = tableName;
