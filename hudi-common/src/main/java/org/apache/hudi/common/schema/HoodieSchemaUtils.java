@@ -58,7 +58,7 @@ import java.util.stream.Stream;
  *   <li>record-key and delete-log schemas: {@link #getRecordKeySchema()},
  *       {@link #getRecordKeyPartitionPathSchema()}, {@link #createDeleteLogSchema(HoodieSchema, List)}</li>
  *   <li>projection and pruning: {@link #generateProjectionSchema(HoodieSchema, List)},
- *       {@link #projectSchema(HoodieSchema, List)}, {@link #pruneDataSchema(HoodieSchema, HoodieSchema, Set)},
+ *       {@link #generateProjectionSchema(HoodieSchema, Map, List)}, {@link #projectSchema(HoodieSchema, List)}, {@link #pruneDataSchema(HoodieSchema, HoodieSchema, Set)},
  *       {@link #removeFields(HoodieSchema, Set)}</li>
  *   <li>appending and merging fields: {@link #appendFieldsToSchema(HoodieSchema, List)},
  *       {@link #appendFieldsToSchemaDedupNested(HoodieSchema, List)},
@@ -72,7 +72,8 @@ import java.util.stream.Stream;
  *   <li>error text: {@link #createSchemaErrorString(String, HoodieSchema, HoodieSchema)}</li>
  *   <li>lookups and predicates that need more than {@link HoodieSchema} offers on its own:
  *       {@link #findNestedField(HoodieSchema, String)}, {@link #findMissingFields(HoodieSchema, HoodieSchema)},
- *       {@link #resolveUnionSchema(HoodieSchema, String)}, {@link #hasDecimalField(HoodieSchema)}</li>
+ *       {@link #resolveUnionSchema(HoodieSchema, String)}, {@link #hasDecimalField(HoodieSchema)},
+ *       {@link #isTimestampMillisField(HoodieSchema)}</li>
  * </ul>
  *
  * <p>Not here:</p>
@@ -517,8 +518,8 @@ public final class HoodieSchemaUtils {
    * such as the realtime reader.</p>
    *
    * @param writeSchema      the source schema
-   * @param schemaFieldsMap field map keyed by names lowercased with {@code Locale.ROOT}, as built by
-   *                        {@code HoodieRealtimeRecordReaderUtils#getNameToFieldMap}
+   * @param schemaFieldsMap  field map keyed by names lowercased with {@code Locale.ROOT}, as built by
+   *                         {@code HoodieRealtimeRecordReaderUtils#getNameToFieldMap}
    * @param fieldNames       the list of field names to include in the projection
    * @return new HoodieSchema containing only the specified fields
    * @throws IllegalArgumentException if {@code writeSchema}, {@code schemaFieldsMap},
@@ -547,14 +548,14 @@ public final class HoodieSchemaUtils {
       HoodieSchemaField field = schemaFieldsMap.get(fieldName.toLowerCase(Locale.ROOT));
       if (field == null) {
         throw new HoodieException("Field " + fieldName + " not found in log schema. Query cannot proceed! "
-                + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
+            + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
         projectedFields.add(createNewSchemaField(field));
       }
     }
 
     return HoodieSchema.createRecord(writeSchema.getName(), writeSchema.getDoc().orElse(null),
-            writeSchema.getNamespace().orElse(null), writeSchema.isError(), projectedFields);
+        writeSchema.getNamespace().orElse(null), writeSchema.isError(), projectedFields);
   }
 
   /**
@@ -830,10 +831,12 @@ public final class HoodieSchemaUtils {
    * the top level field, b is at second level and so on. Field names are matched case-sensitively.
    * This is equivalent to {@link HoodieAvroUtils#projectSchema(Schema, List)} but operates on HoodieSchema.
    *
-   * <p>The two sibling projection helpers differ:</p>
+   * <p>The sibling projection helpers differ:</p>
    * <ul>
    *   <li>{@link #generateProjectionSchema(HoodieSchema, List)} - top-level fields only, matched
    *       case-insensitively</li>
+   *   <li>{@link #generateProjectionSchema(HoodieSchema, Map, List)} - the same projection for callers that
+   *       already hold the lowercased name-to-field map</li>
    *   <li>{@link #pruneDataSchema(HoodieSchema, HoodieSchema, Set)} - prunes to the shape of a required
    *       schema instead of to a list of names</li>
    * </ul>

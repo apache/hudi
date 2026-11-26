@@ -186,6 +186,13 @@ public abstract class AbstractRealtimeRecordReader {
         split.getDeltaLogPaths(), split.getPath(), projectionFields));
   }
 
+  /**
+   * Builds the writer schema reordered to the Hive column order.
+   *
+   * <p>Deliberately not folded into {@link HoodieSchemaUtils#generateProjectionSchema(HoodieSchema, Map, List)}:
+   * the lookup is the same, but a Hive column missing from the schema is skipped here (Hive virtual columns)
+   * whereas the projection helper fails the query.</p>
+   */
   public HoodieSchema constructHiveOrderedSchema(HoodieSchema writerSchema, Map<String, HoodieSchemaField> schemaFieldsMap, String hiveColumnString) {
     String[] hiveColumns = hiveColumnString.isEmpty() ? new String[0] : hiveColumnString.split(",");
     log.info("Hive Columns : {}", hiveColumnString);
