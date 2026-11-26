@@ -20,11 +20,15 @@
 package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.avro.HoodieAvroReaderContext;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -32,10 +36,12 @@ import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -47,6 +53,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -55,11 +62,15 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
@@ -262,6 +273,141 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     assertEquals(0, readStats.getNumInserts());
     assertEquals(1, readStats.getNumDeletes());
     assertEquals(2, readStats.getNumUpdates());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "COMMIT_TIME_ORDERING, 1073741824",
+      "EVENT_TIME_ORDERING, 1073741824",
+      // The applied deletes spill to disk
+      "COMMIT_TIME_ORDERING, 1",
+      "EVENT_TIME_ORDERING, 1"
+  })
+  void deleteAppliesToEveryBaseRecordWithTheKey(RecordMergeMode mergeMode, long maxMemoryForMerge) throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
+    StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
+    List<String> orderingFields = mergeMode == RecordMergeMode.EVENT_TIME_ORDERING ? Collections.singletonList("ts") : Collections.emptyList();
+    // Sets the schema handler on the reader context
+    buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null, mergeMode, orderingFields, Option.of(Pair.of("counter", "3"))).close();
+    TypedProperties props = new TypedProperties();
+    props.setProperty(DELETE_KEY, "counter");
+    props.setProperty(DELETE_MARKER, "3");
+    props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryForMerge));
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
+        mergeMode, orderingFields, props, Option.empty());
+
+    // Three base records share key 2, one of them ordered after the delete, and two share key 3
+    IndexedRecord testRecord2Later = createTestRecord("2", 5, 5L);
+    IndexedRecord testRecord2Copy = createTestRecord("2", 4, 1L);
+    IndexedRecord testRecord3Copy = createTestRecord("3", 4, 1L);
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(
+        Arrays.asList(testRecord2, testRecord1, testRecord3, testRecord2Later, testRecord2Copy, testRecord3Copy).iterator()));
+
+    HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("2", "", 3L));
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Collections.singletonList(testRecord3Update).iterator()));
+    fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
+    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+
+    // Under event-time ordering the base record ordered after the delete is kept, and the delete still applies to
+    // the next copy. An update of a duplicate key still replaces only the first base record with the key
+    boolean eventTime = mergeMode == RecordMergeMode.EVENT_TIME_ORDERING;
+    List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
+    assertEquals(eventTime
+        ? Arrays.asList(testRecord1, testRecord3Update, testRecord2Later, testRecord3Copy)
+        : Arrays.asList(testRecord1, testRecord3Update, testRecord3Copy), actualRecords);
+    assertEquals(0, readStats.getNumInserts());
+    assertEquals(eventTime ? 2 : 3, readStats.getNumDeletes());
+    assertEquals(1, readStats.getNumUpdates());
+    fileGroupRecordBuffer.close();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void removedDuplicateIsNotEmittedOrReported(boolean emitDeletes) throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(mock(StorageConfiguration.class), tableConfig, Option.empty(), Option.empty());
+    List<String> orderingFields = Collections.singletonList("ts");
+    // Sets the schema handler on the reader context
+    buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null, RecordMergeMode.EVENT_TIME_ORDERING, orderingFields, Option.empty()).close();
+    BaseFileUpdateCallback<IndexedRecord> callback = mock(BaseFileUpdateCallback.class);
+    UpdateProcessor<IndexedRecord> updateProcessor = new UpdateProcessor.CallbackProcessor<>(
+        callback, new UpdateProcessor.StandardUpdateProcessor<>(readStats, readerContext, emitDeletes));
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> buffer = new KeyBasedFileGroupRecordBuffer<>(
+        readerContext, RecordMergeMode.EVENT_TIME_ORDERING, Option.empty(), new TypedProperties(), orderingFields, updateProcessor);
+
+    // The delete loses to the first base record of key 2 and removes the second one
+    IndexedRecord laterCopy = createTestRecord("2", 1, 10L);
+    buffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(laterCopy, testRecord2).iterator()));
+    HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("2", "", 5L));
+    buffer.processDeleteBlock(deleteBlock);
+
+    // Key 2 stays, so neither a delete row nor a delete callback is given for it
+    assertEquals(Collections.singletonList(laterCopy), getActualRecords(buffer));
+    assertEquals(1, readStats.getNumDeletes());
+    verifyNoInteractions(callback);
+    buffer.close();
+  }
+
+  @Test
+  void deleteWithRowAppliesToDuplicateBaseRecordsWithItsRow() throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(mock(StorageConfiguration.class), tableConfig, Option.empty(), Option.empty());
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> buffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new RowOrderedMerger(),
+        RecordMergeMode.CUSTOM, Collections.emptyList(), Option.of(Pair.of("counter", "3")));
+
+    // The delete (counter 3) carries its ordering value in its row; it removes the base records of key 2 ordered before it
+    IndexedRecord newerCopy = createTestRecord("2", 1, 9L);
+    buffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord2, newerCopy, createTestRecord("2", 1, 4L)).iterator()));
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock.getEngineRecordIterator(readerContext)).thenReturn(
+        ClosableIterator.wrap(Collections.<IndexedRecord>singletonList(createTestRecord("2", 3, 5L)).iterator()));
+    buffer.processDataBlock(dataBlock, Option.empty());
+
+    assertEquals(Collections.singletonList(newerCopy), getActualRecords(buffer));
+    assertEquals(2, readStats.getNumDeletes());
+    buffer.close();
+  }
+
+  /**
+   * Keeps the older record when the ts field in its row is higher than the one in the row of the newer record.
+   */
+  private static class RowOrderedMerger implements HoodieRecordMerger {
+    private final String strategy = UUID.randomUUID().toString();
+
+    @Override
+    public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) {
+      long olderTs = (long) recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older)).get("ts");
+      long newerTs = (long) recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer)).get("ts");
+      return olderTs > newerTs ? older : newer;
+    }
+
+    @Override
+    public HoodieRecord.HoodieRecordType getRecordType() {
+      return HoodieRecord.HoodieRecordType.AVRO;
+    }
+
+    @Override
+    public String getMergingStrategy() {
+      return strategy;
+    }
   }
 
   @Test

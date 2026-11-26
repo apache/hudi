@@ -277,6 +277,37 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Delete Table removes every row of a duplicate key") {
+    // An insert keeps rows that share a record key, in the same base file and across file groups
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  dt string
+             |) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'
+             | )
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (0, 'a0', 'p1'), (1, 'a1', 'p1'), (1, 'b1', 'p1'), (1, 'c1', 'p2')")
+        spark.sql(s"insert into $tableName values (1, 'd1', 'p1'), (1, 'e1', 'p2'), (2, 'a2', 'p2')")
+        checkAnswer(s"select count(1) from $tableName where id = 1")(Seq(5))
+
+        spark.sql(s"delete from $tableName where id in (1, 100)")
+        checkAnswer(s"select id, name, dt from $tableName order by id")(
+          Seq(0, "a0", "p1"), Seq(2, "a2", "p2"))
+      }
+    }
+  }
+
   test("Test Delete Table with op upsert") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>

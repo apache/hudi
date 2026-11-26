@@ -37,11 +37,17 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.FileIOUtils;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
+
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -50,6 +56,15 @@ import java.util.List;
  * {@link #hasNext} method is called.
  */
 public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
+  // The share of the merge memory that the applied deletes can take before they spill
+  private static final long APPLIED_DELETES_MEMORY_DIVISOR = 10;
+
+  /**
+   * The deletes already merged with a base record, by record key, without their rows. A base file can hold
+   * more than one record with the same key (an insert does not enforce key uniqueness), and a delete of the
+   * key applies to each of them. Null until the first one.
+   */
+  private ExternalSpillableMap<Serializable, BufferedRecord<T>> appliedDeletes;
 
   public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                        RecordMergeMode recordMergeMode,
@@ -144,8 +159,68 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordContext().getRecordKey(baseRecord, readerSchema);
-    BufferedRecord<T> logRecordInfo = records.remove(recordKey);
-    return hasNextBaseRecord(baseRecord, logRecordInfo);
+    return mergeBaseRecord(recordKey, baseRecord, records.remove(recordKey));
+  }
+
+  /**
+   * Merges a base record with the log record taken from the buffer, or, when an earlier base record with the key took
+   * it and it is a delete, with that delete. A base record the delete removes is only counted: the earlier base record
+   * already reported the change of the key.
+   */
+  protected final boolean mergeBaseRecord(String recordKey, T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
+    if (logRecordInfo != null) {
+      if (logRecordInfo.isDelete()) {
+        putAppliedDelete(recordKey, copy(logRecordInfo));
+      }
+      return hasNextBaseRecord(baseRecord, logRecordInfo);
+    }
+    BufferedRecord<T> appliedDelete = getAppliedDelete(recordKey);
+    if (appliedDelete != null) {
+      BufferedRecord<T> baseRecordInfo = BufferedRecords.fromEngineRecord(baseRecord, readerSchema, readerContext.getRecordContext(), orderingFieldNames, false);
+      if (bufferedRecordMerger.finalMerge(baseRecordInfo, copy(appliedDelete)).isDelete()) {
+        updateProcessor.processDeletedDuplicate();
+        return false;
+      }
+    }
+    return hasNextBaseRecord(baseRecord, null);
+  }
+
+  protected void putAppliedDelete(String recordKey, BufferedRecord<T> delete) {
+    if (appliedDeletes == null) {
+      appliedDeletes = createAppliedDeletesMap();
+    }
+    appliedDeletes.put(recordKey, delete);
+  }
+
+  protected BufferedRecord<T> getAppliedDelete(String recordKey) {
+    return appliedDeletes == null ? null : appliedDeletes.get(recordKey);
+  }
+
+  private ExternalSpillableMap<Serializable, BufferedRecord<T>> createAppliedDeletesMap() {
+    try {
+      return createSpillableMap(props.getString(SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath()),
+          props.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue()) / APPLIED_DELETES_MEMORY_DIVISOR);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create the map of applied deletes", e);
+    }
+  }
+
+  /**
+   * A copy of the delete, with its row if it has one, as the merge can modify the record it is given.
+   */
+  private static <T> BufferedRecord<T> copy(BufferedRecord<T> delete) {
+    return new BufferedRecord<>(delete.getRecordKey(), delete.getOrderingValue(), delete.getRecord(), delete.getSchemaId(), delete.getHoodieOperation());
+  }
+
+  @Override
+  public void close() {
+    try {
+      if (appliedDeletes != null) {
+        appliedDeletes.close();
+      }
+    } finally {
+      super.close();
+    }
   }
 
   @Override
