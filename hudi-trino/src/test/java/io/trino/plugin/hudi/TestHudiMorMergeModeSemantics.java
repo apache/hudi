@@ -80,7 +80,16 @@ public class TestHudiMorMergeModeSemantics
                         new ColumnTypesHudiTablesInitializer(),
                         ColumnTypesHudiTablesInitializer.spillingEveryLogRecord(),
                         new SchemaColumnTypesHudiTablesInitializer()))
+                .addConnectorProperties(connectorProperties())
                 .build();
+    }
+
+    /**
+     * Catalog properties of the query runner, on top of the defaults.
+     */
+    protected Map<String, String> connectorProperties()
+    {
+        return Map.of();
     }
 
     @ParameterizedTest

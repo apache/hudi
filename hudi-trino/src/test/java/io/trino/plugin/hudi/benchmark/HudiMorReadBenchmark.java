@@ -34,6 +34,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -129,7 +130,7 @@ final class HudiMorReadBenchmark
         long[] expectedRt = tables.expectedRtTotals();
         long[] expectedRo = tables.expectedRoTotals();
         String sql = "SELECT count(*), sum(ss_quantity), sum(ss_net_paid) FROM %s";
-        for (Variant variant : Variant.values()) {
+        for (Variant variant : Variant.selected()) {
             Measurement ro = measure("scan", "ro", variant, format(sql, STORE_SALES + "_ro"), result -> {
                 assertThat(result.getMaterializedRows().getFirst().getField(0)).isEqualTo(expectedRo[0]);
                 assertThat(result.getMaterializedRows().getFirst().getField(1)).isEqualTo(expectedRo[1]);
@@ -153,7 +154,7 @@ final class HudiMorReadBenchmark
         // min(d_dom) is the date_dim version joined: a _rt query that reads a date_dim row without its update fails
         String sql = "SELECT d.d_year, count(*), sum(ss.ss_quantity), min(d.d_dom) FROM %s ss JOIN %s d ON ss.ss_sold_date_sk = d.d_date_sk " +
                 "WHERE d.d_moy = " + TARGET_MONTH + " GROUP BY d.d_year ORDER BY 1";
-        for (Variant variant : Variant.values()) {
+        for (Variant variant : Variant.selected()) {
             measure("dpp", "ro", variant, format(sql, STORE_SALES + "_ro", DATE_DIM + "_ro"), result -> assertByYear(result, expectedRo));
             measure("dpp", "rt", variant, format(sql, STORE_SALES + "_rt", DATE_DIM + "_rt"), result -> assertByYear(result, expectedRt));
         }
@@ -218,13 +219,33 @@ final class HudiMorReadBenchmark
         /** Resolves the table schema once on the coordinator, which removes the per-split {@code TableSchemaResolver}. */
         SCHEMA_IN_HANDLE(Map.of("resolve_column_name_casing_enabled", "true")),
         /** Waits long enough for the dimension's dynamic filter, isolating the pruning-timing effect. */
-        DF_WAIT_10S(Map.of("dynamic_filtering_wait_timeout", "10s"));
+        DF_WAIT_10S(Map.of("dynamic_filtering_wait_timeout", "10s")),
+        /** Merges log records as Trino rows. */
+        SCHEMA_TYPES(Map.of("schema_column_types_enabled", "true")),
+        /** The vectorized MOR read: positional merge when the log blocks carry positions, with pushdown and log prefetch. */
+        VECTORIZED(Map.of("schema_column_types_enabled", "true", "mor_vectorized_read_enabled", "true")),
+        VECTORIZED_NO_PUSHDOWN(Map.of("schema_column_types_enabled", "true", "mor_vectorized_read_enabled", "true",
+                "mor_vectorized_read_predicate_pushdown_enabled", "false")),
+        VECTORIZED_NO_PREFETCH(Map.of("schema_column_types_enabled", "true", "mor_vectorized_read_enabled", "true",
+                "mor_vectorized_read_log_prefetch_enabled", "false"));
 
         private final Map<String, String> properties;
 
         Variant(Map<String, String> properties)
         {
             this.properties = properties;
+        }
+
+        /** The variants named in {@code bench.variants} (comma separated, lower case), or all of them. */
+        static List<Variant> selected()
+        {
+            String names = System.getProperty("bench.variants", "");
+            if (names.isBlank()) {
+                return List.of(values());
+            }
+            return Arrays.stream(names.split(","))
+                    .map(name -> valueOf(name.trim().toUpperCase(Locale.ROOT)))
+                    .toList();
         }
 
         Session apply(Session session)

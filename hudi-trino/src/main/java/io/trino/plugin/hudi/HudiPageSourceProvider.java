@@ -20,6 +20,7 @@ import io.airlift.log.Logger;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemFactory;
+import io.trino.filesystem.TrinoInput;
 import io.trino.filesystem.TrinoInputFile;
 import io.trino.memory.context.AggregatedMemoryContext;
 import io.trino.parquet.ParquetCorruptionException;
@@ -40,11 +41,14 @@ import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
 import io.trino.plugin.hudi.reader.HudiTrinoRowReaderContext;
+import io.trino.plugin.hudi.reader.HudiVectorizedMorPageSource;
+import io.trino.plugin.hudi.reader.HudiVectorizedMorPageSource.LogRecordMatcher;
+import io.trino.plugin.hudi.reader.TrinoRecordContext;
 import io.trino.plugin.hudi.reader.TrinoRow;
-import io.trino.plugin.hudi.util.ParquetReadConversions;
-import io.trino.plugin.hudi.util.ParquetReadConversions.ReadConversion;
 import io.trino.plugin.hudi.storage.HudiTrinoStorage;
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
+import io.trino.plugin.hudi.util.ParquetReadConversions;
+import io.trino.plugin.hudi.util.ParquetReadConversions.ReadConversion;
 import io.trino.plugin.hudi.util.PrefilledColumnValues;
 import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.TrinoException;
@@ -63,14 +67,27 @@ import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.TypeManager;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.read.TableState;
+import org.apache.hudi.common.table.log.PrefetchedLogFileStorage;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.TableState;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -81,6 +98,7 @@ import org.apache.parquet.schema.Type;
 import org.joda.time.DateTimeZone;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -91,6 +109,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static io.trino.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
@@ -98,6 +117,7 @@ import static io.trino.parquet.ParquetTypeUtils.getColumnIO;
 import static io.trino.parquet.ParquetTypeUtils.getDescriptors;
 import static io.trino.parquet.predicate.PredicateUtils.buildPredicate;
 import static io.trino.parquet.predicate.PredicateUtils.getFilteredRowGroups;
+import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.PARQUET_ROW_INDEX_COLUMN;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.ParquetReaderProvider;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.createDataSource;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.createParquetPageSource;
@@ -107,10 +127,14 @@ import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.getParquetTu
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CANNOT_OPEN_SPLIT;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CURSOR_ERROR;
+import static io.trino.plugin.hudi.HudiSessionProperties.getMorVectorizedReadLogPrefetchMaxSize;
 import static io.trino.plugin.hudi.HudiSessionProperties.getParquetMaxReadBlockRowCount;
 import static io.trino.plugin.hudi.HudiSessionProperties.getParquetMaxReadBlockSize;
 import static io.trino.plugin.hudi.HudiSessionProperties.getParquetSmallFileThreshold;
 import static io.trino.plugin.hudi.HudiSessionProperties.getRecordMergerImpls;
+import static io.trino.plugin.hudi.HudiSessionProperties.isMorVectorizedReadEnabled;
+import static io.trino.plugin.hudi.HudiSessionProperties.isMorVectorizedReadLogPrefetchEnabled;
+import static io.trino.plugin.hudi.HudiSessionProperties.isMorVectorizedReadPredicatePushdownEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetIgnoreStatistics;
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetUseColumnIndex;
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetVectorizedDecodingEnabled;
@@ -124,19 +148,25 @@ import static io.trino.plugin.hudi.HudiUtil.convertToFileSlice;
 import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaAndMergeRequiredColumns;
 import static io.trino.plugin.hudi.HudiUtil.resolveMergeModeAndStrategyId;
 import static io.trino.plugin.hudi.HudiUtil.usesNonProjectionCompatibleMerger;
+import static io.trino.plugin.hudi.storage.HudiTrinoStorage.convertToLocation;
 import static io.trino.plugin.hudi.util.ParquetStatisticsDomains.dropIncomparableDomains;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.SKIP_DELETE_BLOCK_CONTENT;
 
 public class HudiPageSourceProvider
         implements ConnectorPageSourceProvider
 {
     private static final Logger log = Logger.get(HudiPageSourceProvider.class);
     private static final int DOMAIN_COMPACTION_THRESHOLD = 1000;
+    private static final Set<String> VECTORIZED_MERGE_PAYLOAD_CLASSES = Set.of(
+            OverwriteWithLatestAvroPayload.class.getName(),
+            DefaultHoodieRecordPayload.class.getName());
 
     private final TrinoFileSystemFactory fileSystemFactory;
     private final FileFormatDataSourceStats dataSourceStats;
@@ -256,8 +286,6 @@ public class HudiPageSourceProvider
             readColumnHandles = appendMissingMergeRequiredColumns(dataSchema, hudiMetaAndDataColumnHandles, tableConfig, readerProps, schemaTypeMapper);
         }
 
-        ConnectorPageSource dataPageSource =
-                createBaseFilePageSource(session, readColumnHandles, hudiSplit, fileSystem, sessionOptions, start, length, dynamicFilter, false);
         // Build native (RFC-103) delta-log parquet page sources on demand, projected on the file-group
         // reader's requiredSchema with predicate pushdown OFF so every log record is read and merged.
         HudiTrinoReaderContext.LogFileParquetPageSourceFactory logPageSourceFactory =
@@ -278,8 +306,19 @@ public class HudiPageSourceProvider
         HudiTrinoStorage storage = new HudiTrinoStorage(fileSystem, new TrinoStorageConfiguration());
         Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), readColumnHandles.stream().map(HiveColumnHandle::getName).toList());
         FileSlice fileSlice = convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath());
+        boolean trinoRows = schemaTypeMapper.isPresent() && usesTrinoRows(tableConfig);
+        if (trinoRows && isMorVectorizedReadEnabled(session)) {
+            Optional<ConnectorPageSource> vectorized = createVectorizedMorPageSource(
+                    session, hudiTableHandle, hudiSplit, tableConfig, readerProps, dataSchema, requestedSchema, fileSlice, hiveColumnHandles,
+                    dataColumnHandles, readColumnHandles, logPageSourceFactory, storage, fileSystem, sessionOptions, dynamicFilter, prefilledColumnValues);
+            if (vectorized.isPresent()) {
+                return vectorized.get();
+            }
+        }
+        ConnectorPageSource dataPageSource =
+                createBaseFilePageSource(session, readColumnHandles, hudiSplit, fileSystem, sessionOptions, start, length, dynamicFilter, false);
         // The merge mode is resolved only with schema column types on, so the path with them off is unchanged
-        if (schemaTypeMapper.isPresent() && usesTrinoRows(tableConfig)) {
+        if (trinoRows) {
             HudiTrinoRowReaderContext readerContext = new HudiTrinoRowReaderContext(
                     storage.getConf(),
                     tableConfig,
@@ -336,6 +375,242 @@ public class HudiPageSourceProvider
             case COMMIT_TIME_ORDERING, EVENT_TIME_ORDERING -> true;
             case CUSTOM -> PAYLOAD_BASED_MERGE_STRATEGY_UUID.equals(mergeStrategyId);
         };
+    }
+
+    /**
+     * Opens a split through the vectorized MOR read ({@link HudiVectorizedMorPageSource}) when the table and the split's log
+     * records allow it; empty leaves the split to the merge read. The log records are loaded first, so the base file
+     * read knows whether they match base rows by position or by record key: by position it reads the parquet row index
+     * and never the record key.
+     */
+    private Optional<ConnectorPageSource> createVectorizedMorPageSource(
+            ConnectorSession session,
+            HudiTableHandle tableHandle,
+            HudiSplit hudiSplit,
+            HoodieTableConfig tableConfig,
+            TypedProperties readerProps,
+            HoodieSchema dataSchema,
+            Schema requestedSchema,
+            FileSlice fileSlice,
+            List<HiveColumnHandle> outputColumns,
+            List<HiveColumnHandle> dataColumns,
+            List<HiveColumnHandle> readColumns,
+            HudiTrinoReaderContext.LogFileParquetPageSourceFactory logPageSourceFactory,
+            HudiTrinoStorage storage,
+            TrinoFileSystem fileSystem,
+            ParquetReaderOptions sessionOptions,
+            DynamicFilter dynamicFilter,
+            PrefilledColumnValues prefilledColumnValues)
+    {
+        RecordMergeMode mergeMode = resolveMergeModeAndStrategyId(tableConfig).getLeft();
+        if (!isVectorizedMorReadSupported(tableConfig, readerProps, mergeMode)) {
+            return Optional.empty();
+        }
+        Map<String, HiveColumnHandle> readColumnsByName = new HashMap<>();
+        for (HiveColumnHandle column : readColumns) {
+            readColumnsByName.putIfAbsent(column.getName().toLowerCase(Locale.ROOT), column);
+        }
+        List<String> orderingFieldNames = mergeMode == RecordMergeMode.EVENT_TIME_ORDERING
+                ? HoodieRecordUtils.getOrderingFieldNames(mergeMode, tableConfig)
+                : List.of();
+        if (!orderingFieldNames.stream().allMatch(name -> readColumnsByName.containsKey(name.toLowerCase(Locale.ROOT)))) {
+            return Optional.empty();
+        }
+
+        HudiBaseFile baseFile = hudiSplit.getBaseFile().orElseThrow();
+        // Log blocks name the base file their positions index by its instant time, which only the file name carries:
+        // the split's commit time is the query's
+        HoodieBaseFile positionedBaseFile = new HoodieBaseFile(baseFile.getPath());
+        TypedProperties logProps = TypedProperties.copy(readerProps);
+        if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
+            // The merge drops a deleted base row without looking at its key
+            logProps.setProperty(SKIP_DELETE_BLOCK_CONTENT, "true");
+        }
+        HudiTrinoRowReaderContext readerContext = new HudiTrinoRowReaderContext(
+                storage.getConf(),
+                tableConfig,
+                new EmptyPageSource(),
+                readColumns,
+                logPageSourceFactory,
+                logProps,
+                typeMapper);
+        HoodieStorage logStorage = isMorVectorizedReadLogPrefetchEnabled(session)
+                ? PrefetchedLogFileStorage.prefetch(storage, prefetchedLogFiles(hudiSplit), getMorVectorizedReadLogPrefetchMaxSize(session).toBytes(), (path, buffer) -> {
+                    // One ranged read of the whole file, as the parquet reader reads
+                    try (TrinoInput input = fileSystem.newInputFile(convertToLocation(path), buffer.length).newInput()) {
+                        input.readFully(0, buffer, 0, buffer.length);
+                    }
+                })
+                : storage;
+        LogRecordMatcher matcher;
+        boolean byPosition;
+        BufferedRecordMerger<TrinoRow> merger;
+        Option<UnaryOperator<TrinoRow>> outputConverter;
+        try (HoodieFileGroupReader<TrinoRow> logReader = HoodieFileGroupReader.<TrinoRow>builder()
+                .withReaderContext(readerContext)
+                .withTableState(tableHandle.getTableState())
+                .withStorage(logStorage)
+                .withBaseFileOption(Option.of(positionedBaseFile))
+                .withLogFiles(fileSlice.getLogFiles())
+                .withPartitionPath(fileSlice.getPartitionPath())
+                .withDataSchema(dataSchema)
+                .withRequestedSchema(HoodieSchema.fromAvroSchema(requestedSchema))
+                .withLatestCommitTime(tableHandle.getLatestCommitTime())
+                .withProps(logProps)
+                .withShouldUseRecordPosition(true)
+                .withStart(baseFile.getStart())
+                .withLength(baseFile.getLength())
+                .build()) {
+            Map<Serializable, BufferedRecord<TrinoRow>> records = logReader.getLogRecordsByPositionOrKey();
+            // Log records spilled to disk stay with the merge read, which streams them
+            if (readerContext.getMergeMode() != mergeMode
+                    || (records instanceof ExternalSpillableMap<?, ?> spillable && spillable.getDiskBasedMapNumEntries() > 0)) {
+                return Optional.empty();
+            }
+            // Without log records nothing is matched, and the row index is the cheapest match column
+            byPosition = records.isEmpty() || readerContext.getShouldMergeUseRecordPosition();
+            // A record missing a required field, as in a partial update block, needs the merge read
+            Optional<LogRecordMatcher> recordMatcher = HudiVectorizedMorPageSource.logRecordMatcher(
+                    records, byPosition, readerContext.getSchemaHandler().getRequiredSchema());
+            if (recordMatcher.isEmpty()) {
+                return Optional.empty();
+            }
+            matcher = recordMatcher.get();
+            merger = BufferedRecordMergerFactory.create(
+                    readerContext,
+                    mergeMode,
+                    false,
+                    readerContext.getRecordMerger(),
+                    readerContext.getSchemaHandler().getRequiredSchema(),
+                    readerContext.getPayloadClasses(logProps),
+                    logProps,
+                    Option.empty());
+            outputConverter = readerContext.getSchemaHandler().getOutputConverter();
+        }
+        catch (IOException e) {
+            throw new TrinoException(HUDI_CANNOT_OPEN_SPLIT, "Failed to read the log files of " + baseFile.getPath(), e);
+        }
+        finally {
+            if (logStorage != storage) {
+                try {
+                    logStorage.close();
+                }
+                catch (IOException _) {
+                }
+            }
+        }
+
+        List<HiveColumnHandle> baseColumns = new ArrayList<>(dataColumns);
+        int matchChannel = byPosition
+                ? addBaseColumn(baseColumns, PARQUET_ROW_INDEX_COLUMN)
+                : addBaseColumn(baseColumns, readColumnsByName.get(RECORD_KEY_METADATA_FIELD));
+        int[] orderingChannels = new int[orderingFieldNames.size()];
+        List<io.trino.spi.type.Type> orderingTypes = new ArrayList<>(orderingFieldNames.size());
+        for (int field = 0; field < orderingChannels.length; field++) {
+            HiveColumnHandle orderingColumn = readColumnsByName.get(orderingFieldNames.get(field).toLowerCase(Locale.ROOT));
+            orderingChannels[field] = addBaseColumn(baseColumns, orderingColumn);
+            orderingTypes.add(baseColumns.get(orderingChannels[field]).getType());
+        }
+        // Under commit time ordering a log record replaces its base row whatever the row holds, so a base row the
+        // predicate prunes loses nothing: its log record is emitted as a leftover, and the engine filters the output
+        boolean pushdown = byPosition && mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING && isMorVectorizedReadPredicatePushdownEnabled(session);
+        ConnectorPageSource basePageSource = createBaseFilePageSource(
+                session, baseColumns, hudiSplit, fileSystem, sessionOptions, baseFile.getStart(), baseFile.getLength(), dynamicFilter, pushdown);
+        try {
+
+            Optional<HudiVectorizedMorPageSource.BaseOrderingValues> baseOrderingValues = Optional.empty();
+            if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
+                HoodieSchema orderingSchema = HoodieSchema.fromAvroSchema(constructSchema(dataSchema.toAvroSchema(), orderingFieldNames));
+                baseOrderingValues = Optional.of(new HudiVectorizedMorPageSource.BaseOrderingValues(
+                        (TrinoRecordContext) readerContext.getRecordContext(), orderingSchema, orderingTypes, orderingChannels, orderingFieldNames));
+            }
+            Map<String, Integer> dataChannels = new HashMap<>();
+            for (int channel = 0; channel < dataColumns.size(); channel++) {
+                dataChannels.putIfAbsent(dataColumns.get(channel).getName().toLowerCase(Locale.ROOT), channel);
+            }
+            int[] outputToBaseChannel = new int[outputColumns.size()];
+            for (int channel = 0; channel < outputToBaseChannel.length; channel++) {
+                outputToBaseChannel[channel] = dataChannels.getOrDefault(outputColumns.get(channel).getName().toLowerCase(Locale.ROOT), -1);
+            }
+            return Optional.of(HudiVectorizedMorPageSource.create(
+                    basePageSource,
+                    matcher,
+                    matchChannel,
+                    mergeMode,
+                    merger,
+                    baseOrderingValues,
+                    outputConverter,
+                    outputColumns,
+                    outputToBaseChannel,
+                    prefilledColumnValues));
+        }
+        catch (RuntimeException e) {
+            closeAfterFailure(basePageSource, e);
+            throw e;
+        }
+    }
+
+    private static void closeAfterFailure(ConnectorPageSource pageSource, RuntimeException failure)
+    {
+        try {
+            pageSource.close();
+        }
+        catch (IOException | RuntimeException e) {
+            failure.addSuppressed(e);
+        }
+    }
+
+    /**
+     * Whether the vectorized MOR read can merge a table's log records: commit time or event time ordering, which pick
+     * one whole record by commit order or by ordering value, with no payload class other than the two those orderings
+     * stand for, no partial update mode in the table config, record keys in the meta fields and top-level ordering fields.
+     * Everything else keeps the merge read, as does a split whose log records turn out not to fit the vectorized read
+     * (spilled to disk, keyed by both position and record key, or missing a required field as partial updates do).
+     */
+    @VisibleForTesting
+    static boolean isVectorizedMorReadSupported(HoodieTableConfig tableConfig, TypedProperties readerProps, RecordMergeMode mergeMode)
+    {
+        if (mergeMode != RecordMergeMode.COMMIT_TIME_ORDERING && mergeMode != RecordMergeMode.EVENT_TIME_ORDERING) {
+            return false;
+        }
+        String payloadClass = tableConfig.getPayloadClass();
+        if (payloadClass != null && !payloadClass.isEmpty() && !VECTORIZED_MERGE_PAYLOAD_CLASSES.contains(payloadClass)) {
+            return false;
+        }
+        if (tableConfig.getPartialUpdateMode().isPresent() || !tableConfig.populateMetaFields()) {
+            return false;
+        }
+        if (HoodieRecordUtils.getOrderingFieldNames(mergeMode, tableConfig).stream().anyMatch(name -> name.contains("."))) {
+            return false;
+        }
+        return !ConfigUtils.getStringWithAltKeys(readerProps, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
+    }
+
+    /**
+     * The channel of {@code column} in {@code baseColumns}, by name, appending it when absent.
+     */
+    private static int addBaseColumn(List<HiveColumnHandle> baseColumns, HiveColumnHandle column)
+    {
+        requireNonNull(column, "column is null");
+        for (int channel = 0; channel < baseColumns.size(); channel++) {
+            if (baseColumns.get(channel).getName().equalsIgnoreCase(column.getName())) {
+                return channel;
+            }
+        }
+        baseColumns.add(column);
+        return baseColumns.size() - 1;
+    }
+
+    /**
+     * The log files of a split that {@link PrefetchedLogFileStorage} fetches: those the log reader opens as files, with
+     * their sizes. Native log files are read as parquet through their own page sources.
+     */
+    private static List<HoodieLogFile> prefetchedLogFiles(HudiSplit hudiSplit)
+    {
+        return hudiSplit.getLogFiles().stream()
+                .map(logFile -> new HoodieLogFile(new StoragePath(logFile.getPath()), logFile.getFileSize()))
+                .filter(logFile -> !logFile.isNativeLogFile())
+                .toList();
     }
 
     private static <T> HoodieFileGroupReader<T> buildFileGroupReader(
@@ -645,6 +920,11 @@ public class HudiPageSourceProvider
         // Iterate through the columns requested by Trino IN ORDER.
         List<HiveColumnHandle> remappedHandles = new ArrayList<>(requestedColumns.size());
         for (HiveColumnHandle originalHandle : requestedColumns) {
+            // The parquet reader recognizes the row index column by identity
+            if (originalHandle == PARQUET_ROW_INDEX_COLUMN) {
+                remappedHandles.add(originalHandle);
+                continue;
+            }
             // Find the physical index from the file schema map constructed from fileSchema. A column the file
             // does not carry keeps an index one past the last field, which the parquet reader null-fills.
             Integer physicalIndex = physicalIndexMap.get(normalizeColumnName(originalHandle.getBaseColumnName(), caseSensitive));
