@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -162,7 +163,9 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   }
 
   public void appendRecord(HoodieRecord record, HoodieSchema recordSchema) throws IOException {
-    ensureDataFileWriter(recordSchema);
+    if (dataFileWriter == null) {
+      createNativeLogFile(DATA_LOG_EXTENSION, recordSchema);
+    }
     dataFileWriter.write(record.getRecordKey(),
         record, recordSchema, recordProperties);
     if (baseFileInstantTimeOfPositions.isPresent()) {
@@ -171,7 +174,9 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   }
 
   public void appendDeleteRecord(HoodieRecord record, HoodieSchema recordSchema) throws IOException {
-    ensureDeleteFileWriter();
+    if (deleteFileWriter == null) {
+      createNativeLogFile(DELETE_LOG_EXTENSION, tableSchema);
+    }
     String recordKey = record.getRecordKey();
     Comparable orderingValue = getDeleteOrderingValue(record, recordSchema);
     Object deleteEngineRecord = recordContext.constructEngineRecord(
@@ -253,39 +258,32 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     return updatedHeader;
   }
 
-  private void ensureDataFileWriter(HoodieSchema recordSchema) throws IOException {
-    ensureAppendVersion();
-    if (dataFileWriter == null) {
-      dataLogFile = createNativeLogFile(currentAppendVersion, DATA_LOG_EXTENSION);
-      dataFileWriter = HoodieFileWriterFactory.getFileWriter(
-          instantTime, dataLogFile.getPath(), storage, writeConfig, recordSchema, taskContextSupplier,
-          writeConfig.getRecordMerger().getRecordType());
-    }
-  }
-
-  private void ensureDeleteFileWriter() {
-    if (deleteFileWriter != null) {
-      return;
-    }
-    // Setup failures affect every delete in this file and must abort the append.
+  private void createNativeLogFile(String logExtension, HoodieSchema schema) {
+    // Setup failures affect every record in the file and must abort the append.
     try {
-      deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, orderingFieldNames);
-      ensureAppendVersion();
-      deleteLogFile = createNativeLogFile(currentAppendVersion, DELETE_LOG_EXTENSION);
+      boolean isDelete = DELETE_LOG_EXTENSION.equals(logExtension);
+      HoodieSchema fileSchema = isDelete ? HoodieSchemaUtils.createDeleteLogSchema(schema, orderingFieldNames) : schema;
       // Delete records are built by the write-side record context, which can use Avro on Spark executors
       // even when the merger uses Spark records.
-      deleteFileWriter = HoodieFileWriterFactory.getFileWriter(
-          instantTime, deleteLogFile.getPath(), storage, writeConfig, deleteLogSchema, taskContextSupplier,
-          recordContext.getEngineRecordType());
+      HoodieRecordType recordType = isDelete ? recordContext.getEngineRecordType() : writeConfig.getRecordMerger().getRecordType();
+      if (currentAppendVersion < 0) {
+        currentAppendVersion = nextAvailableVersion();
+      }
+      HoodieLogFile file = new HoodieLogFile(makeNativeLogPath(currentAppendVersion, logExtension), 0);
+      getFileCreationCallback().preFileCreation(file);
+      HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
+          instantTime, file.getPath(), storage, writeConfig, fileSchema, taskContextSupplier, recordType);
+      if (isDelete) {
+        deleteLogSchema = fileSchema;
+        deleteLogFile = file;
+        deleteFileWriter = writer;
+      } else {
+        dataLogFile = file;
+        dataFileWriter = writer;
+      }
     } catch (IOException | RuntimeException e) {
-      throw new HoodieAppendException("Failed to initialize native delete log for file group " + logFileId
-          + " in " + parentPath + " with ordering fields " + orderingFieldNames, e);
-    }
-  }
-
-  private void ensureAppendVersion() throws IOException {
-    if (currentAppendVersion < 0) {
-      currentAppendVersion = nextAvailableVersion();
+      throw new HoodieAppendException("Failed to create native ." + logExtension + " file for file group "
+          + logFileId + " in " + parentPath + " at instant " + instantTime, e);
     }
   }
 
@@ -329,12 +327,6 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
       deleteFileWriter = null;
       deleteRecordPositions.clear();
     }
-  }
-
-  private HoodieLogFile createNativeLogFile(int version, String logExtension) throws IOException {
-    HoodieLogFile nativeLogFile = new HoodieLogFile(makeNativeLogPath(version, logExtension), 0);
-    getFileCreationCallback().preFileCreation(nativeLogFile);
-    return nativeLogFile;
   }
 
   private AppendResult toAppendResult(HoodieLogFile nativeLogFile) throws IOException {
