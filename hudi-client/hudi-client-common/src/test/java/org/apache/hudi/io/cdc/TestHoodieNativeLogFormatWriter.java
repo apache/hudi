@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -207,6 +208,42 @@ public class TestHoodieNativeLogFormatWriter {
   public void testConvertsOrderingValueForDeleteLog() throws Exception {
     assertArrayEquals(new Object[] {"stored-key-1", "stored-110"},
         writeDeleteLogFieldValues(Collections.singletonList("ts"), "110"));
+  }
+
+  @Test
+  public void testNestedOrderingFieldFailsBeforeCreatingDeleteFile() throws Exception {
+    HoodieSchema schema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":["
+        + "{\"name\":\"attributes\",\"type\":{\"type\":\"record\",\"name\":\"attrs\","
+        + "\"fields\":[{\"name\":\"ts\",\"type\":\"long\"}]}}]}");
+    LogFileCreationCallback callback = mock(LogFileCreationCallback.class);
+    try (HoodieNativeLogFormatWriter writer = deleteWriter(schema, Collections.singletonList("attributes.ts"), callback)) {
+      HoodieAppendException failure = assertThrows(HoodieAppendException.class,
+          () -> writer.appendDeleteRecord(mock(HoodieRecord.class), schema));
+      assertTrue(failure.getCause().getMessage().contains("attributes.ts"));
+      verify(callback, never()).preFileCreation(any());
+    }
+  }
+
+  @Test
+  public void testDeleteFileWriterCreationFailureAbortsAppend() throws Exception {
+    HoodieSchema schema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":[]}");
+    IOException failure = new IOException("cannot open delete file");
+    try (MockedStatic<HoodieFileWriterFactory> factory = mockStatic(HoodieFileWriterFactory.class);
+         HoodieNativeLogFormatWriter writer = deleteWriter(schema, Collections.emptyList(), mock(LogFileCreationCallback.class))) {
+      factory.when(() -> HoodieFileWriterFactory.getFileWriter(
+          eq("100"), any(), any(), any(), any(), any(), eq(HoodieRecord.HoodieRecordType.AVRO))).thenThrow(failure);
+      HoodieAppendException exception = assertThrows(HoodieAppendException.class,
+          () -> writer.appendDeleteRecord(mock(HoodieRecord.class), schema));
+      assertSame(failure, exception.getCause());
+    }
+  }
+
+  private static HoodieNativeLogFormatWriter deleteWriter(HoodieSchema schema, List<String> orderingFields,
+                                                           LogFileCreationCallback callback) throws IOException {
+    return new HoodieNativeLogFormatWriter(4096, mock(HoodieStorage.class), new StoragePath("/tmp/partition"),
+        "file-1", "100", 1, "1-0-1", 1024L, callback, HoodieTableVersion.TEN,
+        HoodieWriteConfig.newBuilder().withPath("/tmp").build(), HoodieFileFormat.PARQUET, schema,
+        mock(TaskContextSupplier.class), new AvroRecordContext(), orderingFields, Option.empty());
   }
 
   @Test

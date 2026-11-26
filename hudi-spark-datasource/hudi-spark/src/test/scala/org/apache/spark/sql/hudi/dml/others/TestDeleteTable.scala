@@ -107,7 +107,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
         def lastCompletedCommit = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants().lastInstant().get()
         val insertCommit = lastCompletedCommit
         checkNestedExceptionContains(s"DELETE FROM $tableName WHERE id = 1")(
-          "Native delete logs require top-level ordering fields in the table schema. Configured ordering fields: [attributes.ts]")
+          "Native delete log ordering field attributes.ts must be a top-level table field")
         assert(lastCompletedCommit == insertCommit)
         checkAnswer(s"SELECT id FROM $tableName")(Seq(1), Seq(2))
       }

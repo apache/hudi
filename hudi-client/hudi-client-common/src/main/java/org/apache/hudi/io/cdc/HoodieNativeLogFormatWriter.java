@@ -263,24 +263,23 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     }
   }
 
-  private void ensureDeleteFileWriter() throws IOException {
-    ensureAppendVersion();
-    if (deleteFileWriter == null) {
-      try {
-        deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, orderingFieldNames);
-      } catch (IllegalArgumentException e) {
-        // The schema is shared by every delete in this file, so a record-level failure would drop deletes.
-        throw new HoodieAppendException("Native delete logs require top-level ordering fields in the table schema. "
-            + "Configured ordering fields: " + orderingFieldNames, e);
-      }
+  private void ensureDeleteFileWriter() {
+    if (deleteFileWriter != null) {
+      return;
+    }
+    // Setup failures affect every delete in this file and must abort the append.
+    try {
+      deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, orderingFieldNames);
+      ensureAppendVersion();
       deleteLogFile = createNativeLogFile(currentAppendVersion, DELETE_LOG_EXTENSION);
-      // The delete records are built through recordContext#constructEngineRecord (see #appendDeleteRecord), so the
-      // writer must match the record context's engine type rather than the merger's record type: on Spark executors
-      // the reader context for write degrades to Avro (no engine context available), and using the merger record
-      // type here (e.g. SPARK) would create an engine-native writer that fails on the Avro delete records.
+      // Delete records are built by the write-side record context, which can use Avro on Spark executors
+      // even when the merger uses Spark records.
       deleteFileWriter = HoodieFileWriterFactory.getFileWriter(
           instantTime, deleteLogFile.getPath(), storage, writeConfig, deleteLogSchema, taskContextSupplier,
           recordContext.getEngineRecordType());
+    } catch (IOException | RuntimeException e) {
+      throw new HoodieAppendException("Failed to initialize native delete log for file group " + logFileId
+          + " in " + parentPath + " with ordering fields " + orderingFieldNames, e);
     }
   }
 
