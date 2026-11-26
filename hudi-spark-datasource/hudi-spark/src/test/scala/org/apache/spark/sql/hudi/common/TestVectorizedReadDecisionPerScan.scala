@@ -93,7 +93,8 @@ class TestVectorizedReadDecisionPerScan extends HoodieSparkSqlTestBase with Adap
           checkWideScan(tableName, updatedRows)
           assertResult("true")(spark.conf.get(vectorizedReaderConf))
 
-          // Only COW scans return batches; MOR merges rows, so its scans are never columnar
+          // COW scans return batches; whether a MOR scan does is the vectorized merge-on-read decision, covered by
+          // TestVectorizedMorRead
           if (tableType == "cow") {
             assert(scanIsBatched(s"select id, name, dt from $tableName"))
             assert(scanIsBatched(s"select count(*) from $tableName"))
@@ -144,8 +145,9 @@ class TestVectorizedReadDecisionPerScan extends HoodieSparkSqlTestBase with Adap
           }
 
           val narrowScan = s"select id, name, event_time from $tableName"
-          // Only COW scans return batches, and only from Spark 3.5 on for this table
-          assertResult(HoodieSparkUtils.gteqSpark3_5 && tableType == HoodieTableType.COPY_ON_WRITE)(scanIsBatched(narrowScan))
+          // Both table types return batches from Spark 3.5 on for this table: the merge-on-read read merges its
+          // log records into the vectorized base file batches
+          assertResult(HoodieSparkUtils.gteqSpark3_5)(scanIsBatched(narrowScan))
           val narrow = spark.sql(narrowScan).collect().map { row =>
             (row.getAs[Int]("id"), row.getAs[String]("name"), row.getAs[Timestamp]("event_time").getTime)
           }.sorted.toSeq

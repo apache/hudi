@@ -146,8 +146,8 @@ test_spark_native_bundle () {
 
     # Comet declines what it cannot accelerate and hands it back to Spark, so correct results on
     # their own would still pass with a mis-relocated Comet or a libcomet.so that failed to load.
-    # Copy-on-write keeps the vectorized read and bridges columnar to columnar; merge-on-read reads
-    # row by row because file group merging is row level, and bridges through a row conversion.
+    # Both table types keep the vectorized read and bridge columnar to columnar: merge-on-read
+    # merges its log records into the base file batches.
     if ! grep -q 'CometSortMergeJoin' $outputDir/cow_plan/part-*; then
         echo "::error::validate.sh join over copy-on-write Hudi tables was not executed natively by Comet"
         cat $outputDir/cow_plan/part-*
@@ -159,8 +159,9 @@ test_spark_native_bundle () {
         cat $outputDir/cow_plan/part-*
         return 1
     fi
-    if ! grep -q 'CometSparkRowToColumnar' $outputDir/mor_plan/part-*; then
-        echo "::error::validate.sh merge-on-read scan was not bridged into Comet"
+    if ! grep -q 'CometSparkColumnarToColumnar' $outputDir/mor_plan/part-* \
+        || grep -q 'CometSparkRowToColumnar' $outputDir/mor_plan/part-*; then
+        echo "::error::validate.sh merge-on-read scan was not bridged into Comet columnar to columnar"
         cat $outputDir/mor_plan/part-*
         return 1
     fi
