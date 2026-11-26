@@ -45,11 +45,10 @@ import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -65,9 +64,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests.
  */
+@Slf4j
 public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
-
-  protected static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestBase.class);
 
   @BeforeEach
   public void setUp() throws Exception {

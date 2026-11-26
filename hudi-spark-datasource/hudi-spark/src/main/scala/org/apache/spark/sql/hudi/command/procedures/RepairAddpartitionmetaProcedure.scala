@@ -69,7 +69,7 @@ class RepairAddpartitionmetaProcedure extends BaseProcedure with ProcedureBuilde
         if (!dryRun) {
           val partitionMetadata: HoodiePartitionMetadata = new HoodiePartitionMetadata(
             metaClient.getStorage, latestCommit, basePath, partitionPath, metaClient.getTableConfig.getPartitionMetafileFormat)
-          partitionMetadata.trySave()
+          partitionMetadata.trySave(partition)
           action = "Repaired"
         }
       }

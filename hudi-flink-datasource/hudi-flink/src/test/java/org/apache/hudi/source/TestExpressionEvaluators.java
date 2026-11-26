@@ -367,14 +367,43 @@ public class TestExpressionEvaluators {
     Map<String, ColumnStats> stats6 = convertColumnStats(indexRow6, queryFields(2));
     assertFalse(in.eval(stats6), "12 <> null");
 
+    in.bindVals(12, null);
+    assertTrue(in.eval(stats1), "A NULL candidate must not hide a matching value");
+    assertFalse(in.eval(stats5), "A NULL candidate does not match non-null values");
+    assertFalse(in.eval(stats6), "NULL column values do not match");
+
     in.bindVals((Object) null);
-    assertFalse(in.eval(stats1), "It is not possible to test for NULL values with 'in' operator");
+    assertFalse(in.eval(stats1), "An all-NULL list cannot match");
+
+    Object[] largeList = new Object[201];
+    in.bindVals(largeList);
+    assertFalse(in.eval(stats1), "Even a large all-NULL list cannot match");
+    largeList[0] = 12;
+    assertTrue(in.eval(stats1), "A large list with a non-null value is retained");
+  }
+
+  @Test
+  void testInExpressionWithNull() {
+    FieldReferenceExpression ref = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
+    ValueLiteralExpression twelve = new ValueLiteralExpression(12);
+    for (DataType nullType : Arrays.asList(DataTypes.INT(), DataTypes.NULL())) {
+      ValueLiteralExpression nullLiteral = new ValueLiteralExpression(null, nullType);
+      CallExpression expression = CallExpression.permanent(
+          BuiltInFunctionDefinitions.IN, Arrays.asList(ref, nullLiteral, twelve), DataTypes.BOOLEAN());
+      ExpressionEvaluators.Evaluator evaluator = fromExpression(expression);
+
+      assertTrue(evaluator.eval(convertColumnStats(intIndexRow(11, 13), queryFields(2))));
+      assertFalse(evaluator.eval(convertColumnStats(intIndexRow(13, 14), queryFields(2))));
+      assertFalse(evaluator.eval(convertColumnStats(intIndexRow(null, null), queryFields(2))));
+      CallExpression allNull = CallExpression.permanent(
+          BuiltInFunctionDefinitions.IN, Arrays.asList(ref, nullLiteral), DataTypes.BOOLEAN());
+      assertFalse(fromExpression(allNull).eval(convertColumnStats(intIndexRow(11, 13), queryFields(2))));
+    }
   }
 
   @Test
   void testAlwaysFalse() {
     FieldReferenceExpression ref = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
-    ValueLiteralExpression nullLiteral = new ValueLiteralExpression(null, DataTypes.INT());
     RowData indexRow = intIndexRow(11, 13);
     Map<String, ColumnStats> stats = convertColumnStats(indexRow, queryFields(2));
     BuiltInFunctionDefinition[] funDefs = new BuiltInFunctionDefinition[] {
@@ -385,14 +414,13 @@ public class TestExpressionEvaluators {
         BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL,
         BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL,
         BuiltInFunctionDefinitions.IN};
-    for (BuiltInFunctionDefinition funDef : funDefs) {
-      CallExpression expr =
-          CallExpression.permanent(
-              funDef,
-              Arrays.asList(ref, nullLiteral),
-              DataTypes.BOOLEAN());
-      // always return false if the literal value is null
-      assertFalse(fromExpression(expr).eval(stats));
+    for (DataType nullType : Arrays.asList(DataTypes.INT(), DataTypes.NULL())) {
+      ValueLiteralExpression nullLiteral = new ValueLiteralExpression(null, nullType);
+      for (BuiltInFunctionDefinition funDef : funDefs) {
+        CallExpression expr = CallExpression.permanent(
+            funDef, Arrays.asList(ref, nullLiteral), DataTypes.BOOLEAN());
+        assertFalse(fromExpression(expr).eval(stats));
+      }
     }
   }
 

@@ -14,30 +14,35 @@
 package io.trino.plugin.hudi;
 
 import com.google.common.collect.ImmutableList;
+import io.trino.spi.Plugin;
 import io.trino.spi.connector.ConnectorFactory;
 
 import java.nio.file.Path;
-import java.util.List;
+import java.util.Optional;
 
-import static com.google.common.base.Verify.verify;
 import static java.util.Objects.requireNonNull;
 
 public class TestingHudiPlugin
-        extends HudiPlugin
+        implements Plugin
 {
-    private final Path localFileSystemRootPath;
+    private final Optional<Path> localFileSystemRootPath;
+
+    public TestingHudiPlugin()
+    {
+        this.localFileSystemRootPath = Optional.empty();
+    }
 
     public TestingHudiPlugin(Path localFileSystemRootPath)
     {
-        this.localFileSystemRootPath = requireNonNull(localFileSystemRootPath, "localFileSystemRootPath is null");
+        this.localFileSystemRootPath = Optional.of(requireNonNull(localFileSystemRootPath, "localFileSystemRootPath is null"));
     }
 
     @Override
     public Iterable<ConnectorFactory> getConnectorFactories()
     {
-        List<ConnectorFactory> connectorFactories = ImmutableList.copyOf(super.getConnectorFactories());
-        verify(connectorFactories.size() == 1, "Unexpected connector factories: %s", connectorFactories);
-
-        return ImmutableList.of(new TestingHudiConnectorFactory(localFileSystemRootPath));
+        if (localFileSystemRootPath.isPresent()) {
+            return ImmutableList.of(new TestingHudiConnectorFactory(localFileSystemRootPath.get()));
+        }
+        return ImmutableList.of(new HudiConnectorFactory());
     }
 }

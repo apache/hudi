@@ -20,7 +20,9 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -36,6 +38,7 @@ import java.util.Arrays;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -70,14 +73,14 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
   @MethodSource("formatProviderFn")
   public void testTextFormatMetaFile(Option<HoodieFileFormat> format) throws IOException {
     // given
-    final StoragePath partitionPath = new StoragePath(basePath, "a/b/"
-        + format.map(Enum::name).orElse("text"));
+    String relativePartitionPath = "a/b/" + format.map(Enum::name).orElse("text");
+    final StoragePath partitionPath = new StoragePath(basePath, relativePartitionPath);
     storage.createDirectory(partitionPath);
     final String commitTime = "000000000001";
     HoodiePartitionMetadata writtenMetadata = new HoodiePartitionMetadata(
         metaClient.getStorage(), commitTime, new StoragePath(basePath), partitionPath,
         format);
-    writtenMetadata.trySave();
+    writtenMetadata.trySave(relativePartitionPath);
 
     // when
     HoodiePartitionMetadata readMetadata = new HoodiePartitionMetadata(
@@ -87,6 +90,85 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
     assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(storage, partitionPath));
     assertEquals(Option.of(commitTime), readMetadata.readPartitionCreatedCommitTime());
     assertEquals(3, readMetadata.getPartitionDepth());
+  }
+
+  @ParameterizedTest
+  @MethodSource("formatProviderFn")
+  void testRejectsTraversalBeforeCreatingMetadata(Option<HoodieFileFormat> format) throws IOException {
+    StoragePath tablePath = new StoragePath(basePath, "table");
+    for (String relativePartitionPath : Arrays.asList("..", "../outside", "a/../b", "..\\outside")) {
+      StoragePath partitionPath = new StoragePath(tablePath, relativePartitionPath);
+      storage.createDirectory(partitionPath);
+      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(
+          storage, "0001", tablePath, partitionPath, format);
+
+      assertThrows(HoodieKeyException.class, () -> metadata.trySave(relativePartitionPath));
+      assertFalse(HoodiePartitionMetadata.hasPartitionMetadata(storage, partitionPath));
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("formatProviderFn")
+  void testValidatesOriginalPathBeforeNormalization(Option<HoodieFileFormat> format) throws IOException {
+    String relativePartitionPath = "a/../b";
+    StoragePath partitionPath = new StoragePath(basePath, relativePartitionPath);
+    assertEquals(new StoragePath(basePath, "b"), partitionPath);
+    storage.createDirectory(partitionPath);
+    HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(
+        storage, "0001", new StoragePath(basePath), partitionPath, format);
+    assertThrows(HoodieKeyException.class, () -> metadata.trySave(relativePartitionPath));
+    assertTrue(storage.listDirectEntries(partitionPath).isEmpty());
+  }
+
+  @ParameterizedTest
+  @MethodSource("formatProviderFn")
+  void testExistingMetadataSkipsTraversalValidation(Option<HoodieFileFormat> format) throws IOException {
+    StoragePath partitionPath = new StoragePath(basePath, "b");
+    storage.createDirectory(partitionPath);
+    HoodiePartitionMetadata original = new HoodiePartitionMetadata(
+        storage, "0001", new StoragePath(basePath), partitionPath, format);
+    original.trySave("b");
+
+    HoodiePartitionMetadata subsequent = new HoodiePartitionMetadata(
+        storage, "0002", new StoragePath(basePath), partitionPath, format);
+    subsequent.trySave("a/../b");
+    HoodiePartitionMetadata saved = new HoodiePartitionMetadata(storage, partitionPath);
+    assertEquals(Option.of("0001"), saved.readPartitionCreatedCommitTime());
+  }
+
+  @ParameterizedTest
+  @MethodSource("formatProviderFn")
+  void testExistingEncodingIsAccepted(Option<HoodieFileFormat> format) throws IOException {
+    String partitionValue = "../a/./b";
+    String encodedPath = PartitionPathEncodeUtils.escapePathName(partitionValue);
+    StoragePath partitionPath = new StoragePath(basePath, encodedPath);
+    storage.createDirectory(partitionPath);
+    HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(
+        storage, "0001", new StoragePath(basePath), partitionPath, format);
+    metadata.trySave(encodedPath);
+    assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(storage, partitionPath));
+    assertEquals(new StoragePath(basePath), partitionPath.getParent());
+    assertEquals(partitionValue, PartitionPathEncodeUtils.unescapePathName(encodedPath));
+  }
+
+  @ParameterizedTest
+  @MethodSource("formatProviderFn")
+  void testEmptyRelativePartitionPath(Option<HoodieFileFormat> format) {
+    StoragePath tablePath = new StoragePath(basePath);
+    HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(
+        storage, "0001", tablePath, tablePath, format);
+    metadata.trySave("");
+    assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(storage, tablePath));
+    assertEquals(0, metadata.getPartitionDepth());
+  }
+
+  @Test
+  void testRejectsNullRelativePartitionPath() {
+    StoragePath tablePath = new StoragePath(basePath);
+    HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(
+        storage, "0001", tablePath, tablePath, Option.empty());
+    assertThrows(IllegalArgumentException.class, () -> metadata.trySave(null));
+    assertFalse(HoodiePartitionMetadata.hasPartitionMetadata(storage, tablePath));
   }
 
   @Test

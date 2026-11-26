@@ -22,6 +22,7 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
+import org.apache.hudi.io.SeekableDataInputStream;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -36,6 +37,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -71,6 +73,11 @@ public class TestHFileReader {
       + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-";
   private static final Function<Integer, String> LARGE_KEY_CREATOR = i -> LARGE_KEY_PREFIX + String.format("%09d", i);
   private static final int SEEK_TO_THROW_EXCEPTION = -3;
+  // Shifts applied to the data block offsets to simulate HFiles larger than 2GB: the first one
+  // makes the data blocks straddle the 2GB boundary, the others place all data blocks beyond
+  // 2GB and 4GB respectively
+  private static final long[] DATA_BLOCK_OFFSET_SHIFTS = {
+      Integer.MAX_VALUE - 64 * 1024L, 3L << 30, 5L << 30};
 
   static Stream<Arguments> testArgsReadHFilePointAndPrefixLookup() {
     return Stream.of(
@@ -251,6 +258,12 @@ public class TestHFileReader {
                 new KeyLookUpInfo("hudi-key-000019999b", SEEK_TO_EOF, "", "")
             )
         ),
+        // The first two data blocks have 12 checksum bytes each, replaced with gzip-like tails:
+        // block 0: 1f8b08000000000000000700 (invalid DEFLATE block type),
+        // block 1: 1f8b08000000000000000000 (truncated DEFLATE block).
+        // The native reader does not validate CRCs, but must exclude these bytes from decompression.
+        // All headers and compressed payloads are unchanged. This exercises both ZipException and
+        // EOFException regressions through the existing sequential, point, and prefix lookup checks.
         Arguments.of(
             "/hfile/hudi_1_0_hbase_2_4_9_512KB_GZ_20000.hfile",
             20000,
@@ -677,6 +690,31 @@ public class TestHFileReader {
     verifyHFileRead(filename, numEntries, keyCreator, VALUE_CREATOR, keyLookUpInfoList);
   }
 
+  static Stream<Arguments> testArgsReadHFilePointAndPrefixLookupBeyond2GB() {
+    return testArgsReadHFilePointAndPrefixLookup().flatMap(arguments ->
+        Arrays.stream(DATA_BLOCK_OFFSET_SHIFTS).mapToObj(shift -> {
+          Object[] args = arguments.get();
+          Object[] argsWithShift = Arrays.copyOf(args, args.length + 1);
+          argsWithShift[args.length] = shift;
+          return Arguments.of(argsWithShift);
+        }));
+  }
+
+  @ParameterizedTest
+  @MethodSource("testArgsReadHFilePointAndPrefixLookupBeyond2GB")
+  public void testReadHFilePointAndPrefixLookupBeyond2GB(String filename,
+                                                         int numEntries,
+                                                         Function<Integer, String> keyCreator,
+                                                         List<KeyLookUpInfo> keyLookUpInfoList,
+                                                         long dataBlockOffsetShift) throws IOException {
+    byte[] content = readHFileFromResources(filename);
+    try (HFileReader reader = new DataBlockOffsetShiftingHFileReader(content, dataBlockOffsetShift)) {
+      reader.initializeMetadata();
+      verifyHFileValuesInSequentialReads(reader, numEntries, Option.of(keyCreator), Option.of(VALUE_CREATOR));
+      verifyHFileSeekToReads(reader, keyLookUpInfoList);
+    }
+  }
+
   @Test
   public void testReadHFileWithNonUniqueKeys() throws IOException {
     try (HFileReader reader = getHFileReader("/hfile/hudi_1_0_hbase_2_4_9_16KB_GZ_200_20_non_unique.hfile")) {
@@ -984,6 +1022,64 @@ public class TestHFileReader {
           throw new IllegalArgumentException(
               "SeekTo result not allowed: " + keyLookUpInfo.expectedSeekToResult);
       }
+    }
+  }
+
+  /**
+   * An {@link HFileReaderImpl} that reads the data blocks of an HFile as if they were stored at
+   * offsets shifted by {@code dataBlockOffsetShift}, to simulate reading an HFile larger than 2GB
+   * without materializing such a file.
+   */
+  private static class DataBlockOffsetShiftingHFileReader extends HFileReaderImpl {
+    private final long dataBlockOffsetShift;
+
+    DataBlockOffsetShiftingHFileReader(byte[] content, long dataBlockOffsetShift) {
+      super(new OffsetShiftingSeekableDataInputStream(content, dataBlockOffsetShift), content.length);
+      this.dataBlockOffsetShift = dataBlockOffsetShift;
+    }
+
+    @Override
+    public synchronized void initializeMetadata() throws IOException {
+      if (isMetadataInitialized) {
+        return;
+      }
+      super.initializeMetadata();
+      TreeMap<Key, BlockIndexEntry> shiftedDataBlockIndexEntryMap = new TreeMap<>();
+      dataBlockIndexEntryMap.forEach((key, entry) -> shiftedDataBlockIndexEntryMap.put(key,
+          new BlockIndexEntry(entry.getFirstKey(), entry.getNextBlockFirstKey(),
+              entry.getOffset() + dataBlockOffsetShift, entry.getSize())));
+      dataBlockIndexEntryMap = shiftedDataBlockIndexEntryMap;
+    }
+  }
+
+  /**
+   * A {@link SeekableDataInputStream} that maps positions at or beyond {@code shift} back to
+   * {@code position - shift} in the underlying content.
+   */
+  private static class OffsetShiftingSeekableDataInputStream extends SeekableDataInputStream {
+    private final SeekableDataInputStream delegate;
+    private final long shift;
+    private long appliedShift = 0;
+
+    OffsetShiftingSeekableDataInputStream(byte[] content, long shift) {
+      this(new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(content)), shift);
+    }
+
+    private OffsetShiftingSeekableDataInputStream(SeekableDataInputStream delegate, long shift) {
+      super(delegate);
+      this.delegate = delegate;
+      this.shift = shift;
+    }
+
+    @Override
+    public long getPos() throws IOException {
+      return delegate.getPos() + appliedShift;
+    }
+
+    @Override
+    public void seek(long pos) throws IOException {
+      appliedShift = pos >= shift ? shift : 0;
+      delegate.seek(pos - appliedShift);
     }
   }
 

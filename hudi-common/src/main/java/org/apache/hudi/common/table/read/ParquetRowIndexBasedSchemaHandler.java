@@ -43,13 +43,17 @@ import static org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRec
  * This class is responsible for handling the schema for the file group reader that supports row index based positional merge.
  */
 public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaHandler<T> {
+  /**
+   * @deprecated Use the constructor that takes a {@link TableState} built once by the caller and passed down.
+   */
+  @Deprecated
   public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
                                            HoodieSchema dataSchema,
                                            HoodieSchema requestedSchema,
                                            Option<InternalSchema> internalSchemaOpt,
                                            TypedProperties properties,
                                            HoodieTableMetaClient metaClient) {
-    this(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, FileGroupReaderTableState.fromMetaClient(metaClient));
+    this(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, TableState.fromMetaClient(metaClient));
   }
 
   public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
@@ -57,7 +61,7 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
                                            HoodieSchema requestedSchema,
                                            Option<InternalSchema> internalSchemaOpt,
                                            TypedProperties properties,
-                                           FileGroupReaderTableState tableState) {
+                                           TableState tableState) {
     super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, tableState);
     if (!readerContext.getRecordContext().supportsParquetRowIndex()) {
       throw new IllegalStateException("Using " + this.getClass().getName() + " but context does not support parquet row index");

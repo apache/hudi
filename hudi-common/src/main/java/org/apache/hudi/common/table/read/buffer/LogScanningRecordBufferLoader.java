@@ -22,10 +22,10 @@ import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.util.List;
@@ -36,7 +36,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 abstract class LogScanningRecordBufferLoader {
 
   protected <T> List<String> scanLogFiles(HoodieReaderContext<T> readerContext, HoodieStorage storage,
-                                          InputSplit inputSplit, FileGroupReaderTableState tableState,
+                                          InputSplit inputSplit, TableState tableState,
                                           TypedProperties props, ReaderParameters readerParameters,
                                           HoodieReadStats readStats, FileGroupRecordBuffer<T> recordBuffer) {
     try (HoodieMergedLogRecordReader<T> logRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()

@@ -201,7 +201,7 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
 
       // NOTE: To properly support mode when there's no consumer, we have to fall back
       //       to producing future as the trigger for us to shut down the queue
-      return allOf(Arrays.asList(producingFuture, consumingFuture))
+      E result = allOf(Arrays.asList(producingFuture, consumingFuture))
           .whenComplete((ignored, throwable) -> {
             // Close the queue to release the resources
             queue.close();
@@ -209,6 +209,13 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
           .thenApply(ignored -> consumer.get().finish())
           // Block until producing and consuming both finish
           .get();
+      // Disruptor handlers store consumer failures and return normally, so production
+      // and finish() can both succeed while a fatal consume error is still stored.
+      Throwable consumerFailure = queue.getThrowable();
+      if (consumerFailure != null) {
+        throw new HoodieException(consumerFailure);
+      }
+      return result;
     } catch (Exception e) {
       if (e instanceof InterruptedException) {
         // In case {@code InterruptedException} was thrown, resetting the interrupted flag

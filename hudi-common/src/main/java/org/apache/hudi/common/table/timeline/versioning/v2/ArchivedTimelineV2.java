@@ -29,9 +29,8 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -49,6 +48,7 @@ import java.util.function.Function;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getInputStreamOptionLegacy;
 
+@Slf4j(topic = "org.apache.hudi.common.table.timeline.HoodieArchivedTimeline")
 public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchivedTimeline, HoodieInstantReader {
   public static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
   public static final String COMPLETION_TIME_ARCHIVED_META_FIELD = "completionTime";
@@ -57,8 +57,6 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   public static final String PLAN_ARCHIVED_META_FIELD = "plan";
   private HoodieTableMetaClient metaClient;
   private final Map<String, byte[]> readCommits = new ConcurrentHashMap<>();
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieArchivedTimeline.class);
 
   /**
    * Used for loading the archived timeline incrementally, the earliest loaded instant time get memorized

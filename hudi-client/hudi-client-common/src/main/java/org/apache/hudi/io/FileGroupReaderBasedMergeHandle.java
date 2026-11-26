@@ -234,7 +234,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           new StoragePath(config.getBasePath()),
           FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
           hoodieTable.getPartitionMetafileFormat());
-      partitionMetadata.trySave();
+      partitionMetadata.trySave(partitionPath);
 
       String oldFileName = latestValidFilePath.isPresent() ? latestValidFilePath.get() : null;
       String newFileName = createNewFileName(oldFileName);

@@ -1,0 +1,52 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[[profile]]
+id = "direct_sql_none"
+base_fixture = "flink_pr2/stable_key.json"
+catalog = '''
+{"contract_schema":1,"resolution_mode":"direct_sql","external_discovery":"none","sync_owner":"none","data_lifecycle_owner":"application"}
+'''
+
+[[profile]]
+id = "direct_sql_hive_metastore"
+base_fixture = "flink_pr2/stable_key.json"
+catalog = '''
+{"contract_schema":1,"resolution_mode":"direct_sql","external_discovery":"hive_metastore","sync_owner":"flink_sink","data_lifecycle_owner":"application","database":"analytics","hive_configuration":{"source":"metastore_uris","location":"thrift://hms.example:9083"}}
+'''
+
+[[profile]]
+id = "hudi_dfs_catalog_none"
+base_fixture = "flink_pr3/mutable_cow.json"
+source_table = "default_catalog.default_database.orders_mutable_source"
+catalog = '''
+{"contract_schema":1,"resolution_mode":"hudi_dfs_catalog","external_discovery":"none","sync_owner":"none","data_lifecycle_owner":"catalog","catalog_name":"lake","database":"analytics","catalog_path":"file:///tmp/hudi-architect-catalog"}
+'''
+
+[[profile]]
+id = "hudi_dfs_catalog_hive_metastore"
+base_fixture = "flink_pr3/mutable_cow.json"
+source_table = "default_catalog.default_database.orders_mutable_source"
+catalog = '''
+{"contract_schema":1,"resolution_mode":"hudi_dfs_catalog","external_discovery":"hive_metastore","sync_owner":"flink_sink","data_lifecycle_owner":"catalog","catalog_name":"lake","database":"analytics","catalog_path":"file:///tmp/hudi-architect-catalog","hive_configuration":{"source":"metastore_uris","location":"thrift://hms.example:9083"}}
+'''
+
+[[profile]]
+id = "hudi_hms_catalog_hive_metastore"
+base_fixture = "flink_pr3/mutable_cow.json"
+source_table = "default_catalog.default_database.orders_mutable_source"
+catalog = '''
+{"contract_schema":1,"resolution_mode":"hudi_hms_catalog","external_discovery":"hive_metastore","sync_owner":"hudi_hms_catalog","data_lifecycle_owner":"application","catalog_name":"production_hudi","database":"analytics","hive_configuration":{"source":"hive_conf_dir","location":"/etc/hive/conf"},"table_external":true}
+'''

@@ -156,7 +156,7 @@ public class TestHudiSplitFactory
         // A zero target split size must be rejected on construction, before any file slice is seen,
         // instead of looping forever once split generation reaches a non-empty base file
         assertThatThrownBy(() -> new HudiSplitFactory(
-                createTableHandle(),
+                createTableHandle(HoodieTableType.MERGE_ON_READ),
                 new SizeBasedSplitWeightProvider(0.05, DataSize.of(128, MEGABYTE)),
                 DataSize.ofBytes(0)))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -177,6 +177,26 @@ public class TestHudiSplitFactory
     }
 
     @Test
+    public void testReadOptimizedSkipsLogOnlyFileGroup()
+    {
+        FileSlice slice = new FileSlice("partition", COMMIT_TIME, "log-only");
+        slice.addLogFile(new HoodieLogFile(new StoragePathInfo(
+                new StoragePath("/test/path/.log-only_" + COMMIT_TIME + ".log.1_0-0-0"), 100, false, (short) 0, 100, 1)));
+        HudiSplitWeightProvider weightProvider = HudiSplitWeightProvider.uniformStandardWeightProvider();
+        DataSize targetSplitSize = DataSize.of(128, MEGABYTE);
+
+        assertThat(new HudiSplitFactory(createTableHandle(HoodieTableType.COPY_ON_WRITE), weightProvider, targetSplitSize)
+                .createSplits(PARTITION_KEYS, slice, COMMIT_TIME)).isEmpty();
+
+        assertThat(new HudiSplitFactory(createTableHandle(HoodieTableType.MERGE_ON_READ), weightProvider, targetSplitSize)
+                .createSplits(PARTITION_KEYS, slice, COMMIT_TIME))
+                .singleElement().satisfies(split -> {
+                    assertThat(split.getBaseFile()).isEmpty();
+                    assertThat(split.getLogFiles()).hasSize(1);
+                });
+    }
+
+    @Test
     public void testCreateHudiSplitsWithZeroSizeFile()
     {
         // Test with zero-size file - should create 1 split with zero size
@@ -193,7 +213,7 @@ public class TestHudiSplitFactory
             Option<DataSize> logFileSize,
             List<Pair<Long, DataSize>> expectedSplitInfo)
     {
-        HudiTableHandle tableHandle = createTableHandle();
+        HudiTableHandle tableHandle = createTableHandle(HoodieTableType.MERGE_ON_READ);
         HudiSplitWeightProvider weightProvider = new SizeBasedSplitWeightProvider(0.05, DataSize.of(128, MEGABYTE));
 
         FileSlice fileSlice = createFileSlice(baseFileSize, logFileSize);
@@ -219,13 +239,13 @@ public class TestHudiSplitFactory
         }
     }
 
-    private static HudiTableHandle createTableHandle()
+    private static HudiTableHandle createTableHandle(HoodieTableType tableType)
     {
         return new HudiTableHandle(
                 "test_schema",
                 "test_table",
                 "/test/path",
-                HoodieTableType.MERGE_ON_READ,
+                tableType,
                 ImmutableList.of(),
                 ImmutableList.of(),
                 TupleDomain.all(),

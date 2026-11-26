@@ -19,7 +19,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, UpdateAction}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, LogicalPlan, UnresolvedWith, UpdateAction}
 import org.apache.spark.sql.execution.streaming.SerializedOffset
 
 /**
@@ -40,5 +40,11 @@ abstract class HoodieSpark3CatalystPlanUtils extends BaseHoodieCatalystPlanUtils
       case SerializedOffset(json) => Some(json)
       case _ => None
     }
+  }
+
+  override def transformCteDefinitions(withClause: UnresolvedWith, f: LogicalPlan => LogicalPlan): LogicalPlan = {
+    withClause.copy(cteRelations = withClause.cteRelations.map { case (name, cte) =>
+      (name, cte.copy(child = f(cte.child)))
+    })
   }
 }

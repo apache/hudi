@@ -278,15 +278,15 @@ public class HoodieJavaCopyOnWriteTable<T>
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(
       String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile)
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile baseFile)
       throws IOException {
     // these are updates
-    HoodieMergeHandle mergeHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
+    HoodieMergeHandle mergeHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, baseFile);
     return MergeUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
-                                              Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
+                                              Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile baseFile) {
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
     if (!config.populateMetaFields()) {
       try {
@@ -297,7 +297,7 @@ public class HoodieJavaCopyOnWriteTable<T>
       }
     }
     return HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-        dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+        baseFile, taskContextSupplier, keyGeneratorOpt);
   }
 
   @Override

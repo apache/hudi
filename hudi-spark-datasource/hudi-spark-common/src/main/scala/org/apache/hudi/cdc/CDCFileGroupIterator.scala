@@ -38,7 +38,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCEngineRecordAccessor, HoodieCDCInlineLogRecordIterator, HoodieCDCLogRecord, HoodieCDCLogRecordIterator, HoodieCDCNativeLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, FileGroupReaderTableState, HoodieFileGroupReader, HoodieReadStats, IteratorMode, UpdateProcessor}
+import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, IteratorMode, TableState, UpdateProcessor}
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
 import org.apache.hudi.common.util.{DefaultSizeEstimator, HoodieRecordUtils, HoodieStorageUtils, Option, ValidationUtils}
 import org.apache.hudi.common.util.collection.{ClosableIterator, ExternalSpillableMap}
@@ -76,7 +76,7 @@ import scala.collection.mutable
 case class HoodieCDCFileGroupSplit(changes: Array[HoodieCDCFileSplit])
 
 class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
-                           tableState: FileGroupReaderTableState,
+                           tableState: TableState,
                            conf: StorageConfiguration[Configuration],
                            baseFileReader: SparkColumnarFileReader,
                            originTableSchema: HoodieTableSchema,
@@ -86,7 +86,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   extends Iterator[InternalRow]
   with SparkAdapterSupport with AvroDeserializerSupport with Closeable {
 
-  @deprecated("Use the constructor that takes a FileGroupReaderTableState", "1.3.0")
+  @deprecated("Use the constructor that takes a TableState", "1.3.0")
   def this(split: HoodieCDCFileGroupSplit,
            metaClient: HoodieTableMetaClient,
            conf: StorageConfiguration[Configuration],
@@ -95,7 +95,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
            cdcSchema: StructType,
            requiredCdcSchema: StructType,
            props: TypedProperties) = {
-    this(split, FileGroupReaderTableState.fromMetaClient(metaClient), conf, baseFileReader, originTableSchema, cdcSchema,
+    this(split, TableState.fromMetaClient(metaClient), conf, baseFileReader, originTableSchema, cdcSchema,
       requiredCdcSchema, props)
   }
 
@@ -248,7 +248,10 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     org.apache.hudi.common.util.Option.of(parquetSchema)
   }
 
-  private lazy val nativeCdcImageConverter = new InternalRowToJsonStringConverter(cdcDataSparkSchema)
+  private lazy val cdcImageConverter = new InternalRowToJsonStringConverter(cdcDataSparkSchema)
+
+  private lazy val inlineCdcImageDeserializer = sparkAdapter.createAvroDeserializer(
+    HoodieSchemaUtils.removeMetadataFields(schema), cdcDataSparkSchema)
 
   private def needLoadNextFile: Boolean = {
     !recordIter.hasNext &&
@@ -627,7 +630,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   private def cdcRecordImageToJson(record: HoodieCDCLogRecord[_], ordinal: Int): UTF8String = {
     if (record.isNative) {
       val image = record.getEngineImage(ordinal, cdcDataSparkSchema.length).asInstanceOf[InternalRow]
-      if (image == null) null else nativeCdcImageConverter.convert(image)
+      if (image == null) null else cdcImageConverter.convert(image)
     } else {
       recordToJsonAsUTF8String(record.getAvroImage(ordinal).asInstanceOf[GenericRecord])
     }
@@ -664,7 +667,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     if (record == null) {
       null
     } else {
-      convertToUTF8String(HoodieCDCUtils.recordToJson(record))
+      val row = inlineCdcImageDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
+      cdcImageConverter.convert(row)
     }
   }
 

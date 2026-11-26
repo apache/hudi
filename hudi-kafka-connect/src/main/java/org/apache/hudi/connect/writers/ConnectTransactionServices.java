@@ -28,11 +28,14 @@ import java.util.Map;
  * Transaction service APIs used by
  * {@link TransactionCoordinator}.
  */
-public interface ConnectTransactionServices {
+public interface ConnectTransactionServices extends AutoCloseable {
 
   String startCommit();
 
   boolean endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata);
 
   Map<String, String> fetchLatestExtraCommitMetadata();
+
+  @Override
+  void close();
 }

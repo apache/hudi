@@ -42,7 +42,6 @@ import org.apache.hudi.util.{JavaConversions, JFunction}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualNullSafe, EqualTo, Expression, GreaterThanOrEqual, IsNotNull, IsNull, LessThanOrEqual, Literal, Not, Or}
-import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -631,23 +630,23 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     val largeFilter1 = And(largeFilter, IsNull(attribute("c10")))
     validateContainsNullAndValueFilters(largeFilter1, indexedColumns, true)
 
-    // Not(IsNull(...)) → IsNotNull(...)
+    // Not(IsNull(...))
     dataFilter = Not(IsNull(attribute("c1")))
-    // Because pushDownNot should translate Not(IsNull(...)) -> IsNotNull(...)
+    // NOT is looked through, so this is classified like IsNull(c1)
     // The result should be true if c1 is in indexedCols
     validateContainsNullAndValueFilters(dataFilter, Seq("c1"), expectedValue = true)
     // If c1 is not indexed, result should be false
     validateContainsNullAndValueFilters(dataFilter, Seq("c2"), expectedValue = false)
 
-    // Not(IsNotNull(...)) → IsNull(...)
+    // Not(IsNotNull(...))
     dataFilter = Not(IsNotNull(attribute("c2")))
-    // pushDownNot translates Not(IsNotNull(...)) -> IsNull(...)
+    // NOT is looked through, so this is classified like IsNotNull(c2)
     validateContainsNullAndValueFilters(dataFilter, Seq("c2"), expectedValue = true)
 
     // Not(EqualNullSafe(attr, Literal(null, ...)))
     dataFilter = Not(EqualNullSafe(attribute("c3"), Literal("value")))
-    // This doesn’t have a direct pushDownNot pattern unless you explicitly handle it,
-    // but verifying that it doesn’t break your logic is useful.
+    // NOT is looked through; the inner <=> compares against a non-null literal,
+    // so it does not read null counts.
     validateContainsNullAndValueFilters(dataFilter, Seq("c3"), expectedValue = false)
 
     // Double-Negation: Not(Not(IsNull(...)))
@@ -675,7 +674,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   def validateContainsNullAndValueFilters(dataFilter: Expression, indexedCols: Seq[String],
                                           expectedValue: Boolean): Unit = {
-    assertEquals(expectedValue, DataSkippingUtils.containsNullOrValueCountBasedFilters(dataFilter, indexedCols))
+    assertEquals(expectedValue, PartitionStatsIndexSupport.readsNullOrValueCounts(dataFilter, indexedCols))
   }
 
   private def literal(value: String): Literal = {

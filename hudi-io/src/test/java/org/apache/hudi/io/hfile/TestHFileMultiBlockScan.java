@@ -27,9 +27,12 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Locale;
+import java.util.Random;
+import java.util.function.IntFunction;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Reproduces a full-scan record drop on native-writer HFiles that span many data blocks. A large
@@ -47,6 +50,29 @@ public class TestHFileMultiBlockScan {
       "NONE, 65536, 200000", "GZIP, 65536, 200000"
   })
   public void fullScanReturnsAllRecords(String codec, int blockSize, int numRecords) throws Exception {
+    assertFullScanReturnsAllRecords(codec, blockSize, numRecords, i -> getUTF8Bytes(value(i)));
+  }
+
+  /**
+   * GZIP masks the drop for compressible values: the checksum covers the small on-disk block, so it
+   * stays shorter than the last record. With incompressible values the on-disk block stays near the
+   * block size, the checksum grows past a short record, and every full block loses its trailing entries.
+   */
+  @ParameterizedTest
+  @CsvSource({"GZIP, 1048576, 50000, 100"})
+  public void fullScanReturnsAllRecordsWithIncompressibleValues(
+      String codec, int blockSize, int numRecords, int valueLength) throws Exception {
+    Random random = new Random(42);
+    byte[][] values = new byte[numRecords][];
+    for (int i = 0; i < numRecords; i++) {
+      values[i] = new byte[valueLength];
+      random.nextBytes(values[i]);
+    }
+    assertFullScanReturnsAllRecords(codec, blockSize, numRecords, i -> values[i]);
+  }
+
+  private static void assertFullScanReturnsAllRecords(
+      String codec, int blockSize, int numRecords, IntFunction<byte[]> valueOf) throws Exception {
     HFileContext context = new HFileContext.Builder()
         .blockSize(blockSize)
         .compressionCodec(CompressionCodec.valueOf(codec))
@@ -54,7 +80,7 @@ public class TestHFileMultiBlockScan {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try (HFileWriter writer = new HFileWriterImpl(context, baos)) {
       for (int i = 0; i < numRecords; i++) {
-        writer.append(key(i), getUTF8Bytes(value(i)));
+        writer.append(key(i), valueOf.apply(i));
       }
     }
     byte[] fileBytes = baos.toByteArray();
@@ -81,6 +107,18 @@ public class TestHFileMultiBlockScan {
       assertEquals(numRecords, scanned,
           "forward scan returned fewer records than written; " + scenario
               + " firstSkipAtPosition=" + firstSkipAt);
+    }
+
+    // Seeks only move forward, so point lookups use a fresh reader.
+    try (HFileReader reader = new HFileReaderImpl(
+        new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(fileBytes)),
+        fileBytes.length)) {
+      reader.initializeMetadata();
+      assertTrue(reader.seekTo());
+      for (int i = 0; i < numRecords; i++) {
+        assertEquals(HFileReader.SEEK_TO_FOUND, reader.seekTo(new UTF8StringKey(key(i))),
+            "point lookup missed key " + key(i) + "; codec=" + codec + " blockSize=" + blockSize);
+      }
     }
   }
 

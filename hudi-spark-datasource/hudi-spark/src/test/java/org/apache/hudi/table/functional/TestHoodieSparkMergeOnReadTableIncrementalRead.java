@@ -98,8 +98,8 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
       WriteClientTestUtils.startCommitWithTime(client, commitTime1);
 
       List<HoodieRecord> records001 = dataGen.generateInserts(commitTime1, 200);
-      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records001, client, cfg, commitTime1);
-      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
+      Stream<HoodieBaseFile> baseFiles = insertRecordsToMORTable(metaClient, records001, client, cfg, commitTime1);
+      assertTrue(baseFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       // verify only one base file shows up with commit time 001
       FileStatus[] snapshotROFiles = getROSnapshotFiles(partitionPath);
@@ -147,8 +147,8 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
       String insertsTime = "006";
       List<HoodieRecord> records006 = dataGen.generateInserts(insertsTime, 200);
       WriteClientTestUtils.startCommitWithTime(client, insertsTime);
-      dataFiles = insertRecordsToMORTable(metaClient, records006, client, cfg, insertsTime);
-      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
+      baseFiles = insertRecordsToMORTable(metaClient, records006, client, cfg, insertsTime);
+      assertTrue(baseFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       // verify new write shows up in snapshot mode even though there is pending compaction
       snapshotROFiles = getROSnapshotFiles(partitionPath);

@@ -29,6 +29,7 @@ outcome) -- the same trace regardless of which surface called the tool.
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import inspect
 import json
@@ -41,6 +42,7 @@ from typing import Any
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel
 
+from hudi_agent_gateway.cancellation import tool_cancellation_scope
 from hudi_agent_gateway.log import log_event
 
 logger = logging.getLogger("hudi_agent_gateway.tools")
@@ -81,15 +83,24 @@ def _with_invocation_logging(name: str, fn: ToolHandler) -> ToolHandler:
     async def wrapped(*args: Any, **kwargs: Any) -> str:
         start = time.monotonic()
         outcome = "ok"
+        scope = tool_cancellation_scope.get()
+        task = asyncio.current_task()
+        if scope is not None and task is not None:
+            scope.add(task)
         try:
             result = await fn(*args, **kwargs)
             if is_tool_error(result):
                 outcome = "tool_error"
             return result
+        except asyncio.CancelledError:
+            outcome = "cancelled"
+            raise
         except Exception:
             outcome = "exception"
             raise
         finally:
+            if scope is not None and task is not None:
+                scope.tasks.discard(task)
             log_event(
                 logger,
                 "tool_invocation",

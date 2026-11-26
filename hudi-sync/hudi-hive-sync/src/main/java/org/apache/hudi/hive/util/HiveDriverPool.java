@@ -22,12 +22,11 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -56,9 +55,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
  * thread. The pool is gated behind {@code hoodie.datasource.hive_sync.batching.enabled}
  * and is constructed only for HiveQL sync mode.
  */
+@Slf4j
 public class HiveDriverPool implements AutoCloseable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HiveDriverPool.class);
 
   // Per-worker Driver construction has to be fast in practice (a few hundred ms
   // for the SessionState + Driver init). A 60s ceiling per worker leaves plenty of
@@ -102,7 +100,7 @@ public class HiveDriverPool implements AutoCloseable {
       tearDown();
       throw new HoodieException("Failed to construct HiveDriverPool of size " + size, e);
     }
-    LOG.info("Initialized HiveDriverPool with {} workers", size);
+    log.info("Initialized HiveDriverPool with {} workers", size);
   }
 
   /**
@@ -122,7 +120,7 @@ public class HiveDriverPool implements AutoCloseable {
     for (Worker worker : workers) {
       dispatch.add(worker.executor.submit(dispatch.guard(() -> {
         for (String sql : setupSqls) {
-          worker.driver.run(sql);
+          HiveStatementExecutor.executeOrThrow(worker.driver, sql);
         }
         return null;
       }, "Skipped after an earlier setup statement failed")));
@@ -153,7 +151,7 @@ public class HiveDriverPool implements AutoCloseable {
       String sql = sqls.get(i);
       Worker worker = workers.get(i % workers.size());
       dispatch.add(worker.executor.submit(dispatch.guard(() -> {
-        worker.driver.run(sql);
+        HiveStatementExecutor.executeOrThrow(worker.driver, sql);
         return null;
       }, "Skipped after an earlier statement failed")));
     }
@@ -174,12 +172,12 @@ public class HiveDriverPool implements AutoCloseable {
     long start = System.currentTimeMillis();
     ParallelDispatch.Outcome outcome = dispatch.awaitOutcome();
     outcome.suppressed().forEach(e ->
-        LOG.warn("Additional SQL batch failed (suppressed in favor of first error)", e));
+        log.warn("Additional SQL batch failed (suppressed in favor of first error)", e));
 
     if (outcome.failed()) {
       throw new HoodieHiveSyncException("Failed in executing SQL", outcome.firstError());
     }
-    LOG.info("Completed {} SQL statements ({} cancelled) in {} ms across {} workers",
+    log.info("Completed {} SQL statements ({} cancelled) in {} ms across {} workers",
         outcome.completed(), outcome.cancelled(), System.currentTimeMillis() - start, size);
   }
 
@@ -208,7 +206,7 @@ public class HiveDriverPool implements AutoCloseable {
             try {
               worker.driver.close();
             } catch (Exception e) {
-              LOG.warn("Error closing pooled Driver", e);
+              log.warn("Error closing pooled Driver", e);
             }
             // close() releases the current query's resources but leaves the shutdown hook
             // Driver.compile() registered; only destroy() removes it. Without this the
@@ -218,20 +216,20 @@ public class HiveDriverPool implements AutoCloseable {
             try {
               worker.driver.destroy();
             } catch (Exception e) {
-              LOG.warn("Error destroying pooled Driver", e);
+              log.warn("Error destroying pooled Driver", e);
             }
           }
           if (worker.sessionState != null) {
             try {
               worker.sessionState.close();
             } catch (Exception e) {
-              LOG.warn("Error closing pooled SessionState", e);
+              log.warn("Error closing pooled SessionState", e);
             }
           }
           return null;
         }).get(30, TimeUnit.SECONDS);
       } catch (Exception e) {
-        LOG.warn("Error during pool worker shutdown", e);
+        log.warn("Error during pool worker shutdown", e);
       }
       worker.executor.shutdown();
       try {

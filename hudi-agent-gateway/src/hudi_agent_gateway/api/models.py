@@ -54,6 +54,10 @@ class ChatResponse(BaseModel):
 # --- SSE event payloads (each is the JSON body of one `data:` line) ---
 
 
+class StatusEvent(BaseModel):
+    message: str
+
+
 class TokenEvent(BaseModel):
     text: str
 
@@ -77,7 +81,7 @@ class DoneEvent(BaseModel):
 
 
 class ErrorEvent(BaseModel):
-    code: Literal["llm_error", "agent_error", "recursion_limit"]
+    code: Literal["llm_error", "agent_error", "recursion_limit", "chat_timeout"]
     message: str
 
 
@@ -105,8 +109,10 @@ class InfoResponse(BaseModel):
     catalog: str
     schema_: str = Field(alias="schema")
     # In-cluster/network endpoints, for the UI's connect panel.
-    trino_url: str
-    trino_ui_url: str
+    sql_backend: str = "trino"
+    lakehouse_url: str = ""
+    trino_url: str = ""
+    trino_ui_url: str = ""
     mcp_enabled: bool
 
     model_config = {"populate_by_name": True}

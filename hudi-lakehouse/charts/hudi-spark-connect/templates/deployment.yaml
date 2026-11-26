@@ -1,0 +1,168 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hudi-spark-connect.fullname" . }}
+  labels:
+    {{- include "hudi-spark-connect.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Sessions are in-memory; do not load-balance between independent drivers.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "hudi-spark-connect.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hudi-spark-connect.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
+      {{- with .Values.serviceAccount.name }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
+      terminationGracePeriodSeconds: 60
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 185
+        runAsGroup: 185
+        fsGroup: 185
+      containers:
+        - name: spark-connect
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if hasPrefix "k8s://" (include "hudi-spark-connect.master" .) }}
+          # In client mode executors connect directly to this driver pod.
+          args:
+            - --conf
+            - spark.driver.host=$(POD_IP)
+            - --conf
+            - spark.kubernetes.driver.pod.name=$(POD_NAME)
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: connect
+              containerPort: 15002
+          env:
+            - name: HUDI_CONF_DIR
+              value: /opt/hudi/conf
+            {{- if hasPrefix "k8s://" (include "hudi-spark-connect.master" .) }}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            {{- end }}
+            - name: SPARK_LOCAL_DIRS
+              value: /tmp/spark-local
+            - name: AWS_REGION
+              value: {{ .Values.storage.s3.region | quote }}
+            {{- with .Values.storage.s3.existingSecret }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: {{ $.Values.storage.s3.accessKeyKey | quote }}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: {{ $.Values.storage.s3.secretKeyKey | quote }}
+            {{- if $.Values.storage.s3.sessionTokenKey }}
+            - name: AWS_SESSION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: {{ $.Values.storage.s3.sessionTokenKey | quote }}
+            {{- end }}
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /opt/hudi/conf
+              readOnly: true
+            - name: config
+              mountPath: /opt/spark/conf/spark-defaults.conf
+              subPath: spark-defaults.conf
+              readOnly: true
+            - name: scratch
+              mountPath: /tmp
+          # Startup always checks the listener. Optional readiness can also
+          # query a pre-provisioned non-empty table through Spark Connect.
+          startupProbe:
+            tcpSocket:
+              port: connect
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            {{- if .Values.readiness.sql.enabled }}
+            exec:
+              command:
+                - python3
+                - /opt/spark/check-ready.py
+                - --schema
+                - {{ required "readiness.sql.schema is required" .Values.readiness.sql.schema | quote }}
+                - --table
+                - {{ required "readiness.sql.table is required" .Values.readiness.sql.table | quote }}
+                - --column
+                - {{ required "readiness.sql.column is required" .Values.readiness.sql.column | quote }}
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 3
+            {{- else }}
+            tcpSocket:
+              port: connect
+            periodSeconds: 10
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "hudi-spark-connect.fullname" . }}-config
+        - name: scratch
+          {{- if .Values.scratch.sizeLimit }}
+          emptyDir:
+            sizeLimit: {{ .Values.scratch.sizeLimit | quote }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

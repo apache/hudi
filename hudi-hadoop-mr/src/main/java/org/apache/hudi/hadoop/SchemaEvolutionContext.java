@@ -45,6 +45,7 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -64,8 +65,6 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -85,9 +84,8 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
  * If field is renamed in queried schema, its old name will be returned, which is relevant at the provided time.
  * If type of field is changed, its old type will be returned, and projection will be created that will convert the old type to the queried one.
  */
+@Slf4j
 public class SchemaEvolutionContext {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SchemaEvolutionContext.class);
 
   private static final String HIVE_TMP_READ_COLUMN_NAMES_CONF_STR = "hive.tmp.io.file.readcolumn.ids";
   private static final String HIVE_TMP_COLUMNS = "hive.tmp.columns";
@@ -106,7 +104,7 @@ public class SchemaEvolutionContext {
     this.split = split;
     this.job = job;
     if (!job.getBoolean(HIVE_EVOLUTION_ENABLE, true)) {
-      LOG.info("Schema evolution is disabled for split: {}", split);
+      log.info("Schema evolution is disabled for split: {}", split);
       internalSchemaOption = Option.empty();
       this.metaClient = null;
       return;
@@ -158,7 +156,7 @@ public class SchemaEvolutionContext {
     try {
       return parser.apply(cachedJson);
     } catch (Exception e) {
-      LOG.warn("Failed to parse data from cache with key: {}", cacheKey, e);
+      log.warn("Failed to parse data from cache with key: {}", cacheKey, e);
       return Option.empty();
     }
   }
@@ -184,7 +182,7 @@ public class SchemaEvolutionContext {
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
           .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();
     } catch (Exception e) {
-      LOG.error("Not a valid hoodie table, table path: {}", ((FileSplit) split).getPath(), e);
+      log.error("Not a valid hoodie table, table path: {}", ((FileSplit) split).getPath(), e);
       return null;
     }
   }
@@ -197,7 +195,7 @@ public class SchemaEvolutionContext {
    */
   public void doEvolutionForRealtimeInputFormat(AbstractRealtimeRecordReader realtimeRecordReader) throws Exception {
     if (!(split instanceof RealtimeSplit)) {
-      LOG.warn("Expected realtime split for mor table. Found split: {}", split);
+      log.warn("Expected realtime split for mor table. Found split: {}", split);
       return;
     }
     if (internalSchemaOption.isPresent()) {
@@ -221,7 +219,7 @@ public class SchemaEvolutionContext {
       realtimeRecordReader.setHiveSchema(hiveSchema);
       internalSchemaOption = Option.of(prunedInternalSchema);
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
-      LOG.info("About to read compacted logs {} for base split {}, projecting cols {}",
+      log.info("About to read compacted logs {} for base split {}, projecting cols {}",
           realtimeSplit.getDeltaLogPaths(), realtimeSplit.getPath(), requiredColumns);
     }
   }
@@ -359,7 +357,7 @@ public class SchemaEvolutionContext {
       case TIME_MILLIS:
         throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", type));
       default:
-        LOG.error("cannot convert unknown type: {} to Hive", type);
+        log.error("cannot convert unknown type: {} to Hive", type);
         throw new UnsupportedOperationException(String.format("cannot convert unknown type: %s to Hive", type));
     }
   }
@@ -398,8 +396,8 @@ public class SchemaEvolutionContext {
       }
       String filterText = filterExpr.getExprString();
       String serializedFilterExpr = SerializationUtilities.serializeExpression(filterExpr);
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Pushdown initiated with filterText = {}, filterExpr = {}, serializedFilterExpr = {}",
+      if (log.isDebugEnabled()) {
+        log.debug("Pushdown initiated with filterText = {}, filterExpr = {}, serializedFilterExpr = {}",
             filterText, filterExpr, serializedFilterExpr);
       }
       job.set(TableScanDesc.FILTER_TEXT_CONF_STR, filterText);

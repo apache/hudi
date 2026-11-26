@@ -18,17 +18,15 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -38,42 +36,33 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestEventBuffers {
 
   @Test
-  void testAwaitAllInstantsWaitsUntilAllPendingInstantsReset() throws Exception {
-    Configuration conf = new Configuration();
-    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 5_000L);
-    EventBuffers eventBuffers = EventBuffers.getInstance(conf, 1);
+  void testPendingInstantsBeforeIncludeBuffersWithoutEvents() {
+    EventBuffers buffers = EventBuffers.getInstance(new Configuration(), 1);
+    assertTrue(buffers.getPendingInstantsBefore(3L).isEmpty());
 
-    eventBuffers.initNewEventBuffer(1L, "001");
-    eventBuffers.addEventToBuffer(newWriteEvent(1L, "001"));
+    buffers.initNewEventBuffer(1L, "001");
+    assertEquals(Collections.singletonList("001"), buffers.getPendingInstantsBefore(2L));
+    assertFalse(buffers.nonEmpty());
+    assertTrue(buffers.getPendingInstantsBefore(1L).isEmpty());
 
-    ExecutorService executor = Executors.newSingleThreadExecutor();
-    try {
-      // two tasks block waiting on commit.
-      CompletableFuture<Void> waitingFuture1 = CompletableFuture.runAsync(
-          eventBuffers::awaitAllInstantsToCompleteIfNecessary, executor);
-      CompletableFuture<Void> waitingFuture2 = CompletableFuture.runAsync(
-          eventBuffers::awaitAllInstantsToCompleteIfNecessary, executor);
-
-      Thread.sleep(100);
-      assertFalse(waitingFuture1.isDone());
-      assertFalse(waitingFuture2.isDone());
-
-      eventBuffers.reset(1L);
-      Thread.sleep(100);
-      assertTrue(waitingFuture1.isDone());
-      assertTrue(waitingFuture2.isDone());
-    } finally {
-      executor.shutdownNow();
-    }
-  }
-
-  private static WriteMetadataEvent newWriteEvent(long checkpointId, String instant) {
-    return WriteMetadataEvent.builder()
+    buffers.addEventToBuffer(WriteMetadataEvent.builder()
         .taskID(0)
-        .checkpointId(checkpointId)
-        .instantTime(instant)
+        .checkpointId(1L)
+        .instantTime("001")
         .writeStatus(Collections.emptyList())
         .lastBatch(true)
-        .build();
+        .build());
+    assertEquals(Collections.singletonList("001"), buffers.getPendingInstantsBefore(2L));
+    assertTrue(buffers.nonEmpty());
+
+    buffers.initNewEventBuffer(2L, "002");
+    assertEquals(Arrays.asList("001", "002"), buffers.getPendingInstantsBefore(3L));
+    buffers.reset(1L);
+    assertTrue(buffers.getPendingInstantsBefore(2L).isEmpty());
+    assertEquals(Collections.singletonList("002"), buffers.getPendingInstantsBefore(3L));
+    assertFalse(buffers.nonEmpty());
+
+    buffers.reset(2L);
+    assertTrue(buffers.getPendingInstantsBefore(3L).isEmpty());
   }
 }

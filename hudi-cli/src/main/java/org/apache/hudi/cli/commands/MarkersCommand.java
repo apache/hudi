@@ -43,8 +43,9 @@ public class MarkersCommand {
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.DELETE_MARKER, master, sparkMemory, instantTime,
-        HoodieCLI.basePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkMain.SparkCommand.DELETE_MARKER, master, sparkMemory,
+        "instantTime", instantTime,
+        "basePath", HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

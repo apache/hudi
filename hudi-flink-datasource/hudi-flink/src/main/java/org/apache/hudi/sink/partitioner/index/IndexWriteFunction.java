@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.sink.buffer.StableSortBuffer;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.BufferUtils;
@@ -39,7 +40,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
-import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.IOUtils;
@@ -78,7 +78,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
 
   private transient MemorySegmentPool memorySegmentPool;
 
-  private transient BinaryInMemorySortBuffer indexDataBuffer;
+  private transient StableSortBuffer indexDataBuffer;
 
   /**
    * Hoodie Flink table.
@@ -98,7 +98,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(
         config,
         config.get(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE) * 1024 * 1024);
-    this.indexDataBuffer = BufferUtils.createBuffer(IndexRowUtils.INDEX_ROW_TYPE, memorySegmentPool);
+    this.indexDataBuffer = BufferUtils.createStableSortBuffer(IndexRowUtils.INDEX_ROW_TYPE, memorySegmentPool);
     this.dedupKeyExtractor = this.writeClient.getConfig().isRecordLevelIndexEnabled()
         ? IndexWriteFunction::getPartitionedDedupKey : IndexRowUtils::getRecordKey;
   }
@@ -155,7 +155,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     }
   }
 
-  private Pair<List<HoodieRecord>, Set<String>> prepareIndexRecordsAndPartitions(BinaryInMemorySortBuffer indexDataBuffer) {
+  private Pair<List<HoodieRecord>, Set<String>> prepareIndexRecordsAndPartitions(StableSortBuffer indexDataBuffer) {
     BinaryRowData reusedRow = new BinaryRowData(IndexRowUtils.INDEX_ROW_TYPE.getFieldCount());
     Iterator<BinaryRowData> rowItr = new MutableIteratorWrapperIterator<>(indexDataBuffer.getIterator(), () -> reusedRow);
     Set<String> dataPartitions = new HashSet<>();

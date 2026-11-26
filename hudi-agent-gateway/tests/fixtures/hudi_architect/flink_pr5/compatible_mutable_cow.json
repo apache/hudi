@@ -1,0 +1,163 @@
+{
+  "reconciliation_schema": 1,
+  "baseline_id": "hudi-1.2.0-flink-1.20",
+  "writer_transition": "cold_start_new_job",
+  "desired_contract": {
+    "contract_schema": 2,
+    "baseline_id": "hudi-1.2.0-flink-1.20",
+    "hudi_version": "1.2.0",
+    "flink_version": "1.20.1",
+    "safety": {
+      "table_lifecycle": "existing",
+      "writer_model": "single_writer",
+      "external_catalog": false,
+      "mutability": "mutable",
+      "replay_behavior": "must_collapse"
+    },
+    "table": {
+      "name": "orders_mutable_hudi",
+      "path": "file:///tmp/hudi-architect-mutable-orders",
+      "columns": [
+        {"name": "id", "type": "STRING", "nullable": false},
+        {"name": "name", "type": "STRING", "nullable": true},
+        {"name": "event_version", "type": "BIGINT", "nullable": false},
+        {"name": "partition_date", "type": "DATE", "nullable": false}
+      ],
+      "partition_fields": ["partition_date"],
+      "partition_fields_mutable": false
+    },
+    "identity": {
+      "mode": "stable_key",
+      "record_key_fields": ["id"],
+      "record_key_option_fields": []
+    },
+    "ordering": {
+      "mode": "event_time",
+      "fields": ["event_version"]
+    },
+    "source": {
+      "table": "orders_mutable_source",
+      "columns": [
+        {"name": "id", "type": "STRING", "nullable": false},
+        {"name": "name", "type": "STRING", "nullable": true},
+        {"name": "event_version", "type": "BIGINT", "nullable": false},
+        {"name": "partition_date", "type": "DATE", "nullable": false}
+      ],
+      "primary_key_fields": ["id"],
+      "changelog_mode": "UPSERT",
+      "emits_deletes": true,
+      "delete_payload": "FULL_ROW"
+    },
+    "write": {
+      "table_type": "COPY_ON_WRITE",
+      "operation": "upsert",
+      "record_merge_mode": "EVENT_TIME_ORDERING",
+      "index": {
+        "type": "FLINK_STATE",
+        "global": true,
+        "state_ttl_days": 0,
+        "bootstrap_enabled": true
+      },
+      "changelog_enabled": false,
+      "connector_options": {}
+    },
+    "runtime": {
+      "execution_mode": "STREAMING",
+      "checkpointing_enabled": true,
+      "checkpoint_interval_ms": 60000,
+      "target_commit_freshness_ms": 120000
+    }
+  },
+  "evidence": [
+    {
+      "evidence_id": "table-config-1",
+      "kind": "hoodie_properties",
+      "table_path": "file:///tmp/hudi-architect-mutable-orders",
+      "observed_at": "2026-10-19T10:30:00+08:00",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "facts": {
+        "table_name": "orders_mutable_hudi",
+        "table_type": "COPY_ON_WRITE",
+        "table_version": 9,
+        "initial_table_version": 9,
+        "timeline_layout_version": 2,
+        "base_file_format": "PARQUET",
+        "record_key_fields": ["id"],
+        "ordering_fields": ["event_version"],
+        "partition_fields": ["partition_date:SIMPLE"],
+        "key_generator_type": "TIMESTAMP_AVRO",
+        "record_merge_mode": "EVENT_TIME_ORDERING",
+        "hive_style_partitioning": false,
+        "url_encode_partitioning": false
+      }
+    },
+    {
+      "evidence_id": "table-schema-1",
+      "kind": "hudi_table_schema",
+      "table_path": "file:///tmp/hudi-architect-mutable-orders",
+      "observed_at": "2026-10-19T10:30:00+08:00",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "facts": {
+        "columns": [
+          {"name": "id", "type": "STRING", "nullable": false},
+          {"name": "name", "type": "STRING", "nullable": true},
+          {"name": "event_version", "type": "BIGINT", "nullable": false},
+          {"name": "partition_date", "type": "DATE", "nullable": false}
+        ]
+      }
+    },
+    {
+      "evidence_id": "writers-1",
+      "kind": "writer_inventory",
+      "table_path": "file:///tmp/hudi-architect-mutable-orders",
+      "observed_at": "2026-10-19T10:31:00+08:00",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "facts": {
+        "concurrent_writers": false,
+        "previous_writer_engine": "FLINK",
+        "previous_writer_stopped": true
+      }
+    },
+    {
+      "evidence_id": "timeline-1",
+      "kind": "timeline_summary",
+      "table_path": "file:///tmp/hudi-architect-mutable-orders",
+      "observed_at": "2026-10-19T10:31:00+08:00",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "facts": {
+        "pending_instants": []
+      }
+    },
+    {
+      "evidence_id": "identity-1",
+      "kind": "hudi_table_identity",
+      "table_path": "file:///tmp/hudi-architect-mutable-orders",
+      "observed_at": "2026-10-19T10:30:00+08:00",
+      "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "facts": {
+        "table_path": "file:///tmp/hudi-architect-mutable-orders"
+      }
+    },
+    {
+      "evidence_id": "writer-config-1",
+      "kind": "flink_writer_config",
+      "table_path": "file:///tmp/hudi-architect-mutable-orders",
+      "observed_at": "2026-10-19T10:30:00+08:00",
+      "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "facts": {
+        "design_contract_schema": 2,
+        "operation": "UPSERT",
+        "index_type": "FLINK_STATE",
+        "index_global": true,
+        "index_state_ttl_days": 0,
+        "index_bootstrap_enabled": true,
+        "timestamp_key_generator": {
+          "timestamp_type": "SCALAR",
+          "input_time_unit": "DAYS",
+          "output_date_format": "yyyyMMdd",
+          "output_timezone": "UTC"
+        }
+      }
+    }
+  ]
+}

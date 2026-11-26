@@ -59,7 +59,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.FileGroupReaderTableState;
@@ -168,17 +167,6 @@ public class HudiPageSourceProvider
             return new EmptyPageSource();
         }
 
-        // Handle MERGE_ON_READ tables to be read in read_optimized mode
-        // IMPORTANT: These tables will have a COPY_ON_WRITE table, see: `HudiTableTypeUtils#fromInputFormat`
-        // TODO: Move this check into a higher calling stack, such that the split is not created at all
-        if (hudiTableHandle.getTableType().equals(HoodieTableType.COPY_ON_WRITE) && !hudiSplit.getLogFiles().isEmpty()) {
-            if (hudiBaseFileOpt.isEmpty()) {
-                // Handle hasLogFiles=true, hasBaseFile = false
-                // Ignoring log files without base files, no data required to be read
-                return new EmptyPageSource();
-            }
-        }
-
         long start = 0;
         long length = 10;
         if (hudiBaseFileOpt.isPresent()) {
@@ -277,7 +265,8 @@ public class HudiPageSourceProvider
                 dataPageSource,
                 readColumnHandles,
                 prefilledColumnValues,
-                logPageSourceFactory);
+                logPageSourceFactory,
+                readerProps);
 
         Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), readColumnHandles.stream().map(HiveColumnHandle::getName).toList());
         FileSlice fileSlice = convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath());

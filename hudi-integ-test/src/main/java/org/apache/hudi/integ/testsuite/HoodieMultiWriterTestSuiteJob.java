@@ -53,7 +53,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * Example command
  * spark-submit
- * --packages org.apache.spark:spark-avro_2.12:3.5.9
+ * --packages org.apache.spark:spark-avro_2.12:3.5.10
  * --conf spark.task.cpus=3
  * --conf spark.executor.cores=3
  * --conf spark.task.maxFailures=100

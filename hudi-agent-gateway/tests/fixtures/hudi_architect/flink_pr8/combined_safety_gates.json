@@ -1,0 +1,74 @@
+{
+  "contract_schema": 1,
+  "baseline_id": "hudi-1.2.0-flink-1.20",
+  "hudi_version": "1.2.0",
+  "flink_version": "1.21.0",
+  "safety": {
+    "table_lifecycle": "new",
+    "writer_model": "multi_writer",
+    "external_catalog": true,
+    "mutability": "append_only",
+    "replay_behavior": "cannot_occur"
+  },
+  "table": {
+    "name": "orders_hudi",
+    "path": "file:///tmp/hudi-architect-orders",
+    "columns": [
+      {"name": "id", "type": "STRING", "nullable": false},
+      {"name": "name", "type": "STRING", "nullable": true},
+      {"name": "event_ts", "type": "TIMESTAMP(3)", "nullable": false},
+      {"name": "partition_date", "type": "DATE", "nullable": false}
+    ],
+    "partition_fields": ["partition_date"]
+  },
+  "identity": {
+    "mode": "stable_key",
+    "record_key_fields": ["id"],
+    "record_key_option_fields": []
+  },
+  "source": {
+    "table": "orders_source",
+    "columns": [
+      {"name": "id", "type": "STRING", "nullable": false},
+      {"name": "name", "type": "STRING", "nullable": true},
+      {"name": "event_ts", "type": "TIMESTAMP(3)", "nullable": false},
+      {"name": "partition_date", "type": "DATE", "nullable": false}
+    ],
+    "changelog_mode": "INSERT_ONLY"
+  },
+  "write": {
+    "table_type": "COPY_ON_WRITE",
+    "operation": "insert",
+    "insert_cluster": false,
+    "connector_options": {}
+  },
+  "runtime": {
+    "execution_mode": "STREAMING",
+    "checkpointing_enabled": true,
+    "target_commit_freshness_ms": 120000
+  },
+  "writer_contract": {
+    "contract_schema": 1,
+    "primary_writer_id": "flink-orders-stream",
+    "additional_writers": [
+      {
+        "writer_id": "spark-orders-backfill",
+        "role": "BACKFILL",
+        "relationship_to_primary": "INDEPENDENT_CONCURRENT",
+        "engine": "SPARK",
+        "engine_version": "3.5",
+        "hudi_version": "1.2.0",
+        "operation": "BULK_INSERT"
+      }
+    ],
+    "ownership": {
+      "schema_evolution_owner_id": "flink-orders-stream",
+      "table_configuration_owner_id": "flink-orders-stream"
+    },
+    "observed_concurrency": {
+      "mode": "NON_BLOCKING_CONCURRENCY_CONTROL",
+      "lock_provider_class": "org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider",
+      "lock_configuration_consistency": "CONSISTENT"
+    }
+  }
+}

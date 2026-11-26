@@ -36,7 +36,7 @@ import org.apache.flink.configuration.Configuration;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Comparator;
-import java.util.NavigableMap;
+import java.util.Map;
 import java.util.TreeMap;
 
 /**
@@ -182,16 +182,29 @@ public class RecordIndexCache implements Closeable {
   }
 
   /**
-   * Performs the actual cleaning to release memory for new caches.
+   * Removes evictable empty caches and releases memory for new caches when needed.
    *
    * @param nextCacheSize the size for the next new cache
    */
   private void cleanIfNecessary(long nextCacheSize) {
+    // Empty caches provide no lookup benefit, regardless of memory pressure.
+    caches.entrySet().removeIf(entry -> {
+      if (entry.getKey() < minRetainedCheckpointId && entry.getValue().isEmpty()) {
+        entry.getValue().close();
+        log.info("Clean record index cache for checkpoint: {}", entry.getKey());
+        return true;
+      }
+      return false;
+    });
+
+    // Evict remaining caches oldest first, only under memory pressure.
+    long usedMemory = getInMemoryMapSize();
     while (!caches.isEmpty() && caches.lastKey() < minRetainedCheckpointId
-        && getInMemoryMapSize() + nextCacheSize > this.maxCacheSizeInBytes) {
-      NavigableMap.Entry<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> lastEntry = caches.pollLastEntry();
-      lastEntry.getValue().close();
-      log.info("Clean record index cache for checkpoint: {}", lastEntry.getKey());
+        && usedMemory + nextCacheSize > maxCacheSizeInBytes) {
+      Map.Entry<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> entry = caches.pollLastEntry();
+      usedMemory -= entry.getValue().getCurrentInMemoryMapSize();
+      entry.getValue().close();
+      log.info("Clean record index cache for checkpoint: {}", entry.getKey());
     }
   }
 

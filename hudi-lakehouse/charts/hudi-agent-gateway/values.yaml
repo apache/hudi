@@ -54,6 +54,19 @@ gateway:
     # Endpoint for provider=openai-compatible (vLLM, Together, Fireworks, ...).
     baseUrl: ""
   llmTimeoutSeconds: 120
+  # Total wall-clock limit for a chat turn, including all model/tool calls.
+  chatTimeoutSeconds: 300
+
+# trino | spark-connect
+sqlBackend: trino
+
+sparkConnect:
+  uri: "sc://hudi-spark-connect.hudi-lakehouse.svc:15002"
+  catalog: spark_catalog
+  schema: default
+  # Optional Secret key containing GATEWAY_SPARK_CONNECT_URI (e.g. auth tokens).
+  existingSecret: ""
+  uriSecretKey: GATEWAY_SPARK_CONNECT_URI
 
 trino:
   host: hudi-trino.hudi-lakehouse.svc

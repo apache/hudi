@@ -30,10 +30,10 @@ import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.util.function.SerializableFunction;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PrimaryKeyPruners {
 
-  public static Function<Integer, Integer> getBucketIdFunc(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
+  public static SerializableFunction<Integer, Integer> getBucketIdFunc(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
     List<String> pkFields = Arrays.asList(OptionsResolver.getRecordKeys(conf));
     // step1: resolve the hash key values
     final boolean logicalTimestamp = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);

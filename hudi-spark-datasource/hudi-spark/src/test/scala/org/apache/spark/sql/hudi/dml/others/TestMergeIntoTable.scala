@@ -40,7 +40,7 @@ import org.slf4j.LoggerFactory
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
   private val log = LoggerFactory.getLogger(getClass)
 
-  test("Test MergeInto Basic") {
+  testWithMergeHandles("Test MergeInto Basic") {
     Seq(true, false).foreach { sparkSqlOptimizedWrites =>
       withRecordType()(withTempDir { tmp =>
         withSparkSqlSessionConfig("hoodie.payload.combined.schema.validate" -> "false",
@@ -182,7 +182,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
    *
    * The test also provides test coverage for "Test merge into allowed patterns of assignment clauses".
    */
-  test("Test MergeInto with more than once update actions") {
+  testWithMergeHandles("Test MergeInto with more than once update actions") {
 
     withTempDir { tmp =>
       val targetTable = generateTableName
@@ -311,7 +311,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     spark.sessionState.conf.unsetConf("hoodie.index.type")
   }
 
-  test("Test MergeInto with ignored record") {
+  testWithMergeHandles("Test MergeInto with ignored record") {
     withRecordType()(withTempDir { tmp =>
       withSQLConf("hoodie.payload.combined.schema.validate" -> "true") {
         val sourceTable = generateTableName
@@ -670,7 +670,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto For PreCombineField") {
+  testWithMergeHandles("Test MergeInto For PreCombineField") {
     withRecordType()(withTempDir { tmp =>
       withSQLConf("hoodie.payload.combined.schema.validate" -> "true", MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key() -> "0") {
         Seq("cow", "mor").foreach { tableType =>
@@ -915,7 +915,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto with combination of delete update insert") {
+  testWithMergeHandles("Test MergeInto with combination of delete update insert") {
     withRecordType()(withTempDir { tmp =>
       withSQLConf("hoodie.payload.combined.schema.validate" -> "true") {
         val sourceTable = generateTableName
@@ -1210,7 +1210,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     })
   }
 
-  test("Test MereInto With Null Fields") {
+  testWithMergeHandles("Test MereInto With Null Fields") {
     withRecordType()(withTempDir { tmp =>
       withSQLConf("hoodie.payload.combined.schema.validate" -> "true") {
         val types = Seq(
@@ -1487,7 +1487,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto with partial update and insert") {
+  testWithMergeHandles("Test MergeInto with partial update and insert") {
     withSQLConf(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key() -> "0") {
 
 

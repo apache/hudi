@@ -100,10 +100,25 @@ public class BootstrapCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    SparkMain.addAppArgs(sparkLauncher, SparkCommand.BOOTSTRAP, master, sparkMemory, tableName, tableType, targetPath, srcPath, rowKeyField,
-        partitionPathField, String.valueOf(parallelism), schemaProviderClass, bootstrapIndexClass, selectorClass,
-        keyGeneratorClass, fullBootstrapInputProvider, recordMergeMode, payloadClass, recordMergeStrategyId, recordMergeImplClasses,
-        String.valueOf(enableHiveSync), propsFilePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.BOOTSTRAP, master, sparkMemory,
+        "tableName", tableName,
+        "tableType", tableType,
+        "targetPath", targetPath,
+        "srcPath", srcPath,
+        "rowKeyField", rowKeyField,
+        "partitionPathField", partitionPathField,
+        "parallelism", String.valueOf(parallelism),
+        "schemaProviderClass", schemaProviderClass,
+        "bootstrapIndexClass", bootstrapIndexClass,
+        "selectorClass", selectorClass,
+        "keyGeneratorClass", keyGeneratorClass,
+        "fullBootstrapInputProvider", fullBootstrapInputProvider,
+        "recordMergeMode", recordMergeMode,
+        "payloadClass", payloadClass,
+        "recordMergeStrategyId", recordMergeStrategyId,
+        "recordMergeImplClasses", recordMergeImplClasses,
+        "enableHiveSync", String.valueOf(enableHiveSync),
+        "propsFilePath", propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);

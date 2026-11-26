@@ -18,6 +18,7 @@
 
 package org.apache.hudi.async;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import lombok.Getter;
@@ -41,8 +42,10 @@ import java.util.function.Function;
 public abstract class HoodieAsyncService implements Serializable {
   private static final long POLLING_SECONDS = 10;
 
-  // Flag indicating whether an error is incurred in the service
-  protected boolean hasError;
+  // Flag indicating whether an error is incurred in the service; volatile as callers poll it from other threads
+  protected volatile boolean hasError;
+  // Failure the service stopped with, if any
+  private volatile Throwable failure;
   // Flag to track if the service is started.
   @Getter
   private boolean started;
@@ -77,6 +80,21 @@ public abstract class HoodieAsyncService implements Serializable {
 
   public boolean hasError() {
     return hasError;
+  }
+
+  /**
+   * Returns the failure the service stopped with, if it stopped with one.
+   */
+  public Option<Throwable> getFailure() {
+    return Option.ofNullable(failure);
+  }
+
+  /**
+   * Publish the cause before the error flag so a caller observing the flag can also read the cause.
+   */
+  protected void recordFailure(Throwable throwable) {
+    failure = throwable;
+    hasError = true;
   }
 
   /**
@@ -134,6 +152,8 @@ public abstract class HoodieAsyncService implements Serializable {
       log.info("The async service already started.");
       return;
     }
+    failure = null;
+    hasError = false;
     Pair<CompletableFuture, ExecutorService> res = startService();
     future = res.getKey();
     executor = res.getValue();
@@ -157,6 +177,9 @@ public abstract class HoodieAsyncService implements Serializable {
       return;
     }
     future.whenComplete((resp, error) -> {
+      if (null != error && failure == null) {
+        recordFailure((Throwable) error);
+      }
       if (null != callback) {
         callback.apply(null != error);
       }

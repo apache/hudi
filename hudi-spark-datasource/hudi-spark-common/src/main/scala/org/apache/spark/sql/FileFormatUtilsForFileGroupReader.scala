@@ -34,6 +34,7 @@ object FileFormatUtilsForFileGroupReader extends SparkAdapterSupport {
   def applyNewFileFormatChanges(scanOperation: LogicalPlan, logicalRelation: LogicalPlan, fs: HadoopFsRelation): LogicalPlan = {
     val ff = fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait]
     ff.isProjected = true
+    ff.requiredFiltersAppliedInPlan = true
     val tableSchema = fs.location match {
       case _: HoodieCDCFileIndex => HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA
       case index: SparkHoodieTableFileIndex => index.schema

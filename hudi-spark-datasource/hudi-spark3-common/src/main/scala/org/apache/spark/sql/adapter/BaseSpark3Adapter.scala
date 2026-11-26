@@ -188,6 +188,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame = {
     val logicalRelation = LogicalRelation(relation, isStreaming = true)
     val resolvedSchema = logicalRelation.resolve(requiredSchema, sqlContext.sparkSession.sessionState.analyzer.resolver)
+    relation.fileFormat.asInstanceOf[HoodieFormatTrait].requiredFiltersAppliedInPlan = true
     Dataset.ofRows(sqlContext.sparkSession, applyFiltersToPlan(logicalRelation, requiredSchema, resolvedSchema,
         relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
   }

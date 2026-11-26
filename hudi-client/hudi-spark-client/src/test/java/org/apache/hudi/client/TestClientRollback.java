@@ -156,15 +156,15 @@ public class TestClientRollback extends HoodieClientTestBase {
       HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
 
-      List<HoodieBaseFile> dataFiles = partitionPaths.stream().flatMap(s -> {
+      List<HoodieBaseFile> baseFiles = partitionPaths.stream().flatMap(s -> {
         return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"));
       }).collect(Collectors.toList());
-      assertEquals(3, dataFiles.size(), "The data files for commit 003 should be present");
+      assertEquals(3, baseFiles.size(), "The data files for commit 003 should be present");
 
-      dataFiles = partitionPaths.stream().flatMap(s -> {
+      baseFiles = partitionPaths.stream().flatMap(s -> {
         return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"));
       }).collect(Collectors.toList());
-      assertEquals(3, dataFiles.size(), "The data files for commit 002 should be present");
+      assertEquals(3, baseFiles.size(), "The data files for commit 002 should be present");
 
       /**
        * Write 4 (updates)
@@ -180,8 +180,8 @@ public class TestClientRollback extends HoodieClientTestBase {
       table = HoodieSparkTable.create(getConfig(), context, metaClient);
       final BaseFileOnlyView view2 = table.getBaseFileOnlyView();
 
-      dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
-      assertEquals(3, dataFiles.size(), "The data files for commit 004 should be present");
+      baseFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
+      assertEquals(3, baseFiles.size(), "The data files for commit 004 should be present");
 
       // rolling back to a non existent savepoint must not succeed
       assertThrows(HoodieRollbackException.class, () -> {
@@ -195,14 +195,14 @@ public class TestClientRollback extends HoodieClientTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieSparkTable.create(getConfig(), context, metaClient);
       final BaseFileOnlyView view3 = table.getBaseFileOnlyView();
-      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"))).collect(Collectors.toList());
-      assertEquals(3, dataFiles.size(), "The data files for commit 002 be available");
+      baseFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"))).collect(Collectors.toList());
+      assertEquals(3, baseFiles.size(), "The data files for commit 002 be available");
 
-      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"))).collect(Collectors.toList());
-      assertEquals(0, dataFiles.size(), "The data files for commit 003 should be rolled back");
+      baseFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"))).collect(Collectors.toList());
+      assertEquals(0, baseFiles.size(), "The data files for commit 003 should be rolled back");
 
-      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
-      assertEquals(0, dataFiles.size(), "The data files for commit 004 should be rolled back");
+      baseFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
+      assertEquals(0, baseFiles.size(), "The data files for commit 004 should be rolled back");
 
       if (testFailedRestore) {
         //test to make sure that restore commit is reused when the restore fails and is re-ran
@@ -339,15 +339,15 @@ public class TestClientRollback extends HoodieClientTestBase {
       HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
 
-      List<HoodieBaseFile> dataFiles = partitionPaths.stream().flatMap(s -> {
+      List<HoodieBaseFile> baseFiles = partitionPaths.stream().flatMap(s -> {
         return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"));
       }).collect(Collectors.toList());
-      assertEquals(3, dataFiles.size(), "The data files for commit 003 should be present");
+      assertEquals(3, baseFiles.size(), "The data files for commit 003 should be present");
 
-      dataFiles = partitionPaths.stream().flatMap(s -> {
+      baseFiles = partitionPaths.stream().flatMap(s -> {
         return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"));
       }).collect(Collectors.toList());
-      assertEquals(3, dataFiles.size(), "The data files for commit 002 should be present");
+      assertEquals(3, baseFiles.size(), "The data files for commit 002 should be present");
 
       /**
        * Write 4 (updates)
@@ -364,8 +364,8 @@ public class TestClientRollback extends HoodieClientTestBase {
       table = HoodieSparkTable.create(getConfig(), context, metaClient);
       final BaseFileOnlyView view2 = table.getBaseFileOnlyView();
 
-      dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
-      assertEquals(3, dataFiles.size(), "The data files for commit 004 should be present");
+      baseFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
+      assertEquals(3, baseFiles.size(), "The data files for commit 004 should be present");
 
       // rollback to savepoint 002
       HoodieInstant savepoint = table.getCompletedSavepointTimeline().getInstantsAsStream().findFirst().get();
@@ -374,14 +374,14 @@ public class TestClientRollback extends HoodieClientTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieSparkTable.create(getConfig(), context, metaClient);
       final BaseFileOnlyView view3 = table.getBaseFileOnlyView();
-      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"))).collect(Collectors.toList());
-      assertEquals(3, dataFiles.size(), "The data files for commit 002 be available");
+      baseFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"))).collect(Collectors.toList());
+      assertEquals(3, baseFiles.size(), "The data files for commit 002 be available");
 
-      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"))).collect(Collectors.toList());
-      assertEquals(0, dataFiles.size(), "The data files for commit 003 should be rolled back");
+      baseFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"))).collect(Collectors.toList());
+      assertEquals(0, baseFiles.size(), "The data files for commit 003 should be rolled back");
 
-      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
-      assertEquals(0, dataFiles.size(), "The data files for commit 004 should be rolled back");
+      baseFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
+      assertEquals(0, baseFiles.size(), "The data files for commit 004 should be rolled back");
     }
   }
 

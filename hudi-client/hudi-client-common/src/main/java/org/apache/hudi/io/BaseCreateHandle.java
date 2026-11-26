@@ -86,7 +86,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
         new StoragePath(config.getBasePath()),
         FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
         hoodieTable.getPartitionMetafileFormat());
-    partitionMetadata.trySave();
+    partitionMetadata.trySave(partitionPath);
     createMarkerFile(partitionPath,
         FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
   }

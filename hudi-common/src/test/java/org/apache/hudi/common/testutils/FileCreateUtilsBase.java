@@ -33,8 +33,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.net.URI;
@@ -53,9 +52,8 @@ import java.util.stream.Collectors;
 /**
  * Utils for creating dummy Hudi files in testing.
  */
+@Slf4j
 public class FileCreateUtilsBase {
-
-  protected static final Logger LOG = LoggerFactory.getLogger(FileCreateUtilsBase.class);
 
   protected static final String WRITE_TOKEN = "1-0-1";
   protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();

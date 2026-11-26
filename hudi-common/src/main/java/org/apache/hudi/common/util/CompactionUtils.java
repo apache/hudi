@@ -34,8 +34,7 @@ import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2M
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,9 +50,8 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 /**
  * Helper class to generate compaction plan from FileGroup/FileSlice abstraction.
  */
+@Slf4j
 public class CompactionUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(CompactionUtils.class);
-
   public static final Integer COMPACTION_METADATA_VERSION_1 = CompactionV1MigrationHandler.VERSION;
   public static final Integer COMPACTION_METADATA_VERSION_2 = CompactionV2MigrationHandler.VERSION;
   public static final Integer LATEST_COMPACTION_METADATA_VERSION = COMPACTION_METADATA_VERSION_2;
@@ -415,7 +413,7 @@ public class CompactionUtils {
         return Option.of(Pair.of(deltaCommitTimeline.findInstantsModifiedAfterByCompletionTime(
             lastLogCompaction.requestedTime()), lastLogCompaction));
       } else {
-        LOG.info("Last log compaction instant {} is in pending state, returning empty value.", lastLogCompaction.requestedTime());
+        log.info("Last log compaction instant {} is in pending state, returning empty value.", lastLogCompaction.requestedTime());
         return Option.empty();
       }
     } else {

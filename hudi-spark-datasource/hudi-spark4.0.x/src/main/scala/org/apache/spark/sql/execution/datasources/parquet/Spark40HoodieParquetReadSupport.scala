@@ -55,8 +55,8 @@ class Spark40HoodieParquetReadSupport(
   override def init(context: InitContext): ReadContext = {
     val baseContext = super.init(context)
     // Resolve the Spark catalyst requested schema so the reorder is gated on
-    // VariantType -- a user struct that happens to be <value: binary, metadata: binary>
-    // shouldn't be silently reshuffled.
+    // VariantType at any depth -- a user struct that happens to be
+    // <value: binary, metadata: binary> shouldn't be silently reshuffled.
     val sparkRequestedSchema = Option(context.getConfiguration.get(
       ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
       .map(StructType.fromString)
@@ -76,24 +76,64 @@ object Spark40HoodieParquetReadSupport {
    * parquet-mr reconciles the requested schema against the file schema by field name,
    * so the correct bytes still flow to the correct converters regardless of file order.
    *
-   * When a Spark catalyst schema is supplied, reorder only the top-level fields that are
-   * actually typed `VariantType` in catalyst; this prevents reshuffling a user-defined
-   * `struct<value: binary, metadata: binary>` that happens to match the parquet shape.
+   * When a Spark catalyst schema is supplied, the walk is anchored on it and recurses through
+   * structs, arrays and maps, so only what catalyst types as `VariantType` is reordered, at any
+   * depth; a user-defined `struct<value: binary, metadata: binary>` that happens to match the
+   * parquet shape is left alone wherever it sits.
    *
    * Shredded groups are left untouched here; rejecting them is [[rejectShreddedVariants]]'s
-   * job, which walks the whole schema rather than just the top level.
+   * job.
    */
   def reorderVariantFields(schema: MessageType, sparkSchema: Option[StructType] = None): MessageType = {
-    val variantFieldNames: Set[String] = sparkSchema match {
-      case Some(s) => s.fields.collect { case f if f.dataType.isInstanceOf[VariantType] => f.name }.toSet
-      case None => null
+    val reordered = sparkSchema match {
+      case Some(catalyst) => reorderFields(schema, catalyst)
+      case None => schema.getFields.asScala.map(reorderVariantType).toSeq
     }
-    val reordered = schema.getFields.asScala.map { f =>
-      if (variantFieldNames == null || variantFieldNames.contains(f.getName)) {
-        reorderVariantType(f)
-      } else f
-    }.toArray[Type]
     Types.buildMessage().addFields(reordered: _*).named(schema.getName)
+  }
+
+  /** Reorders the fields of `group` against `struct`; fields the struct does not name are left as they are. */
+  private def reorderFields(group: GroupType, struct: StructType): Seq[Type] = {
+    group.getFields.asScala.map { field =>
+      struct.fields.find(_.name == field.getName) match {
+        case Some(catalystField) => reorderByCatalyst(field, catalystField.dataType)
+        case None => field
+      }
+    }.toSeq
+  }
+
+  private def reorderByCatalyst(parquetType: Type, dataType: DataType): Type = {
+    (parquetType, dataType) match {
+      case (group: GroupType, _: VariantType) =>
+        reorderVariantType(group)
+      case (group: GroupType, struct: StructType) =>
+        group.withNewFields(reorderFields(group, struct).asJava)
+      case (group: GroupType, array: ArrayType) =>
+        ParquetSchemaEvolutionUtils.parquetListElement(group)
+          .map(element => replaceType(group, element, reorderByCatalyst(element, array.elementType)))
+          .getOrElse(group)
+      case (group: GroupType, map: MapType) =>
+        ParquetSchemaEvolutionUtils.parquetMapValue(group)
+          .map(value => replaceType(group, value, reorderByCatalyst(value, map.valueType)))
+          .getOrElse(group)
+      case _ => parquetType
+    }
+  }
+
+  /**
+   * Rebuilds `parent` with its descendant `target` (matched by reference) swapped for
+   * `replacement`. The by-reference match covers both list layouts: in the 2-level one the
+   * repeated group is itself the element, so `target` can be a direct child of `parent`.
+   */
+  private def replaceType(parent: Type, target: Type, replacement: Type): Type = {
+    if (parent eq target) {
+      replacement
+    } else if (parent.isPrimitive) {
+      parent
+    } else {
+      val group = parent.asGroupType()
+      group.withNewFields(group.getFields.asScala.map(replaceType(_, target, replacement)).asJava)
+    }
   }
 
   private def reorderVariantType(t: Type): Type = {

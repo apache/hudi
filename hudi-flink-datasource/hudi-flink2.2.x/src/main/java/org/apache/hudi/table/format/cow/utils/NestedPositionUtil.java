@@ -69,7 +69,9 @@ public class NestedPositionUtil {
       }
     }
     if (nullValuesCount == 0) {
-      return new RowPosition(null, fieldDefinitionLevels.length);
+      // Diverges from Flink, which returns fieldDefinitionLevels.length here: that also counts the
+      // skipped values of a last field that is an array, one per element instead of one per row.
+      return new RowPosition(null, nullRowFlags.size());
     }
     return new RowPosition(nullRowFlags.toArray(), nullRowFlags.size());
   }

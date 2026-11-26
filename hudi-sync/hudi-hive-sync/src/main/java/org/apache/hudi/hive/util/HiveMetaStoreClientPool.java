@@ -21,11 +21,10 @@ package org.apache.hudi.hive.util;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -59,9 +58,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * through {@code IMetaStoreClient.dropPartition} (Thrift), whereas ADD/UPDATE/TOUCH go
  * through the thread-bound Hive {@code Driver} and use {@code HiveDriverPool} instead.
  */
+@Slf4j
 public class HiveMetaStoreClientPool implements AutoCloseable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HiveMetaStoreClientPool.class);
 
   private final ArrayBlockingQueue<IMetaStoreClient> available;
   private final List<IMetaStoreClient> all;
@@ -87,7 +85,7 @@ public class HiveMetaStoreClientPool implements AutoCloseable {
     this.all = new ArrayList<>(clients);
     this.available.addAll(clients);
     this.executor = Executors.newFixedThreadPool(size, new PoolThreadFactory());
-    LOG.info("Initialized IMetaStoreClient pool with {} clients", size);
+    log.info("Initialized IMetaStoreClient pool with {} clients", size);
   }
 
   private static List<IMetaStoreClient> buildClients(HiveSyncConfig config, int size) {
@@ -186,14 +184,14 @@ public class HiveMetaStoreClientPool implements AutoCloseable {
     long start = System.currentTimeMillis();
     ParallelDispatch.Outcome outcome = dispatch.awaitOutcome();
     outcome.suppressed().forEach(e ->
-        LOG.warn("Additional {} batch failed (suppressed in favor of first error)", description, e));
+        log.warn("Additional {} batch failed (suppressed in favor of first error)", description, e));
 
     if (outcome.failed()) {
-      LOG.error("{} dispatch aborted after first failure ({} batches cancelled)",
+      log.error("{} dispatch aborted after first failure ({} batches cancelled)",
           description, outcome.cancelled());
       throw outcome.firstError();
     }
-    LOG.info("Completed {} {} batches ({} cancelled) in {} ms across {} clients",
+    log.info("Completed {} {} batches ({} cancelled) in {} ms across {} clients",
         outcome.completed(), description, outcome.cancelled(),
         System.currentTimeMillis() - start, size);
   }
@@ -225,7 +223,7 @@ public class HiveMetaStoreClientPool implements AutoCloseable {
       try {
         client.close();
       } catch (Exception e) {
-        LOG.warn("Error closing pooled IMetaStoreClient", e);
+        log.warn("Error closing pooled IMetaStoreClient", e);
       }
     }
     available.clear();

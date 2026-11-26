@@ -87,6 +87,20 @@ class TestBaseSparkInternalRowReaderContext {
   }
 
   @Test
+  void testConstructEngineRecordWithComparableStringValue() {
+    UTF8String name = UTF8String.fromString("Alice");
+    HoodieUTF8String comparableName = new HoodieUTF8String(name) {
+      @Override
+      public int compareTo(HoodieUTF8String other) {
+        return toString().compareTo(other.toString());
+      }
+    };
+    Object[] fieldVals = new Object[]{1, readerContext.getRecordContext().convertValueToEngineType(comparableName), true};
+    InternalRow row = readerContext.getRecordContext().constructEngineRecord(SCHEMA, fieldVals);
+    assertEquals(name, row.getUTF8String(1));
+  }
+
+  @Test
   void testConstructEngineRecordWithNoUpdate() {
     InternalRow base = new GenericInternalRow(new Object[]{1, UTF8String.fromString("Alice"), true});
     Map<Integer, Object> updates = new HashMap<>();

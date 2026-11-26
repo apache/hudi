@@ -67,6 +67,7 @@ public class TestWriteStatusMerger extends HoodieFlinkClientTestHarness {
     writeStat1.setPath("path1");
     writeStat1.setNumWrites(10);
     writeStat1.setTotalWriteBytes(1000);
+    writeStat1.setFileSizeInBytes(1000);
     writeStatus1.setStat(writeStat1);
 
     writeStatus1.setTotalRecords(10);
@@ -92,6 +93,7 @@ public class TestWriteStatusMerger extends HoodieFlinkClientTestHarness {
     writeStat2.setPath("path2");
     writeStat2.setNumWrites(15);
     writeStat2.setTotalWriteBytes(1500);
+    writeStat2.setFileSizeInBytes(1500);
     writeStatus2.setStat(writeStat2);
 
     writeStatus2.setTotalRecords(15);
@@ -126,6 +128,7 @@ public class TestWriteStatusMerger extends HoodieFlinkClientTestHarness {
     assertEquals("path2", mergedStat.getPath()); // path from the 2nd write stat
     assertEquals(25, mergedStat.getNumWrites()); // 10 + 15
     assertEquals(2500, mergedStat.getTotalWriteBytes()); // 1000 + 1500
+    assertEquals(1500, mergedStat.getFileSizeInBytes());
 
     // Verify merged record delegates
     List<HoodieRecordDelegate> writtenRecordDelegates = mergedStatus.getIndexStats().getWrittenRecordDelegates();

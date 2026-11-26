@@ -126,7 +126,6 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       val out = fs.create(path)
       prevProps.store(out, "hudi properties")
       out.close()
-      fs.close()
 
       // create commit instant
       val newProps: URL = this.getClass.getClassLoader.getResource("table-config.properties")

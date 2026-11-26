@@ -19,14 +19,17 @@
 package org.apache.hudi.cdc
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include
-import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.core.{JsonGenerator, JsonProcessingException}
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.databind.util.RawValue
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
-import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StringType, StructType}
+import org.apache.spark.sql.catalyst.util.{ArrayData, DateTimeUtils, MapData}
+import org.apache.spark.sql.types.{ArrayType, DataType, DateType, Decimal, DecimalType, MapType, StringType, StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
+
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 class InternalRowToJsonStringConverter(schema: StructType) {
 
@@ -37,6 +40,7 @@ class InternalRowToJsonStringConverter(schema: StructType) {
     // The variant branch below embeds its input verbatim once readTree accepts it, and readTree on
     // its own is happy to parse a valid prefix and leave the rest unconsumed.
     _mapper.configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
+    _mapper.configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, true)
     _mapper.registerModule(DefaultScalaModule)
     _mapper
   }
@@ -95,6 +99,11 @@ class InternalRowToJsonStringConverter(schema: StructType) {
               structMap.toMap
             case _ => value // fallback
           }
+        case _: DecimalType => value.asInstanceOf[Decimal].toJavaBigDecimal
+        case DateType => LocalDate.ofEpochDay(value.asInstanceOf[Int]).toString
+        case TimestampType => DateTimeUtils.microsToInstant(value.asInstanceOf[Long]).toString
+        case dt if dt.typeName == InternalRowToJsonStringConverter.TIMESTAMP_NTZ_TYPE_NAME =>
+          DateTimeUtils.microsToLocalDateTime(value.asInstanceOf[Long]).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         case dt if dt.typeName == InternalRowToJsonStringConverter.VARIANT_TYPE_NAME =>
           // VariantVal.toString renders the variant as JSON; embed that rendering verbatim so the
           // image carries the variant's structure. Falling through to the default would serialize
@@ -141,4 +150,6 @@ object InternalRowToJsonStringConverter {
    * against Spark 3 where the type does not exist, needs neither the symbol nor a SparkAdapter.
    */
   private val VARIANT_TYPE_NAME = "variant"
+
+  private val TIMESTAMP_NTZ_TYPE_NAME = "timestamp_ntz"
 }

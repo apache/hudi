@@ -116,6 +116,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -1143,7 +1144,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   @VisibleForTesting
   String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
-    if (needsUpgrade(metaClient)) {
+    if (needsUpgradeOrBackfill(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
@@ -1152,7 +1153,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
 
     txnManager.beginStateChange(Option.empty(), lastCompletedTxnAndMetadata.map(Pair::getLeft));
-    String instantTime;
+    String instantTime = null;
     HoodieInstant instant = null;
     try {
       instantTime = providedInstantTime.orElseGet(() -> createNewInstantTime(false));
@@ -1173,6 +1174,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         instant = metaClient.createNewInstant(State.REQUESTED, actionType, instantTime);
         metaClient.getActiveTimeline().createNewInstant(instant);
       }
+    } catch (RuntimeException | Error failure) {
+      // The caller does not know the allocated instant until startCommit returns. In particular, a
+      // failed timeline write must not leave its heartbeat running on a client reused by streaming.
+      if (instantTime != null && config.getFailedWritesCleanPolicy().isLazy()) {
+        try {
+          heartbeatClient.stop(instantTime);
+        } catch (RuntimeException cleanupFailure) {
+          failure.addSuppressed(cleanupFailure);
+        }
+      }
+      throw failure;
     } finally {
       txnManager.endStateChange(Option.ofNullable(instant));
     }
@@ -1451,10 +1463,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Performs necessary bootstrapping operations (for ex, validating whether Metadata Table has to be bootstrapped).
+   * Performs necessary bootstrapping operations and validates the table properties.
    *
-   * <p>NOTE: THIS OPERATION IS EXECUTED UNDER LOCK, THEREFORE SHOULD AVOID ANY OPERATIONS
-   *          NOT REQUIRING EXTERNAL SYNCHRONIZATION
+   * <p>Upgrade and metadata table initialization execute under lock. Table properties are validated afterward.
    *
    * @param metaClient instance of {@link HoodieTableMetaClient}
    * @param instantTime current inflight instant time
@@ -1465,15 +1476,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       ownerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType,
           metaClient.getTableType()), instantTime.get()));
     }
-    boolean requiresInitTable = needsUpgrade(metaClient) || config.isMetadataTableEnabled();
-    if (!requiresInitTable) {
-      return;
+    boolean requiresInitTable = needsUpgradeOrBackfill(metaClient) || config.isMetadataTableEnabled();
+    if (requiresInitTable) {
+      executeUsingTxnManager(ownerInstant, () -> {
+        tryUpgrade(metaClient, instantTime);
+        // TODO: this also does MT table management..
+        initMetadataTable(instantTime, metaClient);
+      });
     }
-    executeUsingTxnManager(ownerInstant, () -> {
-      tryUpgrade(metaClient, instantTime);
-      // TODO: this also does MT table management..
-      initMetadataTable(instantTime, metaClient);
-    });
+    validateAgainstTableProperties(metaClient, config, operationType);
   }
 
   /**
@@ -1511,13 +1522,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     doInitTable(operationType, metaClient, instantTime);
-    if (WriteOperationType.isInsert(operationType) || WriteOperationType.isChangingRecords(operationType)) {
-      ensureComplexKeyGenEncodingRecorded(metaClient);
-    }
     HoodieTable table = createTable(config, metaClient);
-
-    // Validate table properties
-    validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
 
     switch (operationType) {
       case INSERT:
@@ -1558,7 +1563,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Pure validation: this method reads both configs and throws, and never modifies either.
+   * Validates the write configuration against the table properties. For writes that key records,
+   * ensures the complex key generator encoding is recorded; engines may record a missing encoding.
    *
    * <p>Nothing reconciles the write config against the table beforehand. That is deliberate: the mode
    * is read further down the write path by handles and writer factories, some of which hold no table
@@ -1566,7 +1572,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * in. This gate is what makes that true, by refusing writes whose meta-field settings do not already
    * agree with the table.
    */
-  public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+  public void validateAgainstTableProperties(HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig, WriteOperationType operationType) {
+    if (WriteOperationType.isInsert(operationType) || WriteOperationType.isChangingRecords(operationType)) {
+      ensureComplexKeyGenEncodingRecorded(metaClient);
+    }
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
@@ -1686,8 +1696,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Upgrades the hoodie table if need be when moving to a new Hudi version.
-   * This method is called within a lock. Try to avoid double locking from within this method.
+   * Upgrades the hoodie table if need be when moving to a new Hudi version, and backfills the table configs
+   * that readers of the table version need but the table does not carry.
+   * This method is called within a lock, except when the Flink stream write coordinator calls it on start.
+   * Try to avoid double locking from within this method.
    * @param metaClient instance of {@link HoodieTableMetaClient} to use.
    * @param instantTime instant time of interest if we have one.
    */
@@ -1712,11 +1724,31 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       metaClient.reloadTableConfig();
       metaClient.reloadActiveTimeline();
     }
+
+    backfillTableConfigs(metaClient);
   }
 
-  private boolean needsUpgrade(HoodieTableMetaClient metaClient) {
+  private void backfillTableConfigs(HoodieTableMetaClient metaClient) {
+    if (!HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig()).isPresent()) {
+      return;
+    }
+    // another writer may have backfilled the table since this meta client loaded its config
+    metaClient.reloadTableConfig();
+    Option<String> missingKeyGeneratorClass = HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig());
+    if (missingKeyGeneratorClass.isPresent()) {
+      log.info("Backfilling {}={} for table {}", HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(),
+          missingKeyGeneratorClass.get(), metaClient.getBasePath());
+      Properties updatedProps = new Properties();
+      updatedProps.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), missingKeyGeneratorClass.get());
+      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
+      metaClient.reloadTableConfig();
+    }
+  }
+
+  private boolean needsUpgradeOrBackfill(HoodieTableMetaClient metaClient) {
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
-    return upgradeDowngrade.needsUpgrade(config.getWriteVersion());
+    return upgradeDowngrade.needsUpgrade(config.getWriteVersion())
+        || HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig()).isPresent();
   }
 
   /**

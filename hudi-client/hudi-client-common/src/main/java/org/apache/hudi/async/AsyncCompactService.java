@@ -84,14 +84,14 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
         }
         log.info("Compactor shutting down properly!!");
       } catch (InterruptedException ie) {
-        hasError = true;
+        recordFailure(ie);
         log.warn("Compactor executor thread got interrupted exception. Stopping", ie);
       } catch (IOException e) {
-        hasError = true;
+        recordFailure(e);
         log.error("Compactor executor failed due to IOException", e);
         throw new HoodieIOException(e.getMessage(), e);
       } catch (Exception e) {
-        hasError = true;
+        recordFailure(e);
         log.error("Compactor executor failed", e);
         throw e;
       }
@@ -108,6 +108,10 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
     return false;
   }
 
+  /**
+   * Switches the client used by later compaction runs. Does not wait for a compaction that is running: it can run
+   * for a long time, and the writer calling this must not be blocked until it completes.
+   */
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
     this.compactor.updateWriteClient(writeClient);
   }

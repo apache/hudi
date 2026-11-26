@@ -23,13 +23,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.shims.HiveShim;
 import org.apache.hudi.hadoop.utils.shims.HiveShims;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hive.common.util.HiveVersionInfo;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,9 +39,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class HoodieHiveUtils {
-
-  public static final Logger LOG = LoggerFactory.getLogger(HoodieHiveUtils.class);
 
   public static final String HOODIE_INCREMENTAL_USE_DATABASE = "hoodie.incremental.use.database";
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
@@ -93,7 +91,7 @@ public class HoodieHiveUtils {
   public static boolean stopAtCompaction(JobContext job, String tableName) {
     String compactionPropName = String.format(HOODIE_STOP_AT_COMPACTION_PATTERN, tableName);
     boolean stopAtCompaction = job.getConfiguration().getBoolean(compactionPropName, true);
-    LOG.info("Read stop at compaction - {}", stopAtCompaction);
+    log.info("Read stop at compaction - {}", stopAtCompaction);
     return stopAtCompaction;
   }
 
@@ -103,13 +101,13 @@ public class HoodieHiveUtils {
     if (maxCommits == MAX_COMMIT_ALL) {
       maxCommits = Integer.MAX_VALUE;
     }
-    LOG.info("Read max commits - {}", maxCommits);
+    log.info("Read max commits - {}", maxCommits);
     return maxCommits;
   }
 
   public static String readStartCommitTime(JobContext job, String tableName) {
     String startCommitTimestampName = String.format(HOODIE_START_COMMIT_PATTERN, tableName);
-    LOG.info("Read start commit time - {}", job.getConfiguration().get(startCommitTimestampName));
+    log.info("Read start commit time - {}", job.getConfiguration().get(startCommitTimestampName));
     return job.getConfiguration().get(startCommitTimestampName);
   }
 

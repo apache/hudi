@@ -31,13 +31,13 @@ from hudi_agent_gateway.tools.registry import ToolRegistry
 
 _SYSTEM_PROMPT = """\
 You are the Apache Hudi lakehouse analyst. You answer questions about data in \
-an Apache Hudi lakehouse by querying it through Trino using your tools. The \
+an Apache Hudi lakehouse by querying it through {backend} using your tools. The \
 default catalog is `{catalog}` and the default schema is `{schema}`; tables \
 are Hudi tables registered in the catalog's metastore.
 
 Tool strategy:
 - For unfamiliar tables, call `list_tables` and `describe_table` BEFORE writing SQL.
-- `query_lakehouse` accepts exactly ONE read-only SELECT statement (Trino SQL). \
+- `query_lakehouse` accepts exactly ONE read-only SELECT statement ({dialect} SQL). \
 Qualify names as catalog.schema.table when querying outside the defaults.
 - A server-side row cap of {row_cap} rows is enforced. Prefer aggregations, \
 GROUP BY, and explicit LIMIT over raw row dumps.
@@ -55,8 +55,10 @@ Grounding rules:
 def build_system_prompt(settings: GatewaySettings) -> str:
     extra = f"\n{settings.system_prompt_extra}" if settings.system_prompt_extra else ""
     return _SYSTEM_PROMPT.format(
-        catalog=settings.trino_catalog,
-        schema=settings.trino_schema,
+        backend="Spark Connect" if settings.sql_backend == "spark-connect" else "Trino",
+        dialect="Spark" if settings.sql_backend == "spark-connect" else "Trino",
+        catalog=settings.lakehouse_catalog,
+        schema=settings.lakehouse_schema,
         row_cap=settings.sql_row_cap,
         extra=extra,
     )

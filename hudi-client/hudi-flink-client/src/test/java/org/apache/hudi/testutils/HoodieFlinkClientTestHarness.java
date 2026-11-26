@@ -34,11 +34,10 @@ import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -49,9 +48,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 /**
  * The test harness for resource initialization and cleanup.
  */
+@Slf4j
 public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
 
-  protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkClientTestHarness.class);
   protected StorageConfiguration<Configuration> storageConf;
   protected FileSystem fs;
   protected HoodieFlinkEngineContext context;
@@ -104,7 +103,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
    */
   protected void cleanupFileSystem() throws IOException {
     if (fs != null) {
-      LOG.warn("Closing file-system instance used in previous test-run");
+      log.warn("Closing file-system instance used in previous test-run");
       fs.close();
       fs = null;
     }
@@ -153,7 +152,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
    */
   protected void cleanupFlinkContexts() {
     if (context != null) {
-      LOG.info("Closing flink engine context used in previous test-case");
+      log.info("Closing flink engine context used in previous test-case");
       context = null;
     }
   }

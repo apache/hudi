@@ -295,30 +295,6 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
   }
 
   /**
-   * Test case for do not let the parttitonpath field change
-   */
-  @Test
-  def testChangeWriteTableVersion(): Unit = {
-    Seq(6, 8).foreach { tableVersion =>
-      val tempPath = s"$tempBasePath/${tableVersion}"
-      val tableModifier1 = Map(
-        "path" -> tempPath,
-        HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-        "hoodie.write.table.version" -> s"$tableVersion",
-        "hoodie.datasource.write.recordkey.field" -> "uuid",
-        "hoodie.datasource.write.partitionpath.field" -> "ts"
-      )
-      val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
-
-      // Make sure table version is adopted.
-      val metaClient = HoodieTableMetaClient.builder().setBasePath(tempPath)
-        .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())).build()
-      assertEquals(metaClient.getTableConfig.getTableVersion.versionCode(), tableVersion)
-    }
-  }
-
-  /**
    * Test case for each bulk insert sort mode
    *
    * @param sortMode Bulk insert sort mode

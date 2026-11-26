@@ -248,7 +248,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   minio:
-    image: 'quay.io/minio/minio:latest'
+    image: 'cgr.dev/chainguard/minio:latest'
     platform: linux/amd64
     hostname: minio
     container_name: minio
@@ -258,13 +258,13 @@ services:
     volumes:
       - minio-data:/data
     environment:
-      - MINIO_ACCESS_KEY=minio
-      - MINIO_SECRET_KEY=minio123
+      - MINIO_ROOT_USER=minio
+      - MINIO_ROOT_PASSWORD=minio123
       - MINIO_DOMAIN=minio
     command: server --address ":9090" --console-address ":9091" /data
 
   mc:
-    image: quay.io/minio/mc
+    image: cgr.dev/chainguard/minio-client:latest-dev
     platform: linux/amd64
     container_name: mc
     entrypoint: >
@@ -272,7 +272,7 @@ services:
       until (/usr/bin/mc alias set minio http://minio:9090 minio minio123 --api S3v4) do echo '...waiting...' && sleep 1; done;
       /usr/bin/mc rm -r --force minio/warehouse;
       /usr/bin/mc mb minio/warehouse;
-      /usr/bin/mc policy set public minio/warehouse;
+      /usr/bin/mc anonymous set public minio/warehouse;
       tail -f /dev/null
       "
     depends_on:

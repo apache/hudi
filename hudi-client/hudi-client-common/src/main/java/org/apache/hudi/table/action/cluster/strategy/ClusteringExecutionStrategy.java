@@ -57,7 +57,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
-import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 
 /**
@@ -112,7 +111,10 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     // Without this, reading source file groups with a CUSTOM merge mode fails to resolve the
     // configured merger (HUDI-18980). This mirrors the compaction read path.
     TypedProperties props = TypedProperties.copy(config.getProps());
-    props.setProperty(SPILLABLE_MAP_BASE_PATH.key(), config.getSpillableMapBasePath());
+    // Don't pin SPILLABLE_MAP_BASE_PATH here: this runs on the driver, and props flow into
+    // executor task closures, so a value resolved here (e.g. via FileIOUtils.getDefaultSpillableMapBasePath())
+    // would apply to every executor regardless of its own local disks. Leaving it unset lets each
+    // consumer (e.g. FileGroupRecordBuffer) resolve it lazily inside the executor.
     props.setProperty(SPILLABLE_DISK_MAP_TYPE.key(), config.getCommonConfig().getSpillableDiskMapType().toString());
     props.setProperty(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), Boolean.toString(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled()));
     props.setProperty(MAX_MEMORY_FOR_MERGE.key(), Long.toString(maxMemory));

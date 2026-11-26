@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
@@ -549,7 +550,7 @@ public class TestAvroSchemaConverter {
     Configuration enableInt96ReadingConfig = new Configuration();
     enableInt96ReadingConfig.setBoolean(AvroReadSupport.READ_INT96_AS_FIXED, true);
 
-    HoodieSchema int96schema = HoodieSchema.createFixed("INT96", "INT96 represented as byte[12]", null, 12);
+    HoodieSchema int96schema = HoodieSchema.createFixed("INT96", null, "INT96 represented as byte[12]", 12);
     HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("int96_field", int96schema, null, null)));
 
@@ -844,6 +845,70 @@ public class TestAvroSchemaConverter {
 
     testParquetToAvroConversion(schema, parquetSchema);
     testParquetToAvroConversion(NEW_BEHAVIOR, schema, parquetSchema);
+  }
+
+  @Test
+  public void testReuseNamesArrays() throws Exception {
+    HoodieSchema a1 = HoodieSchema.createRecord("array", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("a4", HoodieSchema.create(HoodieSchemaType.FLOAT))));
+    HoodieSchema a2 = HoodieSchema.createFixed("array", "array2", null, 1);
+    HoodieSchema a3 = HoodieSchema.createFixed("array", "array3", null, 1);
+    HoodieSchema schema = HoodieSchema.createRecord("Message", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("a1", HoodieSchema.createArray(a1)),
+            HoodieSchemaField.of("a2", HoodieSchema.createArray(a2)),
+            HoodieSchemaField.of("a3", HoodieSchema.createArray(a3))));
+
+    String parquetSchema = "message Message {\n"
+        + "  required group a1 (LIST) {\n"
+        + "    repeated group array {\n"
+        + "      required float a4;\n"
+        + "    }\n"
+        + "  }\n"
+        + "  required group a2 (LIST) {\n"
+        + "    repeated fixed_len_byte_array(1) array;\n"
+        + "  }\n"
+        + "  required group a3 (LIST) {\n"
+        + "    repeated fixed_len_byte_array(1) array;\n"
+        + "  }\n"
+        + "}\n";
+
+    testParquetToAvroConversion(schema, parquetSchema);
+    testParquetToAvroConversion(NEW_BEHAVIOR, schema, parquetSchema);
+  }
+
+  @Test
+  public void testReuseNamesOnFixedSurvivesStringRoundTrip() {
+    // Shredded-variant shape (GH-20307): a DECIMAL fixed typed_value nested under a typed_value record,
+    // plus two same-named DECIMAL fixed leaves of different sizes.
+    HoodieSchema schema = getAvroSchemaConverter(new Configuration()).convert(MessageTypeParser.parseMessageType(
+        "message m {\n"
+            + "  optional group payload {\n"
+            + "    required binary metadata;\n"
+            + "    optional binary value;\n"
+            + "    optional group typed_value {\n"
+            + "      required group k10 {\n"
+            + "        optional binary value;\n"
+            + "        optional fixed_len_byte_array(8) typed_value (DECIMAL(18,12));\n"
+            + "      }\n"
+            + "    }\n"
+            + "  }\n"
+            + "  optional group price { optional fixed_len_byte_array(5) amount (DECIMAL(10,2)); }\n"
+            + "  optional group tax { optional fixed_len_byte_array(8) amount (DECIMAL(18,4)); }\n"
+            + "}\n"));
+
+    Schema avroSchema = schema.toAvroSchema();
+    assertEquals(avroSchema, new Schema.Parser().parse(avroSchema.toString()));
+
+    HoodieSchema decimalLeaf = nonNullField(nonNullField(nonNullField(schema, "payload"), "typed_value"), "k10")
+        .getField("typed_value").get().schema().getNonNullType();
+    assertEquals("typed_value2.typed_value", decimalLeaf.getFullName());
+    assertEquals("amount", nonNullField(nonNullField(schema, "price"), "amount").getFullName());
+    assertEquals("amount2.amount", nonNullField(nonNullField(schema, "tax"), "amount").getFullName());
+  }
+
+  private static HoodieSchema nonNullField(HoodieSchema record, String fieldName) {
+    return record.getField(fieldName).get().schema().getNonNullType();
   }
 
   @Test

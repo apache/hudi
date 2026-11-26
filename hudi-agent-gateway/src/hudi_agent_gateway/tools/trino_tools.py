@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Lakehouse tools backed by Trino.
+"""Lakehouse tools backed by Trino or Spark Connect.
 
 Handlers return JSON strings. Expected failures (guardrail rejections, query
 errors, timeouts) are returned as ``{"error": ..., "hint": ...}`` payloads
@@ -32,13 +32,13 @@ from pydantic import Field
 
 from hudi_agent_gateway.config import GatewaySettings
 from hudi_agent_gateway.tools.guardrails import enforce_guardrails
-from hudi_agent_gateway.tools.registry import ToolInputError, ToolRegistry
-from hudi_agent_gateway.tools.trino_client import (
+from hudi_agent_gateway.tools.lakehouse_client import (
+    LakehouseClient,
+    QueryError,
     QueryResult,
-    TrinoClient,
-    TrinoQueryError,
-    TrinoTimeoutError,
+    QueryTimeoutError,
 )
+from hudi_agent_gateway.tools.registry import ToolInputError, ToolRegistry
 
 _QUERY_DESC = (
     "Run a single read-only SELECT statement (Trino SQL) against the lakehouse "
@@ -87,15 +87,17 @@ def shape_result(result: QueryResult, *, max_bytes: int, sql: str, row_cap: int)
     if len(text.encode()) > max_bytes:
         # Fail-safe: even zero rows can bust the limit (huge sql text, very
         # many columns, or a tiny configured cap). Return a bounded payload.
-        text = json.dumps({
-            "sql": sql[:100],
-            "column_count": len(result.columns),
-            "rows": [],
-            "row_count": result.row_count,
-            "truncated": True,
-            "notice": "Result exceeded the size limit; rows and column names omitted. "
-            "Narrow the query or raise the result size limit.",
-        })
+        text = json.dumps(
+            {
+                "sql": sql[:100],
+                "column_count": len(result.columns),
+                "rows": [],
+                "row_count": result.row_count,
+                "truncated": True,
+                "notice": "Result exceeded the size limit; rows and column names omitted. "
+                "Narrow the query or raise the result size limit.",
+            }
+        )
         if len(text.encode()) > max_bytes:
             text = json.dumps({"error": "result exceeded the size limit", "truncated": True})
     return text
@@ -129,9 +131,9 @@ def _validate_identifier(value: str, kind: str) -> str:
 def _split_table_name(table: str, settings: GatewaySettings) -> tuple[str, str, str]:
     parts = table.split(".")
     if len(parts) == 1:
-        return settings.trino_catalog, settings.trino_schema, parts[0]
+        return settings.lakehouse_catalog, settings.lakehouse_schema, parts[0]
     if len(parts) == 2:
-        return settings.trino_catalog, parts[0], parts[1]
+        return settings.lakehouse_catalog, parts[0], parts[1]
     if len(parts) == 3:
         return parts[0], parts[1], parts[2]
     raise ToolInputError(
@@ -139,28 +141,37 @@ def _split_table_name(table: str, settings: GatewaySettings) -> tuple[str, str, 
     )
 
 
-def register(registry: ToolRegistry, client: TrinoClient, settings: GatewaySettings) -> None:
-    @registry.register("query_lakehouse", _QUERY_DESC)
+def register(registry: ToolRegistry, client: LakehouseClient, settings: GatewaySettings) -> None:
+    spark = settings.sql_backend == "spark-connect"
+    dialect = settings.sql_dialect
+
+    @registry.register(
+        "query_lakehouse", _QUERY_DESC.replace("Trino", "Spark" if spark else "Trino")
+    )
     async def query_lakehouse(
         sql: Annotated[
-            str, Field(description="A single read-only SELECT statement in Trino SQL.")
+            str,
+            Field(description="A single read-only SELECT in the configured backend's SQL dialect."),
         ],
     ) -> str:
         try:
-            safe_sql = enforce_guardrails(sql, row_cap=settings.sql_row_cap)
+            safe_sql = enforce_guardrails(
+                sql, row_cap=settings.sql_row_cap, dialect=dialect,
+                spark_catalog=settings.spark_connect_catalog,
+            )
             result = await client.execute(
                 safe_sql, timeout=settings.sql_timeout_seconds, max_rows=settings.sql_row_cap
             )
         except ToolInputError as e:
             return _error(str(e), e.hint)
-        except TrinoTimeoutError as e:
+        except QueryTimeoutError as e:
             return _error(
                 f"query failed: {e}",
                 f"The query hit the gateway's {settings.sql_timeout_seconds:.0f}s limit -- "
                 "narrow it (partition filter, pre-aggregate, fewer columns) or raise "
                 "GATEWAY_SQL_TIMEOUT_SECONDS.",
             )
-        except TrinoQueryError as e:
+        except QueryError as e:
             return _error(f"query failed: {e}", "Fix the SQL and try again.")
         return shape_result(
             result,
@@ -179,20 +190,30 @@ def register(registry: ToolRegistry, client: TrinoClient, settings: GatewaySetti
         ] = "",
     ) -> str:
         try:
-            cat = _validate_identifier(catalog or settings.trino_catalog, "catalog")
-            sch = _validate_identifier(schema_name or settings.trino_schema, "schema")
+            cat = _validate_identifier(catalog or settings.lakehouse_catalog, "catalog")
+            sch = _validate_identifier(schema_name or settings.lakehouse_schema, "schema")
         except ToolInputError as e:
             return _error(str(e), e.hint)
         sql = (
-            f'SELECT table_schema, table_name, table_type FROM "{cat}".information_schema.tables '
-            f"WHERE table_schema = '{sch}' ORDER BY table_name"
+            f"SHOW TABLES IN `{cat}`.`{sch}`"
+            if spark
+            else (
+                "SELECT table_schema, table_name, table_type "
+                f'FROM "{cat}".information_schema.tables '
+                f"WHERE table_schema = '{sch}' ORDER BY table_name"
+            )
         )
         try:
             result = await client.execute(
                 sql, timeout=settings.sql_timeout_seconds, max_rows=settings.sql_row_cap
             )
-        except TrinoQueryError as e:
+        except QueryError as e:
             return _error(f"listing tables failed: {e}")
+        if spark:
+            result = QueryResult(
+                columns=["table_schema", "table_name", "table_type"],
+                rows=[[row[0], row[1], "TEMPORARY" if row[2] else "TABLE"] for row in result.rows],
+            )
         return shape_result(
             result, max_bytes=settings.tool_result_max_bytes, sql=sql, row_cap=settings.sql_row_cap
         )
@@ -211,15 +232,19 @@ def register(registry: ToolRegistry, client: TrinoClient, settings: GatewaySetti
         except ToolInputError as e:
             return _error(str(e), e.hint)
         sql = (
-            "SELECT column_name, data_type, is_nullable "
-            f'FROM "{cat}".information_schema.columns '
-            f"WHERE table_schema = '{sch}' AND table_name = '{tbl}' ORDER BY ordinal_position"
+            f"SELECT * FROM `{cat}`.`{sch}`.`{tbl}` LIMIT 0"
+            if spark
+            else (
+                "SELECT column_name, data_type, is_nullable "
+                f'FROM "{cat}".information_schema.columns '
+                f"WHERE table_schema = '{sch}' AND table_name = '{tbl}' ORDER BY ordinal_position"
+            )
         )
         try:
-            result = await client.execute(
+            result = await (client.describe if spark else client.execute)(
                 sql, timeout=settings.sql_timeout_seconds, max_rows=settings.sql_row_cap
             )
-        except TrinoQueryError as e:
+        except QueryError as e:
             return _error(f"describe failed: {e}")
         if result.row_count == 0:
             return _error(

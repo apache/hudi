@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
+import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 import scala.collection.JavaConverters._
@@ -44,7 +45,8 @@ import scala.collection.JavaConverters._
 case class CreateHoodieTableAsSelectCommand(
    table: CatalogTable,
    mode: SaveMode,
-   query: LogicalPlan) extends DataWritingCommand {
+   query: LogicalPlan,
+   appendToExistingTable: Boolean = false) extends DataWritingCommand {
   override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
 
   override lazy val metrics: Map[String, SQLMetric] = HoodieCommandMetrics.metrics
@@ -63,7 +65,12 @@ case class CreateHoodieTableAsSelectCommand(
     val qualifiedTableIdentifier = table.identifier.copy(database = Some(db))
     val tableName = qualifiedTableIdentifier.unquotedString
 
-    if (sessionState.catalog.tableExists(qualifiedTableIdentifier)) {
+    val tableExists = sessionState.catalog.tableExists(qualifiedTableIdentifier)
+    if (mode == SaveMode.Append && tableExists != appendToExistingTable) {
+      throw new HoodieAnalysisException(s"Table $tableName existence changed after analysis. Retry the append.")
+    }
+
+    if (tableExists) {
       checkState(mode != SaveMode.Overwrite,
         s"Expect the table $tableName has been dropped when the save mode is Overwrite")
 
@@ -73,6 +80,19 @@ case class CreateHoodieTableAsSelectCommand(
 
       if (mode == SaveMode.Ignore) {
         // Since the table already exists and the save mode is Ignore, we will just return.
+        // scalastyle:off
+        return Seq.empty
+        // scalastyle:on
+      }
+
+      if (mode == SaveMode.Append) {
+        val existingTable = sessionState.catalog.getTableMetadata(qualifiedTableIdentifier)
+        val partitionSpec = existingTable.partitionColumnNames.map((_, None)).toMap
+        InsertIntoHoodieTableCommand.run(sparkSession, existingTable, plan, partitionSpec,
+          overwrite = false,
+          extraOptions = mapSqlOptionsToDataSourceWriteConfigs(table.storage.properties -- needFilterProps - "path"),
+          metrics = metrics)
+        DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
         // scalastyle:off
         return Seq.empty
         // scalastyle:on

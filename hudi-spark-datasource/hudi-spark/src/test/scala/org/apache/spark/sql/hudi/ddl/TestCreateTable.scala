@@ -21,22 +21,24 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.testutils.HoodieTestUtils.assertTableConfigs
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
-import org.apache.hudi.keygen.constant.{ComplexKeyGenEncoding, KeyGeneratorType}
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.Assertions
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
-import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.apache.spark.sql.{AnalysisException, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.execution.datasources.CreateTable
 import org.apache.spark.sql.functions.{col, concat, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
@@ -50,7 +52,7 @@ import scala.collection.JavaConverters._
 class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelpers {
 
   test("Test Create Managed Hoodie Table") {
-    val databaseName = "hudi_database"
+    val databaseName = generateTableName
     spark.sql(s"create database if not exists $databaseName")
     spark.sql(s"use $databaseName")
 
@@ -103,57 +105,101 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     spark.sql("use default")
   }
 
-  test("Test Create Hoodie Table With Options") {
-    val tableName = generateTableName
-    spark.sql(
-      s"""
-         | create table $tableName (
-         |  id int,
-         |  name string,
-         |  price double,
-         |  ts long,
-         |  dt string
-         | ) using hudi
-         | partitioned by (dt)
-         | options (
-         |   hoodie.database.name = "databaseName",
-         |   hoodie.table.name = "tableName",
-         |   primaryKey = 'id',
-         |   orderingFields = 'ts',
-         |   hoodie.datasource.write.operation = 'upsert'
-         | )
-       """.stripMargin)
-    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
-    assertResult(table.properties("type"))("cow")
-    assertResult(table.properties("primaryKey"))("id")
-    assertResult(table.properties("orderingFields"))("ts")
-    assertResult(tableName)(table.identifier.table)
-    assertResult("hudi")(table.provider.get)
-    assertResult(CatalogTableType.MANAGED)(table.tableType)
-    assertResult(
-      HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
-        ++ Seq(
-        StructField("id", IntegerType),
-        StructField("name", StringType),
-        StructField("price", DoubleType),
-        StructField("ts", LongType),
-        StructField("dt", StringType))
-    )(table.schema.fields)
-    assertFalse(table.properties.contains(HoodieTableConfig.DATABASE_NAME.key()))
-    assertFalse(table.properties.contains(HoodieTableConfig.NAME.key()))
-    assertFalse(table.properties.contains(OPERATION.key()))
+  // the arm without a table version leaves the write table version unset, so the default version is covered as well
+  Seq(Some(HoodieTableVersion.SIX), Some(HoodieTableVersion.EIGHT), Some(HoodieTableVersion.NINE), Some(HoodieTableVersion.TEN), None).foreach { tableVersion =>
+    test(s"Test Create Hoodie Table With Options (tableVersion=${tableVersion.map(_.versionCode().toString).getOrElse("default")})") {
+      val tableName = generateTableName
+      val tableVersionOption = tableVersion.map(v => s"hoodie.write.table.version = '${v.versionCode()}',").getOrElse("")
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           | ) using hudi
+           | partitioned by (dt)
+           | options (
+           |   hoodie.database.name = "databaseName",
+           |   hoodie.table.name = "tableName",
+           |   $tableVersionOption
+           |   primaryKey = 'id',
+           |   orderingFields = 'ts',
+           |   hoodie.datasource.write.operation = 'upsert'
+           | )
+         """.stripMargin)
+      val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+      assertResult(table.properties("type"))("cow")
+      assertResult(table.properties("primaryKey"))("id")
+      assertResult(table.properties("orderingFields"))("ts")
+      assertResult(tableName)(table.identifier.table)
+      assertResult("hudi")(table.provider.get)
+      assertResult(CatalogTableType.MANAGED)(table.tableType)
+      assertResult(
+        HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
+          ++ Seq(
+          StructField("id", IntegerType),
+          StructField("name", StringType),
+          StructField("price", DoubleType),
+          StructField("ts", LongType),
+          StructField("dt", StringType))
+      )(table.schema.fields)
+      assertFalse(table.properties.contains(HoodieTableConfig.DATABASE_NAME.key()))
+      assertFalse(table.properties.contains(HoodieTableConfig.NAME.key()))
+      assertFalse(table.properties.contains(OPERATION.key()))
 
-    val tablePath = table.storage.properties("path")
-    val metaClient = createMetaClient(spark, tablePath)
-    val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
-    assertResult(true)(tableConfig.contains(HoodieTableConfig.CREATE_SCHEMA.key))
-    assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
-    assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
-    assertResult("ts")(tableConfig(HoodieTableConfig.ORDERING_FIELDS.key))
-    assertResult(KeyGeneratorType.SIMPLE.name())(tableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key))
-    assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
-    assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
-    assertFalse(tableConfig.contains(OPERATION.key()))
+      val tablePath = table.storage.properties("path")
+      val metaClient = createMetaClient(spark, tablePath)
+      assertTrue(metaClient.getTableConfig.contains(HoodieTableConfig.CREATE_SCHEMA))
+      val expectedTableVersion = tableVersion.getOrElse(
+        HoodieTableVersion.fromVersionCode(HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue()))
+      assertTableConfigs(metaClient.getStorage, tablePath, expectedTableConfigs(tableName, expectedTableVersion).asJava)
+    }
+  }
+
+  private def expectedTableConfigs(tableName: String, tableVersion: HoodieTableVersion): Map[String, String] = {
+    val commonConfigs = Map(
+      "hoodie.database.name" -> "default",
+      "hoodie.table.name" -> tableName,
+      "hoodie.table.type" -> "COPY_ON_WRITE",
+      "hoodie.table.version" -> tableVersion.versionCode().toString,
+      "hoodie.table.recordkey.fields" -> "id",
+      "hoodie.table.partition.fields" -> "dt",
+      "hoodie.table.ordering.fields" -> "ts",
+      "hoodie.table.keygenerator.type" -> "SIMPLE",
+      "hoodie.table.format" -> "native",
+      "hoodie.meta.fields.mode" -> "ALL",
+      "hoodie.datasource.write.drop.partition.columns" -> "false",
+      "hoodie.datasource.write.hive_style_partitioning" -> "true",
+      "hoodie.datasource.write.partitionpath.urlencode" -> "false",
+      "hoodie.archivelog.folder" -> "archived",
+      "hoodie.timeline.path" -> "timeline",
+      "hoodie.timeline.history.path" -> "history")
+    val layoutConfigs = if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      Map(
+        "hoodie.timeline.layout.version" -> "1",
+        "hoodie.table.keygenerator.class" -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+    } else {
+      Map(
+        "hoodie.timeline.layout.version" -> "2",
+        "hoodie.table.initial.version" -> tableVersion.versionCode().toString,
+        "hoodie.record.merge.mode" -> "EVENT_TIME_ORDERING")
+    }
+    val mergeConfigs = if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      Map(
+        "hoodie.table.precombine.field" -> "ts",
+        "hoodie.compaction.payload.class" -> "org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+        "hoodie.record.merge.strategy.id" -> "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5")
+    } else {
+      Map.empty[String, String]
+    }
+    val metaFieldsConfigs = if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+      Map("hoodie.populate.meta.fields" -> "true")
+    } else {
+      Map.empty[String, String]
+    }
+    commonConfigs ++ layoutConfigs ++ mergeConfigs ++ metaFieldsConfigs
   }
 
   test("Test Create External Hoodie Table") {
@@ -266,8 +312,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       assertTrue(storage.exists(tableConfigPath))
       val tableConfigModificationTime = storage.getPathInfo(tableConfigPath).getModificationTime
       validateExternalTableCreation(storage, basePath, tableConfigModificationTime, Option.empty)
-      validateExternalTableCreation(storage, basePath, tableConfigModificationTime, Option("new_database"))
-      validateExternalTableCreation(storage, basePath, tableConfigModificationTime, Option("another_database"))
+      validateExternalTableCreation(storage, basePath, tableConfigModificationTime, Option(generateTableName))
+      validateExternalTableCreation(storage, basePath, tableConfigModificationTime, Option(generateTableName))
     }
   }
 
@@ -275,7 +321,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
                                             basePath: String,
                                             tableConfigModificationTime: Long,
                                             databaseName: Option[String]): Unit = {
-    val tableName = "table"
+    val tableName = generateTableName
     if (databaseName.isDefined) {
       spark.sql(
         s"""
@@ -988,7 +1034,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
   test("Test Create Table From Existing Hoodie Table") {
     withTempDir { tmp =>
-      val databaseName = "hudi_database"
+      val databaseName = generateTableName
       spark.sql(s"create database if not exists $databaseName")
       spark.sql(s"use $databaseName")
 
@@ -1244,6 +1290,50 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
         )
       }
     }
+  }
+
+  test("Test Create Table below version 9 records the ordering fields under the legacy key too") {
+    // readers of a table below version 9 (0.x for version 6, 1.0.x for version 8) only know the precombine key
+    Seq(6, 8).foreach { tableVersion =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  ts long
+             |) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  orderingFields = 'ts',
+             |  hoodie.write.table.version = '$tableVersion'
+             | )
+           """.stripMargin)
+        assertOrderingFieldsKeys(tablePath, tableVersion)
+
+        // a table written by 0.x records the ordering fields only under the precombine key
+        val metaClient = createMetaClient(spark, tablePath)
+        val legacyOrderingFields = new java.util.Properties()
+        legacyOrderingFields.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key, "ts")
+        HoodieTableConfig.updateAndDeleteProps(metaClient.getStorage, metaClient.getMetaPath, legacyOrderingFields,
+          java.util.Collections.singleton(HoodieTableConfig.ORDERING_FIELDS.key))
+        // ALTER TABLE RENAME re-creates the table from its own properties
+        spark.sql(s"alter table $tableName rename to ${generateTableName}")
+        assertOrderingFieldsKeys(tablePath, tableVersion)
+      }
+    }
+  }
+
+  private def assertOrderingFieldsKeys(tablePath: String, tableVersion: Int): Unit = {
+    val tableConfig = createMetaClient(spark, tablePath).getTableConfig
+    assertResult(tableVersion)(tableConfig.getTableVersion.versionCode())
+    val properties = tableConfig.getProps.asScala.toMap
+    assertResult(Some("ts"))(properties.get(HoodieTableConfig.ORDERING_FIELDS.key))
+    assertResult(Some("ts"))(properties.get(HoodieTableConfig.PRECOMBINE_FIELD.key))
   }
 
   test("Test Merge Into a legacy single-field complex keygen table without the recorded encoding") {
@@ -1513,7 +1603,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
   }
 
   test("Test Create Non-Hudi Table(Parquet Table)") {
-    val databaseName = "test_database"
+    val databaseName = generateTableName
     spark.sql(s"create database if not exists $databaseName")
     spark.sql(s"use $databaseName")
 
@@ -1608,6 +1698,249 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
        """.stripMargin)
     checkKeyGenerator("org.apache.hudi.keygen.ComplexKeyGenerator", tableName)
     spark.sql(s"drop table $tableName")
+  }
+
+  for (tableType <- Seq("cow", "mor"); external <- Seq(false, true); partitioned <- Seq(false, true)) {
+    test(s"saveAsTable append preserves existing $tableType table (external=$external, partitioned=$partitioned)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val location = if (external) s"LOCATION '${tmp.getCanonicalPath}/$tableName'" else ""
+        val partition = if (partitioned) "PARTITIONED BY (dt)" else ""
+        spark.sql(
+          s"""CREATE TABLE $tableName (id INT, name STRING, ts BIGINT, dt STRING)
+             |USING hudi $partition $location
+             |TBLPROPERTIES (type = '$tableType', primaryKey = 'id', orderingFields = 'ts')
+             |""".stripMargin)
+        try {
+          spark.sql(s"INSERT INTO $tableName VALUES (1, 'first', 1, 'p1')")
+          val identifier = TableIdentifier(tableName)
+          val before = spark.sessionState.catalog.getTableMetadata(identifier)
+          val tablePath = HoodieCatalogTable(spark, before).tableLocation
+          val configBefore = createMetaClient(spark, tablePath).getTableConfig.getProps.asScala.toMap
+
+          // Omit table options and partitionBy: these must come from the existing table.
+          spark.sql("SELECT 2 AS id, 'second' AS name, CAST(2 AS BIGINT) AS ts, 'p2' AS dt")
+            .write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+          checkAnswer(s"SELECT id, name, ts, dt FROM $tableName")(
+            Seq(1, "first", 1L, "p1"), Seq(2, "second", 2L, "p2"))
+          // saveAsTable appends by column name even when the input order differs.
+          spark.sql("SELECT 'p3' AS dt, CAST(3 AS BIGINT) AS ts, 'third' AS name, 3 AS id")
+            .write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+          checkAnswer(s"SELECT id, name, ts, dt FROM $tableName")(
+            Seq(1, "first", 1L, "p1"), Seq(2, "second", 2L, "p2"), Seq(3, "third", 3L, "p3"))
+          spark.sql("SELECT 2 AS id, 'updated' AS name, CAST(4 AS BIGINT) AS ts, 'p2' AS dt")
+            .write.format("hudi").mode(SaveMode.Append)
+            .option("hoodie.spark.sql.insert.into.operation", "upsert").saveAsTable(tableName)
+          // The snapshot view must contain the updated row exactly once, including for MOR tables.
+          checkAnswer(s"SELECT id, name, ts, dt FROM $tableName")(
+            Seq(1, "first", 1L, "p1"), Seq(2, "updated", 4L, "p2"), Seq(3, "third", 3L, "p3"))
+          val after = spark.sessionState.catalog.getTableMetadata(identifier)
+          assertEquals(before.storage.locationUri, after.storage.locationUri)
+          assertEquals(before.partitionColumnNames, after.partitionColumnNames)
+          assertEquals(before.schema, after.schema)
+          assertEquals(configBefore, createMetaClient(spark, tablePath).getTableConfig.getProps.asScala.toMap)
+        } finally {
+          spark.sql(s"DROP TABLE IF EXISTS $tableName")
+        }
+      }
+    }
+  }
+
+  for (tableType <- Seq("cow", "mor")) {
+    test(s"saveAsTable append aligns types and rejects extra columns for $tableType") {
+      val tableName = generateTableName
+      spark.sql(s"CREATE TABLE $tableName (id INT, name STRING) USING hudi " +
+        s"TBLPROPERTIES (type = '$tableType', primaryKey = 'id')")
+      try {
+        spark.sql("SELECT 'first' AS name, CAST(1 AS BIGINT) AS id")
+          .write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+        checkAnswer(s"SELECT id, name FROM $tableName")(Seq(1, "first"))
+        assertEquals(IntegerType, spark.table(tableName).schema("id").dataType)
+        val path = HoodieCatalogTable(spark, spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))).tableLocation
+        assertEquals(IntegerType, spark.read.format("hudi").load(path).schema("id").dataType)
+        val metaClient = createMetaClient(spark, path)
+        val commitsBefore = metaClient.getActiveTimeline.getWriteTimeline.countInstants()
+        val error = intercept[AnalysisException] {
+          spark.sql("SELECT 2 AS id, 'second' AS name, 'unexpected' AS extra")
+            .write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+        }
+        assertTrue(error.getMessage.toLowerCase.contains("too many data columns"))
+        assertEquals(commitsBefore, metaClient.reloadActiveTimeline().getWriteTimeline.countInstants())
+        // A rejected append must leave the persisted and catalog schemas usable for later inserts.
+        spark.sql(s"INSERT INTO $tableName VALUES (2, 'second')")
+        checkAnswer(s"SELECT id, name FROM $tableName")(Seq(1, "first"), Seq(2, "second"))
+      } finally {
+        spark.sql(s"DROP TABLE IF EXISTS $tableName")
+      }
+    }
+  }
+
+  for (partitionColumns <- Seq(Seq.empty[String], Seq("dt"), Seq("name", "dt"))) {
+    test(s"saveAsTable append validates specified partitioning ${partitionColumns.mkString(",")}") {
+      val tableName = generateTableName
+      val partition = if (partitionColumns.isEmpty) "" else s"PARTITIONED BY (${partitionColumns.mkString(",")})"
+      spark.sql(s"CREATE TABLE $tableName (id INT, name STRING, dt STRING) USING hudi $partition " +
+        "TBLPROPERTIES (primaryKey = 'id')")
+      try {
+        val df = spark.sql("SELECT 1 AS id, 'first' AS name, 'p1' AS dt")
+        val error = intercept[AnalysisException] {
+          df.write.format("hudi").mode(SaveMode.Append).partitionBy("name").saveAsTable(tableName)
+        }
+        assertTrue(error.getMessage.contains("does not match that of the existing table"))
+        if (partitionColumns.size > 1) {
+          intercept[AnalysisException] {
+            df.write.format("hudi").mode(SaveMode.Append).partitionBy(partitionColumns.reverse: _*).saveAsTable(tableName)
+          }
+        }
+        withSQLConf("spark.sql.caseSensitive" -> "false") {
+          df.write.format("hudi").mode(SaveMode.Append)
+            .partitionBy(partitionColumns.map(_.toUpperCase(java.util.Locale.ROOT)): _*).saveAsTable(tableName)
+        }
+        checkAnswer(s"SELECT id, name, dt FROM $tableName")(Seq(1, "first", "p1"))
+      } finally {
+        spark.sql(s"DROP TABLE IF EXISTS $tableName")
+      }
+    }
+  }
+
+  test("saveAsTable append rejects a non-Hudi table") {
+    val tableName = generateTableName
+    spark.sql(s"CREATE TABLE $tableName (id INT) USING parquet")
+    try {
+      val error = intercept[AnalysisException] {
+        spark.sql("SELECT 1 AS id").write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+      }
+      assertTrue(error.getMessage.contains("existing table uses parquet"))
+      spark.sql(s"INSERT INTO $tableName VALUES (2)")
+      checkAnswer(s"SELECT * FROM $tableName")(Seq(2))
+    } finally {
+      spark.sql(s"DROP TABLE IF EXISTS $tableName")
+    }
+  }
+
+  test("saveAsTable append rejects conflicting table options") {
+    val tableName = generateTableName
+    spark.sql(s"CREATE TABLE $tableName (id INT, name STRING, ts BIGINT, dt STRING) USING hudi " +
+      "PARTITIONED BY (dt) TBLPROPERTIES (primaryKey = 'id', orderingFields = 'ts')")
+    try {
+      val conflicts = Seq(
+        "hoodie.datasource.write.recordkey.field" -> "name",
+        "hoodie.datasource.write.precombine.field" -> "id",
+        "hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+        "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.ComplexKeyGenerator",
+        "primaryKey" -> "name",
+        "type" -> "mor")
+      val df = spark.sql("SELECT 1 AS id, 'first' AS name, CAST(1 AS BIGINT) AS ts, 'p1' AS dt")
+      conflicts.foreach { case (key, value) =>
+        withClue(s"Conflicting option $key=$value: ") {
+          val error = intercept[org.apache.hudi.exception.HoodieException] {
+            df.write.format("hudi").mode(SaveMode.Append).option(key, value).saveAsTable(tableName)
+          }
+          assertTrue(error.getMessage.contains("Config conflict"))
+        }
+      }
+      df.write.format("hudi").mode(SaveMode.Append)
+        .option("primaryKey", "id").option("type", "cow").saveAsTable(tableName)
+      checkAnswer(s"SELECT id, name, ts, dt FROM $tableName")(Seq(1, "first", 1L, "p1"))
+    } finally {
+      spark.sql(s"DROP TABLE IF EXISTS $tableName")
+    }
+  }
+
+  for (caseSensitive <- Seq(false, true)) {
+    test(s"saveAsTable append matches columns only by name (caseSensitive=$caseSensitive)") {
+      withSQLConf("spark.sql.caseSensitive" -> caseSensitive.toString) {
+        val tableName = generateTableName
+        spark.sql(s"CREATE TABLE $tableName (id INT, first STRING, last STRING) USING hudi " +
+          "TBLPROPERTIES (primaryKey = 'id')")
+        try {
+          val error = intercept[AnalysisException] {
+            spark.sql("SELECT 1 AS id, 'Doe' AS last, 'John' AS first_name")
+              .write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+          }
+          assertTrue(error.getMessage.contains("first"))
+          assertEquals(0L, spark.table(tableName).count())
+          val upperCase = spark.sql("SELECT 'Doe' AS LAST, 1 AS ID, 'John' AS FIRST")
+          if (caseSensitive) {
+            intercept[AnalysisException] {
+              upperCase.write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+            }
+            spark.sql("SELECT 'Doe' AS last, 1 AS id, 'John' AS first")
+              .write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+          } else {
+            upperCase.write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+          }
+          // SQL INSERT INTO retains its positional fallback for differently named input columns.
+          spark.sql(s"INSERT INTO $tableName SELECT 2 AS other_id, 'Jane' AS other_first, 'Roe' AS other_last")
+          checkAnswer(s"SELECT id, first, last FROM $tableName")(
+            Seq(1, "John", "Doe"), Seq(2, "Jane", "Roe"))
+        } finally {
+          spark.sql(s"DROP TABLE IF EXISTS $tableName")
+        }
+      }
+    }
+  }
+
+  for (external <- Seq(false, true)) {
+    test(s"saveAsTable append validates the qualified location (external=$external)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val locationClause = if (external) s"LOCATION '${tmp.getCanonicalPath}/$tableName'" else ""
+        spark.sql(s"CREATE TABLE $tableName (id INT) USING hudi $locationClause TBLPROPERTIES (primaryKey = 'id')")
+        try {
+          spark.sql(s"INSERT INTO $tableName VALUES (1)")
+          val location = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).location
+          val other = new java.io.File(tmp, "other")
+          val error = intercept[AnalysisException] {
+            spark.sql("SELECT 2 AS id").write.format("hudi").mode(SaveMode.Append)
+              .option("path", other.getCanonicalPath).saveAsTable(tableName)
+          }
+          assertTrue(error.getMessage.contains("doesn't match the specified location"))
+          assertFalse(other.exists())
+          checkAnswer(s"SELECT id FROM $tableName")(Seq(1))
+          // Qualified URIs and unqualified paths referring to the same location are both valid.
+          spark.sql("SELECT 2 AS id").write.format("hudi").mode(SaveMode.Append)
+            .option("path", location.getPath).saveAsTable(tableName)
+          spark.sql("SELECT 3 AS id").write.format("hudi").mode(SaveMode.Append)
+            .option("path", location.toString + "/").saveAsTable(tableName)
+          checkAnswer(s"SELECT id FROM $tableName")(Seq(1), Seq(2), Seq(3))
+        } finally {
+          spark.sql(s"DROP TABLE IF EXISTS $tableName")
+        }
+      }
+    }
+  }
+
+  for (existsAtAnalysis <- Seq(false, true)) {
+    test(s"saveAsTable append rejects table existence changes after analysis (existsAtAnalysis=$existsAtAnalysis)") {
+      val tableName = generateTableName
+      val createTable = s"CREATE TABLE $tableName (id INT) USING hudi TBLPROPERTIES (primaryKey = 'id')"
+      if (existsAtAnalysis) {
+        spark.sql(createTable)
+      }
+      try {
+        val table = CatalogTable(TableIdentifier(tableName), CatalogTableType.MANAGED,
+          CatalogStorageFormat.empty, new StructType(), provider = Some("hudi"))
+        val query = spark.sql("SELECT 1 AS id").queryExecution.analyzed
+        val analyzed = spark.sessionState.executePlan(CreateTable(table, SaveMode.Append, Some(query))).analyzed
+        if (existsAtAnalysis) {
+          spark.sql(s"DROP TABLE $tableName")
+        } else {
+          spark.sql(createTable)
+        }
+        val error = intercept[AnalysisException] {
+          spark.sessionState.executePlan(analyzed).executedPlan.executeCollect()
+        }
+        assertTrue(error.getMessage.contains("existence changed after analysis"))
+        if (existsAtAnalysis) {
+          assertFalse(spark.catalog.tableExists(tableName))
+        } else {
+          assertEquals(0L, spark.table(tableName).count())
+        }
+      } finally {
+        spark.sql(s"DROP TABLE IF EXISTS $tableName")
+      }
+    }
   }
 
   test("Test CTAS not de-duplicating (by default)") {
@@ -2408,8 +2741,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
   // VECTOR type name.
 
   test("test create VECTOR table with CLUSTERED BY bucket spec parses (parser coverage)") {
+    val bucketTableName = generateTableName
     val plan = parseCreateTable(
-      "CREATE TABLE vec_bucket_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+      s"CREATE TABLE $bucketTableName (id BIGINT, embedding VECTOR(4)) USING hudi " +
         "CLUSTERED BY (id) INTO 4 BUCKETS")
     val bucket = transformByName(plan, "bucket")
     assertEquals("4", firstLiteralArg(bucket).value.toString)
@@ -2417,14 +2751,16 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
     // SORTED BY ... ASC is accepted by the bucket-spec visitor and yields a sorted_bucket
     // transform; a plain bucket transform here would mean the SORTED BY clause was dropped.
+    val sortedBucketTableName = generateTableName
     val sortedPlan = parseCreateTable(
-      "CREATE TABLE vec_sbucket_tbl (id BIGINT, ts BIGINT, embedding VECTOR(4)) USING hudi " +
+      s"CREATE TABLE $sortedBucketTableName (id BIGINT, ts BIGINT, embedding VECTOR(4)) USING hudi " +
         "CLUSTERED BY (id, ts) SORTED BY (id ASC) INTO 8 BUCKETS")
     assertEquals("sorted_bucket", sortedPlan.partitioning.head.name)
 
     // SORTED BY ... DESC is rejected by the bucket-spec visitor.
+    val badBucketTableName = generateTableName
     checkExceptionContain(
-      "CREATE TABLE vec_bad_bucket_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+      s"CREATE TABLE $badBucketTableName (id BIGINT, embedding VECTOR(4)) USING hudi " +
         "CLUSTERED BY (id) SORTED BY (id DESC) INTO 4 BUCKETS")(
       "Column ordering must be ASC")
   }
@@ -2435,40 +2771,44 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     // tableSpec (location/comment/properties are stable across Spark 3.3 through 4.2; the parsed
     // options map is not exposed on the 3.5+ TableSpecBase, so OPTIONS is only asserted through
     // the path-folding case below).
+    val tableName = generateTableName
     val plan = parseCreateTable(
       s"""
-         |CREATE TABLE vec_clause_tbl (
+         |CREATE TABLE $tableName (
          |  id BIGINT,
          |  embedding VECTOR(4)
          |) USING hudi
          |COMMENT 'a vector table'
-         |LOCATION '/tmp/vec_clause_tbl'
+         |LOCATION '/tmp/$tableName'
          |OPTIONS ('opt_str' = 'v', 'opt_int' = 1, 'opt_bool' = true)
          |TBLPROPERTIES ('prop_str' = 'v', 'prop_int' = 2, 'prop_bool' = false)
          """.stripMargin)
     assertEquals(ArrayType(FloatType, containsNull = false), plan.tableSchema("embedding").dataType)
     assertEquals(Some("a vector table"), plan.tableSpec.comment)
-    assertEquals(Some("/tmp/vec_clause_tbl"), plan.tableSpec.location)
+    assertEquals(Some(s"/tmp/$tableName"), plan.tableSpec.location)
     assertEquals("v", plan.tableSpec.properties("prop_str"))
     assertEquals("2", plan.tableSpec.properties("prop_int"))
     assertEquals("false", plan.tableSpec.properties("prop_bool"))
 
     // A 'path' option with no LOCATION is folded into the table location by the option cleaner.
+    val pathTableName = generateTableName
     val pathPlan = parseCreateTable(
-      "CREATE TABLE vec_path_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
-        "OPTIONS ('path' = '/tmp/vec_path_tbl')")
-    assertEquals(Some("/tmp/vec_path_tbl"), pathPlan.tableSpec.location)
+      s"CREATE TABLE $pathTableName (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        s"OPTIONS ('path' = '/tmp/$pathTableName')")
+    assertEquals(Some(s"/tmp/$pathTableName"), pathPlan.tableSpec.location)
 
     // A 'path' option colliding with LOCATION is rejected by the option cleaner.
+    val dupPathTableName = generateTableName
     interceptParse(
-      "CREATE TABLE vec_dup_path_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+      s"CREATE TABLE $dupPathTableName (id BIGINT, embedding VECTOR(4)) USING hudi " +
         "OPTIONS ('path' = '/tmp/a') LOCATION '/tmp/b'")(
       "Duplicated table paths")
 
     // Each reserved table property (provider, location, owner) is rejected by the property cleaner.
     Seq("provider", "location", "owner").foreach { reserved =>
+      val reservedTableName = generateTableName
       interceptParse(
-        s"CREATE TABLE vec_reserved_$reserved (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        s"CREATE TABLE $reservedTableName (id BIGINT, embedding VECTOR(4)) USING hudi " +
           s"TBLPROPERTIES ('$reserved' = 'x')")(
         "reserved table property")
     }

@@ -155,8 +155,4 @@ public class HoodieCDCUtils {
     record.put(CDC_RECORD_KEY, recordKey);
     return record;
   }
-
-  public static String recordToJson(GenericRecord record) {
-    return GenericData.get().toString(record);
-  }
 }

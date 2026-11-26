@@ -23,29 +23,12 @@ package org.apache.hudi
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
-
-  @Test
-  def testTableVersionAndWriteVersionMatching(): Unit = {
-    val basePath = s"$tempBasePath/tbl_1"
-    val df = spark.range(1).selectExpr("1 as id", "1 as name", "1 as partition")
-
-    // write table with current version
-    df.write.format("hudi")
-      .option(HoodieWriteConfig.TBL_NAME.key, "tbl_1")
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    val metaClient = HoodieTestUtils.createMetaClient(basePath)
-    assertEquals(HoodieTableVersion.current().versionCode(),
-      metaClient.getTableConfig.getTableVersion.versionCode())
-  }
 
   @Test
   def testThrowsExceptionForIncompatibleTableVersion(): Unit = {

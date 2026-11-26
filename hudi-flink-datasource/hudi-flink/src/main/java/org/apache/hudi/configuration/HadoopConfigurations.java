@@ -49,7 +49,9 @@ public class HadoopConfigurations {
    * along with some configurations necessary to construct file readers/writers.
    */
   public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
-    org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
+    String hadoopConfDir = conf.getOptional(FlinkOptions.HADOOP_CONF_DIR).orElse(null);
+    org.apache.hadoop.conf.Configuration hadoopConf = hadoopConfDir == null
+        ? FlinkClientUtil.getHadoopConf() : FlinkClientUtil.getHadoopConf(hadoopConfDir);
     Map<String, String> hadoopOptions = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
     hadoopOptions.forEach(hadoopConf::set);
     // kind of hacky: flink specific IO options.

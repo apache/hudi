@@ -198,4 +198,55 @@ public class TestHiveSchemaUtil {
         "STRUCT< `title` : string, `variant_data` : STRUCT< `metadata` : binary, `value` : binary>>");
     assertEquals(expected, actual);
   }
+
+  /**
+   * Fields of the Avro primitive type "null" (not a nullable union) are valid Avro but carry no data.
+   * They are not written to parquet and have no Hive equivalent, so Hive sync must skip them,
+   * at the top level as well as inside nested records.
+   */
+  @Test
+  void testNullTypeFieldsAreSkipped() throws IOException {
+    Map<String, String> actual = HiveSchemaUtil.convertSchemaToHiveSchema(schemaWithNullTypeFields(), false);
+    Map<String, String> expected = new HashMap<>();
+    expected.put("`id`", "string");
+    expected.put("`msg`",
+        "STRUCT< `fare` : STRUCT< `breakdown` : STRUCT< `profile` : string, `currency` : string, `total` : string>>>");
+    assertEquals(expected, actual);
+  }
+
+  /**
+   * A table whose Hive schema was synced before (without the "null" type fields) must not
+   * fail or report a schema difference.
+   */
+  @Test
+  void testSchemaDiffIgnoresNullTypeFields() {
+    Map<String, String> tableSchema = new HashMap<>();
+    tableSchema.put("id", "string");
+    tableSchema.put("msg", "struct<fare:struct<breakdown:struct<profile:string,currency:string,total:string>>>");
+    SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(schemaWithNullTypeFields(),
+        tableSchema, Collections.emptyList(), false);
+    assertTrue(schemaDifference.isEmpty(), "Unexpected schema difference: " + schemaDifference);
+  }
+
+  /**
+   * Mirrors a Kafka topic schema where some fields are declared with the primitive type "null",
+   * nested three records deep.
+   */
+  private static HoodieSchema schemaWithNullTypeFields() {
+    return HoodieSchema.parse("{\"type\":\"record\",\"name\":\"h\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":[\"null\",\"string\"],\"default\":null},"
+        + "{\"name\":\"top_level_null\",\"type\":\"null\",\"default\":null},"
+        + "{\"name\":\"msg\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"msg\",\"fields\":["
+        + "{\"name\":\"fare\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"fare\",\"fields\":["
+        + "{\"name\":\"breakdown\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"breakdown\",\"fields\":["
+        + "{\"name\":\"profile\",\"type\":[\"null\",\"string\"],\"default\":null},"
+        + "{\"name\":\"clientPromotion\",\"type\":\"null\",\"default\":null},"
+        + "{\"name\":\"currency\",\"type\":[\"null\",\"string\"],\"default\":null},"
+        + "{\"name\":\"personalizedDiscount\",\"type\":\"null\",\"default\":null},"
+        + "{\"name\":\"total\",\"type\":[\"null\",\"string\"],\"default\":null}"
+        + "]}],\"default\":null}"
+        + "]}],\"default\":null}"
+        + "]}],\"default\":null}"
+        + "]}");
+  }
 }

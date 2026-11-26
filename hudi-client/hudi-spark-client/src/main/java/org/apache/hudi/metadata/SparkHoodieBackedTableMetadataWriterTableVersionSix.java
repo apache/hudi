@@ -46,9 +46,8 @@ import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -58,9 +57,8 @@ import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGE
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
+@Slf4j
 public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieBackedTableMetadataWriterTableVersionSix<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBackedTableMetadataWriter.class);
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
@@ -97,9 +95,9 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
     if (metadataWriteConfig.isMetricsOn()) {
       Registry registry;
       if (metadataWriteConfig.isExecutorMetricsEnabled() && metadataWriteConfig.getMetricsReporterType() != MetricsReporterType.INMEMORY) {
-        registry = Registry.getRegistry("HoodieMetadata", DistributedRegistry.class.getName());
+        DistributedRegistry distRegistry = (DistributedRegistry) Registry.getRegistry("HoodieMetadata", DistributedRegistry.class.getName());
         HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
-        ((DistributedRegistry) registry).register(sparkEngineContext.getJavaSparkContext());
+        registry = distRegistry.register(sparkEngineContext.getJavaSparkContext());
       } else {
         registry = Registry.getRegistry("HoodieMetadata");
       }
@@ -161,7 +159,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   @Override
   public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
     List<String> partitionsToDrop = partitions.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
-    LOG.info("Deleting Metadata Table partitions: {}", partitionsToDrop);
+    log.info("Deleting Metadata Table partitions: {}", partitionsToDrop);
 
     SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient();
     String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);

@@ -1,0 +1,14 @@
+{
+  "evidence_id": "unrelated-writers-1",
+  "kind": "writer_inventory",
+  "table_path": "file:///tmp/unrelated-orders-table",
+  "observed_at": "2026-10-30T14:20:00+08:00",
+  "sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+  "facts": {
+    "active_writers": ["flink-unrelated", "spark-unrelated"],
+    "concurrent_writers": true,
+    "previous_writer_engine": "SPARK",
+    "previous_writer_stopped": false,
+    "schema_evolution_owner_id": "spark-unrelated"
+  }
+}

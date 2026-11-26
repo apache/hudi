@@ -103,15 +103,19 @@ public class FileGroupReaderSchemaHandler<T> {
   protected final TypedProperties properties;
   @Getter
   private final DeleteContext deleteContext;
-  private final FileGroupReaderTableState tableState;
+  private final TableState tableState;
 
+  /**
+   * @deprecated Use the constructor that takes a {@link TableState} built once by the caller and passed down.
+   */
+  @Deprecated
   public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
                                       HoodieSchema tableSchema,
                                       HoodieSchema requestedSchema,
                                       Option<InternalSchema> internalSchemaOpt,
                                       TypedProperties properties,
                                       HoodieTableMetaClient metaClient) {
-    this(readerContext, tableSchema, requestedSchema, internalSchemaOpt, properties, FileGroupReaderTableState.fromMetaClient(metaClient));
+    this(readerContext, tableSchema, requestedSchema, internalSchemaOpt, properties, TableState.fromMetaClient(metaClient));
   }
 
   public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
@@ -119,7 +123,7 @@ public class FileGroupReaderSchemaHandler<T> {
                                       HoodieSchema requestedSchema,
                                       Option<InternalSchema> internalSchemaOpt,
                                       TypedProperties properties,
-                                      FileGroupReaderTableState tableState) {
+                                      TableState tableState) {
     this.properties = properties;
     this.readerContext = readerContext;
     this.tableSchema = tableSchema;

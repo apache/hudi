@@ -19,6 +19,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieFileIndex.collectReferencedColumns
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
@@ -27,6 +28,7 @@ import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.InstantComparison.{compareTimestamps, GREATER_THAN_OR_EQUALS}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil}
@@ -35,9 +37,9 @@ import org.apache.hudi.util.{JFunction}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
-import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.hudi.DataSkippingUtils.{containsNullOrValueCountBasedFilters, translateIntoColumnStatsIndexFilterExpr}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, DateAdd, DateFormatClass, DateSub, EqualNullSafe, Expression, FromUnixTime, IsNotNull, IsNull, Literal, Not, Or, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
+import org.apache.spark.sql.hudi.DataSkippingUtils.getTargetIndexedColumnName
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.storage.StorageLevel
 
@@ -57,6 +59,16 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     metadataConfig.isEnabled &&
       metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS) &&
       metaClient.getIndexMetadata.isPresent
+  }
+
+  override def supportsQueryType(options: Map[String, String]): Boolean = {
+    // Partition statistics describe the latest snapshot. Their bounds can shrink after updates
+    // or partition replacement and exclude historical records.
+    options.get(TIME_TRAVEL_AS_OF_INSTANT.key).forall { instant =>
+      val latestCommit = metaClient.getCommitsTimeline.filterCompletedInstants.lastInstant
+      latestCommit.isPresent && compareTimestamps(HoodieSqlCommonUtils.formatQueryInstant(instant),
+        GREATER_THAN_OR_EQUALS, latestCommit.get.requestedTime)
+    }
   }
 
   override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
@@ -108,30 +120,27 @@ class PartitionStatsIndexSupport(spark: SparkSession,
           transposedPartitionStatsDF => {
             try {
               transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
-              val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-                .collect()
-                .map(_.getString(0))
-                .toSet
-              if (allPartitions.nonEmpty) {
-                // PARTITION_STATS index exist for all or some columns in the filters
-                // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
-                //       column in a filter does not have the stats available, by making sure such a
-                //       filter does not prune any partition.
-                // to be fixed. HUDI-8836.
-                val indexFilter = filteredQueryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = filteredIndexedCols)).reduce(And)
-                if (indexFilter.equals(TrueLiteral)) {
-                  // if there are any non indexed cols or we can't translate source expr, we cannot prune partitions based on col stats lookup.
-                  Some(allPartitions)
-                } else {
-                  Some(transposedPartitionStatsDF.where(sparkAdapter.createColumnFromExpression(indexFilter))
-                    .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+              // Use the file index's query-path inventory: partitions entirely absent from the
+              // projected stats must survive, just like files absent from the column stats index.
+              lazy val allPartitions = fileIndex.getAllQueryPartitionPaths.asScala.map(_.getPath).toSet
+              buildCandidateFilter(transposedPartitionStatsDF, filteredQueryFilters, filteredIndexedCols) match {
+                case None => Some(allPartitions)
+                case Some(candidateFilter) =>
+                  val indexedPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
                     .collect()
                     .map(_.getString(0))
-                    .toSet)
-                }
-              } else {
-                // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
-                Option.empty
+                    .toSet
+                  if (indexedPartitions.nonEmpty) {
+                    val matchingPartitions = transposedPartitionStatsDF.where(candidateFilter)
+                      .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                      .collect()
+                      .map(_.getString(0))
+                      .toSet
+                    Some((matchingPartitions ++ (allPartitions -- indexedPartitions)).intersect(allPartitions))
+                  } else {
+                    // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
+                    None
+                  }
               }
             } finally {
               transposedPartitionStatsDF.unpersist()
@@ -148,7 +157,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
 
   private def filterExpressionsExcludingNullAndValue(queryFilters: Seq[Expression], indexedCols: Seq[String]): Seq[Expression] = {
     // Filter queries which do not contain null/value-count filters
-    queryFilters.filter(query => !containsNullOrValueCountBasedFilters(query, indexedCols))
+    queryFilters.filter(query => !PartitionStatsIndexSupport.readsNullOrValueCounts(query, indexedCols))
   }
 
   private def filterNonSqlExpressions(queryFilters: Seq[Expression]): Seq[Expression] = {
@@ -178,4 +187,20 @@ class PartitionStatsIndexSupport(spark: SparkSession,
 
 object PartitionStatsIndexSupport {
   val INDEX_NAME = "PARTITION_STATS"
+
+  /**
+   * Whether `filter` reads null or value counts (IS NULL, IS NOT NULL, <=> NULL) of an indexed
+   * column. Partition stats pruning skips such filters (#12744). NOT does not change the answer,
+   * so it is looked through.
+   */
+  private[hudi] def readsNullOrValueCounts(filter: Expression, indexedCols: Seq[String]): Boolean = filter match {
+    case e if !e.resolved => false
+    case And(l, r) => readsNullOrValueCounts(l, indexedCols) || readsNullOrValueCounts(r, indexedCols)
+    case Or(l, r) => readsNullOrValueCounts(l, indexedCols) || readsNullOrValueCounts(r, indexedCols)
+    case Not(child) => readsNullOrValueCounts(child, indexedCols)
+    case IsNull(a: AttributeReference) => getTargetIndexedColumnName(a, indexedCols).isDefined
+    case IsNotNull(a: AttributeReference) => getTargetIndexedColumnName(a, indexedCols).isDefined
+    case EqualNullSafe(a: AttributeReference, Literal(null, _)) => getTargetIndexedColumnName(a, indexedCols).isDefined
+    case _ => false
+  }
 }

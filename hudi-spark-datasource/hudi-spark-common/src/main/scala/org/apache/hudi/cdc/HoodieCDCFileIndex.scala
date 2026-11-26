@@ -25,6 +25,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.{HoodieCDCExtractor, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.hadoop.fs.{FileStatus, Path}
@@ -57,7 +59,10 @@ class HoodieCDCFileIndex(override val spark: SparkSession,
       .startInstant(options.getOrElse(DataSourceReadOptions.START_COMMIT.key(),
         throw new HoodieException(s"CDC Query should provide the valid start completion time "
           + s"through the option ${DataSourceReadOptions.START_COMMIT.key()}")
-      ))
+      ) match {
+        case start if start.equalsIgnoreCase(IncrementalQueryAnalyzer.START_COMMIT_EARLIEST) => HoodieTimeline.INIT_INSTANT_TS
+        case start => start
+      })
       .endInstant(options.getOrElse(DataSourceReadOptions.END_COMMIT.key(),
         HoodieCDCFileIndex.getTimestampOfLatestInstant(metaClient)
       ))

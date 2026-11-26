@@ -123,8 +123,8 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
   // spark.sql.variant.pushVariantIntoScan is on (off by default there), but its readers do not
   // evaluate the projection and Hudi does not align log records to it, so fail here instead of
   // falling through to the schema-change path (#20032).
-  override def validateVariantProjectionReadable(requiredSchema: StructType): Unit = {
-    requiredSchema.fields.find(f => containsVariantProjection(f.dataType)).foreach { field =>
+  override def validateVariantProjectionReadable(schema: StructType): Unit = {
+    schema.fields.find(f => containsVariantProjection(f.dataType)).foreach { field =>
       throw new HoodieNotSupportedException(
         s"Column '${field.name}' was rewritten by spark.sql.variant.pushVariantIntoScan into a variant " +
           s"projection struct, which Hudi does not support on Spark ${HoodieSparkUtils.getSparkVersion}. " +

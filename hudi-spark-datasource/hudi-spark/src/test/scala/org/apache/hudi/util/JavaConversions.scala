@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.datasources.parquet.TestSparkParquetReaderFormat
+import org.apache.spark.sql.types.StructType
 
 import java.util.function.Predicate
 
@@ -49,7 +50,20 @@ object JavaConversions extends SparkAdapterSupport {
    * @param paths comma separated list of files or directories containing files
    * @return dataframe containing the data from the input paths
    */
-  def createTestDataFrame(sparkSession: SparkSession, paths: String, fileFormat: HoodieFileFormat): DataFrame = {
+  def createTestDataFrame(sparkSession: SparkSession, paths: String, fileFormat: HoodieFileFormat): DataFrame =
+    createTestDataFrame(sparkSession, paths, fileFormat, None)
+
+  /**
+   * Same as the overload above, but reads the files
+   * with the given schema instead of the one inferred from them, the way a table read asks for
+   * the table schema.
+   */
+  def createTestDataFrame(sparkSession: SparkSession, paths: String, fileFormat: HoodieFileFormat,
+                          schema: StructType): DataFrame =
+    createTestDataFrame(sparkSession, paths, fileFormat, Some(schema))
+
+  private def createTestDataFrame(sparkSession: SparkSession, paths: String, fileFormat: HoodieFileFormat,
+                                  schema: Option[StructType]): DataFrame = {
     val splitPaths = paths.split(",").toSeq
     val className = fileFormat match {
       case HoodieFileFormat.PARQUET => "org.apache.spark.sql.execution.datasources.parquet.TestSparkParquetReaderFormat"
@@ -61,7 +75,8 @@ object JavaConversions extends SparkAdapterSupport {
     sparkSession.sqlContext.baseRelationToDataFrame(DataSource.apply(
       sparkSession = sparkSession,
       className = className,
-      paths =  splitPaths
+      paths =  splitPaths,
+      userSpecifiedSchema = schema
     ).resolveRelation())
   }
 }

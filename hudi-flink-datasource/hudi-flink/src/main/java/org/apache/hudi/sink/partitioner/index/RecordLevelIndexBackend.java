@@ -154,7 +154,6 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
   public void onCheckpointComplete(Correspondent correspondent, long completedCheckpointId) {
     Map<Long, String> inflightInstants = correspondent.requestInflightInstants();
     updateEvictableCkp(inflightInstants.keySet().stream().min(Long::compareTo).orElse(completedCheckpointId));
-    metaClient.reloadActiveTimeline();
     reloadMetadataTable();
   }
 
@@ -291,27 +290,19 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
 
   @VisibleForTesting
   void cleanIfNecessary(long nextCacheSize, String protectedPartitionPath) {
-    while (getCurrentHeapSize() + nextCacheSize > maxCacheSizeInBytes) {
-      boolean cleaned = false;
-      Iterator<Map.Entry<String, BucketCache>> iterator = partitionBucketCaches.entrySet().iterator();
-      while (iterator.hasNext()) {
-        Map.Entry<String, BucketCache> entry = iterator.next();
-        if (entry.getKey().equals(protectedPartitionPath)) {
-          continue;
-        }
-        BucketCache cache = entry.getValue();
-        if (cache.lastUpdatedCheckpoint < minRetainedCheckpointId) {
-          cache.close();
-          iterator.remove();
-          cleaned = true;
-          log.info("Evict partitioned RLI cache for partition {}", entry.getKey());
-          break;
-        }
+    long currentHeapSize = getCurrentHeapSize();
+    Iterator<Map.Entry<String, BucketCache>> iterator = partitionBucketCaches.entrySet().iterator();
+    while (currentHeapSize + nextCacheSize > maxCacheSizeInBytes && iterator.hasNext()) {
+      Map.Entry<String, BucketCache> entry = iterator.next();
+      if (entry.getKey().equals(protectedPartitionPath)) {
+        continue;
       }
-      if (!cleaned) {
-        // All remaining partition caches are either protected or too recent to evict safely.
-        // Returning avoids retrying the same scan without making progress.
-        return;
+      BucketCache cache = entry.getValue();
+      if (cache.lastUpdatedCheckpoint < minRetainedCheckpointId) {
+        currentHeapSize -= cache.getHeapSize();
+        cache.close();
+        iterator.remove();
+        log.info("Evict partitioned RLI cache for partition {}", entry.getKey());
       }
     }
   }

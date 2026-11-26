@@ -20,8 +20,7 @@ package org.apache.hudi.timeline.service.handlers.marker;
 
 import org.apache.hudi.common.util.Option;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,9 +30,8 @@ import java.util.concurrent.ExecutorService;
 /**
  * A runnable that performs periodic, batched creation of markers for write operations.
  */
+@Slf4j
 public class MarkerCreationDispatchingRunnable implements Runnable {
-  public static final Logger LOG = LoggerFactory.getLogger(MarkerCreationDispatchingRunnable.class);
-
   // Marker directory states, {markerDirPath -> MarkerDirState instance}
   private final Map<String, MarkerDirState> markerDirStateMap;
   private final ExecutorService executorService;
@@ -72,7 +70,7 @@ public class MarkerCreationDispatchingRunnable implements Runnable {
       MarkerDirState markerDirState = entry.getValue();
       Option<Integer> fileIndex = markerDirState.getNextFileIndexToUse();
       if (!fileIndex.isPresent()) {
-        LOG.debug("All marker files are busy, skip batch processing of create marker requests in {}", markerDir);
+        log.debug("All marker files are busy, skip batch processing of create marker requests in {}", markerDir);
         continue;
       }
       List<MarkerCreationFuture> futures = markerDirState.fetchPendingMarkerCreationRequests();

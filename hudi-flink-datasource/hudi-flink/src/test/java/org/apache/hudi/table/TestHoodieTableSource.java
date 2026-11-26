@@ -45,9 +45,13 @@ import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.connector.ProviderContext;
+import org.apache.flink.table.connector.source.DataStreamScanProvider;
 import org.apache.flink.table.connector.source.LookupTableSource;
+import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.lookup.AsyncLookupFunctionProvider;
 import org.apache.flink.table.connector.source.lookup.LookupFunctionProvider;
 import org.apache.flink.table.data.RowData;
@@ -167,6 +171,25 @@ public class TestHoodieTableSource {
     assertThrows(HoodieException.class, () -> tableSource.getInputFormat(true));
   }
 
+  @ParameterizedTest(name = "read.source-v2.enabled={0}")
+  @ValueSource(booleans = {false, true})
+  void testStreamingSourcePlanningBeforeFirstWrite(boolean isSourceV2) {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, isSourceV2);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    tableSource.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
+    assertTrue(tableSource.getDataBucketFunc().isPresent());
+
+    DataStreamScanProvider provider = (DataStreamScanProvider)
+        tableSource.getScanRuntimeProvider(mock(ScanTableSource.ScanContext.class));
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+    assertNotNull(provider.produceDataStream(mock(ProviderContext.class), env));
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testGetTableAvroSchema(boolean isSourceV2) {
@@ -234,6 +257,33 @@ public class TestHoodieTableSource {
     HoodieTableSource hoodieTableSource = createHoodieTableSource(conf);
     hoodieTableSource.applyFilters(filters);
     assertEquals(expectedPartitions, hoodieTableSource.getReadPartitions());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"snapshot", "read_optimized", "incremental", "streaming"})
+  void testPartitionStatsPrunerForReadMode(String readMode) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    if ("streaming".equals(readMode)) {
+      conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    } else {
+      conf.set(FlinkOptions.QUERY_TYPE, readMode);
+    }
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    tableSource.applyFilters(Arrays.asList(
+        createLitEquivalenceExpr("age", 2, DataTypes.INT().notNull(), 18),
+        createLitEquivalenceExpr("partition", 4, DataTypes.STRING().notNull(), "par1")));
+    assertNotNull(tableSource.getColumnStatsProbe());
+    if ("incremental".equals(readMode) || "streaming".equals(readMode)) {
+      assertEquals(Collections.singletonList("par1"), tableSource.getReadPartitions());
+    } else {
+      assertTrue(tableSource.getReadPartitions().isEmpty());
+    }
   }
 
   @Test

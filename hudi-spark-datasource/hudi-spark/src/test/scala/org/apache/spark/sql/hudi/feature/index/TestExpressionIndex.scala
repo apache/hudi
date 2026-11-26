@@ -54,17 +54,19 @@ import org.apache.spark.sql.catalyst.analysis.{Analyzer, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, FromUnixTime, Literal, Upper}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.execution.FileSourceScanExec
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.{ExclusiveSuite, HoodieSparkSqlTestBase}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
+import java.util.TimeZone
 import java.util.stream.Collectors
 
 import scala.collection.JavaConverters
 
-class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSupport {
+class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSupport with ExclusiveSuite {
 
   override protected def beforeAll(): Unit = {
     spark.sql("set hoodie.metadata.index.column.stats.enable=false")
@@ -1865,6 +1867,121 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
+  test("Test Expression Index Reads Only Filters On Its Own Expression") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""CREATE TABLE $tableName (
+           |  ts STRING, uuid STRING, rider STRING, driver STRING, fare DOUBLE, city STRING
+           |) USING HUDI
+           |PARTITIONED BY (city)
+           |LOCATION '${tmp.getCanonicalPath}/$tableName'
+           |TBLPROPERTIES (primaryKey = 'uuid', preCombineField = 'ts')
+           |""".stripMargin)
+      // One base file per partition; hour(ts) spans chennai [1, 2], san_francisco [16, 23], sao_paulo [9, 9]
+      spark.sql(
+        s"""INSERT INTO $tableName VALUES
+           |('2023-09-19 23:40:49','334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco'),
+           |('2023-09-18 21:45:54','e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',27.70,'san_francisco'),
+           |('2023-09-18 19:14:22','9909a8b1-2d15-4d3d-8ec9-efc48c536a00','rider-D','driver-L',33.90,'san_francisco'),
+           |('2023-09-21 16:34:26','1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'san_francisco'),
+           |('2023-09-23 09:42:17','e3cf430c-889d-4015-bc98-59bdce1e530c','rider-F','driver-P',34.15,'sao_paulo'),
+           |('2023-09-22 09:53:40','7a84095f-737f-40bc-b62f-6b69664712d2','rider-G','driver-Q',43.40,'sao_paulo'),
+           |('2023-09-19 02:38:07','3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06,'chennai'),
+           |('2023-09-19 01:33:19','c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai')
+           |""".stripMargin)
+      spark.sql(s"CREATE INDEX ts_hour ON $tableName USING column_stats(ts) options(expr='hour')")
+      spark.sql(s"CREATE INDEX rider_upper ON $tableName USING column_stats(rider) options(expr='upper')")
+
+      withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+        "spark.sql.adaptive.enabled" -> "false") {
+        assertScan(tableName, "hour(ts) = 16", Seq("rider-E"), expectedFiles = 1)
+        // Spark casts the STRING column inside hour() for the IN too
+        assertScan(tableName, "hour(ts) IN (16, 19)", Seq("rider-D", "rider-E"), expectedFiles = 1)
+        // Both indexes prune: hour keeps chennai and san_francisco, upper keeps san_francisco and sao_paulo
+        assertScan(tableName, "hour(ts) IN (2, 16) AND upper(rider) IN ('RIDER-E', 'RIDER-F')", Seq("rider-E"), expectedFiles = 1)
+        // Another function of ts, or ts itself, does not read the hour stats
+        assertScan(tableName, "minute(ts) = 34", Seq("rider-E"), expectedFiles = 3)
+        assertScan(tableName, "ts = '2023-09-21 16:34:26'", Seq("rider-E"), expectedFiles = 3)
+        // Ranges do not read an expression index yet (#20537)
+        assertScan(tableName, "hour(ts) > 12", Seq("rider-A", "rider-C", "rider-D", "rider-E"), expectedFiles = 3)
+      }
+
+      spark.sql(s"CREATE INDEX ts_date ON $tableName USING column_stats(ts) options(expr='to_date')")
+      spark.sql(s"CREATE INDEX ts_next_day ON $tableName USING column_stats(ts) options(expr='date_add', days='1')")
+
+      withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+        "spark.sql.adaptive.enabled" -> "false") {
+        // The optimizer turns a format-less to_date(ts) into CAST(ts AS DATE)
+        assertScan(tableName, "to_date(ts) = DATE'2023-09-21'", Seq("rider-E"), expectedFiles = 1)
+        // More than 10 values become an InSet, which does not read an expression index: its DATE values are ints
+        val days = (1 to 11).map(day => f"DATE'2023-09-$day%02d'").mkString(", ")
+        assertScan(tableName, s"date_add(ts, 1) IN ($days)", Seq.empty, expectedFiles = 3)
+      }
+    }
+  }
+
+  test("Test Expression Index Leaves A Filter It Cannot Prune To Column Stats") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // One base file per insert, so that column stats prune inside the partition. Instant times in UTC, so that moving
+      // the JVM time zone below does not put an instant hours ahead of the next one
+      withSQLConf("hoodie.metadata.index.column.stats.enable" -> "true", "hoodie.parquet.small.file.limit" -> "0") {
+        spark.sql(
+          s"""CREATE TABLE $tableName (ts STRING, uuid STRING, rider STRING, fare DOUBLE, city STRING) USING HUDI
+             |PARTITIONED BY (city)
+             |LOCATION '${tmp.getCanonicalPath}/$tableName'
+             |TBLPROPERTIES (primaryKey = 'uuid', preCombineField = 'ts', 'hoodie.table.timeline.timezone' = 'UTC')
+             |""".stripMargin)
+        spark.sql(s"INSERT INTO $tableName VALUES ('2023-09-23 09:42:17','u1','rider-F',34.15,'sao_paulo')")
+        spark.sql(s"INSERT INTO $tableName VALUES ('2023-09-24 09:00:00','u2','rider-Z',12.50,'sao_paulo')")
+        spark.sql(s"CREATE INDEX ts_year ON $tableName USING column_stats(ts) options(expr='date_format', format='yyyy')")
+
+        withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+          "spark.sql.adaptive.enabled" -> "false") {
+          // Spark casts the indexed string to INT here, which no rule ranges: the index cannot prune this filter
+          assertScan(tableName, "date_format(ts, 'yyyy') = 2023 AND fare = 12.5", Seq("rider-Z"), expectedFiles = 1)
+        }
+
+        // Year 0 prints as 0001 in a java.sql.Date and as 0000 in a LocalDate; 2011-12-30 is a day Pacific/Apia skipped
+        spark.sql(s"INSERT INTO $tableName VALUES ('0000-01-01 10:00:00','u3','rider-Y',7.25,'sao_paulo')")
+        spark.sql(s"INSERT INTO $tableName VALUES ('2011-12-28 10:00:00','u4','rider-X',8.75,'sao_paulo')")
+
+        // A bloom filter holds a DATE as the writer's string, a java.sql.Date or, with the java8 API, a LocalDate,
+        // not as the epoch days of the literal (#20567)
+        Seq("false", "true").foreach { java8Api =>
+          withSQLConf("spark.sql.datetime.java8API.enabled" -> java8Api) {
+            spark.sql(s"CREATE INDEX ts_two_days ON $tableName USING bloom_filters(ts) options(expr='date_add', days='2')")
+          }
+          withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+            "spark.sql.adaptive.enabled" -> "false") {
+            assertScan(tableName, "date_add(ts, 2) = DATE'2023-09-25'", Seq("rider-F"), expectedFiles = 1)
+            assertScan(tableName, "date_add(ts, 2) IN (DATE'2023-09-25', DATE'2023-09-27')", Seq("rider-F"), expectedFiles = 1)
+            assertScan(tableName, "date_add(ts, 2) = DATE'0000-01-03'", Seq("rider-Y"), expectedFiles = 1)
+          }
+          spark.sql(s"DROP INDEX ts_two_days ON $tableName")
+        }
+
+        // A java.sql.Date prints in the writer's JVM time zone: an executor in Pacific/Apia, which skipped 2011-12-30,
+        // stores that day as 2011-12-31, which a reader in another zone must still probe
+        withSQLConf("spark.sql.datetime.java8API.enabled" -> "false") {
+          val defaultZone = TimeZone.getDefault
+          TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Apia"))
+          try {
+            spark.sql(s"CREATE INDEX ts_two_days ON $tableName USING bloom_filters(ts) options(expr='date_add', days='2')")
+          } finally {
+            TimeZone.setDefault(defaultZone)
+          }
+        }
+        withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+          "spark.sql.adaptive.enabled" -> "false") {
+          assertScan(tableName, "date_add(ts, 2) = DATE'2011-12-30'", Seq("rider-X"), expectedFiles = 1)
+        }
+        spark.sql(s"DROP INDEX ts_two_days ON $tableName")
+      }
+    }
+  }
+
   test("Test bloom filters index pruning") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
@@ -2357,6 +2474,14 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     assertFalse(bloomFilterRecords.isEmpty)
     val bloomFilter: HoodieMetadataBloomFilter = bloomFilterRecords.collectAsList().get(0).getData.asInstanceOf[HoodieMetadataPayload].getBloomFilterMetadata.get()
     assertTrue(bloomFilter.getType.equals("DYNAMIC_V0"))
+  }
+
+  /** The riders the query returns, and the number of files its scan read. */
+  private def assertScan(tableName: String, predicate: String, expectedRiders: Seq[String], expectedFiles: Int): Unit = {
+    val df = spark.sql(s"SELECT rider FROM $tableName WHERE $predicate")
+    assertEquals(expectedRiders, df.collect().map(_.getString(0)).sorted.toSeq, predicate)
+    val scannedFiles = df.queryExecution.executedPlan.collect { case scan: FileSourceScanExec => scan.metrics("numFiles").value }.sum
+    assertEquals(expectedFiles, scannedFiles, predicate)
   }
 
   private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient,

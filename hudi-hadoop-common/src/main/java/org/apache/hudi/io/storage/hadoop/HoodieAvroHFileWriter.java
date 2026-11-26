@@ -41,12 +41,11 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -64,9 +63,9 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * 1. Records should be added in order of keys
  * 2. There are no column stats
  */
+@Slf4j
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileWriter.class);
   private static final AtomicLong RECORD_INDEX_COUNT = new AtomicLong(1);
   private final Path file;
   private final HoodieHFileConfig hfileConfig;
@@ -146,7 +145,7 @@ public class HoodieAvroHFileWriter
     if (!this.hfileConfig.isAllowDuplicatesOnHfileWrites()) {
       // When allowDuplicatesOnHfileWrites is true, allow duplicates to be written to hFile.
       if (prevRecordKey.equals(recordKey)) {
-        LOG.info("Duplicate recordKey {} found while writing to HFile. Record payload {}", recordKey, record);
+        log.info("Duplicate recordKey {} found while writing to HFile. Record payload {}", recordKey, record);
         throw new HoodieDuplicateKeyException("Duplicate recordKey " + recordKey + " found while writing to HFile.");
       }
     }

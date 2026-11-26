@@ -43,8 +43,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -62,8 +61,8 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  * This strategy can be used to cluster data based on specific commit criteria
  * such as commit frequency, commit size, or other commit-based metrics.
  */
+@Slf4j
 public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwareClusteringPlanStrategy<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(CommitBasedClusteringPlanStrategy.class);
   private String checkpoint;
   public static final String CLUSTERING_COMMIT_CHECKPOINT_KEY = "clustering.commit.checkpoint";
 
@@ -83,10 +82,10 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
     String earliestCommit = getWriteConfig().getClusteringEarliestCommitToCluster();
     if (earliestCommit == null) {
-      LOG.error("earliest commit to cluster is not specified");
+      log.error("earliest commit to cluster is not specified");
       return Option.empty();
     }
-    LOG.info("Earliest commit to cluster (exclusive): {}", earliestCommit);
+    log.info("Earliest commit to cluster (exclusive): {}", earliestCommit);
 
     HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().findInstantsAfter(earliestCommit).filterCompletedInstants();
     // For each completed commit, invoke getFileSlicesEligibleForCommitBasedClustering
@@ -153,7 +152,7 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
     checkpoint = lastCommit;
 
     if (clusteringGroups.isEmpty()) {
-      LOG.warn("No data available to cluster");
+      log.warn("No data available to cluster");
       return Option.empty();
     }
 
@@ -247,7 +246,7 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
       try {
         commitMetadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
       } catch (IOException e) {
-        LOG.error("Failed to read commit metadata for instant: {}", instant, e);
+        log.error("Failed to read commit metadata for instant: {}", instant, e);
         throw new HoodieException("Failed to read commit metadata for instant: " + instant, e);
       }
     } else {
@@ -285,7 +284,7 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
         try {
           pathInfo = storage.getPathInfo(path);
         } catch (Exception e) {
-          LOG.error("Could not get PathInfo for file path: {}", path, e);
+          log.error("Could not get PathInfo for file path: {}", path, e);
           throw new HoodieException("Could not get PathInfo for file path: " + path, e);
         }
 

@@ -36,8 +36,7 @@ from hudi_agent_gateway.llm import LLMReadiness
 from hudi_agent_gateway.log import log_event, setup_logging
 from hudi_agent_gateway.mcp_server import build_mcp
 from hudi_agent_gateway.sessions import SessionStore
-from hudi_agent_gateway.tools import build_registry
-from hudi_agent_gateway.tools.trino_client import TrinoClient
+from hudi_agent_gateway.tools import build_client, build_registry
 
 logger = logging.getLogger("hudi_agent_gateway.app")
 
@@ -46,8 +45,8 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
     s = settings or GatewaySettings()
     setup_logging(s.log_level)
 
-    trino_client = TrinoClient(s)
-    registry = build_registry(s, trino_client)
+    lakehouse_client = build_client(s)
+    registry = build_registry(s, lakehouse_client)
     # NOTE: the MCP ASGI sub-app has its own lifespan that MUST run inside the
     # outer app's lifespan, or FastMCP's streamable-HTTP session manager never
     # starts and /mcp requests hang.
@@ -56,7 +55,7 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = s
-        app.state.trino_client = trino_client
+        app.state.lakehouse_client = lakehouse_client
         app.state.registry = registry
         app.state.llm_readiness = LLMReadiness(s)
         app.state.sessions = SessionStore(s)
@@ -79,6 +78,7 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
                 yield
         finally:
             sweeper.cancel()
+            lakehouse_client.close()
 
     app = FastAPI(title="hudi-agent-gateway", version=__version__, lifespan=lifespan)
     app.include_router(meta.router)

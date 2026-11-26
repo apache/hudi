@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.index.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -563,6 +562,12 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
                | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-26', DATE'2021-12-26')
                |""".stripMargin)
 
+          // Filters on non-ASCII columns, including one renamed after the base file was written,
+          // are pushed down with backtick-quoted names and must resolve against the file schema.
+          checkAnswer(spark.sql(s"select id from $tableName where `名字` = '李明'").collect())(Seq(1))
+          checkAnswer(spark.sql(s"select id from $tableName where `爱好_Best` = '读书'").collect())(Seq(1))
+          checkAnswer(spark.sql(s"select id from $tableName where `爱好_Best` = '跑步'").collect())()
+
           // alter date to string
           spark.sql(s"alter table $tableName alter column `上次更新时间` type string ")
           checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
@@ -1064,7 +1069,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"select id, name, cast(price as string), ts from $tableName")
 
           // clear after using INMEMORY index
-          HoodieInMemoryHashIndex.clear()
+          clearInMemoryIndex()
         }
       }
     }
@@ -1148,7 +1153,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           )
 
           // clear after using INMEMORY index
-          HoodieInMemoryHashIndex.clear()
+          clearInMemoryIndex()
         }
       }
     }

@@ -18,17 +18,15 @@
 
 package org.apache.hudi;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
 
+@Slf4j
 public class TestReportJvmConfiguration {
-  private static final Logger LOG = LoggerFactory.getLogger(TestReportJvmConfiguration.class);
-
   @Test
   public void testReportMemoryUsage() {
     reportMemoryUsageWithMXBean();
@@ -41,15 +39,15 @@ public class TestReportJvmConfiguration {
     MemoryUsage heapMemoryUsage = memoryBean.getHeapMemoryUsage();
     MemoryUsage nonHeapMemoryUsage = memoryBean.getNonHeapMemoryUsage();
 
-    LOG.warn("Heap Memory Usage (MemoryMXBean):");
-    LOG.warn("  Used: {} bytes", heapMemoryUsage.getUsed());
-    LOG.warn("  Committed: {} bytes", heapMemoryUsage.getCommitted());
-    LOG.warn("  Max: {} bytes", heapMemoryUsage.getMax());
+    log.warn("Heap Memory Usage (MemoryMXBean):");
+    log.warn("  Used: {} bytes", heapMemoryUsage.getUsed());
+    log.warn("  Committed: {} bytes", heapMemoryUsage.getCommitted());
+    log.warn("  Max: {} bytes", heapMemoryUsage.getMax());
 
-    LOG.warn("Non-Heap Memory Usage (MemoryMXBean):");
-    LOG.warn("  Used: {} bytes", nonHeapMemoryUsage.getUsed());
-    LOG.warn("  Committed: {} bytes", nonHeapMemoryUsage.getCommitted());
-    LOG.warn("  Max: {} bytes", nonHeapMemoryUsage.getMax());
+    log.warn("Non-Heap Memory Usage (MemoryMXBean):");
+    log.warn("  Used: {} bytes", nonHeapMemoryUsage.getUsed());
+    log.warn("  Committed: {} bytes", nonHeapMemoryUsage.getCommitted());
+    log.warn("  Max: {} bytes", nonHeapMemoryUsage.getMax());
   }
 
   private void reportMemoryUsageWithRuntime() {
@@ -59,9 +57,9 @@ public class TestReportJvmConfiguration {
     long freeMemory = runtime.freeMemory();
     long usedMemory = totalMemory - freeMemory;
 
-    LOG.warn("Memory Usage (Runtime):");
-    LOG.warn("  Total Memory: {} bytes", totalMemory);
-    LOG.warn("  Free Memory: {} bytes", freeMemory);
-    LOG.warn("  Used Memory: {} bytes", usedMemory);
+    log.warn("Memory Usage (Runtime):");
+    log.warn("  Total Memory: {} bytes", totalMemory);
+    log.warn("  Free Memory: {} bytes", freeMemory);
+    log.warn("  Used Memory: {} bytes", usedMemory);
   }
 }

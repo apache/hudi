@@ -139,8 +139,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   @Override
   public HoodieRecord<RowData> constructHoodieRecord(BufferedRecord<RowData> bufferedRecord, String partitionPath) {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    // delete record
-    if (bufferedRecord.isDelete()) {
+    if (bufferedRecord.isDelete() && bufferedRecord.isEmpty()) {
       return new HoodieEmptyRecord<>(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.FLINK);
     }
     RowData rowData = bufferedRecord.getRecord();

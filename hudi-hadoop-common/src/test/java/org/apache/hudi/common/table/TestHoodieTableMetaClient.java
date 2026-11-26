@@ -23,7 +23,9 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -42,21 +44,35 @@ import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.assertTableConfigs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -104,6 +120,39 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertTrue(completedInstant.isCompleted());
     assertEquals(completedInstant.requestedTime(), instant.requestedTime());
     assertEquals("val", metaClient.getActiveTimeline().readCommitMetadata(completedInstant).getExtraMetadata().get("key"));
+  }
+
+  /**
+   * The archived timeline is cached by the meta client that loaded it, and a serialized copy (as shipped to
+   * executors) must not carry it, since it holds every loaded archived instant and its details.
+   */
+  @Test
+  void testArchivedTimelineCacheIsNotSerialized() throws IOException, ClassNotFoundException {
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+    assertSame(archivedTimeline, metaClient.getArchivedTimeline());
+
+    Set<Class<?>> serializedClasses = new HashSet<>();
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(bytes) {
+      {
+        enableReplaceObject(true);
+      }
+
+      @Override
+      protected Object replaceObject(Object obj) {
+        serializedClasses.add(obj.getClass());
+        return obj;
+      }
+    }) {
+      out.writeObject(metaClient);
+    }
+    assertTrue(serializedClasses.stream().noneMatch(HoodieArchivedTimeline.class::isAssignableFrom),
+        "The archived timeline was serialized with the meta client: " + serializedClasses);
+
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+      HoodieTableMetaClient deserializedMetaClient = (HoodieTableMetaClient) in.readObject();
+      assertNotNull(deserializedMetaClient.getArchivedTimeline());
+    }
   }
 
   @Test
@@ -251,21 +300,69 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     }
   }
 
-  @Test
-  void testTableVersion() throws IOException {
+  /**
+   * A null version leaves the table version unset on the builder, so the default version is covered as well.
+   */
+  @ParameterizedTest
+  @MethodSource("tableVersionsAndKeyGeneratorSettings")
+  void testTableConfigsBasedOnVersion(HoodieTableVersion version, boolean setKeyGeneratorType) throws IOException {
     final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t1";
-    HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
+    HoodieTableMetaClient.TableBuilder tableBuilder = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ.name())
         .setTableName("table-version-test")
-        .setTableVersion(HoodieTableVersion.SIX.versionCode())
-        .initTable(this.metaClient.getStorageConf(), basePath);
-    assertEquals(HoodieTableVersion.SIX, metaClient1.getTableConfig().getTableVersion());
+        .setRecordKeyFields("key")
+        .setPartitionFields("partition")
+        .setOrderingFields("ts");
+    if (version != null) {
+      tableBuilder.setTableVersion(version.versionCode());
+    }
+    if (setKeyGeneratorType) {
+      tableBuilder.setKeyGeneratorType(KeyGeneratorType.SIMPLE.name());
+    } else {
+      tableBuilder.setKeyGeneratorClassProp(KeyGeneratorType.SIMPLE.getClassName());
+    }
+    HoodieTableVersion expectedVersion = version == null ? HoodieTableVersion.current() : version;
+    HoodieTableMetaClient createdMetaClient = tableBuilder.initTable(this.metaClient.getStorageConf(), basePath);
+    assertEquals(expectedVersion, createdMetaClient.getTableConfig().getTableVersion());
+    assertTableConfigs(createdMetaClient.getStorage(), basePath, expectedTableConfigs(expectedVersion));
+  }
 
-    HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
-        .setConf(this.metaClient.getStorageConf())
-        .setBasePath(basePath)
-        .build();
-    assertEquals(HoodieTableVersion.SIX, metaClient2.getTableConfig().getTableVersion());
+  private static Stream<Arguments> tableVersionsAndKeyGeneratorSettings() {
+    return Stream.of(null, HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, HoodieTableVersion.TEN)
+        .flatMap(version -> Stream.of(Arguments.of(version, false), Arguments.of(version, true)));
+  }
+
+  private static Map<String, String> expectedTableConfigs(HoodieTableVersion version) {
+    Map<String, String> configs = new HashMap<>();
+    configs.put("hoodie.table.name", "table-version-test");
+    configs.put("hoodie.table.type", "MERGE_ON_READ");
+    configs.put("hoodie.table.version", String.valueOf(version.versionCode()));
+    configs.put("hoodie.table.recordkey.fields", "key");
+    configs.put("hoodie.table.partition.fields", "partition");
+    configs.put("hoodie.table.ordering.fields", "ts");
+    configs.put("hoodie.table.keygenerator.type", "SIMPLE");
+    configs.put("hoodie.meta.fields.mode", "ALL");
+    configs.put("hoodie.datasource.write.drop.partition.columns", "false");
+    configs.put("hoodie.archivelog.folder", "archived");
+    configs.put("hoodie.timeline.path", "timeline");
+    configs.put("hoodie.timeline.history.path", "history");
+    if (version.lesserThan(HoodieTableVersion.EIGHT)) {
+      configs.put("hoodie.timeline.layout.version", "1");
+      configs.put("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
+    } else {
+      configs.put("hoodie.timeline.layout.version", "2");
+      configs.put("hoodie.table.initial.version", String.valueOf(version.versionCode()));
+      configs.put("hoodie.record.merge.mode", "EVENT_TIME_ORDERING");
+    }
+    if (version.lesserThan(HoodieTableVersion.NINE)) {
+      configs.put("hoodie.table.precombine.field", "ts");
+      configs.put("hoodie.compaction.payload.class", "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
+      configs.put("hoodie.record.merge.strategy.id", "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5");
+    }
+    if (version.lesserThan(HoodieTableVersion.TEN)) {
+      configs.put("hoodie.populate.meta.fields", "true");
+    }
+    return configs;
   }
 
   @Test
@@ -469,6 +566,91 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .setComplexKeyGenEncoding(encoding);
   }
 
+  /**
+   * Readers of a table below version 9 know only the deprecated {@code hoodie.table.precombine.field}: 0.x for
+   * version 6 and 1.0.x for version 8. Such a table records its ordering field under that key too, the key the
+   * 9 to 8 downgrade writes, while a table at version 9 or above records it only under
+   * {@code hoodie.table.ordering.fields}.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
+  void testOrderingFieldsKeysFollowTableVersion(HoodieTableVersion version) throws IOException {
+    HoodieTableMetaClient created = orderingFieldsTableBuilder(version)
+        .setOrderingFields("ts")
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ordering-v" + version.versionCode());
+    assertOrderingFieldsKeys(version, created.getTableConfig());
+  }
+
+  /**
+   * Readers of a table below version 9 take the deprecated precombine key as one field name, so a table ordered on
+   * several fields records them only under {@code hoodie.table.ordering.fields}.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  void testMultipleOrderingFieldsStayOffLegacyKey(HoodieTableVersion version) throws IOException {
+    Properties props = orderingFieldsTableBuilder(version)
+        .setOrderingFields("ts,seq")
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "multi-ordering-v" + version.versionCode())
+        .getTableConfig().getProps();
+    assertEquals("ts,seq", props.getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertFalse(props.containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key()), "precombine key at version " + version.versionCode());
+  }
+
+  /**
+   * The deprecated precombine key repeats a single declared ordering field whatever the payload: 0.x and 1.0.x Spark
+   * writers dedup a {@link MySqlDebeziumAvroPayload} batch on the field it names, the same field 1.x uses.
+   */
+  @ParameterizedTest
+  @CsvSource(delimiter = '|', nullValues = "null", value = {
+      "SIX|_event_seq|_event_seq", "EIGHT|_event_seq|_event_seq", "SIX|ts|ts", "EIGHT|ts|ts",
+      "SIX|_event_bin_file,_event_pos|null", "EIGHT|_event_bin_file,_event_pos|null", "SIX|null|null", "EIGHT|null|null"})
+  void testMySqlDebeziumPayloadLegacyKeyFollowsDeclaredOrderingField(HoodieTableVersion version, String orderingFields, String legacyOrderingField) throws IOException {
+    Properties props = orderingFieldsTableBuilder(version)
+        .setPayloadClass(MySqlDebeziumAvroPayload.class)
+        .setOrderingFields(orderingFields)
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "mysql-debezium-v" + version.versionCode())
+        .getTableConfig().getProps();
+    assertEquals(orderingFields, props.getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertEquals(legacyOrderingField, props.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key()), "precombine key at version " + version.versionCode());
+  }
+
+  /**
+   * ALTER TABLE RENAME re-creates the table from its own properties. A table below version 9 that records its
+   * ordering fields only under the deprecated precombine key, as 0.x, 1.0.x and the 9 to 8 downgrade write them,
+   * must keep that key.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  void testReInitFromPropertiesKeepsLegacyOrderingFieldsKey(HoodieTableVersion version) throws IOException {
+    String path = tempDir.toAbsolutePath() + Path.SEPARATOR + "legacy-ordering-v" + version.versionCode();
+    HoodieTableMetaClient created = orderingFieldsTableBuilder(version).initTable(this.metaClient.getStorageConf(), path);
+    Properties legacyOrderingFields = new Properties();
+    legacyOrderingFields.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "ts");
+    HoodieTableConfig.update(created.getStorage(), created.getMetaPath(), legacyOrderingFields);
+    created.reloadTableConfig();
+    assertFalse(created.getTableConfig().getProps().containsKey(HoodieTableConfig.ORDERING_FIELDS.key()));
+
+    HoodieTableMetaClient reInitialised = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(created.getTableConfig().getProps())
+        .initTable(this.metaClient.getStorageConf(), path);
+    assertOrderingFieldsKeys(version, reInitialised.getTableConfig());
+  }
+
+  private static HoodieTableMetaClient.TableBuilder orderingFieldsTableBuilder(HoodieTableVersion version) {
+    return HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.MERGE_ON_READ.name())
+        .setTableName("table")
+        .setTableVersion(version)
+        .setRecordKeyFields("id");
+  }
+
+  private static void assertOrderingFieldsKeys(HoodieTableVersion version, HoodieTableConfig tableConfig) {
+    assertEquals("ts", tableConfig.getProps().getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertEquals(version.lesserThan(HoodieTableVersion.NINE) ? "ts" : null,
+        tableConfig.getProps().getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key()),
+        "precombine key at version " + version.versionCode());
+  }
+
   @Test
   void testDeleteDefinition() throws IOException {
     final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t7";
@@ -498,6 +680,43 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieIndexMetadata indexMetadata = HoodieIndexMetadata.fromJson(
         new String(FileIOUtils.readDataFromPath(metaClient.getStorage(), new StoragePath(metaClient.getIndexDefinitionPath())).get()));
     assertTrue(indexMetadata.getIndexDefinitions().isEmpty());
+  }
+
+  @Test
+  void testIndexDefinitionChangesKeepDefinitionsOfOtherMetaClients() throws IOException {
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t8";
+    HoodieTableMetaClient firstMetaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table")
+        .initTable(this.metaClient.getStorageConf(), basePath);
+    // both meta clients load the index definitions before either of them changes them
+    HoodieTableMetaClient secondMetaClient = HoodieTableMetaClient.reload(firstMetaClient);
+    String secondaryIndexName = MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "c1";
+    String columnStatsIndexName = MetadataPartitionType.COLUMN_STATS.getPartitionPath();
+
+    firstMetaClient.buildIndexDefinition(HoodieIndexDefinition.newBuilder()
+        .withIndexName(secondaryIndexName)
+        .withIndexType(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath())
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), secondaryIndexName))
+        .withSourceFields(Collections.singletonList("c1"))
+        .build());
+    // the second meta client did not load the secondary index definition, and must not drop it
+    secondMetaClient.buildIndexDefinition(HoodieIndexDefinition.newBuilder()
+        .withIndexName(columnStatsIndexName)
+        .withIndexType(columnStatsIndexName)
+        .withIndexFunction(columnStatsIndexName)
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), columnStatsIndexName))
+        .withSourceFields(Arrays.asList("c1", "c2"))
+        .build());
+    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(firstMetaClient);
+    assertTrue(reloadedMetaClient.getIndexForMetadataPartition(secondaryIndexName).isPresent());
+    assertTrue(reloadedMetaClient.getIndexForMetadataPartition(columnStatsIndexName).isPresent());
+
+    // a delete through the first meta client must keep the definition the second meta client wrote
+    firstMetaClient.deleteIndexDefinition(secondaryIndexName);
+    reloadedMetaClient = HoodieTableMetaClient.reload(firstMetaClient);
+    assertFalse(reloadedMetaClient.getIndexForMetadataPartition(secondaryIndexName).isPresent());
+    assertTrue(reloadedMetaClient.getIndexForMetadataPartition(columnStatsIndexName).isPresent());
   }
 
   @Test

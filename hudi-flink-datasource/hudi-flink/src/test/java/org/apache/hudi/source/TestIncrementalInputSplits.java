@@ -402,6 +402,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
 
     PartitionPruners.PartitionPruner partitionPruner =
         PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(basePath).metaClient(metaClient).conf(conf).columnStatsProbe(columnStatsProbe).build();
+    assertEquals(Collections.singleton("par3"), partitionPruner.filter(Arrays.asList("par1", "par2", "par3", "par4")));
     IncrementalInputSplits iis = IncrementalInputSplits.builder()
         .conf(conf)
         .path(new Path(basePath))
@@ -410,7 +411,14 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
         .build();
     IncrementalInputSplits.Result result = iis.inputSplits(metaClient, null, false);
     List<String> partitions = getFilteredPartitions(result);
-    assertEquals(Arrays.asList("par3"), partitions);
+    assertEquals(Collections.singletonList("par3"), partitions);
+
+    PartitionPruners.PartitionPruner chainedPruner = PartitionPruners.builder()
+        .rowType(TestConfigurations.ROW_TYPE).basePath(basePath).metaClient(metaClient).conf(conf)
+        .columnStatsProbe(columnStatsProbe).candidatePartitions(Arrays.asList("par1", "par3")).build();
+    IncrementalInputSplits chainedSplits = IncrementalInputSplits.builder()
+        .conf(conf).path(new Path(basePath)).rowType(TestConfigurations.ROW_TYPE).partitionPruner(chainedPruner).build();
+    assertEquals(Collections.singletonList("par3"), getFilteredPartitions(chainedSplits.inputSplits(metaClient, null, false)));
   }
 
   @Test

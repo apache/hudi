@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.FooterMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -245,7 +246,7 @@ public class HoodieLogFileCommand {
           fileGroupReaderProperties);
       try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>builder()
           .withReaderContext(readerContext)
-          .withHoodieTableMetaClient(HoodieCLI.getTableMetaClient())
+          .withTableState(TableState.snapshotOf(HoodieCLI.getTableMetaClient(), true, false))
           .withBaseFileOption(fileSlice.getBaseFile())
           .withLogFiles(fileSlice.getLogFiles())
           .withPartitionPath(fileSlice.getPartitionPath())

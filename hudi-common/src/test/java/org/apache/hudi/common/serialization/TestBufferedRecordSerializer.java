@@ -19,9 +19,7 @@
 package org.apache.hudi.common.serialization;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
-import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.avro.AvroRecordSerializer;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -101,8 +99,7 @@ public class TestBufferedRecordSerializer {
   @EnumSource(value = HoodieOperation.class,  names = {"UPDATE_BEFORE", "DELETE"})
   void testDeleteRecordSerAndDe(HoodieOperation hoodieOperation) throws IOException {
     HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
-    DeleteRecord record = DeleteRecord.create("id", "partition", 100);
-    BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecords.fromDeleteRecord(record, AvroRecordContext.getFieldAccessorInstance());
+    BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecords.createDelete("id", 100);
     bufferedRecord.setHoodieOperation(hoodieOperation);
 
     AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema.toAvroSchema());

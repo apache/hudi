@@ -31,10 +31,10 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -63,6 +63,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
         : FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.NINE);
     when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
@@ -106,7 +107,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
 
     HoodieFileGroupRecordBuffer fileGroupRecordBuffer = (HoodieFileGroupRecordBuffer) fileGroupRecordBufferLoader
         .getRecordBuffer(readerContext, storage, inputSplit, Collections.singletonList("ts"),
-            FileGroupReaderTableState.fromMetaClient(mockMetaClient), new TypedProperties(), readerParameters, readStats, fileGroupUpdateCallback).getLeft();
+            TableState.fromMetaClient(mockMetaClient), new TypedProperties(), readerParameters, readStats, fileGroupUpdateCallback).getLeft();
 
     switch (fileGroupRecordBufferType) {
       case "KeyBasedFileGroupRecordBuffer":

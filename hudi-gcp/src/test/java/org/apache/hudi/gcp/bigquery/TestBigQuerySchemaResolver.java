@@ -244,6 +244,42 @@ public class TestBigQuerySchemaResolver {
   }
 
   @Test
+  void convertSchema_nullTypeField() {
+    HoodieSchema input = HoodieSchema.parse("{\"type\": \"record\", \"name\": \"testRecord\", \"fields\": ["
+        + "{\"name\": \"name\", \"type\": \"string\"},"
+        + "{\"name\": \"clientpromotion\", \"type\": \"null\", \"default\": null},"
+        + "{\"name\": \"age\", \"type\": [\"null\", \"int\"], \"default\": null}]}");
+
+    Schema expected = Schema.of(
+        Field.newBuilder("name", StandardSQLTypeName.STRING).setMode(Field.Mode.REQUIRED).build(),
+        Field.newBuilder("age", StandardSQLTypeName.INT64).setMode(Field.Mode.NULLABLE).build());
+
+    Schema result = SCHEMA_RESOLVER.convertSchema(input);
+    Assertions.assertEquals(expected, result);
+    Assertions.assertEquals("`name` STRING NOT NULL, `age` INT64", schemaToSqlString(result));
+  }
+
+  @Test
+  void convertSchema_nestedNullTypeField() {
+    HoodieSchema input = HoodieSchema.parse("{\"type\": \"record\", \"name\": \"testRecord\", \"fields\": ["
+        + "{\"name\": \"name\", \"type\": \"string\"},"
+        + "{\"name\": \"address\", \"type\": {\"type\": \"record\", \"name\": \"address\", \"fields\": ["
+        + "{\"name\": \"city\", \"type\": \"string\"},"
+        + "{\"name\": \"nestedpromotion\", \"type\": \"null\", \"default\": null}]}}]}");
+
+    Schema expected = Schema.of(
+        Field.newBuilder("name", StandardSQLTypeName.STRING).setMode(Field.Mode.REQUIRED).build(),
+        Field.newBuilder("address", StandardSQLTypeName.STRUCT,
+                Field.newBuilder("city", StandardSQLTypeName.STRING).setMode(Field.Mode.REQUIRED).build())
+            .setMode(Field.Mode.REQUIRED).build());
+
+    Schema result = SCHEMA_RESOLVER.convertSchema(input);
+    Assertions.assertEquals(expected, result);
+    Assertions.assertEquals("`name` STRING NOT NULL, `address` STRUCT<`city` STRING NOT NULL> NOT NULL",
+        schemaToSqlString(result));
+  }
+
+  @Test
   void getTableSchema_withPartitionFields() throws Exception {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     TableSchemaResolver mockTableSchemaResolver = mock(TableSchemaResolver.class);

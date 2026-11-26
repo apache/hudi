@@ -248,7 +248,9 @@ public class HoodieJavaWriteClient<T> extends
         if (writer.hasPartitionsStateChanged()) {
           metaClient.reloadTableConfig();
         }
-        writer.performTableServices(inFlightInstantTimestamp);
+        if (config.getMetadataConfig().isInlineTableServicesEnabled()) {
+          writer.performTableServices(inFlightInstantTimestamp);
+        }
       }
     } catch (Exception e) {
       throw new HoodieException("Failed to instantiate Metadata table ", e);

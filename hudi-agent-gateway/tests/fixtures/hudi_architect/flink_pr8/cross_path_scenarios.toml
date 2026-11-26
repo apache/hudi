@@ -1,0 +1,134 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+schema_version = 1
+baseline_id = "hudi-1.2.0-flink-1.20"
+
+[[scenario]]
+case_id = "X01_APPEND_COW_DIRECT_SQL"
+validator = "design"
+input = "flink_pr2/stable_key.json"
+expected_status = "CONFIG_VALIDATED"
+executable_eligible = true
+expected_returncode = 0
+expected_findings = []
+
+[[scenario]]
+case_id = "X02_MUTABLE_COW_DFS_CATALOG_HMS"
+validator = "design"
+input = "catalog_profile:hudi_dfs_catalog_hive_metastore"
+expected_status = "CONFIG_VALIDATED"
+executable_eligible = true
+expected_returncode = 0
+expected_findings = []
+
+[[scenario]]
+case_id = "X03_MUTABLE_MOR_DIRECT_SQL_HMS"
+validator = "design"
+input = "flink_pr4/mutable_mor.json+direct_sql_hive_metastore"
+expected_status = "CONFIG_VALIDATED"
+executable_eligible = true
+expected_returncode = 0
+expected_findings = []
+
+[[scenario]]
+case_id = "X04_EXISTING_COMPATIBLE"
+validator = "existing_table"
+input = "flink_pr5/compatible_mutable_cow.json"
+expected_status = "CONFIG_VALIDATED"
+executable_eligible = false
+expected_returncode = 0
+expected_findings = []
+
+[[scenario]]
+case_id = "X05_EXISTING_CATALOG_MUTATION"
+validator = "existing_table"
+input = "flink_pr5/compatible_mutable_cow.json+direct_sql_hive_metastore"
+expected_status = "REVIEW_REQUIRED"
+executable_eligible = false
+expected_returncode = 1
+expected_findings = [
+  { code = "FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED", status = "REVIEW_REQUIRED" },
+]
+
+[[scenario]]
+case_id = "X06_MULTI_WRITER_OCC"
+validator = "design"
+input = "flink_pr3/mutable_cow.json+multi_writer_occ"
+expected_status = "REVIEW_REQUIRED"
+executable_eligible = false
+expected_returncode = 1
+expected_findings = [
+  { code = "FLINK_MULTI_WRITER_REVIEW", status = "REVIEW_REQUIRED" },
+]
+
+[[scenario]]
+case_id = "X07_MULTI_WRITER_NBCC"
+validator = "design"
+input = "flink_pr4/mutable_mor.json+multi_writer_nbcc"
+expected_status = "BLOCKED"
+executable_eligible = false
+expected_returncode = 1
+expected_findings = [
+  { code = "FLINK_MULTI_WRITER_REVIEW", status = "REVIEW_REQUIRED" },
+  { code = "FLINK_WRITER_COMBINATION_UNSUPPORTED", status = "BLOCKED" },
+]
+
+[[scenario]]
+case_id = "X08_EXISTING_OUT_OF_SCOPE_MULTI_WRITER_EVIDENCE"
+validator = "existing_table"
+input = "flink_pr5/compatible_mutable_cow.json+flink_pr8/existing_multi_writer_out_of_scope.json"
+expected_status = "REVIEW_REQUIRED"
+executable_eligible = false
+expected_returncode = 1
+expected_findings = [
+  { code = "FLINK_EXISTING_EVIDENCE_CONFLICT", status = "REVIEW_REQUIRED" },
+]
+
+[[scenario]]
+case_id = "X09_COMBINED_SAFETY_GATES"
+validator = "design"
+input = "flink_pr8/combined_safety_gates.json"
+expected_status = "BLOCKED"
+executable_eligible = false
+expected_returncode = 1
+expected_findings = [
+  { code = "FLINK_VERSION_UNVERIFIED", status = "REVIEW_REQUIRED" },
+  { code = "FLINK_MULTI_WRITER_REVIEW", status = "REVIEW_REQUIRED" },
+  { code = "FLINK_WRITER_COMBINATION_UNSUPPORTED", status = "BLOCKED" },
+  { code = "FLINK_CATALOG_CONTRACT_REQUIRED", status = "INCOMPLETE" },
+  { code = "FLINK_CHECKPOINT_INTERVAL_REQUIRED", status = "INCOMPLETE" },
+]
+
+[[scenario]]
+case_id = "X10_MALFORMED_CROSS_PATH"
+validator = "existing_table"
+input = "flink_pr8/malformed_cross_path.json"
+expected_status = "BLOCKED"
+executable_eligible = false
+expected_returncode = 1
+expected_findings = [
+  { code = "FLINK_MULTI_WRITER_REVIEW", status = "REVIEW_REQUIRED" },
+  { code = "FLINK_WRITER_CONTRACT_INVALID", status = "INCOMPLETE" },
+  { code = "FLINK_CATALOG_CONTRACT_INVALID", status = "INCOMPLETE" },
+  { code = "FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED", status = "REVIEW_REQUIRED" },
+  { code = "FLINK_DESIGN_CONTRACT_INVALID", status = "INCOMPLETE" },
+  { code = "FLINK_PHYSICAL_SCHEMA_REQUIRED", status = "INCOMPLETE" },
+  { code = "FLINK_PARTITION_FIELD_MISSING", status = "BLOCKED" },
+  { code = "FLINK_RECORD_KEY_FIELD_MISSING", status = "BLOCKED" },
+  { code = "FLINK_MUTABLE_ORDERING_FIELD_INVALID", status = "BLOCKED" },
+  { code = "FLINK_EXISTING_EVIDENCE_INVALID", status = "INCOMPLETE" },
+  { code = "FLINK_EXISTING_EVIDENCE_REQUIRED", status = "INCOMPLETE" },
+]

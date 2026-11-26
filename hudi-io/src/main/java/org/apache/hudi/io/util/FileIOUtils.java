@@ -26,8 +26,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -52,8 +51,8 @@ import java.util.stream.Collectors;
 /**
  * Bunch of utility methods for working with files and byte streams.
  */
+@Slf4j
 public class FileIOUtils {
-  public static final Logger LOG = LoggerFactory.getLogger(FileIOUtils.class);
   public static final long KB = 1024;
 
   public static void deleteDirectory(File directory) throws IOException {
@@ -164,7 +163,7 @@ public class FileIOUtils {
     try {
       closeable.close();
     } catch (IOException e) {
-      LOG.warn("Failed to close the closeable", e);
+      log.warn("Failed to close the closeable", e);
     }
   }
 
@@ -183,7 +182,7 @@ public class FileIOUtils {
       if (!ignoreIOE) {
         throw new HoodieIOException("Failed to create file " + fullPath, e);
       } else {
-        LOG.warn("Failed to create file {}", fullPath, e);
+        log.warn("Failed to create file {}", fullPath, e);
       }
     }
   }
@@ -241,13 +240,13 @@ public class FileIOUtils {
     try (InputStream is = storage.open(detailPath)) {
       return Option.of(FileIOUtils.readAsByteArray(is));
     } catch (FileNotFoundException fnfe) {
-      LOG.debug("No file found at path {}", detailPath);
+      log.debug("No file found at path {}", detailPath);
       return Option.empty();
     } catch (IOException e) {
       if (!ignoreIOE) {
         throw new HoodieIOException("Could not read commit details from " + detailPath, e);
       } else {
-        LOG.warn("Could not read commit details from {}", detailPath, e);
+        log.warn("Could not read commit details from {}", detailPath, e);
       }
       return Option.empty();
     }
@@ -269,6 +268,11 @@ public class FileIOUtils {
       // created the directories already, and that they are secured so that only the
       // user has access to them.
       return getYarnLocalDirs().split(",");
+    } else if (System.getenv("SPARK_LOCAL_DIRS") != null) {
+      // Kubernetes provides no scheduler-side local-dir contract like YARN's, so Spark itself
+      // publishes the mounted scratch paths here. Without this we fall through to
+      // java.io.tmpdir, i.e. /tmp inside the container rather than the mounted disk.
+      return System.getenv("SPARK_LOCAL_DIRS").split(",");
     } else if (System.getProperty("java.io.tmpdir") != null) {
       return System.getProperty("java.io.tmpdir").split(",");
     } else {

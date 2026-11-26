@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -144,7 +143,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
           HoodieRecordUtils.getOrderingFieldNames(tableConfig.getRecordMergeMode(), tableConfig);
       return new HoodieNativeLogFileReader(storage, logFile, readerSchema, internalSchema,
           orderingFieldNames,
-          getRelativePartitionPath(logFile), TypedProperties.copy(tableConfig.getProps()));
+          getRelativePartitionPath(logFile), tableConfig.getProps());
     }
     return new HoodieLogFileReader(storage, logFile, readerSchema, bufferSize, reverseLogReader,
         enableInlineReading, recordKeyField, internalSchema);

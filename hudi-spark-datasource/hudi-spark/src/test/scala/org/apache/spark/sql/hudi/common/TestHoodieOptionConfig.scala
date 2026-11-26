@@ -30,6 +30,97 @@ import org.scalatest.Matchers.intercept
 class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
 
   @Test
+  def testMakeOptionsCaseInsensitive(): Unit = {
+    val options = Map(
+      "PRIMARYKEY" -> "Id",
+      "OrderingFields" -> "EventTime",
+      "PRECOMBINEFIELD" -> "LegacyTime",
+      "TYPE" -> "mor",
+      "PayloadClass" -> "org.example.CustomPayload",
+      "RECORDMERGESTRATEGYID" -> "custom-strategy",
+      "recordmergemode" -> "CUSTOM"
+    )
+    val expected = Map(
+      "primaryKey" -> "Id",
+      "orderingFields" -> "EventTime",
+      "preCombineField" -> "LegacyTime",
+      "type" -> "mor",
+      "payloadClass" -> "org.example.CustomPayload",
+      "recordMergeStrategyId" -> "custom-strategy",
+      "recordMergeMode" -> "CUSTOM"
+    )
+
+    assertEquals(expected, HoodieOptionConfig.makeOptionsCaseInsensitive(options))
+    assertEquals(expected, HoodieOptionConfig.makeOptionsCaseInsensitive(expected))
+  }
+
+  @Test
+  def testMakeOptionsCaseInsensitivePreservesSubstringKeys(): Unit = {
+    val customOptions = Map(
+      "key" -> "business_tag",
+      "field" -> "custom_field",
+      "mode" -> "custom_mode",
+      "hoodie.datasource.write.recordkey.field" -> "id",
+      "CustomProperty" -> "CustomValue"
+    )
+    val options = customOptions ++ Map(
+      "PRIMARYKEY" -> "id",
+      "ORDERINGFIELDS" -> "ts",
+      "RECORDMERGEMODE" -> "EVENT_TIME_ORDERING"
+    )
+    val expected = customOptions ++ Map(
+      "primaryKey" -> "id",
+      "orderingFields" -> "ts",
+      "recordMergeMode" -> "EVENT_TIME_ORDERING"
+    )
+
+    assertEquals(customOptions, HoodieOptionConfig.makeOptionsCaseInsensitive(customOptions))
+    assertEquals(expected, HoodieOptionConfig.makeOptionsCaseInsensitive(options))
+  }
+
+  @Test
+  def testMapToTableConfigRecognizesAliasesAndDeclaredConfigs(): Unit = {
+    Seq("primaryKey", "PRIMARYKEY", "hoodie.datasource.write.recordkey.field", "hoodie.table.recordkey.fields").foreach { key =>
+      assertEquals(Some(HoodieTableConfig.RECORDKEY_FIELDS.key -> "Id"), HoodieOptionConfig.mapToTableConfig(key, "Id"))
+    }
+    Seq("orderingFields", "PRECOMBINEFIELD", "hoodie.datasource.write.precombine.field", "hoodie.table.precombine.field").foreach { key =>
+      assertEquals(Some(HoodieTableConfig.ORDERING_FIELDS.key -> "ts"), HoodieOptionConfig.mapToTableConfig(key, "ts"))
+    }
+    Seq("TYPE", "hoodie.datasource.write.table.type", "hoodie.table.type").foreach { key =>
+      assertEquals(Some(HoodieTableConfig.TYPE.key -> "MERGE_ON_READ"), HoodieOptionConfig.mapToTableConfig(key, "MoR"))
+      assertEquals(Some(HoodieTableConfig.TYPE.key -> "COPY_ON_WRITE"), HoodieOptionConfig.mapToTableConfig(key, "copy_on_write"))
+    }
+    assertEquals(Some(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key -> "true"),
+      HoodieOptionConfig.mapToTableConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true"))
+    assertEquals(Some(HoodieTableConfig.BASE_FILE_FORMAT.key -> "PARQUET"),
+      HoodieOptionConfig.mapToTableConfig("hoodie.table.ro.file.format", "PARQUET"))
+    // Only table-type values are aliases: a field named "cow" must stay a field name.
+    assertEquals(Some(HoodieTableConfig.RECORDKEY_FIELDS.key -> "cow"), HoodieOptionConfig.mapToTableConfig("primaryKey", "cow"))
+  }
+
+  @Test
+  def testMapToTableConfigLeavesWriteAndCustomPropertiesMutable(): Unit = {
+    Seq("hoodie.table.services.enabled", "hoodie.table.services.incremental.enabled",
+      "hoodie.table.service.manager.enabled", "hoodie.table.custom.setting", "some.key").foreach { key =>
+      assertEquals(None, HoodieOptionConfig.mapToTableConfig(key, "false"), key)
+    }
+  }
+
+  @Test
+  def testGetTableConfigValueUsesDeclaredAlternativesWithoutDefaults(): Unit = {
+    val config = new HoodieTableConfig()
+    assertEquals(None, HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.TYPE.key))
+    config.setValue("hoodie.table.precombine.field", "ts")
+    config.setValue("hoodie.table.ro.file.format", "PARQUET")
+    assertEquals(Some("ts"), HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.ORDERING_FIELDS.key))
+    assertEquals(Some("PARQUET"), HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.BASE_FILE_FORMAT.key))
+    config.setValue(HoodieTableConfig.ORDERING_FIELDS.key, "new_ts")
+    assertEquals(Some("new_ts"), HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.ORDERING_FIELDS.key))
+    config.setValue(HoodieTableConfig.TYPE.key, "copy_on_write")
+    assertEquals(Some("COPY_ON_WRITE"), HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.TYPE.key))
+  }
+
+  @Test
   def testWithDefaultSqlOptions(): Unit = {
     val ops1 = Map("primaryKey" -> "id")
     val with1 = HoodieOptionConfig.withDefaultSqlOptions(ops1)

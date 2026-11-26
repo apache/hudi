@@ -100,6 +100,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "instead of executing them inline. This prevents the current writer from executing compaction/logcompaction "
           + "on the metadata table, allowing a separate async pipeline to handle them.");
 
+  public static final ConfigProperty<Boolean> INLINE_TABLE_SERVICES_ENABLED = ConfigProperty
+      .key(METADATA_PREFIX + ".inline.table.services.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("If false, a data table writer does not run clean, compaction or archival on the metadata table "
+          + "inline. For jobs that must not maintain the metadata table, such as a partition delete, "
+          + "and that leave it to the regular writers or a table service platform.");
+
   public static final Set<ActionType> SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS =
       EnumSet.of(ActionType.compaction, ActionType.logcompaction);
 
@@ -667,7 +676,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "metadata table. This is used to calculate how many bits should be assigned for the bloom filter "
           + "and the number of hash functions. This is usually set very low (default: 0.000000001), "
           + "we like to tradeoff disk space for lower false positives. If the number of entries "
-          + "added to bloom filter exceeds the configured value (hoodie.metadata.bloom.num_entries), "
+          + "added to bloom filter exceeds the configured value (" + BLOOM_FILTER_NUM_ENTRIES.key() + "), "
           + "then this fpp may not be honored.");
 
   public static final ConfigProperty<String> BLOOM_FILTER_DYNAMIC_MAX_ENTRIES = ConfigProperty
@@ -744,6 +753,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isTableServiceManagerEnabled() {
     return getBoolean(TABLE_SERVICE_MANAGER_ENABLED);
+  }
+
+  public boolean isInlineTableServicesEnabled() {
+    return getBoolean(INLINE_TABLE_SERVICES_ENABLED);
   }
 
   public String getTableServiceManagerActions() {
@@ -1097,6 +1110,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withTableServiceManagerEnabled(boolean enabled) {
       metadataConfig.setValue(TABLE_SERVICE_MANAGER_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withInlineTableServicesEnabled(boolean enabled) {
+      metadataConfig.setValue(INLINE_TABLE_SERVICES_ENABLED, String.valueOf(enabled));
       return this;
     }
 

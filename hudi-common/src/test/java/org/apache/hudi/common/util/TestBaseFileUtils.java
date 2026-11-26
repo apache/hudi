@@ -50,8 +50,8 @@ public class TestBaseFileUtils {
     // Step 3: Assertions
     assertEquals(PARTITION_PATH, result.getFilePath());
     assertEquals(COLUMN_NAME, result.getColumnName());
-    assertEquals(Integer.valueOf(1), new Integer(result.getMinValue().toString()));
-    assertEquals(Integer.valueOf(8), new Integer(result.getMaxValue().toString()));
+    assertEquals(Integer.valueOf(1), Integer.valueOf(result.getMinValue().toString()));
+    assertEquals(Integer.valueOf(8), Integer.valueOf(result.getMaxValue().toString()));
     assertEquals(1, result.getNullCount());
     assertEquals(25, result.getValueCount());
     assertEquals(220, result.getTotalSize());
@@ -73,8 +73,8 @@ public class TestBaseFileUtils {
     // Step 3: Assertions
     assertEquals(PARTITION_PATH, result.getFilePath());
     assertEquals(COLUMN_NAME, result.getColumnName());
-    assertEquals(Integer.valueOf(1), new Integer(result.getMinValue().toString()));
-    assertEquals(Integer.valueOf(8), new Integer(result.getMaxValue().toString()));
+    assertEquals(Integer.valueOf(1), Integer.valueOf(result.getMinValue().toString()));
+    assertEquals(Integer.valueOf(8), Integer.valueOf(result.getMaxValue().toString()));
     assertEquals(1, result.getNullCount());
     assertEquals(25, result.getValueCount());
     assertEquals(220, result.getTotalSize());

@@ -28,11 +28,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -54,8 +52,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getInputStreamOptionLegacy;
 
-// no-arg constructor is for serialization and de-serialization only
-@NoArgsConstructor(onConstructor_ = @Deprecated)
+@Slf4j(topic = "org.apache.hudi.common.table.timeline.HoodieArchivedTimeline")
 public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchivedTimeline, HoodieInstantReader {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
@@ -66,8 +63,6 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   private final Map<String, Map<String, Map<HoodieInstant.State, byte[]>>> 
       readCommits = new HashMap<>();
   private final ArchivedTimelineLoaderV1 timelineLoader = new ArchivedTimelineLoaderV1();
-
-  private static final Logger LOG = LoggerFactory.getLogger(org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.class);
 
   /**
    * Loads all the archived instants.
@@ -156,6 +151,15 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
    */
   public ArchivedTimelineV1(HoodieTableMetaClient metaClient, Set<String> logFiles, Option<HoodieInstant.State> state) {
     this(metaClient, null, new LogFileFilter(logFiles), state);
+  }
+
+  /**
+   * For serialization and de-serialization only.
+   *
+   * @deprecated
+   */
+  @Deprecated
+  public ArchivedTimelineV1() {
   }
 
   @Override
@@ -375,7 +379,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
       case HoodieTimeline.INDEXING_ACTION:
         return Option.of("hoodieIndexCommitMetadata");
       default:
-        LOG.error(String.format("Unknown action in metadata (%s)", instant.getAction()));
+        log.error(String.format("Unknown action in metadata (%s)", instant.getAction()));
         return Option.empty();
     }
   }

@@ -21,8 +21,12 @@ package org.apache.hudi.util;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.GlobalConfiguration;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.apache.hudi.util.FlinkClientUtil.FLINK_HADOOP_CONFIG_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,4 +52,22 @@ public class TestFlinkClientUtil {
       assertEquals(CRYPTO_RETRIEVER_CLASS, hadoopConf.get(CRYPTO_RETRIEVER_KEY));
     }
   }
+
+  @Test
+  public void testExplicitDirectoryPreservesFlinkHadoopOptions(@TempDir Path dir) throws Exception {
+    Files.writeString(dir.resolve("core-site.xml"), "<configuration><property><name>fs.defaultFS</name>"
+        + "<value>hdfs://remote-cluster</value></property><property><name>" + CRYPTO_RETRIEVER_KEY
+        + "</name><value>site-value</value></property></configuration>");
+    try (MockedStatic<GlobalConfiguration> global = Mockito.mockStatic(GlobalConfiguration.class)) {
+      Configuration flinkConf = new Configuration();
+      flinkConf.setString(FLINK_CRYPTO_RETRIEVER_KEY, CRYPTO_RETRIEVER_CLASS);
+      flinkConf.setString(FLINK_HADOOP_CONFIG_PREFIX + "test.marker", "flink-only");
+      global.when(() -> GlobalConfiguration.loadConfiguration(anyString())).thenReturn(flinkConf);
+      org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf(dir.toString());
+      assertEquals("hdfs://remote-cluster", hadoopConf.get("fs.defaultFS"));
+      assertEquals(CRYPTO_RETRIEVER_CLASS, hadoopConf.get(CRYPTO_RETRIEVER_KEY));
+      assertEquals("flink-only", hadoopConf.get("test.marker"));
+    }
+  }
+
 }

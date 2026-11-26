@@ -48,6 +48,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -57,8 +58,6 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -104,6 +103,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * <p>
  * Test data uses a toy Uber trips, data model.
  */
+@Slf4j
 public class HoodieTestDataGenerator implements AutoCloseable {
 
   /**
@@ -117,7 +117,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final int BYTES_PER_RECORD = (int) (1.2 * 1024);
   // with default bloom filter with 60,000 entries and 0.000000001 FPRate
   public static final int BLOOM_FILTER_BYTES = 323495;
-  private static Logger logger = LoggerFactory.getLogger(HoodieTestDataGenerator.class);
   public static final String NO_PARTITION_PATH = "";
   public static final String DEFAULT_FIRST_PARTITION_PATH = "2016/03/15";
   public static final String DEFAULT_SECOND_PARTITION_PATH = "2015/03/16";
@@ -287,7 +286,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     this.numKeysBySchema = new HashMap<>();
     this.numKeysBySchema.put(schema, keyPartitionMap.size());
 
-    logger.info(String.format("Test DataGenerator's seed (%s)", seed));
+    log.info(String.format("Test DataGenerator's seed (%s)", seed));
   }
 
   //////////////////////////////////////////////////////////////////////////////////
@@ -368,7 +367,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
                                      String basePath) {
     for (String partitionPath : partitionPaths) {
       new HoodiePartitionMetadata(storage, "000", new StoragePath(basePath),
-          new StoragePath(basePath, partitionPath), Option.empty()).trySave();
+          new StoragePath(basePath, partitionPath), Option.empty()).trySave(partitionPath);
     }
   }
 
@@ -1330,7 +1329,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
         index = (index + 1) % numExistingKeys;
         kp = existingKeys.get(index);
       }
-      logger.debug("key getting updated: {}", kp.key.getRecordKey());
+      log.debug("key getting updated: {}", kp.key.getRecordKey());
       used.add(kp);
       try {
         return new HoodieAvroIndexedRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false, timestamp));
@@ -1518,7 +1517,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       ctor.setAccessible(true);
       return ctor.newInstance((Object) bytes);
     } catch (InvocationTargetException | InstantiationException | IllegalAccessException | NoSuchMethodException e) {
-      logger.info("Failed to generate pseudo-random UUID!");
+      log.info("Failed to generate pseudo-random UUID!");
       throw new HoodieException(e);
     }
   }

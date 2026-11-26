@@ -23,14 +23,21 @@ import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.expressions.CallExpression;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -52,6 +59,27 @@ class TestColumnStatsProbe {
 
     assertEquals(minValue, stats1.get("field").getMinVal());
     assertEquals(maxValue, stats1.get("field").getMaxVal());
+  }
+
+  @ParameterizedTest
+  @MethodSource("columnStatsCompleteness")
+  void testProbeWithIncompleteColumnStats(Integer minValue, Integer maxValue, Long nullCount, boolean expected) {
+    CallExpression filter = CallExpression.permanent(BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(new FieldReferenceExpression("field", DataTypes.INT(), 0, 0), new ValueLiteralExpression(3)),
+        DataTypes.BOOLEAN());
+    ColumnStatsProbe probe = ColumnStatsProbe.newInstance(Collections.singletonList(filter));
+    RowData indexRow = GenericRowData.of(StringData.fromString("f1"), 10L, minValue, maxValue, nullCount);
+    RowType.RowField[] fields = getDataFields(getDataRowDataType(DataTypes.INT()));
+    assertEquals(expected, probe.test(indexRow, fields));
+  }
+
+  static Stream<Arguments> columnStatsCompleteness() {
+    return Stream.of(
+        arguments(null, null, null, true), // Missing statistics must retain the file.
+        arguments(null, null, 10L, false), // Known all-null data cannot match equality.
+        arguments(1, 5, 0L, true),
+        arguments(4, 5, 0L, false)
+    );
   }
 
   static Stream<Arguments> testTypes() {

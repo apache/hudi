@@ -66,15 +66,15 @@ public class CompactionOperation implements Serializable {
     this.metrics = metrics;
   }
 
-  public CompactionOperation(Option<HoodieBaseFile> dataFile, String partitionPath, List<HoodieLogFile> logFiles,
+  public CompactionOperation(Option<HoodieBaseFile> baseFile, String partitionPath, List<HoodieLogFile> logFiles,
       Map<String, Double> metrics) {
     ValidationUtils.checkArgument(!logFiles.isEmpty(), "log files should not be empty.");
-    if (dataFile.isPresent()) {
-      this.baseInstantTime = dataFile.get().getCommitTime();
-      this.dataFileName = Option.of(dataFile.get().getFileName());
-      this.fileGroupId = new HoodieFileGroupId(partitionPath, dataFile.get().getFileId());
-      this.dataFileCommitTime = Option.of(dataFile.get().getCommitTime());
-      this.bootstrapFilePath = dataFile.get().getBootstrapBaseFile().map(BaseFile::getPath);
+    if (baseFile.isPresent()) {
+      this.baseInstantTime = baseFile.get().getCommitTime();
+      this.dataFileName = Option.of(baseFile.get().getFileName());
+      this.fileGroupId = new HoodieFileGroupId(partitionPath, baseFile.get().getFileId());
+      this.dataFileCommitTime = Option.of(baseFile.get().getCommitTime());
+      this.bootstrapFilePath = baseFile.get().getBootstrapBaseFile().map(BaseFile::getPath);
     } else {
       this.dataFileName = Option.empty();
       this.baseInstantTime = logFiles.get(0).getDeltaCommitTime();

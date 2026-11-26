@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -85,7 +85,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // Log-Blocks belonging to inflight delta-instants are filtered-out using this high-watermark.
   private final String latestInstantTime;
   protected final HoodieReaderContext<T> readerContext;
-  protected final FileGroupReaderTableState tableState;
+  protected final TableState tableState;
   // Merge strategy to use when combining records from log
   @Getter(AccessLevel.PROTECTED)
   private final String payloadClassFQN;
@@ -150,7 +150,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // table version for compatibility
   private final HoodieTableVersion tableVersion;
 
-  protected BaseHoodieLogRecordReader(HoodieReaderContext<T> readerContext, FileGroupReaderTableState tableState, HoodieStorage storage,
+  protected BaseHoodieLogRecordReader(HoodieReaderContext<T> readerContext, TableState tableState, HoodieStorage storage,
                                       List<HoodieLogFile> logFiles,
                                       boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan, Option<String> partitionNameOverride,

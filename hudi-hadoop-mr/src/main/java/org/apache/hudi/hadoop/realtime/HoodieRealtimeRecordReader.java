@@ -20,12 +20,11 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -33,13 +32,13 @@ import java.io.IOException;
  * Realtime Record Reader which can do compacted (merge-on-read) record reading or unmerged reading (parquet and log
  * files read in parallel) based on job configuration.
  */
+@Slf4j
 public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
   // Property to enable parallel reading of parquet and log files without merging.
   public static final String REALTIME_SKIP_MERGE_PROP = "hoodie.realtime.merge.skip";
   // By default, we do merged-reading
   public static final String DEFAULT_REALTIME_SKIP_MERGE = "false";
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReader.class);
   private final RecordReader<NullWritable, ArrayWritable> reader;
 
   public HoodieRealtimeRecordReader(RealtimeSplit split, JobConf job,
@@ -63,19 +62,19 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
       JobConf jobConf, RecordReader<NullWritable, ArrayWritable> realReader) {
     try {
       if (canSkipMerging(jobConf)) {
-        LOG.info("Enabling un-merged reading of realtime records");
+        log.info("Enabling un-merged reading of realtime records");
         return new RealtimeUnmergedRecordReader(split, jobConf, realReader);
       }
-      LOG.info("Enabling merged reading of realtime records for split {}", split);
+      log.info("Enabling merged reading of realtime records for split {}", split);
       return new RealtimeCompactedRecordReader(split, jobConf, realReader);
     } catch (Exception e) {
-      LOG.error("Got exception when constructing record reader", e);
+      log.error("Got exception when constructing record reader", e);
       try {
         if (null != realReader) {
           realReader.close();
         }
       } catch (IOException ioe) {
-        LOG.error("Unable to close real reader", ioe);
+        log.error("Unable to close real reader", ioe);
       }
       throw new HoodieException("Exception when constructing record reader ", e);
     }

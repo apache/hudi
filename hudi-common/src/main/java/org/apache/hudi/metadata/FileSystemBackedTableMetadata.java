@@ -201,12 +201,14 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                 fileInfoPair -> {
                   StoragePath path = fileInfoPair.getKey();
                   if (fileInfoPair.getValue()) {
-                    if (HoodiePartitionMetadata.hasPartitionMetadata(getStorage(), path)) {
+                    if (path.getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+                      return Pair.of(Option.empty(), Option.empty());
+                    } else if (HoodiePartitionMetadata.hasPartitionMetadata(getStorage(), path)) {
                       return Pair.of(
                           Option.of(FSUtils.getRelativePartitionPath(dataBasePath,
                               path)),
                           Option.empty());
-                    } else if (!path.getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+                    } else {
                       return Pair.of(Option.empty(), Option.of(path));
                     }
                   } else if (path.getName()

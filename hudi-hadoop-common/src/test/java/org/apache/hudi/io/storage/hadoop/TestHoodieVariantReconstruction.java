@@ -32,17 +32,26 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.avro.AvroWriteSupport;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -54,6 +63,15 @@ class TestHoodieVariantReconstruction {
   private static HoodieSchema recordWithVariant(HoodieSchema variantSchema) {
     return HoodieSchema.createRecord("test_record", "org.apache.hudi.test", null,
         Collections.singletonList(HoodieSchemaField.of("v", variantSchema)));
+  }
+
+  /** Creates the reconstruction with the parquet schema the file schema would have been read from. */
+  private static HoodieVariantReconstruction create(HoodieSchema fileSchema, HoodieSchema requestedSchema,
+                                                    HoodieStorage storage) {
+    MessageType fileParquetSchema = fileSchema.getType() == HoodieSchemaType.RECORD
+        ? getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(fileSchema)
+        : null;
+    return HoodieVariantReconstruction.create(fileSchema, fileParquetSchema, requestedSchema, storage);
   }
 
   private static HoodieStorage storageWithReadingShredded(Path tmp, boolean enabled) {
@@ -68,29 +86,33 @@ class TestHoodieVariantReconstruction {
     HoodieSchema fileSchema = recordWithVariant(
         HoodieSchema.createVariantShredded(HoodieSchema.create(HoodieSchemaType.INT)));
     HoodieSchema requestedSchema = recordWithVariant(HoodieSchema.createVariant());
+    HoodieStorage storage = storageWithReadingShredded(tmp, false);
+    storage.getConf().set(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(),
+        TestVariantShreddingProvider.class.getName());
+    TestVariantShreddingProvider.PREPARED.clear();
 
-    HoodieException ex = assertThrows(HoodieException.class, () ->
-        HoodieVariantReconstruction.create(fileSchema, requestedSchema,
-            storageWithReadingShredded(tmp, false)));
+    HoodieException ex = assertThrows(HoodieException.class, () -> create(fileSchema, requestedSchema, storage));
     // The flag check must run after shredded-column detection: dropping typed_value silently would
     // corrupt rows whose payload lives there, so a disabled read of a shredded file fails fast.
     assertTrue(ex.getMessage().contains("reading shredded variants is disabled"), ex.getMessage());
+    // And before any column is prepared, so a provider's own layout errors cannot mask it.
+    assertTrue(TestVariantShreddingProvider.PREPARED.isEmpty(), TestVariantShreddingProvider.PREPARED::toString);
   }
 
   @Test
   void returnsNullWhenNoShreddedColumnEvenIfReadingDisabled(@TempDir Path tmp) {
     HoodieSchema schema = recordWithVariant(HoodieSchema.createVariant());
     // No shredded variant column to reconstruct: nothing to do regardless of the flag.
-    assertNull(HoodieVariantReconstruction.create(schema, schema,
+    assertNull(create(schema, schema,
         storageWithReadingShredded(tmp, false)));
   }
 
   @Test
   void returnsNullForNonRecordSchemas(@TempDir Path tmp) {
     HoodieStorage storage = storageWithReadingShredded(tmp, true);
-    assertNull(HoodieVariantReconstruction.create(
+    assertNull(create(
         HoodieSchema.create(HoodieSchemaType.STRING), recordWithVariant(HoodieSchema.createVariant()), storage));
-    assertNull(HoodieVariantReconstruction.create(
+    assertNull(create(
         recordWithVariant(HoodieSchema.createVariant()), HoodieSchema.create(HoodieSchemaType.STRING), storage));
   }
 
@@ -101,7 +123,7 @@ class TestHoodieVariantReconstruction {
     HoodieSchema requestedSchema = recordWithVariant(HoodieSchema.createVariant());
 
     HoodieException exception = assertThrows(HoodieException.class, () ->
-        HoodieVariantReconstruction.create(fileSchema, requestedSchema,
+        create(fileSchema, requestedSchema,
             storageWithReadingShredded(tmp, true)));
     assertTrue(exception.getMessage().contains("no VariantShreddingProvider is available"));
   }
@@ -115,7 +137,7 @@ class TestHoodieVariantReconstruction {
     storage.getConf().set(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(),
         TestVariantShreddingProvider.class.getName());
 
-    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(
+    HoodieVariantReconstruction reconstruction = create(
         fileSchema, requestedSchema, storage);
     assertNotNull(reconstruction);
     assertTrue(reconstruction.intermediateSchema().getField("v").get().schema().getNonNullType()
@@ -154,7 +176,7 @@ class TestHoodieVariantReconstruction {
     storage.getConf().set(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(),
         TestVariantShreddingProvider.class.getName());
 
-    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(
+    HoodieVariantReconstruction reconstruction = create(
         fileSchema, requestedSchema, storage);
     assertNotNull(reconstruction, "Plain-record shredded shape with a variant requested column must engage");
 
@@ -182,7 +204,7 @@ class TestHoodieVariantReconstruction {
     // shredded reading disabled.
     HoodieSchema fileSchema = recordWithIdAndVariant(footerStylePlainUnshreddedSchema());
     HoodieSchema requestedSchema = recordWithIdAndVariant(HoodieSchema.createVariant());
-    assertNull(HoodieVariantReconstruction.create(fileSchema, requestedSchema,
+    assertNull(create(fileSchema, requestedSchema,
         storageWithReadingShredded(tmp, false)));
   }
 
@@ -203,7 +225,7 @@ class TestHoodieVariantReconstruction {
     storage.getConf().set(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(),
         TestVariantShreddingProvider.class.getName());
 
-    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(
+    HoodieVariantReconstruction reconstruction = create(
         fileSchema, requestedSchema, storage);
     assertNotNull(reconstruction, "A shredded group with no value column must still engage");
 
@@ -229,7 +251,7 @@ class TestHoodieVariantReconstruction {
         HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
         HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.INT)),
         HoodieSchemaField.of("extra", HoodieSchema.createNullable(HoodieSchemaType.STRING))));
-    assertNull(HoodieVariantReconstruction.create(
+    assertNull(create(
         recordWithIdAndVariant(fourField), recordWithIdAndVariant(HoodieSchema.createVariant()),
         storageWithReadingShredded(tmp, false)));
   }
@@ -243,7 +265,7 @@ class TestHoodieVariantReconstruction {
         HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
         HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.INT)),
         HoodieSchemaField.of("extra", HoodieSchema.createNullable(HoodieSchemaType.STRING))));
-    assertNull(HoodieVariantReconstruction.create(
+    assertNull(create(
         recordWithIdAndVariant(threeField), recordWithIdAndVariant(HoodieSchema.createVariant()),
         storageWithReadingShredded(tmp, false)));
   }
@@ -255,12 +277,13 @@ class TestHoodieVariantReconstruction {
     // nothing to reconstruct, so create() returns null even with shredded reading disabled.
     HoodieSchema fileSchema = recordWithIdAndVariant(footerStylePlainShreddedSchema());
     HoodieSchema requestedSchema = recordWithIdAndVariant(footerStylePlainShreddedSchema());
-    assertNull(HoodieVariantReconstruction.create(fileSchema, requestedSchema,
+    assertNull(create(fileSchema, requestedSchema,
         storageWithReadingShredded(tmp, false)));
   }
 
-  @Test
-  void reconstructsShreddedVariantsNestedInRecordsArraysAndMaps(@TempDir Path tmp) {
+  @ParameterizedTest(name = "writeOldListStructure={0}")
+  @ValueSource(booleans = {true, false})
+  void reconstructsShreddedVariantsNestedInRecordsArraysAndMaps(boolean writeOldListStructure, @TempDir Path tmp) {
     // Both write paths shred at any depth their write schema asks them to
     // (HoodieRowParquetWriteSupport.processNestedDataType, VariantSchemaUtils.applyForcedShredding),
     // so a nested variant can reach this reader as a plain {metadata, value, typed_value} record too.
@@ -281,10 +304,31 @@ class TestHoodieVariantReconstruction {
     HoodieStorage storage = storageWithReadingShredded(tmp, true);
     storage.getConf().set(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(),
         TestVariantShreddingProvider.class.getName());
+    // The file's lists are either the legacy 2-level `repeated group array` or the 3-level
+    // `repeated group list { element }`; HoodieAvroParquetReader converts the footer of both with
+    // ADD_LIST_ELEMENT_RECORDS=false (tryOverrideDefaultConfigs).
+    storage.getConf().set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, Boolean.toString(writeOldListStructure));
+    storage.getConf().set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, "false");
+    MessageType fileParquetSchema =
+        getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(fileSchema);
+    GroupType itemsRepeated = fileParquetSchema.getType("items").asGroupType().getType(0).asGroupType();
+    assertEquals(writeOldListStructure ? "array" : "list", itemsRepeated.getName());
+    TestVariantShreddingProvider.PREPARED.clear();
 
-    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(
-        fileSchema, requestedSchema, storage);
+    HoodieVariantReconstruction reconstruction =
+        HoodieVariantReconstruction.create(fileSchema, fileParquetSchema, requestedSchema, storage);
     assertNotNull(reconstruction, "A variant nested below the top level must engage reconstruction");
+
+    // Each variant column is prepared once, from its own parquet group: the struct member, the list
+    // element (the repeated group itself in the 2-level layout, its only field in the 3-level one) and
+    // the map value.
+    Map<String, GroupType> expectedGroups = new LinkedHashMap<>();
+    expectedGroups.put("nested.v", fileParquetSchema.getType("nested").asGroupType().getType("v").asGroupType());
+    expectedGroups.put("items.element",
+        writeOldListStructure ? itemsRepeated : itemsRepeated.getType(0).asGroupType());
+    expectedGroups.put("tags.value",
+        fileParquetSchema.getType("tags").asGroupType().getType(0).asGroupType().getType(1).asGroupType());
+    assertEquals(expectedGroups, TestVariantShreddingProvider.PREPARED);
 
     // The file's shredded shape must reach every nested position of the read schema, otherwise
     // parquet never materializes typed_value there.
@@ -342,7 +386,7 @@ class TestHoodieVariantReconstruction {
         HoodieSchema.createVariant("nested_v", "org.apache.hudi.test", null),
         HoodieSchema.createVariant("element_v", "org.apache.hudi.test", null),
         HoodieSchema.createVariant("map_v", "org.apache.hudi.test", null));
-    assertNull(HoodieVariantReconstruction.create(fileSchema, requestedSchema,
+    assertNull(create(fileSchema, requestedSchema,
         storageWithReadingShredded(tmp, false)));
   }
 
@@ -404,6 +448,9 @@ class TestHoodieVariantReconstruction {
   }
 
   public static class TestVariantShreddingProvider implements VariantShreddingProvider {
+    // The provider is instantiated by class name, so what it is prepared with is recorded statically.
+    static final Map<String, GroupType> PREPARED = new LinkedHashMap<>();
+
     @Override
     public GenericRecord shredVariantRecord(
         GenericRecord unshreddedVariant, Schema shreddedSchema, HoodieSchema.Variant variantSchema) {
@@ -412,13 +459,15 @@ class TestHoodieVariantReconstruction {
     }
 
     @Override
-    public GenericRecord rebuildVariantRecord(
-        GenericRecord shreddedVariant, Schema shreddedSchema, Schema unshreddedSchema) {
-      GenericRecord rebuilt = new GenericData.Record(unshreddedSchema);
-      rebuilt.put("metadata", shreddedVariant.get("metadata"));
-      rebuilt.put("value", ByteBuffer.wrap(new byte[] {
-          ((Number) shreddedVariant.get("typed_value")).byteValue()}));
-      return rebuilt;
+    public VariantRebuilder prepareRebuild(String columnPath, GroupType parquetVariantType, Schema unshreddedSchema) {
+      PREPARED.put(columnPath, parquetVariantType);
+      return shreddedVariant -> {
+        GenericRecord rebuilt = new GenericData.Record(unshreddedSchema);
+        rebuilt.put("metadata", shreddedVariant.get("metadata"));
+        rebuilt.put("value", ByteBuffer.wrap(new byte[] {
+            ((Number) shreddedVariant.get("typed_value")).byteValue()}));
+        return rebuilt;
+      };
     }
   }
 }

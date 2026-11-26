@@ -169,7 +169,6 @@ public class GlobalRecordLevelIndexBackend implements MinibatchIndexBackend {
     // the latest completed checkpoint id is used as the minimum checkpoint id,
     // since the streaming write operator always uses previous checkpoint id to request the new instant.
     recordIndexCache.markAsEvictable(inflightInstants.keySet().stream().min(Long::compareTo).orElse(completedCheckpointID));
-    this.metaClient.reloadActiveTimeline();
     reloadMetadataTable();
   }
 

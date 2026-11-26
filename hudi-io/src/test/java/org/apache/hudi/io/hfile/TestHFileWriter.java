@@ -25,6 +25,7 @@ import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 import org.apache.hudi.io.util.IOUtils;
 
 import com.google.protobuf.CodedOutputStream;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.hbase.CellComparatorImpl;
@@ -36,8 +37,6 @@ import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.WritableUtils;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -66,10 +65,11 @@ import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
 import static org.apache.hudi.io.hfile.HFileTrailer.TRAILER_SIZE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 class TestHFileWriter {
-  private static final Logger LOG = LoggerFactory.getLogger(TestHFileWriter.class);
   private static final HFileContext CONTEXT = HFileContext.builder().build();
   private static final String[] THREE_KEYS = {"key1", "key2", "key3"};
   private static final byte[][] THREE_VALUES = {bytes("value1"), bytes("value2"), bytes("value3")};
@@ -98,6 +98,39 @@ class TestHFileWriter {
           + "616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
           + "616161616161616161616161616161616161616161007fffffffffffffff0400000000";
 
+  /**
+   * Same-key and oversized records beyond the block capacity are rejected without changing the
+   * writer's state.
+   */
+  @Test
+  void testAppendRejectsRecordsExceedingDataBlockCapacity() throws IOException {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    // One entry costs 21 bytes of framing plus key and value
+    byte[] fittingValue = new byte[50];
+    byte[] oversizedValue = new byte[100];
+    try (HFileWriter writer = new HFileWriterImpl(CONTEXT, out, 100L)) {
+      writer.append("a", fittingValue);
+      IllegalArgumentException sameKey = assertThrows(IllegalArgumentException.class,
+          () -> writer.append("a", fittingValue));
+      assertTrue(sameKey.getMessage().startsWith(
+          "Data block would hold 144 uncompressed bytes after appending key a, exceeding the maximum of 100 bytes"),
+          sameKey.getMessage());
+      IllegalArgumentException oversized = assertThrows(IllegalArgumentException.class,
+          () -> writer.append("bbbbb", oversizedValue));
+      assertTrue(oversized.getMessage().startsWith(
+          "Data block would hold 126 uncompressed bytes after appending key bbbbb, exceeding the maximum of 100 bytes"),
+          oversized.getMessage());
+    }
+    byte[] hfile = out.toByteArray();
+    try (HFileReader reader = new HFileReaderImpl(
+        new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(hfile)), hfile.length)) {
+      assertEquals(1, reader.getNumKeyValueEntries());
+      assertEquals("a", new Key(reader.getMetaInfo(LAST_KEY).get()).getContentInString());
+      assertEquals(1, IOUtils.readInt(reader.getMetaInfo(AVG_KEY_LEN).get(), 0));
+      assertEquals(fittingValue.length, IOUtils.readInt(reader.getMetaInfo(AVG_VALUE_LEN).get(), 0));
+    }
+  }
+
   @Test
   void testOverflow() throws Exception {
     // 1. Write data.
@@ -108,7 +141,7 @@ class TestHFileWriter {
     validateHFileStructure(hfile);
     // 4. Validate consistency with HFileReader.
     validateConsistencyWithHFileReader(hfile);
-    LOG.info("All validations passed!");
+    log.info("All validations passed!");
   }
 
   @Test
@@ -308,8 +341,8 @@ class TestHFileWriter {
     assertEquals(hbaseBlocks[0], nativeBlocks[0], "native vs HBase data block bytes");
     assertEquals(hbaseBlocks[1], nativeBlocks[1], "native vs HBase root index bytes");
     if (dataGolden != null) {
-      LOG.info("DATA_REGION_HEX={}", nativeBlocks[0]);
-      LOG.info("ROOT_INDEX_BLOCK_HEX={}", nativeBlocks[1]);
+      log.info("DATA_REGION_HEX={}", nativeBlocks[0]);
+      log.info("ROOT_INDEX_BLOCK_HEX={}", nativeBlocks[1]);
       assertEquals(dataGolden, nativeBlocks[0], "data block bytes changed (storage-format change)");
       assertEquals(rootGolden, nativeBlocks[1], "root index bytes changed (storage-format change)");
     }

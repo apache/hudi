@@ -81,7 +81,7 @@ public class SparkTempViewProvider implements TempViewProvider {
         DataType headerDataType = getDataType(rows.get(0).get(i));
         structType = structType.add(DataTypes.createStructField(headersNoSpaces.get(i), headerDataType, true));
       }
-      List<Row> records = rows.stream().map(row -> RowFactory.create(row.toArray(new Comparable[row.size()])))
+      List<Row> records = rows.stream().map(row -> RowFactory.create(row.toArray()))
               .collect(Collectors.toList());
       Dataset<Row> dataset = this.sqlContext.createDataFrame(records, structType);
       dataset.createOrReplaceTempView(tableName);

@@ -75,13 +75,13 @@ public class ColumnStatsIndexHelper {
           @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata) {
     if (colType instanceof IntegerType) {
       return Pair.of(
-          new Integer(colMetadata.getMinValue().toString()),
-          new Integer(colMetadata.getMaxValue().toString())
+          Integer.valueOf(colMetadata.getMinValue().toString()),
+          Integer.valueOf(colMetadata.getMaxValue().toString())
       );
     } else if (colType instanceof DoubleType) {
       return Pair.of(
-          new Double(colMetadata.getMinValue().toString()),
-          new Double(colMetadata.getMaxValue().toString())
+          Double.valueOf(colMetadata.getMinValue().toString()),
+          Double.valueOf(colMetadata.getMaxValue().toString())
       );
     } else if (colType instanceof StringType) {
       return Pair.of(
@@ -97,16 +97,16 @@ public class ColumnStatsIndexHelper {
           java.sql.Date.valueOf(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof LongType) {
       return Pair.of(
-          new Long(colMetadata.getMinValue().toString()),
-          new Long(colMetadata.getMaxValue().toString()));
+          Long.valueOf(colMetadata.getMinValue().toString()),
+          Long.valueOf(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof ShortType) {
       return Pair.of(
-          new Short(colMetadata.getMinValue().toString()),
-          new Short(colMetadata.getMaxValue().toString()));
+          Short.valueOf(colMetadata.getMinValue().toString()),
+          Short.valueOf(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof FloatType) {
       return Pair.of(
-          new Float(colMetadata.getMinValue().toString()),
-          new Float(colMetadata.getMaxValue().toString()));
+          Float.valueOf(colMetadata.getMinValue().toString()),
+          Float.valueOf(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof BinaryType) {
       return Pair.of(
           ((ByteBuffer) colMetadata.getMinValue()).array(),

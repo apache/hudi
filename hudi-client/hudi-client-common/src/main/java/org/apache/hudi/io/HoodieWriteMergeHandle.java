@@ -147,9 +147,9 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
    */
   public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                 Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                                HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier,
+                                HoodieBaseFile baseFile, TaskContextSupplier taskContextSupplier,
                                 Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, MergeContext.create(Collections.emptyIterator()), partitionPath, fileId, taskContextSupplier, dataFileToBeMerged, keyGeneratorOpt,
+    super(config, instantTime, hoodieTable, MergeContext.create(Collections.emptyIterator()), partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt,
         // preserveMetadata is disabled by default for MDT but enabled otherwise
         !HoodieTableMetadata.isMetadataTable(config.getBasePath()));
     this.keyToNewRecords = keyToNewRecords;
@@ -387,7 +387,9 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
             readerContext.getRecordContext(), props, orderingFields, deleteContext);
         BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
         HoodieSchema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
-        HoodieRecord combinedRecord = readerContext.getRecordContext().constructHoodieRecord(mergeResult);
+        // The merge result is final: build it without the payload, which would decode it with the payload's own
+        // schema and re-apply payload logic (e.g. the NOT MATCHED clause of ExpressionPayload) to the merged row.
+        HoodieRecord combinedRecord = readerContext.getRecordContext().constructFinalHoodieRecord(mergeResult);
         if (combinedRecord.shouldIgnore(combineRecordSchema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;

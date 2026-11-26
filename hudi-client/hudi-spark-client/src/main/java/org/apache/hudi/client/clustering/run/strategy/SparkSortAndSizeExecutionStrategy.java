@@ -20,12 +20,12 @@ package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -63,17 +63,14 @@ public class SparkSortAndSizeExecutionStrategy<T>
                                                                    boolean shouldPreserveHoodieMetadata,
                                                                    Map<String, String> extraMetadata) {
     log.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
-    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
-        .withBulkInsertParallelism(numOutputGroups)
-        .withProps(getWriteConfig().getProps()).build();
-
-    newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(getWriteConfig().getClusteringTargetFileMaxBytes()));
+    HoodieWriteConfig newConfig = getGroupWriteConfig(Option.of(getWriteConfig().getClusteringTargetFileMaxBytes()));
 
     BulkInsertPartitioner<Dataset<Row>> partitioner = getRowPartitioner(strategyParams, schema);
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
 
     return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
-        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
+        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata,
+        getGroupWriterSchema(repartitionedRecords.schema(), newConfig));
   }
 
   @Override
@@ -87,11 +84,7 @@ public class SparkSortAndSizeExecutionStrategy<T>
                                                                  final Map<String, String> extraMetadata) {
     log.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
 
-    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
-        .withBulkInsertParallelism(numOutputGroups)
-        .withProps(getWriteConfig().getProps()).build();
-
-    newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(getWriteConfig().getClusteringTargetFileMaxBytes()));
+    HoodieWriteConfig newConfig = getGroupWriteConfig(Option.of(getWriteConfig().getClusteringTargetFileMaxBytes()));
 
     return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(),
         newConfig, false, getRDDPartitioner(strategyParams, schema), true, numOutputGroups, new CreateHandleFactory(shouldPreserveHoodieMetadata));

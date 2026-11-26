@@ -82,6 +82,27 @@ public abstract class HoodieEngineContext {
 
   public abstract <T> HoodieData<T> parallelize(List<T> data, int parallelism);
 
+  /**
+   * Unions all the given {@link HoodieData} into a single {@link HoodieData}.
+   *
+   * <p>The default implementation folds the inputs with {@link HoodieData#union(HoodieData)}, which
+   * does not nest when {@link #emptyHoodieData()} is eager, since every step materializes its result.
+   * Engines whose union nests per call should override this with a single flat union: on Spark, a
+   * chain of a few hundred {@code UnionRDD} levels is enough to overflow the stack during task
+   * serialization.
+   *
+   * @param dataList the {@link HoodieData} to union
+   * @param <T>      type of object
+   * @return the union of all the inputs, or {@link #emptyHoodieData()} if there is none
+   */
+  public <T> HoodieData<T> union(List<HoodieData<T>> dataList) {
+    HoodieData<T> result = emptyHoodieData();
+    for (HoodieData<T> data : dataList) {
+      result = result.union(data);
+    }
+    return result;
+  }
+
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
 
   public abstract <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc,

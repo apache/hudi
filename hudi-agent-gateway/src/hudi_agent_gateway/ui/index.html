@@ -42,13 +42,13 @@ limitations under the License.
   <section id="connect-panel" hidden>
     <div class="endpoint">
       <div>
-        <strong>Trino SQL</strong>
+        <strong id="ep-sql-label">Lakehouse SQL</strong>
         <small>point any SQL client / BI tool at the lakehouse directly</small>
       </div>
       <code id="ep-trino">&hellip;</code>
       <button class="copy" data-copy="ep-trino" title="Copy">&#x2398;</button>
     </div>
-    <div class="endpoint">
+    <div class="endpoint" id="ep-trino-ui-row">
       <div>
         <strong>Trino Web UI</strong>
         <small>query monitoring &amp; cluster overview</small>
@@ -72,7 +72,7 @@ limitations under the License.
       <code id="ep-mcp">&hellip;</code>
       <button class="copy" data-copy="ep-mcp" title="Copy">&#x2398;</button>
     </div>
-    <p class="endpoint-note">Trino is addressed by its in-cluster service name; from outside the
+    <p class="endpoint-note">The SQL endpoint is addressed by its in-cluster service name; from outside the
     cluster, port-forward or expose the service. The inference and MCP URLs are this gateway.</p>
   </section>
 
@@ -80,7 +80,7 @@ limitations under the License.
     <div class="welcome" id="welcome">
       <h1>Talk to your lakehouse</h1>
       <p>Ask questions about your Hudi tables in plain English. The agent
-      inspects the catalog, writes guarded Trino SQL, and answers from real
+      inspects the catalog, writes guarded read-only SQL, and answers from real
       query results.</p>
       <div class="suggestions">
         <button class="suggestion">What tables are available?</button>
@@ -94,6 +94,7 @@ limitations under the License.
     <form id="composer">
       <textarea id="input" rows="1" placeholder="Ask about your data&hellip;"
                 autocomplete="off" autofocus></textarea>
+      <button id="stop" type="button" hidden>Stop</button>
       <button id="send" type="submit" title="Send">&#x27A4;</button>
     </form>
     <p class="fineprint">Answers are generated from live queries against your lakehouse. Verify before acting.</p>

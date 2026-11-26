@@ -43,15 +43,19 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -68,6 +72,7 @@ class TestClusteringCommitSink {
 
   private Configuration conf;
   private HoodieFlinkWriteClient writeClient;
+  private HoodieFlinkWriteClient cleaningClient;
   private HoodieFlinkTable table;
   private HoodieTableMetaClient metaClient;
   private HoodieActiveTimeline activeTimeline;
@@ -80,6 +85,7 @@ class TestClusteringCommitSink {
     conf = new Configuration();
     conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, false);
     writeClient = mock(HoodieFlinkWriteClient.class);
+    cleaningClient = mock(HoodieFlinkWriteClient.class);
     table = mock(HoodieFlinkTable.class);
     metaClient = mock(HoodieTableMetaClient.class);
     activeTimeline = mock(HoodieActiveTimeline.class);
@@ -183,8 +189,10 @@ class TestClusteringCommitSink {
     }
   }
 
-  @Test
-  void testCommitSuccessfulClusteringAndCleanInline() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testCommitSuccessfulClusteringAndCloseClients(boolean asyncCleaning) throws Exception {
+    conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, asyncCleaning);
     ClusteringCommitSink sink = openSink();
     HoodieClusteringPlan plan = planWithGroups(1);
     HoodieWriteStat writeStat = new HoodieWriteStat();
@@ -213,7 +221,21 @@ class TestClusteringCommitSink {
         any(HoodieCommitMetadata.class),
         same(table),
         eq(INSTANT));
-    verify(writeClient).clean();
+    sink.close();
+    verify(writeClient, times(asyncCleaning ? 0 : 1)).clean();
+    verify(writeClient).close();
+    verify(cleaningClient, times(asyncCleaning ? 1 : 0)).clean();
+    verify(cleaningClient, times(asyncCleaning ? 1 : 0)).close();
+  }
+
+  @Test
+  void testClosesClusteringClientWhenCleaningClientCloseFails() throws Exception {
+    conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, true);
+    doThrow(new RuntimeException("expected")).when(cleaningClient).close();
+    ClusteringCommitSink sink = openSink();
+    assertThrows(RuntimeException.class, sink::close);
+    verify(cleaningClient).close();
+    verify(writeClient).close();
   }
 
   private ClusteringCommitSink openSink() throws Exception {
@@ -221,9 +243,14 @@ class TestClusteringCommitSink {
     MockStreamingRuntimeContext runtimeContext = new MockStreamingRuntimeContext(false, 1, 0);
     sink.setRuntimeContext(runtimeContext);
     try (MockedStatic<FlinkWriteClients> writeClients = mockStatic(FlinkWriteClients.class)) {
-      writeClients.when(() -> FlinkWriteClients.createWriteClient(conf, runtimeContext))
-          .thenReturn(writeClient);
+      if (conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+        writeClients.when(() -> FlinkWriteClients.createWriteClient(conf, runtimeContext)).thenReturn(cleaningClient, writeClient);
+      } else {
+        writeClients.when(() -> FlinkWriteClients.createWriteClient(conf, runtimeContext)).thenReturn(writeClient);
+      }
       sink.open(conf);
+      writeClients.verify(() -> FlinkWriteClients.createWriteClient(conf, runtimeContext),
+          times(conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) ? 2 : 1));
     }
     return sink;
   }

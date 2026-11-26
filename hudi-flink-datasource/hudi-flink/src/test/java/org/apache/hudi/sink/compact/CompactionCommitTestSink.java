@@ -18,12 +18,14 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchiverV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.configuration.Configuration;
@@ -34,23 +36,28 @@ import java.util.List;
  * CompactionCommitTestSink, throw for first attempt to simulate failure
  */
 public class CompactionCommitTestSink extends CompactionCommitSink {
+  private final Configuration conf;
+
   public CompactionCommitTestSink(Configuration conf) {
     super(conf);
+    this.conf = conf;
   }
 
   @Override
   public void invoke(CompactionCommitEvent event, Context context) throws Exception {
     super.invoke(event, context);
-    List<HoodieInstant> instants = writeClient.getHoodieTable().getMetaClient().getActiveTimeline().getInstants();
-    boolean compactCommitted = instants.stream().anyMatch(i -> i.requestedTime().equals(event.getInstant()) && i.isCompleted());
-    if (compactCommitted && RuntimeContextUtils.getAttemptNumber(getRuntimeContext()) == 0) {
-      // archive compact instant
-      this.writeClient.getConfig().setValue(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP, "1");
-      this.writeClient.getConfig().setValue(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP, "1");
-      HoodieTimelineArchiver archiver = new TimelineArchiverV2(this.writeClient.getConfig(), this.writeClient.getHoodieTable());
-      this.writeClient.getHoodieTable().getMetaClient().reloadActiveTimeline();
-      archiver.archiveIfRequired(HoodieFlinkEngineContext.DEFAULT);
-      throw new HoodieException("Fail first attempt to simulate failover in test.");
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext())) {
+      List<HoodieInstant> instants = writeClient.getHoodieTable().getMetaClient().getActiveTimeline().getInstants();
+      boolean compactCommitted = instants.stream().anyMatch(i -> i.requestedTime().equals(event.getInstant()) && i.isCompleted());
+      if (compactCommitted && RuntimeContextUtils.getAttemptNumber(getRuntimeContext()) == 0) {
+        // archive compact instant
+        writeClient.getConfig().setValue(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP, "1");
+        writeClient.getConfig().setValue(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP, "1");
+        HoodieTimelineArchiver archiver = new TimelineArchiverV2(writeClient.getConfig(), writeClient.getHoodieTable());
+        writeClient.getHoodieTable().getMetaClient().reloadActiveTimeline();
+        archiver.archiveIfRequired(HoodieFlinkEngineContext.DEFAULT);
+        throw new HoodieException("Fail first attempt to simulate failover in test.");
+      }
     }
   }
 }

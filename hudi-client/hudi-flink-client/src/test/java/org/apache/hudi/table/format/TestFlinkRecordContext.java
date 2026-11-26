@@ -19,31 +19,70 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.client.model.HoodieFlinkRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.columnar.ColumnarRowData;
 import org.apache.flink.table.data.columnar.vector.ColumnVector;
 import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.columnar.vector.heap.HeapBytesVector;
 import org.apache.flink.table.data.columnar.vector.heap.HeapIntVector;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestFlinkRecordContext {
 
   private static final HoodieSchema SCHEMA = HoodieSchema.createRecord("test_record", null, null, Arrays.asList(
       HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
       HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.INT))));
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testConstructDeleteRecord(boolean hasRowData) {
+    HoodieSchema schema = HoodieSchema.createRecord("delete_record", null, null,
+        Collections.singletonList(HoodieSchemaField.of("ts", HoodieSchema.createTimestampMillis())));
+    TimestampData orderingValue = TimestampData.fromEpochMillis(60);
+    RowData row = hasRowData ? GenericRowData.of(orderingValue) : null;
+    FlinkRecordContext context = FlinkRecordContext.getDeleteCheckingInstance();
+    BufferedRecord<RowData> buffered = new BufferedRecord<>("id1", orderingValue, row, context.encodeSchema(schema), HoodieOperation.DELETE);
+
+    HoodieRecord<RowData> record = context.constructHoodieRecord(buffered, "par1").newInstance(new HoodieKey("id1", "par2"));
+
+    assertEquals(hasRowData ? HoodieFlinkRecord.class : HoodieEmptyRecord.class, record.getClass());
+    assertSame(row, record.getData());
+    assertEquals(HoodieOperation.DELETE, record.getOperation());
+    assertTrue(record.isDelete(null, new Properties()));
+    if (hasRowData) {
+      assertEquals(60L, record.getOrderingValueAsJava(schema, new Properties(), new String[] {"ts"}));
+    }
+    assertSame(orderingValue, record.getOrderingValue(schema, new Properties(), new String[] {"ts"}));
+    BufferedRecord<RowData> roundTrip = BufferedRecords.fromHoodieRecord(record, schema, context, new Properties(), new String[] {"ts"}, true);
+    assertTrue(roundTrip.isDelete());
+    assertSame(row, roundTrip.getRecord());
+    assertSame(orderingValue, roundTrip.getOrderingValue());
+  }
 
   @Test
   void testSealDoesNotCopyGenericRowData() {

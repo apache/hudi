@@ -29,7 +29,7 @@ async def client(settings, fake_trino, monkeypatch):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as c, app.router.lifespan_context(app):
-        app.state.trino_client = fake_trino
+        app.state.lakehouse_client = fake_trino
         yield c, app
 
 
@@ -42,7 +42,7 @@ async def test_health(client) -> None:
 
 async def test_ready_reports_dependency_failures(client) -> None:
     c, app = client
-    app.state.trino_client.fail_with("connection refused")
+    app.state.lakehouse_client.fail_with("connection refused")
 
     class NotReady:
         async def check(self):

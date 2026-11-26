@@ -164,6 +164,13 @@ public class HudiTrinoInlineStorage
     }
 
     @Override
+    public boolean isEmpty(StoragePath path)
+            throws IOException
+    {
+        throw new HoodieNotSupportedException("This API should not be called by Hudi inline storage.");
+    }
+
+    @Override
     public List<StoragePathInfo> listDirectEntries(StoragePath path, StoragePathFilter storagePathFilter)
             throws IOException
     {

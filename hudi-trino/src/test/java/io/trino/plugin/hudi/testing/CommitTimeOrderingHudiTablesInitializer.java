@@ -33,6 +33,7 @@ import java.util.Optional;
 
 import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_STRING;
+import static io.trino.plugin.hudi.testing.TypeInfoHelper.charHiveType;
 
 /**
  * Creates a non-partitioned Merge-On-Read table in {@link RecordMergeMode#COMMIT_TIME_ORDERING} that
@@ -63,6 +64,7 @@ public class CommitTimeOrderingHudiTablesInitializer
         return ImmutableList.of(
                 new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
                 new Column("name", HIVE_STRING, Optional.empty(), Map.of()),
+                new Column("code", charHiveType(5), Optional.empty(), Map.of()),
                 new Column("value", HIVE_LONG, Optional.empty(), Map.of()),
                 new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()));
     }
@@ -73,6 +75,7 @@ public class CommitTimeOrderingHudiTablesInitializer
         List<Schema.Field> fields = ImmutableList.of(
                 new Schema.Field(RECORD_KEY_FIELD, Schema.create(Schema.Type.STRING)),
                 new Schema.Field("name", Schema.create(Schema.Type.STRING)),
+                new Schema.Field("code", Schema.create(Schema.Type.STRING)),
                 new Schema.Field("value", Schema.create(Schema.Type.LONG)),
                 new Schema.Field(ORDERING_FIELD, Schema.create(Schema.Type.LONG)));
         return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
@@ -97,9 +100,9 @@ public class CommitTimeOrderingHudiTablesInitializer
         // First commit: base parquet file with 3 keys at ts 100.
         String firstCommit = client.startCommit();
         List<WriteStatus> firstStatuses = client.bulkInsert(ImmutableList.of(
-                record(schema, "k1", "k1_base", 10L, 100L),
-                record(schema, "k2", "k2_base", 20L, 100L),
-                record(schema, "k3", "k3_base", 30L, 100L)), firstCommit);
+                record(schema, "k1", "k1_base", "k1", 10L, 100L),
+                record(schema, "k2", "k2_base", "k2", 20L, 100L),
+                record(schema, "k3", "k3_base", " ab", 30L, 100L)), firstCommit);
         client.commit(firstCommit, firstStatuses);
 
         // Second commit (log file): update k1 with a LOWER ts (50). Commit-time ordering keeps the
@@ -107,7 +110,7 @@ public class CommitTimeOrderingHudiTablesInitializer
         // case, which discriminates OverwriteWithLatestMerger from event-time merging.
         String secondCommit = client.startCommit();
         List<WriteStatus> secondStatuses = client.upsert(ImmutableList.of(
-                record(schema, "k1", "k1_updated", 11L, 50L)), secondCommit);
+                record(schema, "k1", "k1_updated", "\tx\t", 11L, 50L)), secondCommit);
         client.commit(secondCommit, secondStatuses);
 
         // Third commit: hard delete of k2 (commit-time deletes always win).
@@ -117,11 +120,12 @@ public class CommitTimeOrderingHudiTablesInitializer
         client.commit(deleteCommit, deleteStatuses);
     }
 
-    private static HoodieRecord<HoodieAvroPayload> record(Schema schema, String key, String name, long value, long ts)
+    private static HoodieRecord<HoodieAvroPayload> record(Schema schema, String key, String name, String code, long value, long ts)
     {
         GenericRecord record = new GenericData.Record(schema);
         record.put(RECORD_KEY_FIELD, key);
         record.put("name", name);
+        record.put("code", code);
         record.put("value", value);
         record.put(ORDERING_FIELD, ts);
         return avroRecord(record, key);

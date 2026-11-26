@@ -24,14 +24,28 @@ from __future__ import annotations
 
 from hudi_agent_gateway.config import GatewaySettings
 from hudi_agent_gateway.tools import trino_tools
+from hudi_agent_gateway.tools.lakehouse_client import LakehouseClient
 from hudi_agent_gateway.tools.registry import ToolRegistry
 from hudi_agent_gateway.tools.trino_client import TrinoClient
 
 
+def build_client(settings: GatewaySettings) -> LakehouseClient:
+    if settings.sql_backend == "spark-connect":
+        try:
+            from hudi_agent_gateway.tools.spark_connect_client import SparkConnectClient
+        except ModuleNotFoundError as e:
+            if e.name and (e.name == "pyspark" or e.name.startswith("pyspark.")):
+                raise RuntimeError("Spark Connect requires the spark-connect extra") from e
+            raise
+
+        return SparkConnectClient(settings)
+    return TrinoClient(settings)
+
+
 def build_registry(
-    settings: GatewaySettings, trino_client: TrinoClient | None = None
+    settings: GatewaySettings, lakehouse_client: LakehouseClient | None = None
 ) -> ToolRegistry:
     registry = ToolRegistry()
-    client = trino_client or TrinoClient(settings)
+    client = lakehouse_client or build_client(settings)
     trino_tools.register(registry, client, settings)
     return registry

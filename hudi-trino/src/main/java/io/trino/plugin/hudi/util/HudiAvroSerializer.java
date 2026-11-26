@@ -67,6 +67,7 @@ import static io.trino.plugin.hudi.HudiUtil.getFieldFromSchema;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
 import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.Chars.truncateToLengthAndTrimSpaces;
 import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.Decimals.writeBigDecimal;
 import static io.trino.spi.type.Decimals.writeShortDecimal;
@@ -83,6 +84,7 @@ import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MICROSECOND;
 import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_MICROSECOND;
 import static io.trino.spi.type.TinyintType.TINYINT;
+import static io.trino.spi.type.Varchars.truncateToLength;
 import static java.lang.Integer.parseInt;
 import static java.lang.Math.floorDiv;
 import static java.lang.Math.floorMod;
@@ -435,16 +437,9 @@ public class HudiAvroSerializer
 
     private static void writeSlice(BlockBuilder output, Type type, Object value)
     {
-        if (type instanceof VarcharType) {
-            if (value instanceof Utf8) {
-                type.writeSlice(output, utf8Slice(((Utf8) value).toString()));
-            }
-            else if (value instanceof String) {
-                type.writeSlice(output, utf8Slice((String) value));
-            }
-            else {
-                type.writeSlice(output, utf8Slice(value.toString()));
-            }
+        if (type instanceof VarcharType varcharType) {
+            // Match Trino's Parquet VARCHAR reader: truncate a bounded VARCHAR to its length in code points
+            type.writeSlice(output, truncateToLength(utf8Slice(value.toString()), varcharType));
         }
         else if (type instanceof VarbinaryType) {
             if (value instanceof ByteBuffer) {
@@ -458,7 +453,7 @@ public class HudiAvroSerializer
                         format("Unhandled type for %s: %s | value type: %s", type.getJavaType().getSimpleName(), type, value.getClass().getName()));
             }
         }
-        else if (type instanceof CharType) {
+        else if (type instanceof CharType charType) {
             String stringValue;
             if (value instanceof Utf8) {
                 stringValue = ((Utf8) value).toString();
@@ -470,9 +465,9 @@ public class HudiAvroSerializer
                 // Fallback: convert any other object to its string representation
                 stringValue = value.toString();
             }
-            // IMPORTANT: Char types may be padded with trailing "space" characters to make up for length if the contents are lesser than defined length.
-            // Need to trim out trailing spaces as Slice representing Char should not have trailing spaces
-            type.writeSlice(output, utf8Slice(stringValue.trim()));
+            // Match Trino's Parquet CHAR reader: truncate to the declared length in code points, then strip
+            // trailing U+0020 padding only, keeping leading whitespace and trailing control characters
+            type.writeSlice(output, truncateToLengthAndTrimSpaces(utf8Slice(stringValue), charType));
         }
         else {
             throw new TrinoException(GENERIC_INTERNAL_ERROR,

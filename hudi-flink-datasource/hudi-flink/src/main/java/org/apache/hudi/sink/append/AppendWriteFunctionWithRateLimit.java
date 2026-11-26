@@ -20,14 +20,13 @@ package org.apache.hudi.sink.append;
 
 import org.apache.hudi.common.util.RateLimiter;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.utils.FlinkRateLimiterFactory;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
-
-import java.util.concurrent.TimeUnit;
 
 /**
  * Append write function with configurable rate limit.
@@ -37,7 +36,7 @@ public class AppendWriteFunctionWithRateLimit<I>
   /**
    * Total rate limit per second for this job.
    */
-  private final double totalLimit;
+  private final long totalLimit;
 
   /**
    * Rate limit per second for per task.
@@ -52,13 +51,28 @@ public class AppendWriteFunctionWithRateLimit<I>
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.rateLimiter =
-        RateLimiter.create((int) totalLimit / RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()), TimeUnit.SECONDS);
+    this.rateLimiter = FlinkRateLimiterFactory.create(
+        totalLimit, RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()));
   }
 
   @Override
   public void processElement(I value, Context ctx, Collector<RowData> out) throws Exception {
-    rateLimiter.acquire(1);
+    rateLimiter.acquire();
     super.processElement(value, ctx, out);
+  }
+
+  @Override
+  public void close() throws Exception {
+    try {
+      super.close();
+    } finally {
+      if (rateLimiter != null) {
+        rateLimiter.stop();
+      }
+    }
+  }
+
+  RateLimiter getRateLimiter() {
+    return rateLimiter;
   }
 }

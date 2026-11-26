@@ -26,7 +26,6 @@ import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
-import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -793,18 +792,70 @@ class TestHoodieTableMetadataUtil {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
-  void testPartitionStatsConversionFailureIsWrapped() {
-    HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> pairData =
-        mock(HoodiePairData.class);
-    when(pairData.flatMapValues(any())).thenThrow(new RuntimeException("conversion failed"));
+  void testPartitionStatsCoverageAndInvalidation() {
+    Map<String, HoodieSchema> columns = new HashMap<>();
+    columns.put("age", HoodieSchema.create(HoodieSchemaType.INT));
+    columns.put("name", HoodieSchema.create(HoodieSchemaType.STRING));
+    columns.put("absent", HoodieSchema.create(HoodieSchemaType.STRING));
+    List<HoodieColumnRangeMetadata<Comparable>> ranges = Arrays.asList(
+        partitionStatsRange("/table/p1/old.parquet", "age", 25, 0, columns),
+        partitionStatsRange("p1/new.parquet", "age", 30, 0, columns),
+        partitionStatsRange("new.parquet", "name", "bob", 0, columns),
+        partitionStatsRange("new.parquet", "name", "bob", 0, columns));
+    Map<String, HoodieMetadataColumnStats> result = partitionStatsByColumn(ranges, columns);
+    assertEquals(columns.keySet(), result.keySet());
+    assertFalse(result.get("age").getIsDeleted());
+    assertTrue(result.get("age").getIsTightBound());
+    assertEquals(2L, result.get("age").getValueCount());
+    assertEquals(25, HoodieColumnRangeMetadata.fromColumnStats(result.get("age")).getMinValue());
+    assertEquals(30, HoodieColumnRangeMetadata.fromColumnStats(result.get("age")).getMaxValue());
+    // Duplicate contributions from one file cannot stand in for another file's missing statistics.
+    assertTrue(result.get("name").getIsDeleted());
+    assertTrue(result.get("absent").getIsDeleted());
+    assertEquals("p1", result.get("name").getFileName());
 
-    assertThrows(org.apache.hudi.exception.HoodieException.class,
-        () -> HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords(
-            pairData,
-            mock(HoodieTableMetaClient.class),
-            Collections.emptyMap(),
-            HoodieIndexVersion.V1));
+    HoodieMetadataColumnStats previous = HoodieMetadataPayload.createPartitionStatsRecords("p1",
+        Collections.singletonList(partitionStatsRange("p1", "name", "bob", 0, columns)), false, true, Option.empty())
+        .map(record -> ((HoodieMetadataPayload) record.getData()).getColumnStatMetadata().get()).findFirst().get();
+    assertEquals(result.get("name"), HoodieTableMetadataUtil.mergeColumnStatsRecords(previous, result.get("name")));
+    List<HoodieColumnRangeMetadata<Comparable>> complete = Arrays.asList(
+        partitionStatsRange("old.parquet", "name", "alice", 0, columns),
+        partitionStatsRange("new.parquet", "name", "bob", 0, columns));
+    HoodieMetadataColumnStats restored = partitionStatsByColumn(complete, columns).get("name");
+    assertFalse(restored.getIsDeleted());
+    assertEquals(restored, HoodieTableMetadataUtil.mergeColumnStatsRecords(result.get("name"), restored));
+  }
+
+  @Test
+  void testPartitionStatsWithAllMissingOrAllNullStatistics() {
+    Map<String, HoodieSchema> columns = Collections.singletonMap("name", HoodieSchema.create(HoodieSchemaType.STRING));
+    assertTrue(partitionStatsByColumn(Collections.emptyList(), columns).get("name").getIsDeleted());
+    List<HoodieColumnRangeMetadata<Comparable>> ranges = Arrays.asList(
+        partitionStatsRange("old.parquet", "name", null, 1, columns),
+        HoodieColumnRangeMetadata.createEmpty("new.parquet", "name", HoodieIndexVersion.V1));
+    HoodieMetadataColumnStats allNull = partitionStatsByColumn(ranges, columns).get("name");
+    assertFalse(allNull.getIsDeleted());
+    assertNull(allNull.getMinValue());
+    assertNull(allNull.getMaxValue());
+    assertEquals(1L, allNull.getNullCount());
+    assertEquals(1L, allNull.getValueCount());
+
+    ranges = Arrays.asList(ranges.get(0), HoodieColumnRangeMetadata.stub("new.parquet", "name", HoodieIndexVersion.V1));
+    assertTrue(partitionStatsByColumn(ranges, columns).get("name").getIsDeleted());
+  }
+
+  private static Map<String, HoodieMetadataColumnStats> partitionStatsByColumn(List<HoodieColumnRangeMetadata<Comparable>> ranges,
+                                                                             Map<String, HoodieSchema> columns) {
+    return HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords("p1", ranges,
+        new java.util.HashSet<>(Arrays.asList("old.parquet", "new.parquet")), columns, HoodieIndexVersion.V1)
+        .map(record -> ((HoodieMetadataPayload) record.getData()).getColumnStatMetadata().get())
+        .collect(java.util.stream.Collectors.toMap(HoodieMetadataColumnStats::getColumnName, stats -> stats));
+  }
+
+  private static HoodieColumnRangeMetadata<Comparable> partitionStatsRange(String file, String column, Comparable value, long nullCount,
+                                                                          Map<String, HoodieSchema> columns) {
+    return HoodieColumnRangeMetadata.create(file, column, value, value, nullCount, 1, 1, 1,
+        org.apache.hudi.metadata.stats.ValueMetadata.getValueMetadata(columns.get(column), HoodieIndexVersion.V1));
   }
 
   @Test

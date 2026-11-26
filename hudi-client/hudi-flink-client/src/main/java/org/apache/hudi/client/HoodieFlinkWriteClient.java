@@ -74,6 +74,9 @@ import java.util.stream.Collectors;
  * <p>The client is used both on driver (for starting/committing transactions)
  * and executor (for writing dataset).
  *
+ * <p>Table property and schema validation for streaming writes is performed by the operator coordinator before
+ * making each new instant available to the write tasks.
+ *
  * @param <T> type of the payload
  */
 @Slf4j
@@ -231,7 +234,6 @@ public class HoodieFlinkWriteClient<T>
   public List<WriteStatus> upsert(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
 
     preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result;
@@ -249,7 +251,6 @@ public class HoodieFlinkWriteClient<T>
     // only used for metadata table, the upsert happens in single thread
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient(), Option.of(HoodieListData.eager(preppedRecords)));
     Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
         .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
@@ -273,7 +274,6 @@ public class HoodieFlinkWriteClient<T>
   public List<WriteStatus> insert(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.INSERT, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
 
     preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result;
@@ -290,7 +290,6 @@ public class HoodieFlinkWriteClient<T>
   public List<WriteStatus> insertOverwrite(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.INSERT_OVERWRITE, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
     // create the write handle if not exists
     HoodieWriteMetadata<List<WriteStatus>> result;
@@ -303,7 +302,6 @@ public class HoodieFlinkWriteClient<T>
   @Override
   public List<WriteStatus> insertOverwriteTable(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime) {
     HoodieTable table = initTable(WriteOperationType.INSERT_OVERWRITE_TABLE, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
     // create the write handle if not exists
     HoodieWriteMetadata<List<WriteStatus>> result;
@@ -333,7 +331,6 @@ public class HoodieFlinkWriteClient<T>
     // only used for metadata table, the bulk_insert happens in single JVM process
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.BULK_INSERT_PREPPED, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient(), Option.of(HoodieListData.eager(preppedRecords)));
     Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
         .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
@@ -403,10 +400,15 @@ public class HoodieFlinkWriteClient<T>
   }
 
   /**
-   * Refresh the last transaction metadata,
+   * Validate the table properties and write schema, and refresh the last transaction metadata,
    * should be called before the Driver starts a new transaction with a reloaded metaclient.
    */
   public void preTxn(WriteOperationType operationType, HoodieTableMetaClient metaClient) {
+    // Validate once on the coordinator using its refreshed timeline, before writers receive the instant.
+    validateAgainstTableProperties(metaClient, config, operationType);
+    if (!metaClient.isMetadataTable() && (WriteOperationType.isChangingRecords(operationType) || WriteOperationType.isInsert(operationType))) {
+      createTable(config, metaClient).validateSchema();
+    }
     if (txnManager.isLockRequired() && config.needResolveWriteConflict(operationType, metaClient.isMetadataTable(), config, metaClient.getTableConfig())) {
       this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
       this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
@@ -489,6 +491,8 @@ public class HoodieFlinkWriteClient<T>
     // no need to execute the upgrade/downgrade on each write in streaming.
 
     // flink performs metadata table bootstrap on the coordinator when it starts up.
+
+    // flink validates table properties on the coordinator in preTxn.
   }
 
   /**
