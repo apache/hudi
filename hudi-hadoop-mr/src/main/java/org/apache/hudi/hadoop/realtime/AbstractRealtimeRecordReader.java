@@ -181,11 +181,18 @@ public abstract class AbstractRealtimeRecordReader {
     // TODO(vc): In the future, the reader schema should be updated based on log files & be able
     // to null out fields not present before
 
-    readerSchema = HoodieRealtimeRecordReaderUtils.generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
+    readerSchema = HoodieSchemaUtils.generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
     log.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
         split.getDeltaLogPaths(), split.getPath(), projectionFields));
   }
 
+  /**
+   * Builds the writer schema reordered to the Hive column order.
+   *
+   * <p>Deliberately not folded into {@link HoodieSchemaUtils#generateProjectionSchema(HoodieSchema, Map, List)}:
+   * the lookup is the same, but a Hive column missing from the schema is skipped here (Hive virtual columns)
+   * whereas the projection helper fails the query.</p>
+   */
   public HoodieSchema constructHiveOrderedSchema(HoodieSchema writerSchema, Map<String, HoodieSchemaField> schemaFieldsMap, String hiveColumnString) {
     String[] hiveColumns = hiveColumnString.isEmpty() ? new String[0] : hiveColumnString.split(",");
     log.info("Hive Columns : {}", hiveColumnString);
