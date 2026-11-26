@@ -13,12 +13,16 @@
  */
 package io.trino.plugin.hudi.query.index;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableMap;
 import io.airlift.log.Logger;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hudi.HudiTableHandle;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+import org.apache.avro.Schema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.common.util.Lazy;
@@ -33,7 +37,7 @@ import static io.trino.plugin.hudi.HudiSessionProperties.isPartitionStatsIndexEn
 import static io.trino.plugin.hudi.HudiSessionProperties.isRecordLevelIndexEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.isResolveColumnNameCasingEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.isSecondaryIndexEnabled;
-import static io.trino.plugin.hudi.HudiUtil.getFieldFromSchema;
+import static io.trino.plugin.hudi.HudiUtil.findFieldInSchema;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -128,14 +132,37 @@ public class IndexSupportFactory
 
     private static TupleDomain<String> transformTupleDomain(ConnectorSession session, HudiTableHandle hudiTableHandle, TupleDomain<HiveColumnHandle> tupleDomain)
     {
-        // Synthesized columns have no physical field in the Hudi schema or its indexes.
+        // Synthesized columns have no physical field in the Hudi schema or its indexes. Dropping them up front keeps
+        // their names out of the index strategies when casing resolution is off, and skips the table schema lookup
+        // below when a query filters on synthesized columns only.
         tupleDomain = tupleDomain.filter((column, domain) -> !column.isHidden());
-        if (isResolveColumnNameCasingEnabled(session)) {
+        if (isResolveColumnNameCasingEnabled(session) && !tupleDomain.isAll() && !tupleDomain.isNone()) {
             // if column case reconciliation is enabled, transform the tuple domain keys to match the column names from the Hudi table.
-            return tupleDomain.transformKeys(hiveColumnHandle ->
-                    getFieldFromSchema(hiveColumnHandle.getName(), hudiTableHandle.getTableSchema().toAvroSchema()).name());
+            // all and none carry no keys to resolve, so the table schema is not loaded for them.
+            return resolveFieldNames(tupleDomain, hudiTableHandle.getTableSchema().toAvroSchema());
         }
         return tupleDomain.transformKeys(HiveColumnHandle::getName);
+    }
+
+    /**
+     * Re-keys the tuple domain by the field names of the Hudi table schema. A metastore column can be absent
+     * from the table schema (e.g. meta columns synced for a table that does not populate them, or a column
+     * dropped from the table but still registered in the metastore). No index covers such a column, so its
+     * domain is dropped; the engine still applies the predicate, since it is never reported as enforced.
+     * <p>
+     * This only keeps index selection from failing on such a column. Reads that resolve their columns against
+     * the table schema (file slices with log files) still reject it.
+     *
+     * @param tupleDomain the predicates to re-key; must not be none
+     */
+    @VisibleForTesting
+    static TupleDomain<String> resolveFieldNames(TupleDomain<HiveColumnHandle> tupleDomain, Schema tableSchema)
+    {
+        ImmutableMap.Builder<String, Domain> resolved = ImmutableMap.builder();
+        tupleDomain.getDomains().orElseThrow().forEach((column, domain) ->
+                findFieldInSchema(column.getName(), tableSchema)
+                        .ifPresent(field -> resolved.put(field.name(), domain)));
+        return TupleDomain.withColumnDomains(resolved.buildOrThrow());
     }
 
     /**

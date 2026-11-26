@@ -342,6 +342,8 @@ public class TestHudiSmokeTest
         assertThat(computeScalar(session, query + " WHERE id = 1 AND \"$path\" = 'not-a-file'")).isEqualTo(0L);
         assertThat(computeScalar(session, query + " WHERE \"$file_size\" > 0")).isEqualTo(2L);
         assertThat(computeScalar(session, query + " WHERE \"$file_modified_time\" IS NOT NULL")).isEqualTo(2L);
+        // $partition only exists on partitioned tables
+        assertThat(computeScalar(session, "SELECT count(*) FROM " + HUDI_COW_PT_TBL + " WHERE \"$partition\" = 'dt=2021-12-09/hh=10'")).isEqualTo(1L);
     }
 
     @Test
@@ -783,6 +785,11 @@ public class TestHudiSmokeTest
         assertThat(prunedSplits).isEqualTo(1);
         assertThat(totalRows).isEqualTo(2);
         assertThat(prunedRows).isEqualTo(1);
+
+        // A hidden-column conjunct must not cost the physical predicate its index pruning
+        MaterializedResult hiddenRes = getQueryRunner().execute(session, "SELECT * FROM " + table + " WHERE name='Alice' AND \"$file_size\" > 0");
+        assertThat(hiddenRes.getStatementStats().get().getTotalSplits()).isEqualTo(1);
+        assertThat(hiddenRes.getRowCount()).isEqualTo(1);
     }
 
     @Test
