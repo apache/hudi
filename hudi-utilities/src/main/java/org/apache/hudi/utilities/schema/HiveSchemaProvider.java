@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
@@ -43,11 +44,19 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 /**
  * A schema provider to get data schema through user specified hive table.
  */
-@Getter
 public class HiveSchemaProvider extends SchemaProvider {
 
+  @Getter
   private final HoodieSchema sourceHoodieSchema;
+  // Null when no target table is configured; getTargetHoodieSchema() then falls back to the source schema.
   private HoodieSchema targetHoodieSchema;
+
+  @VisibleForTesting
+  HiveSchemaProvider(TypedProperties props, HoodieSchema sourceHoodieSchema, HoodieSchema targetHoodieSchema) {
+    super(props, null);
+    this.sourceHoodieSchema = sourceHoodieSchema;
+    this.targetHoodieSchema = targetHoodieSchema;
+  }
 
   public HiveSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
@@ -95,15 +104,19 @@ public class HiveSchemaProvider extends SchemaProvider {
   }
 
   /**
+   * Returns the schema of the configured target table, or the source schema when no target table is configured.
+   */
+  @Override
+  public HoodieSchema getTargetHoodieSchema() {
+    return targetHoodieSchema != null ? targetHoodieSchema : getSourceHoodieSchema();
+  }
+
+  /**
    * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
    */
   @Override
   @Deprecated
   public Schema getTargetSchema() {
-    if (getTargetHoodieSchema() != null) {
-      return getTargetHoodieSchema().toAvroSchema();
-    } else {
-      return super.getTargetSchema();
-    }
+    return getTargetHoodieSchema().toAvroSchema();
   }
 }
