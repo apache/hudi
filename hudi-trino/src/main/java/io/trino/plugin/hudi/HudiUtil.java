@@ -66,7 +66,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -553,9 +552,7 @@ public final class HudiUtil
      */
     public static boolean isNullOnly(HoodieSchemaField field)
     {
-        HoodieSchema schema = field.schema();
-        return schema.isSchemaNull()
-                || (schema.getType() == HoodieSchemaType.UNION && schema.getTypes().stream().allMatch(HoodieSchema::isSchemaNull));
+        return TrinoTypeMapper.isNullOnly(field.schema());
     }
 
     /**

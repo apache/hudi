@@ -61,15 +61,18 @@ import static io.trino.hive.formats.HiveClassNames.HUDI_PARQUET_REALTIME_INPUT_F
 import static io.trino.hive.formats.HiveClassNames.MAPRED_PARQUET_OUTPUT_FORMAT_CLASS;
 import static io.trino.hive.formats.HiveClassNames.PARQUET_HIVE_SERDE_CLASS;
 import static io.trino.metastore.HiveType.HIVE_BOOLEAN;
+import static io.trino.metastore.HiveType.HIVE_BYTE;
 import static io.trino.metastore.HiveType.HIVE_DATE;
 import static io.trino.metastore.HiveType.HIVE_INT;
 import static io.trino.metastore.HiveType.HIVE_LONG;
+import static io.trino.metastore.HiveType.HIVE_SHORT;
 import static io.trino.metastore.HiveType.HIVE_STRING;
 import static io.trino.metastore.HiveType.HIVE_TIMESTAMP;
 import static io.trino.plugin.hive.HivePartitionManager.extractPartitionValues;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static io.trino.plugin.hudi.testing.HudiTestUtils.hiveSyncStorageSchema;
 import static io.trino.plugin.hudi.testing.HudiTestUtils.metastoreDataColumns;
+import static io.trino.plugin.hudi.testing.HudiTestUtils.withDeclaredTypes;
 import static io.trino.plugin.hudi.testing.TypeInfoHelper.decimalHiveType;
 
 public class ResourceHudiTablesInitializer
@@ -410,7 +413,16 @@ public class ResourceHudiTablesInitializer
         public List<Column> getDataColumns(HoodieTableMetaClient metaClient)
         {
             List<String> partitionKeys = partitionColumns.stream().map(Column::getName).collect(toImmutableList());
-            return metastoreDataColumns(hiveSyncStorageSchema(metaClient, false), writer.supportTimestamp, partitionKeys);
+            List<Column> columns = metastoreDataColumns(hiveSyncStorageSchema(metaClient, false), writer.supportTimestamp, partitionKeys);
+            if (this == HUDI_COMPREHENSIVE_TYPES_V6_MOR || this == HUDI_COMPREHENSIVE_TYPES_V8_MOR) {
+                // The types the tables' Spark SQL DDL declared, which the Hudi schema holds as int and string
+                return withDeclaredTypes(columns, ImmutableMap.of(
+                        "col_tinyint", HIVE_BYTE,
+                        "col_smallint", HIVE_SHORT,
+                        "col_varchar", HiveType.valueOf("varchar(50)"),
+                        "col_char", HiveType.valueOf("char(10)")));
+            }
+            return columns;
         }
 
         public List<Column> getPartitionColumns()

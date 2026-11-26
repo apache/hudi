@@ -26,7 +26,10 @@ import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 import io.trino.spi.type.UuidType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
+import org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit;
 import org.apache.parquet.schema.Types;
 import org.junit.jupiter.api.Test;
 
@@ -42,14 +45,21 @@ import java.util.function.Consumer;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.airlift.slice.Slices.wrappedBuffer;
 import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.DateTimeEncoding.packDateTimeWithZone;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.RealType.REAL;
+import static io.trino.spi.type.TimeZoneKey.UTC_KEY;
+import static io.trino.spi.type.TimestampType.TIMESTAMP_MICROS;
+import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
+import static io.trino.spi.type.TimestampWithTimeZoneType.TIMESTAMP_TZ_MICROS;
+import static io.trino.spi.type.TimestampWithTimeZoneType.TIMESTAMP_TZ_MILLIS;
 import static io.trino.spi.type.TinyintType.TINYINT;
 import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.apache.parquet.schema.LogicalTypeAnnotation.listType;
 import static org.apache.parquet.schema.LogicalTypeAnnotation.mapType;
 import static org.apache.parquet.schema.LogicalTypeAnnotation.stringType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.timestampType;
 import static org.apache.parquet.schema.LogicalTypeAnnotation.uuidType;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY;
@@ -222,6 +232,92 @@ final class TestParquetReadConversions
         });
         Block converted = conversion.toColumnType().apply(read);
         assertThat(objectValues(columnType, converted)).containsExactly(Map.of("k", SAMPLE_UUID.toString()), null);
+    }
+
+    @Test
+    void testTwoLevelListOfUuids()
+    {
+        // parquet-avro's default (write-old-list-structure) list: the repeated field named "array" is the element
+        ArrayType columnType = new ArrayType(UuidType.UUID);
+        org.apache.parquet.schema.Type list = Types.optionalGroup().as(listType())
+                .addField(Types.primitive(BINARY, REPEATED).as(stringType()).named("array"))
+                .named("ids");
+
+        ReadConversion conversion = ParquetReadConversions.forColumn(columnType, list).orElseThrow();
+        assertThat(conversion.readType()).isEqualTo(new ArrayType(VARBINARY));
+
+        Block read = build(conversion.readType(), 2, builder -> {
+            ((ArrayBlockBuilder) builder).buildEntry(elements -> VARBINARY.writeSlice(elements, utf8Slice(SAMPLE_UUID.toString())));
+            builder.appendNull();
+        });
+        Block converted = conversion.toColumnType().apply(read);
+        assertThat(objectValues(columnType, converted)).containsExactly(List.of(SAMPLE_UUID.toString()), null);
+    }
+
+    @Test
+    void testMisstatedTimestampsReadInTheTableUnit()
+    {
+        long epochMillis = 1_700_000_000_123L;
+        org.apache.parquet.schema.Type microsUtc = Types.primitive(INT64, OPTIONAL).as(timestampType(true, TimeUnit.MICROS)).named("ts");
+        org.apache.parquet.schema.Type bareLong = Types.primitive(INT64, OPTIONAL).named("ts");
+        HoodieSchema millisField = HoodieSchema.createNullable(HoodieSchema.createTimestampMillis());
+
+        // A field the table declares millis whose file says MICROS holds millis (#14161)
+        ReadConversion utcMillis = ParquetReadConversions.forColumn(TIMESTAMP_TZ_MILLIS, microsUtc, millisField).orElseThrow();
+        assertThat(utcMillis.readType()).isEqualTo(BIGINT);
+        Block converted = utcMillis.toColumnType().apply(bigints(epochMillis, null));
+        assertThat(TIMESTAMP_TZ_MILLIS.getLong(converted, 0)).isEqualTo(packDateTimeWithZone(epochMillis, UTC_KEY));
+        assertThat(converted.isNull(1)).isTrue();
+
+        // A bare long under a local timestamp holds the table's unit; Trino holds a short timestamp as micros
+        Block localMillis = ParquetReadConversions.forColumn(TIMESTAMP_MILLIS, bareLong, HoodieSchema.createLocalTimestampMillis()).orElseThrow()
+                .toColumnType().apply(bigints(epochMillis));
+        assertThat(TIMESTAMP_MILLIS.getLong(localMillis, 0)).isEqualTo(epochMillis * 1000);
+        Block localMicros = ParquetReadConversions.forColumn(TIMESTAMP_MICROS, bareLong, HoodieSchema.createLocalTimestampMicros()).orElseThrow()
+                .toColumnType().apply(bigints(epochMillis * 1000 + 456));
+        assertThat(TIMESTAMP_MICROS.getLong(localMicros, 0)).isEqualTo(epochMillis * 1000 + 456);
+
+        // Nested, as a list element and as a row field, the field matched case-insensitively
+        org.apache.parquet.schema.Type list = Types.optionalGroup().as(listType())
+                .addField(Types.repeatedGroup().addField(microsUtc).named("list"))
+                .named("tss");
+        assertThat(ParquetReadConversions.forColumn(new ArrayType(TIMESTAMP_TZ_MILLIS), list, HoodieSchema.createArray(millisField)).orElseThrow().readType())
+                .isEqualTo(new ArrayType(BIGINT));
+        RowType rowType = RowType.from(List.of(RowType.field("ts", TIMESTAMP_TZ_MILLIS)));
+        HoodieSchema record = HoodieSchema.createRecord("r", null, null, List.of(HoodieSchemaField.of("TS", millisField, null, HoodieSchema.NULL_VALUE)));
+        assertThat(ParquetReadConversions.forColumn(rowType, Types.optionalGroup().addField(microsUtc).named("r"), record).orElseThrow().readType())
+                .isEqualTo(RowType.from(List.of(RowType.field("ts", BIGINT))));
+    }
+
+    @Test
+    void testTrustedTimestampAnnotationsNeedNoConversion()
+    {
+        org.apache.parquet.schema.Type millisUtc = Types.primitive(INT64, OPTIONAL).as(timestampType(true, TimeUnit.MILLIS)).named("ts");
+        org.apache.parquet.schema.Type microsUtc = Types.primitive(INT64, OPTIONAL).as(timestampType(true, TimeUnit.MICROS)).named("ts");
+        org.apache.parquet.schema.Type bareLong = Types.primitive(INT64, OPTIONAL).named("ts");
+        assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MILLIS, millisUtc, HoodieSchema.createTimestampMillis())).isEmpty();
+        assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MICROS, microsUtc, HoodieSchema.createTimestampMicros())).isEmpty();
+        // A millis file under a micros field is a lossless widening the reader handles
+        assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MICROS, millisUtc, HoodieSchema.createTimestampMicros())).isEmpty();
+        // HoodieSchemaRepair does not repair a bare long under a UTC timestamp, so neither does the read
+        assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MILLIS, bareLong, HoodieSchema.createTimestampMillis())).isEmpty();
+        // Without the field's schema the precision alone says nothing: a timestamp(3) read of a micros file is a
+        // rounding the reader does itself, as for a metastore-typed column
+        assertThat(ParquetReadConversions.forColumn(TIMESTAMP_MILLIS, microsUtc)).isEmpty();
+    }
+
+    private static Block bigints(Long... values)
+    {
+        return build(BIGINT, values.length, builder -> {
+            for (Long value : values) {
+                if (value == null) {
+                    builder.appendNull();
+                }
+                else {
+                    BIGINT.writeLong(builder, value);
+                }
+            }
+        });
     }
 
     private static void assertVector(Type elementType, org.apache.parquet.schema.Type parquetType, byte[] littleEndianBytes, List<Object> expectedElements)

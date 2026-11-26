@@ -23,9 +23,12 @@ import io.trino.spi.predicate.ValueSet;
 import io.trino.spi.type.CharType;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.Int128;
+import io.trino.spi.type.LongTimestampWithTimeZone;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.UuidType;
 import io.trino.spi.type.VarbinaryType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
@@ -52,11 +55,17 @@ import static io.trino.plugin.hudi.util.TestParquetStatisticsDomains.LibraryOutc
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.CharType.createCharType;
+import static io.trino.spi.type.DateTimeEncoding.packDateTimeWithZone;
 import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
+import static io.trino.spi.type.TimeZoneKey.UTC_KEY;
+import static io.trino.spi.type.TimeZoneKey.getTimeZoneKey;
+import static io.trino.spi.type.TimestampType.TIMESTAMP_MICROS;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
+import static io.trino.spi.type.TimestampWithTimeZoneType.TIMESTAMP_TZ_MICROS;
+import static io.trino.spi.type.TimestampWithTimeZoneType.TIMESTAMP_TZ_MILLIS;
 import static io.trino.spi.type.TinyintType.TINYINT;
 import static io.trino.spi.type.UuidType.UUID;
 import static io.trino.spi.type.VarbinaryType.VARBINARY;
@@ -199,6 +208,9 @@ class TestParquetStatisticsDomains
                 // over an INT32 column would still be hashed as raw bytes against a filter built from four-byte
                 // integer hashes, so the guard has to drop it rather than lean on getDomain declining.
                 dropped("timestamp over an unannotated INT64", TIMESTAMP_MILLIS, plain(INT64), ALL),
+                // getDomain has no branch for a timestamp with time zone; dropIncomparableDomains rewrites one over a
+                // UTC-adjusted INT64 into a timestamp domain instead, see testUtcTimestampDomain*
+                dropped("timestamp with time zone over INT64 timestamp", TIMESTAMP_TZ_MILLIS, annotated(INT64, LogicalTypeAnnotation.timestampType(true, TimeUnit.MILLIS)), ALL),
                 dropped("varbinary over INT32", VARBINARY, plain(INT32), ALL),
                 // The bloom filter hashes a uuid lookup as its 16 raw bytes, while parquet-mr hashed a string-encoded
                 // uuid column as its 36 characters of text, so every lookup would miss and drop the row group
@@ -293,6 +305,88 @@ class TestParquetStatisticsDomains
 
         // Not TupleDomain.none(): dropping means "do not prune on this", never "this matches nothing"
         assertThat(dropIncomparableDomains(predicate).isAll()).as("everything dropped").isTrue();
+    }
+
+    @Test
+    public void testUtcTimestampDomainIsRewrittenToTheSameInstants()
+    {
+        ColumnDescriptor millis = descriptorOf(annotated(INT64, LogicalTypeAnnotation.timestampType(true, TimeUnit.MILLIS)));
+        // The zone a value was written in does not matter: an instant is an instant
+        Domain withTimeZone = Domain.create(ValueSet.ofRanges(
+                Range.range(TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(1_000, UTC_KEY), true, packDateTimeWithZone(2_000, getTimeZoneKey("Asia/Singapore")), false),
+                Range.greaterThan(TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(5_000, UTC_KEY))), true);
+
+        Domain rewritten = dropIncomparableDomains(TupleDomain.withColumnDomains(Map.of(millis, withTimeZone))).getDomains().orElseThrow().get(millis);
+
+        // A short timestamp holds epoch micros
+        assertThat(rewritten).isEqualTo(Domain.create(ValueSet.ofRanges(
+                Range.range(TIMESTAMP_MILLIS, 1_000_000L, true, 2_000_000L, false),
+                Range.greaterThan(TIMESTAMP_MILLIS, 5_000_000L)), true));
+
+        // A long timestamp with time zone carries its micros in picos of the milli
+        ColumnDescriptor micros = descriptorOf(annotated(INT64, LogicalTypeAnnotation.timestampType(true, TimeUnit.MICROS)));
+        Domain microsDomain = Domain.singleValue(TIMESTAMP_TZ_MICROS, LongTimestampWithTimeZone.fromEpochMillisAndFraction(1_000, 456_000_000, UTC_KEY));
+        assertThat(dropIncomparableDomains(TupleDomain.withColumnDomains(Map.of(micros, microsDomain))).getDomains().orElseThrow().get(micros))
+                .isEqualTo(Domain.singleValue(TIMESTAMP_MICROS, 1_000_456L));
+    }
+
+    @Test
+    public void testUtcTimestampDomainPrunesOnTheStatistics()
+            throws Exception
+    {
+        // Statistics of 1..2 ms: a domain at 1 ms overlaps them, one at 3 ms does not
+        PrimitiveType fileType = annotated(INT64, LogicalTypeAnnotation.timestampType(true, TimeUnit.MILLIS));
+        ColumnDescriptor descriptor = descriptorOf(fileType);
+        Domain statistics = TupleDomainParquetPredicate.getDomain(descriptor, TIMESTAMP_MILLIS, VALUE_COUNT, statisticsOf(fileType), DATA_SOURCE_ID, DateTimeZone.UTC);
+        for (long epochMillis : List.of(1L, 3L)) {
+            Domain predicate = dropIncomparableDomains(TupleDomain.withColumnDomains(Map.of(descriptor, Domain.singleValue(TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(epochMillis, UTC_KEY)))))
+                    .getDomains().orElseThrow().get(descriptor);
+            assertThat(predicate.overlaps(statistics)).as("%s ms against statistics of 1..2 ms", epochMillis).isEqualTo(epochMillis == 1);
+        }
+    }
+
+    @Test
+    public void testUtcTimestampDomainIsNotRewrittenOverOtherColumns()
+    {
+        Domain withTimeZone = Domain.singleValue(TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(1_000, UTC_KEY));
+        for (PrimitiveType fileType : List.of(
+                // A local timestamp's statistics are wall-clock times, not instants
+                annotated(INT64, LogicalTypeAnnotation.timestampType(false, TimeUnit.MILLIS)),
+                plain(INT96),
+                plain(INT64))) {
+            ColumnDescriptor descriptor = descriptorOf(fileType);
+            assertThat(dropIncomparableDomains(TupleDomain.withColumnDomains(Map.of(descriptor, withTimeZone))).isAll())
+                    .as("timestamp with time zone over %s", fileType)
+                    .isTrue();
+        }
+    }
+
+    @Test
+    public void testMisstatedTimestampUnitIsDropped()
+    {
+        // The table declares millis, the file says micros while holding millis (#14161): getDomain would read the bounds
+        // a thousand times small and drop row groups holding matching rows
+        PrimitiveType microsUtc = Types.primitive(INT64, OPTIONAL).as(LogicalTypeAnnotation.timestampType(true, TimeUnit.MICROS)).named("ts");
+        PrimitiveType bareLong = Types.primitive(INT64, OPTIONAL).named("lts");
+        PrimitiveType microsOther = Types.primitive(INT64, OPTIONAL).as(LogicalTypeAnnotation.timestampType(true, TimeUnit.MICROS)).named("other");
+        HoodieSchema tableSchema = HoodieSchema.createRecord("t", null, null, List.of(
+                HoodieSchemaField.of("TS", HoodieSchema.createNullable(HoodieSchema.createTimestampMillis()), null, HoodieSchema.NULL_VALUE),
+                HoodieSchemaField.of("lts", HoodieSchema.createLocalTimestampMillis()),
+                HoodieSchemaField.of("other", HoodieSchema.createTimestampMicros())));
+        ColumnDescriptor ts = descriptorOf(microsUtc);
+        ColumnDescriptor lts = descriptorOf(bareLong);
+        ColumnDescriptor other = descriptorOf(microsOther);
+        Domain millisDomain = Domain.singleValue(TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(1_000, UTC_KEY));
+        Domain localDomain = Domain.singleValue(TIMESTAMP_MILLIS, 1_000_000L);
+        Domain microsDomain = Domain.singleValue(TIMESTAMP_TZ_MICROS, LongTimestampWithTimeZone.fromEpochMillisAndFraction(1_000, 0, UTC_KEY));
+        TupleDomain<ColumnDescriptor> predicate = TupleDomain.withColumnDomains(Map.of(ts, millisDomain, lts, localDomain, other, microsDomain));
+
+        // Only the column whose field declares a different unit is dropped, matched case-insensitively
+        assertThat(dropIncomparableDomains(predicate, Optional.of(tableSchema)).getDomains().orElseThrow())
+                .containsOnlyKeys(other);
+        // Without the table schema nothing says the unit is misstated
+        assertThat(dropIncomparableDomains(predicate).getDomains().orElseThrow())
+                .containsKeys(ts, other);
     }
 
     private static TypePair kept(String description, Type domainType, PrimitiveType fileType, LibraryOutcome outcome)

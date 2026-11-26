@@ -33,6 +33,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.avro.HoodieAvroUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.schema.HoodieSchema.Vector.VectorElementType.DOUBLE;
 import static org.apache.hudi.common.schema.HoodieSchema.Vector.VectorElementType.FLOAT;
 import static org.apache.hudi.common.schema.HoodieSchema.Vector.VectorElementType.INT8;
@@ -55,7 +56,7 @@ public class HoodieSchemaTypesHudiTablesInitializer
     public static final String TABLE_NAME = "hoodie_schema_types_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
 
-    private static final List<String> ENUM_SYMBOLS = ImmutableList.of("RED", "GREEN", "BLUE");
+    public static final List<String> ENUM_SYMBOLS = ImmutableList.of("RED", "GREEN", "BLUE");
 
     // A converted type nested in a record: the read path converts the uuid inside the row
     private static final HoodieSchema RECORD_SCHEMA = HoodieSchema.createRecord("c_record", null, null, ImmutableList.of(
@@ -89,6 +90,9 @@ public class HoodieSchemaTypesHudiTablesInitializer
             // Required elements: parquet-avro's default two-level list (write-old-list-structure) rejects a null element
             nullableField("c_array", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.LONG))),
             nullableField("c_map", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.LONG))),
+            // A converted type as a list element (parquet-avro's two-level list) and as a map value
+            nullableField("c_array_uuid", HoodieSchema.createArray(HoodieSchema.createUUID())),
+            nullableField("c_map_uuid", HoodieSchema.createMap(HoodieSchema.createUUID())),
             nullableField("c_record", RECORD_SCHEMA),
             nullableField("c_vector_float", HoodieSchema.createVector(3, FLOAT)),
             nullableField("c_vector_double", HoodieSchema.createVector(2, DOUBLE)),
@@ -171,6 +175,8 @@ public class HoodieSchemaTypesHudiTablesInitializer
         record.put("c_local_timestamp_micros", 1_700_000_000_123_456L + seed * 86_400_000_000L);
         record.put("c_array", ImmutableList.of((long) seed, seed + 1L));
         record.put("c_map", Map.of("a", (long) seed, "b", 10L * seed));
+        record.put("c_array_uuid", ImmutableList.of(uuid(seed, 2), uuid(seed, 3)));
+        record.put("c_map_uuid", Map.of("a", uuid(seed, 4)));
         GenericRecord nested = new GenericData.Record(valueSchema("c_record"));
         nested.put("name", "record-" + seed);
         nested.put("id", uuid(seed, 1));
@@ -210,7 +216,7 @@ public class HoodieSchemaTypesHudiTablesInitializer
             return blob;
         }
         blob.put(HoodieSchema.Blob.TYPE, new GenericData.EnumSymbol(typeSchema, HoodieSchema.Blob.OUT_OF_LINE));
-        GenericRecord reference = new GenericData.Record(nonNull(blobSchema.getField(HoodieSchema.Blob.EXTERNAL_REFERENCE).schema()));
+        GenericRecord reference = new GenericData.Record(getNonNullTypeFromUnion(blobSchema.getField(HoodieSchema.Blob.EXTERNAL_REFERENCE).schema()));
         reference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, "file:///blobs/blob-" + seed + ".bin");
         reference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, 16L * seed);
         reference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, true);
@@ -226,7 +232,8 @@ public class HoodieSchemaTypesHudiTablesInitializer
         return avroRecord(record, key);
     }
 
-    private static String uuid(int seed, int discriminator)
+    /** The text of the uuid the rows hold for {@code seed}, one per {@code discriminator} so every uuid column differs. */
+    public static String uuid(int seed, int discriminator)
     {
         return "%08x-%04x-4000-8000-%012x".formatted(seed, discriminator, seed);
     }
@@ -239,15 +246,7 @@ public class HoodieSchemaTypesHudiTablesInitializer
     /** The non-null branch of a nullable column, which typed values must carry for the union to resolve. */
     private static Schema valueSchema(String fieldName)
     {
-        return nonNull(AVRO_SCHEMA.getField(fieldName).schema());
-    }
-
-    private static Schema nonNull(Schema nullableSchema)
-    {
-        return nullableSchema.getTypes().stream()
-                .filter(branch -> branch.getType() != Schema.Type.NULL)
-                .findFirst()
-                .orElseThrow();
+        return getNonNullTypeFromUnion(AVRO_SCHEMA.getField(fieldName).schema());
     }
 
     private static HoodieSchemaField nullableField(String name, HoodieSchema schema)

@@ -212,7 +212,7 @@ public class HudiPageSourceProvider
         // Avoid avro serialization if split/filegroup only contains base files
         if (isBaseFileOnly) {
             return new HudiBaseFileOnlyPageSource(
-                    createBaseFilePageSource(session, dataColumnHandles, hudiSplit, fileSystem, sessionOptions, start, length, dynamicFilter, true),
+                    createBaseFilePageSource(session, dataColumnHandles, hudiSplit, fileSystem, sessionOptions, start, length, dynamicFilter, true, Optional.ofNullable(hudiTableHandle.getTableSchema())),
                     hiveColumnHandles,
                     dataColumnHandles,
                     prefilledColumnValues);
@@ -252,7 +252,7 @@ public class HudiPageSourceProvider
         }
 
         ConnectorPageSource dataPageSource =
-                createBaseFilePageSource(session, readColumnHandles, hudiSplit, fileSystem, sessionOptions, start, length, dynamicFilter, false);
+                createBaseFilePageSource(session, readColumnHandles, hudiSplit, fileSystem, sessionOptions, start, length, dynamicFilter, false, Optional.of(dataSchema));
         // Build native (RFC-103) delta-log parquet page sources on demand, projected on the file-group
         // reader's requiredSchema with predicate pushdown OFF so every log record is read and merged.
         HudiTrinoReaderContext.LogFileParquetPageSourceFactory logPageSourceFactory =
@@ -269,7 +269,8 @@ public class HudiPageSourceProvider
                         sessionOptions,
                         timeZone,
                         DynamicFilter.EMPTY,
-                        false);
+                        false,
+                        Optional.of(dataSchema));
         HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(
                 metaClient.getStorageConf(),
                 metaClient.getTableConfig(),
@@ -312,7 +313,8 @@ public class HudiPageSourceProvider
             long start,
             long length,
             DynamicFilter dynamicFilter,
-            boolean enablePredicatePushDown)
+            boolean enablePredicatePushDown,
+            Optional<HoodieSchema> tableSchema)
     {
         HudiBaseFile baseFile = hudiSplit.getBaseFile().orElseThrow();
         return createPageSource(
@@ -328,7 +330,8 @@ public class HudiPageSourceProvider
                 sessionOptions,
                 timeZone,
                 dynamicFilter,
-                enablePredicatePushDown);
+                enablePredicatePushDown,
+                tableSchema);
     }
 
     /**
@@ -377,7 +380,8 @@ public class HudiPageSourceProvider
             ParquetReaderOptions options,
             DateTimeZone timeZone,
             DynamicFilter dynamicFilter,
-            boolean enablePredicatePushDown)
+            boolean enablePredicatePushDown,
+            Optional<HoodieSchema> tableSchema)
     {
         ParquetDataSource dataSource = null;
         boolean useColumnNames = shouldUseParquetColumnNames(session);
@@ -413,7 +417,7 @@ public class HudiPageSourceProvider
             // ever sees them. See ParquetStatisticsDomains.
             TupleDomain<ColumnDescriptor> parquetTupleDomain = options.isIgnoreStatistics() || !enablePredicatePushDown
                     ? TupleDomain.all()
-                    : dropIncomparableDomains(getParquetTupleDomain(descriptorsByPath, getPushdownPredicate(hudiSplit, dynamicFilter, physicalIndexMap), fileSchema, useColumnNames));
+                    : dropIncomparableDomains(getParquetTupleDomain(descriptorsByPath, getPushdownPredicate(hudiSplit, dynamicFilter, physicalIndexMap), fileSchema, useColumnNames), tableSchema);
 
             TupleDomainParquetPredicate parquetPredicate = buildPredicate(requestedSchema, parquetTupleDomain, descriptorsByPath, timeZone);
 
@@ -445,7 +449,7 @@ public class HudiPageSourceProvider
                     Optional.empty(),
                     parquetMetadata.getDecryptionContext());
 
-            List<Optional<ReadConversion>> readConversions = readConversions(columns, fileSchema, useColumnNames);
+            List<Optional<ReadConversion>> readConversions = readConversions(columns, fileSchema, useColumnNames, tableSchema);
             ConnectorPageSource pageSource = createParquetPageSource(withReadTypes(columns, readConversions), fileSchema, messageColumn, useColumnNames, parquetReaderProvider);
             return toColumnTypes(pageSource, readConversions);
         }
@@ -471,9 +475,10 @@ public class HudiPageSourceProvider
     /**
      * The conversion each column needs from the type the parquet reader can produce for it to its column type, see
      * {@link ParquetReadConversions}. Only base data columns are considered: this connector never pushes a
-     * dereference down, and the page source is only ever asked for data columns.
+     * dereference down, and the page source is only ever asked for data columns. A misstated timestamp is repaired
+     * only for a column whose field {@code tableSchema} has.
      */
-    private static List<Optional<ReadConversion>> readConversions(List<HiveColumnHandle> columns, MessageType fileSchema, boolean useColumnNames)
+    private static List<Optional<ReadConversion>> readConversions(List<HiveColumnHandle> columns, MessageType fileSchema, boolean useColumnNames, Optional<HoodieSchema> tableSchema)
     {
         ImmutableList.Builder<Optional<ReadConversion>> conversions = ImmutableList.builderWithExpectedSize(columns.size());
         for (HiveColumnHandle column : columns) {
@@ -482,7 +487,8 @@ public class HudiPageSourceProvider
                 continue;
             }
             Optional<Type> parquetType = getColumnType(column, fileSchema, useColumnNames);
-            conversions.add(parquetType.flatMap(type -> ParquetReadConversions.forColumn(column.getType(), type)));
+            HoodieSchema fieldSchema = tableSchema.map(schema -> ParquetReadConversions.fieldSchema(schema, column.getBaseColumnName())).orElse(null);
+            conversions.add(parquetType.flatMap(type -> ParquetReadConversions.forColumn(column.getType(), type, fieldSchema)));
         }
         return conversions.build();
     }

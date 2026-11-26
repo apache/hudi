@@ -15,14 +15,19 @@ package io.trino.plugin.hudi.util;
 
 import io.airlift.log.Logger;
 import io.trino.spi.predicate.Domain;
+import io.trino.spi.predicate.Range;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.predicate.ValueSet;
 import io.trino.spi.type.CharType;
 import io.trino.spi.type.DecimalType;
+import io.trino.spi.type.LongTimestampWithTimeZone;
 import io.trino.spi.type.TimestampType;
+import io.trino.spi.type.TimestampWithTimeZoneType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.UuidType;
 import io.trino.spi.type.VarbinaryType;
 import io.trino.spi.type.VarcharType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.LogicalTypeAnnotation.DecimalLogicalTypeAnnotation;
@@ -30,16 +35,23 @@ import org.apache.parquet.schema.LogicalTypeAnnotation.TimestampLogicalTypeAnnot
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
+import static io.trino.spi.type.DateTimeEncoding.unpackMillisUtc;
 import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.SmallintType.SMALLINT;
+import static io.trino.spi.type.TimestampType.createTimestampType;
+import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_MILLISECOND;
+import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_MICROSECOND;
 import static io.trino.spi.type.TinyintType.TINYINT;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY;
@@ -95,25 +107,130 @@ public final class ParquetStatisticsDomains
      */
     public static TupleDomain<ColumnDescriptor> dropIncomparableDomains(TupleDomain<ColumnDescriptor> parquetTupleDomain)
     {
+        return dropIncomparableDomains(parquetTupleDomain, Optional.empty());
+    }
+
+    /**
+     * {@link #dropIncomparableDomains(TupleDomain)}, also dropping the domain of a column whose file annotation
+     * misstates the timestamp unit its field in {@code tableSchema} declares
+     * ({@link ParquetReadConversions#storedTimestampUnit}): its statistics read in the wrong unit, a thousand times
+     * off, and would drop row groups holding matching rows.
+     */
+    public static TupleDomain<ColumnDescriptor> dropIncomparableDomains(TupleDomain<ColumnDescriptor> parquetTupleDomain, Optional<HoodieSchema> tableSchema)
+    {
         if (parquetTupleDomain.isAll() || parquetTupleDomain.isNone()) {
             return parquetTupleDomain;
         }
 
         Map<ColumnDescriptor, Domain> domains = parquetTupleDomain.getDomains().orElseThrow();
         Map<ColumnDescriptor, Domain> comparableDomains = new LinkedHashMap<>();
+        boolean changed = false;
         for (Map.Entry<ColumnDescriptor, Domain> entry : domains.entrySet()) {
-            if (hasComparableStatistics(entry.getValue().getType(), entry.getKey().getPrimitiveType())) {
-                comparableDomains.put(entry.getKey(), entry.getValue());
+            Domain domain = entry.getValue();
+            PrimitiveType fileType = entry.getKey().getPrimitiveType();
+            if (misstatesTimestampUnit(entry.getKey(), tableSchema)) {
+                log.debug("Not pushing down a %s predicate on %s: the file misstates the column's timestamp unit", domain.getType(), entry.getKey());
+                changed = true;
+                continue;
+            }
+            Optional<Domain> utcTimestampDomain = asUtcTimestampDomain(domain, fileType);
+            if (utcTimestampDomain.isPresent()) {
+                comparableDomains.put(entry.getKey(), utcTimestampDomain.get());
+                changed = true;
+            }
+            else if (hasComparableStatistics(domain.getType(), fileType)) {
+                comparableDomains.put(entry.getKey(), domain);
             }
             else {
                 log.debug("Not pushing down a %s predicate on %s: the file stores it as %s, so the column statistics cannot answer it",
-                        entry.getValue().getType(), entry.getKey(), entry.getKey().getPrimitiveType());
+                        domain.getType(), entry.getKey(), fileType);
+                changed = true;
             }
         }
-        if (comparableDomains.size() == domains.size()) {
+        if (!changed) {
             return parquetTupleDomain;
         }
         return TupleDomain.withColumnDomains(comparableDomains);
+    }
+
+    private static boolean misstatesTimestampUnit(ColumnDescriptor column, Optional<HoodieSchema> tableSchema)
+    {
+        if (tableSchema.isEmpty()) {
+            return false;
+        }
+        HoodieSchema fieldSchema = tableSchema.get();
+        for (String name : column.getPath()) {
+            fieldSchema = ParquetReadConversions.fieldSchema(fieldSchema, name);
+            if (fieldSchema == null) {
+                return false;
+            }
+        }
+        return ParquetReadConversions.storedTimestampUnit(fieldSchema, column.getPrimitiveType()).isPresent();
+    }
+
+    /**
+     * A {@code timestamp with time zone} domain rewritten as the {@code timestamp} domain of the same UTC instants,
+     * for an INT64 column the file annotates as UTC-adjusted; empty for every other domain or column.
+     * <p>
+     * {@code TupleDomainParquetPredicate.getDomain} has no branch for {@code timestamp with time zone}, so such a
+     * domain would only ever prune on the null count. Its {@code timestamp} branch decodes a UTC-adjusted column into
+     * the predicate's time zone, which {@code HudiPageSourceProvider} fixes at UTC: so a UTC-adjusted column's
+     * statistics read as the wall-clock times of its instants at UTC, which is what each instant maps to here. The map
+     * is exact and order-preserving at Hudi's precisions (millis, micros), so every range keeps its bounds and
+     * inclusiveness.
+     */
+    static Optional<Domain> asUtcTimestampDomain(Domain domain, PrimitiveType fileType)
+    {
+        if (!(domain.getType() instanceof TimestampWithTimeZoneType withTimeZoneType)
+                || withTimeZoneType.getPrecision() > TimestampType.MAX_SHORT_PRECISION
+                || fileType.getPrimitiveTypeName() != INT64
+                || !(fileType.getLogicalTypeAnnotation() instanceof TimestampLogicalTypeAnnotation annotation)
+                || !annotation.isAdjustedToUTC()
+                || annotation.getUnit() == null) {
+            return Optional.empty();
+        }
+        TimestampType timestampType = createTimestampType(withTimeZoneType.getPrecision());
+        ValueSet values = domain.getValues().getValuesProcessor().transform(
+                ranges -> {
+                    List<Range> utcRanges = new ArrayList<>(ranges.getRangeCount());
+                    for (Range range : ranges.getOrderedRanges()) {
+                        utcRanges.add(utcRange(
+                                timestampType,
+                                range.getLowValue().map(value -> toEpochMicros(withTimeZoneType, value)),
+                                range.isLowInclusive(),
+                                range.getHighValue().map(value -> toEpochMicros(withTimeZoneType, value)),
+                                range.isHighInclusive()));
+                    }
+                    return ValueSet.ofRanges(utcRanges);
+                },
+                _ -> {
+                    throw new IllegalStateException("A timestamp with time zone domain is a range set");
+                },
+                allOrNone -> allOrNone.isAll() ? ValueSet.all(timestampType) : ValueSet.none(timestampType));
+        return Optional.of(Domain.create(values, domain.isNullAllowed()));
+    }
+
+    private static Range utcRange(TimestampType type, Optional<Long> low, boolean lowInclusive, Optional<Long> high, boolean highInclusive)
+    {
+        if (low.isPresent() && high.isPresent()) {
+            return Range.range(type, low.get(), lowInclusive, high.get(), highInclusive);
+        }
+        if (low.isPresent()) {
+            return lowInclusive ? Range.greaterThanOrEqual(type, low.get()) : Range.greaterThan(type, low.get());
+        }
+        if (high.isPresent()) {
+            return highInclusive ? Range.lessThanOrEqual(type, high.get()) : Range.lessThan(type, high.get());
+        }
+        return Range.all(type);
+    }
+
+    private static long toEpochMicros(TimestampWithTimeZoneType type, Object value)
+    {
+        if (type.isShort()) {
+            return unpackMillisUtc((long) value) * MICROSECONDS_PER_MILLISECOND;
+        }
+        LongTimestampWithTimeZone timestamp = (LongTimestampWithTimeZone) value;
+        return timestamp.getEpochMillis() * MICROSECONDS_PER_MILLISECOND + timestamp.getPicosOfMilli() / PICOSECONDS_PER_MICROSECOND;
     }
 
     /**

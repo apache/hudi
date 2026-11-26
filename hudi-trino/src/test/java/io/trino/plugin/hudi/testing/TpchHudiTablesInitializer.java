@@ -21,6 +21,7 @@ import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.metastore.Column;
 import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.HiveMetastoreFactory;
+import io.trino.metastore.HiveType;
 import io.trino.metastore.PrincipalPrivileges;
 import io.trino.metastore.StorageFormat;
 import io.trino.metastore.Table;
@@ -65,6 +66,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -72,6 +74,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.io.MoreFiles.deleteRecursively;
 import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
 import static io.trino.hive.formats.HiveClassNames.HUDI_PARQUET_INPUT_FORMAT;
@@ -80,6 +83,7 @@ import static io.trino.hive.formats.HiveClassNames.PARQUET_HIVE_SERDE_CLASS;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static io.trino.plugin.hudi.testing.HudiTestUtils.hiveSyncStorageSchema;
 import static io.trino.plugin.hudi.testing.HudiTestUtils.metastoreDataColumns;
+import static io.trino.plugin.hudi.testing.HudiTestUtils.withDeclaredTypes;
 import static java.lang.String.format;
 import static java.nio.file.Files.createTempDirectory;
 import static java.util.Objects.requireNonNull;
@@ -124,8 +128,11 @@ public class TpchHudiTablesInitializer
                 Location tableLocation = dataLocation.appendPath(tpchTable.getTableName());
                 ResourceHudiTablesInitializer.copyDir(tempTableDir, fileSystem, tableLocation);
 
-                // Hive sync's columns for the table as written (its HMS path, support_timestamp off as by default)
-                List<Column> columns = metastoreDataColumns(hiveSyncStorageSchema(createMetaClient(tempTableDir), false), false);
+                // Hive sync's columns for the table as written (its HMS path, support_timestamp off as by default), with
+                // the varchar(n) a DDL would declare for the TPC-H text columns, which the Hudi schema holds as strings
+                List<Column> columns = withDeclaredTypes(
+                        metastoreDataColumns(hiveSyncStorageSchema(new Path(tempTableDir.toUri()).toString(), false), false),
+                        declaredVarcharTypes(tpchTable));
                 Table table = createTableDefinition(schemaName, tpchTable, tableLocation, columns);
                 metastore.createTable(table, PrincipalPrivileges.NO_PRIVILEGES);
             }
@@ -133,6 +140,15 @@ public class TpchHudiTablesInitializer
         finally {
             deleteRecursively(tempDir, ALLOW_INSECURE);
         }
+    }
+
+    private static Map<String, HiveType> declaredVarcharTypes(TpchTable<?> tpchTable)
+    {
+        return tpchTable.getColumns().stream()
+                .filter(column -> column.getType().getBase() == TpchColumnType.Base.VARCHAR)
+                .collect(toImmutableMap(
+                        TpchColumn::getSimplifiedColumnName,
+                        column -> HiveType.valueOf("varchar(" + column.getType().getPrecision().orElseThrow() + ")")));
     }
 
     public void load(TpchTable<?> tpchTables, QueryRunner queryRunner, java.nio.file.Path tableDirectory)
@@ -169,13 +185,6 @@ public class TpchHudiTablesInitializer
         return builder.toString();
     }
 
-    private static HoodieTableMetaClient createMetaClient(java.nio.file.Path tableDirectory)
-    {
-        return HoodieTableMetaClient.builder()
-                .setConf(new HadoopStorageConfiguration(new Configuration()))
-                .setBasePath(new Path(tableDirectory.toUri()).toString())
-                .build();
-    }
 
     private static Table createTableDefinition(String schemaName, TpchTable<?> table, Location location, List<Column> columns)
     {

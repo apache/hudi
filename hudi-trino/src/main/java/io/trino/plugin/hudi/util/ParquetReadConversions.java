@@ -25,12 +25,23 @@ import io.trino.spi.block.ColumnarMap;
 import io.trino.spi.block.MapBlock;
 import io.trino.spi.block.RowBlock;
 import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.LongTimestamp;
+import io.trino.spi.type.LongTimestampWithTimeZone;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
+import io.trino.spi.type.TimestampType;
+import io.trino.spi.type.TimestampWithTimeZoneType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 import io.trino.spi.type.UuidType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
+import org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit;
+import org.apache.parquet.schema.LogicalTypeAnnotation.TimestampLogicalTypeAnnotation;
+import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 
 import java.util.ArrayList;
@@ -41,17 +52,25 @@ import java.util.function.Function;
 
 import static io.trino.parquet.ParquetTypeUtils.getParquetTypeByName;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
+import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.DateTimeEncoding.packDateTimeWithZone;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.RealType.REAL;
+import static io.trino.spi.type.TimeZoneKey.UTC_KEY;
+import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_MILLISECOND;
+import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_MICROSECOND;
 import static io.trino.spi.type.TinyintType.TINYINT;
 import static io.trino.spi.type.UuidType.javaUuidToTrinoUuid;
 import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static java.lang.Float.floatToRawIntBits;
+import static java.lang.Math.floorDiv;
+import static java.lang.Math.floorMod;
+import static java.lang.Math.multiplyExact;
 import static java.util.Objects.requireNonNull;
 import static org.apache.parquet.schema.Type.Repetition.REPEATED;
 
 /**
- * Converts blocks from the type the Trino parquet reader can decode a column as to the column's Trino type, for the two
+ * Converts blocks from the type the Trino parquet reader can decode a column as to the column's Trino type, for the
  * {@link TrinoTypeMapper} types the reader cannot produce from the layouts Hudi writes:
  * <ul>
  * <li>UUID: Hudi writes it as a string by default and as a 16-byte FIXED_LEN_BYTE_ARRAY with the UUID annotation only
@@ -59,10 +78,15 @@ import static org.apache.parquet.schema.Type.Repetition.REPEATED;
  * are read as varbinary and converted.</li>
  * <li>VECTOR: written as a bare FIXED_LEN_BYTE_ARRAY of little-endian elements, which the reader cannot decode into an
  * array. Read as varbinary and decoded into an array of the element type.</li>
+ * <li>TIMESTAMP whose file column misstates its unit, the two cases {@code HoodieSchemaRepair} repairs for the Avro
+ * readers: a field the table schema declares timestamp-millis but the file labels MICROS (written by the releases
+ * #14161 repairs, whose values are millis), and a bare INT64 under a local timestamp. Read as bigint and converted from
+ * the table schema's unit; see {@link #storedTimestampUnit}.</li>
  * </ul>
- * Both are detected from the column type and the file's parquet type alone, so workers need no table schema: a
- * {@code uuid} column is a UUID, and an array of real, double or tinyint over a non-repeated FIXED_LEN_BYTE_ARRAY is a
- * VECTOR. Rows, arrays and maps are walked alongside their parquet groups so nested UUID and VECTOR values convert too;
+ * UUID and VECTOR are detected from the column type and the file's parquet type alone: a {@code uuid} column is a
+ * UUID, and an array of real, double or tinyint over a non-repeated FIXED_LEN_BYTE_ARRAY is a VECTOR. A misstated
+ * timestamp needs the field's schema, as the column type does not say which unit the table declares; without one,
+ * nothing is repaired. Rows, arrays and maps are walked alongside their parquet groups so nested UUID and VECTOR values convert too;
  * subtrees that need no conversion pass through as they are.
  */
 public final class ParquetReadConversions
@@ -86,11 +110,29 @@ public final class ParquetReadConversions
     }
 
     /**
-     * Returns the conversion a column of {@code columnType} stored as {@code parquetType} needs, or empty when the
-     * reader decodes it as the column type directly.
+     * {@link #forColumn(Type, org.apache.parquet.schema.Type, HoodieSchema)} without the field's schema, which
+     * repairs no timestamp.
      */
     public static Optional<ReadConversion> forColumn(Type columnType, org.apache.parquet.schema.Type parquetType)
     {
+        return forColumn(columnType, parquetType, null);
+    }
+
+    /**
+     * Returns the conversion a column of {@code columnType} stored as {@code parquetType} needs, or empty when the
+     * reader decodes it as the column type directly.
+     *
+     * @param fieldSchema the column's field in the table schema, or null when unknown
+     */
+    public static Optional<ReadConversion> forColumn(Type columnType, org.apache.parquet.schema.Type parquetType, HoodieSchema fieldSchema)
+    {
+        if (columnType instanceof TimestampType || columnType instanceof TimestampWithTimeZoneType) {
+            if (!parquetType.isPrimitive()) {
+                return Optional.empty();
+            }
+            return storedTimestampUnit(fieldSchema, parquetType.asPrimitiveType())
+                    .map(unit -> new ReadConversion(BIGINT, block -> timestampsFromLong(columnType, unit, block)));
+        }
         if (columnType instanceof UuidType) {
             if (!isBinary(parquetType)) {
                 return Optional.empty();
@@ -102,7 +144,7 @@ public final class ParquetReadConversions
                 return Optional.of(new ReadConversion(VARBINARY, block -> vectorsFromBinary(arrayType, block)));
             }
             return arrayElementType(parquetType)
-                    .flatMap(elementParquetType -> forColumn(arrayType.getElementType(), elementParquetType))
+                    .flatMap(elementParquetType -> forColumn(arrayType.getElementType(), elementParquetType, childSchema(fieldSchema, HoodieSchemaType.ARRAY)))
                     .map(element -> new ReadConversion(
                             new ArrayType(element.readType()),
                             block -> convertArrayElements(block, element.toColumnType())));
@@ -110,7 +152,7 @@ public final class ParquetReadConversions
         if (columnType instanceof MapType mapType) {
             // Map keys are always varchar (TrinoTypeMapper maps Avro's string keys), so only values can need a conversion
             return mapValueType(parquetType)
-                    .flatMap(valueParquetType -> forColumn(mapType.getValueType(), valueParquetType))
+                    .flatMap(valueParquetType -> forColumn(mapType.getValueType(), valueParquetType, childSchema(fieldSchema, HoodieSchemaType.MAP)))
                     .map(value -> new ReadConversion(
                             new MapType(mapType.getKeyType(), value.readType(), READ_TYPE_OPERATORS),
                             block -> convertMapValues(block, mapType, value.toColumnType())));
@@ -119,12 +161,43 @@ public final class ParquetReadConversions
             if (parquetType.isPrimitive()) {
                 return Optional.empty();
             }
-            return rowConversion(rowType, parquetType.asGroupType());
+            return rowConversion(rowType, parquetType.asGroupType(), fieldSchema);
         }
         return Optional.empty();
     }
 
-    private static Optional<ReadConversion> rowConversion(RowType rowType, GroupType groupType)
+    /**
+     * The field of {@code recordSchema} named {@code name}, matched as the parquet reader matches columns
+     * (case-insensitively), or null when there is no record schema or no such field.
+     */
+    public static HoodieSchema fieldSchema(HoodieSchema recordSchema, String name)
+    {
+        HoodieSchema record = nonNull(recordSchema);
+        if (record == null || record.getType() != HoodieSchemaType.RECORD) {
+            return null;
+        }
+        return record.getFields().stream()
+                .filter(field -> field.name().equalsIgnoreCase(name))
+                .findFirst()
+                .map(HoodieSchemaField::schema)
+                .orElse(null);
+    }
+
+    private static HoodieSchema childSchema(HoodieSchema schema, HoodieSchemaType containerType)
+    {
+        HoodieSchema container = nonNull(schema);
+        if (container == null || container.getType() != containerType) {
+            return null;
+        }
+        return containerType == HoodieSchemaType.ARRAY ? container.getElementType() : container.getValueType();
+    }
+
+    private static HoodieSchema nonNull(HoodieSchema schema)
+    {
+        return schema == null || schema.isComplexUnion() ? null : schema.getNonNullType();
+    }
+
+    private static Optional<ReadConversion> rowConversion(RowType rowType, GroupType groupType, HoodieSchema recordSchema)
     {
         List<RowType.Field> fields = rowType.getFields();
         List<RowType.Field> readFields = new ArrayList<>(fields.size());
@@ -133,8 +206,8 @@ public final class ParquetReadConversions
         for (RowType.Field field : fields) {
             // Resolved by name, as the parquet reader resolves row fields
             Optional<ReadConversion> conversion = field.getName()
-                    .map(name -> getParquetTypeByName(name, groupType))
-                    .flatMap(fieldParquetType -> forColumn(field.getType(), fieldParquetType));
+                    .flatMap(name -> Optional.ofNullable(getParquetTypeByName(name, groupType))
+                            .flatMap(fieldParquetType -> forColumn(field.getType(), fieldParquetType, fieldSchema(recordSchema, name))));
             anyConversion |= conversion.isPresent();
             readFields.add(new RowType.Field(field.getName(), conversion.map(ReadConversion::readType).orElse(field.getType())));
             fieldConversions.add(conversion.map(ReadConversion::toColumnType));
@@ -143,6 +216,69 @@ public final class ParquetReadConversions
             return Optional.empty();
         }
         return Optional.of(new ReadConversion(RowType.from(readFields), block -> convertRowFields(block, fieldConversions)));
+    }
+
+    /**
+     * The unit an INT64 timestamp column really stores its values in, when the file's annotation misstates the one the
+     * field's table schema declares, as {@code HoodieSchemaRepair.needsLogicalTypeRepair} decides for the Avro readers
+     * (and the log blocks they read):
+     * <ul>
+     * <li>a MICROS annotation under a field the table declares timestamp-millis holds millis, as the releases #14161
+     * repairs wrote it</li>
+     * <li>a bare INT64 under a local timestamp holds the table's unit</li>
+     * </ul>
+     * Empty when the annotation can be trusted or the field's schema is unknown. The parquet reader decodes a misstated
+     * column by its annotation (a thousand times off) or, for the bare INT64, refuses it, and its statistics are misread
+     * the same way, so {@link ParquetStatisticsDomains} drops a predicate on such a column.
+     */
+    public static Optional<TimeUnit> storedTimestampUnit(HoodieSchema fieldSchema, PrimitiveType fileType)
+    {
+        HoodieSchema schema = nonNull(fieldSchema);
+        if (schema == null || schema.getType() != HoodieSchemaType.TIMESTAMP || fileType.getPrimitiveTypeName() != PrimitiveTypeName.INT64) {
+            return Optional.empty();
+        }
+        HoodieSchema.Timestamp timestamp = (HoodieSchema.Timestamp) schema;
+        TimeUnit tableUnit = timestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS ? TimeUnit.MILLIS : TimeUnit.MICROS;
+        LogicalTypeAnnotation annotation = fileType.getLogicalTypeAnnotation();
+        if (annotation == null) {
+            return timestamp.isUtcAdjusted() ? Optional.empty() : Optional.of(tableUnit);
+        }
+        if (annotation instanceof TimestampLogicalTypeAnnotation timestampAnnotation
+                && timestampAnnotation.getUnit() == TimeUnit.MICROS
+                && tableUnit == TimeUnit.MILLIS) {
+            return Optional.of(TimeUnit.MILLIS);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * A timestamp read as the bigint the file stores, counted in {@code unit} from the epoch.
+     */
+    private static Block timestampsFromLong(Type columnType, TimeUnit unit, Block block)
+    {
+        int positionCount = block.getPositionCount();
+        BlockBuilder builder = columnType.createBlockBuilder(null, positionCount);
+        for (int position = 0; position < positionCount; position++) {
+            if (block.isNull(position)) {
+                builder.appendNull();
+                continue;
+            }
+            long value = BIGINT.getLong(block, position);
+            long epochMicros = switch (unit) {
+                case MILLIS -> multiplyExact(value, MICROSECONDS_PER_MILLISECOND);
+                case MICROS -> value;
+                case NANOS -> throw new IllegalArgumentException("Hudi stores no nanosecond timestamps");
+            };
+            long epochMillis = floorDiv(epochMicros, MICROSECONDS_PER_MILLISECOND);
+            switch (columnType) {
+                case TimestampWithTimeZoneType withTimeZone when withTimeZone.isShort() -> columnType.writeLong(builder, packDateTimeWithZone(epochMillis, UTC_KEY));
+                case TimestampWithTimeZoneType _ -> columnType.writeObject(builder, LongTimestampWithTimeZone.fromEpochMillisAndFraction(
+                        epochMillis, floorMod(epochMicros, MICROSECONDS_PER_MILLISECOND) * PICOSECONDS_PER_MICROSECOND, UTC_KEY));
+                case TimestampType timestampType when timestampType.isShort() -> columnType.writeLong(builder, epochMicros);
+                default -> columnType.writeObject(builder, new LongTimestamp(epochMicros, 0));
+            }
+        }
+        return builder.build();
     }
 
     private static boolean isBinary(org.apache.parquet.schema.Type parquetType)

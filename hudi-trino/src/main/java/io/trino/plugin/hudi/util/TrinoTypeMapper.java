@@ -23,6 +23,8 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchema.TimePrecision;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
+import java.util.List;
+
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -67,8 +69,13 @@ import static java.util.Objects.requireNonNull;
  * </table>
  * hoodie.datasource.hive_sync.support_timestamp is off by default and on for Spark SQL writes.
  * <p>
- * A nullable type maps as its non-null type; Trino carries nullability on the column. Other unions and NULL have no
- * Trino type and are rejected.
+ * A UTC-adjusted timestamp is an instant, as Spark's TIMESTAMP is. Flink writes its wall-clock TIMESTAMP(p) as a
+ * UTC-adjusted timestamp too, and reads it back as wall-clock, so a Flink table's timestamps read here as that wall-clock
+ * time at UTC: compare them with a literal that names UTC, as a plain timestamp literal is taken at the session zone.
+ * <p>
+ * A nullable type maps as its non-null type; Trino carries nullability on the column. A record field that can only hold
+ * null is left out of the row, as Hive sync leaves it out of the struct. Other unions and NULL have no Trino type and
+ * are rejected.
  */
 public final class TrinoTypeMapper
 {
@@ -113,9 +120,18 @@ public final class TrinoTypeMapper
             }
             case ARRAY -> new ArrayType(toTypeSystem(nonNullSchema.getElementType()));
             case MAP -> new MapType(VARCHAR, toTypeSystem(nonNullSchema.getValueType()), typeOperators);
-            case RECORD, BLOB, VARIANT -> RowType.from(nonNullSchema.getFields().stream()
-                    .map(field -> RowType.field(field.name(), toTypeSystem(field.schema())))
-                    .toList());
+            case RECORD, BLOB, VARIANT -> {
+                // A field that can only hold null has no Trino type and no column: the Parquet writer does not write it
+                // and Hive sync leaves it out of the struct, at any depth
+                List<RowType.Field> fields = nonNullSchema.getFields().stream()
+                        .filter(field -> !isNullOnly(field.schema()))
+                        .map(field -> RowType.field(field.name(), toTypeSystem(field.schema())))
+                        .toList();
+                if (fields.isEmpty()) {
+                    throw unsupported(nonNullSchema, "Trino has no row type without fields, and every field of this record can only hold null");
+                }
+                yield RowType.from(fields);
+            }
             case VECTOR -> new ArrayType(switch (((HoodieSchema.Vector) nonNullSchema).getVectorElementType()) {
                 case FLOAT -> REAL;
                 case DOUBLE -> DOUBLE;
@@ -125,6 +141,15 @@ public final class TrinoTypeMapper
             case UNION -> throw unsupported(nonNullSchema, "Trino has no union type");
             case NULL -> throw unsupported(nonNullSchema, "Trino has no null type");
         };
+    }
+
+    /**
+     * Whether a schema can only hold null: {@code "null"}, or a union of nothing but {@code "null"}.
+     */
+    public static boolean isNullOnly(HoodieSchema schema)
+    {
+        return schema.isSchemaNull()
+                || (schema.getType() == HoodieSchemaType.UNION && schema.getTypes().stream().allMatch(HoodieSchema::isSchemaNull));
     }
 
     private static int trinoPrecision(TimePrecision precision)

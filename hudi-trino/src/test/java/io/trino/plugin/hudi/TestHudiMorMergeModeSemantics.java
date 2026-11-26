@@ -18,7 +18,9 @@ import io.trino.Session;
 import io.trino.plugin.hudi.testing.CommitTimeOrderingHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer.OrderingType;
 import io.trino.plugin.hudi.testing.HoodieSchemaTypesHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.MislabeledTimestampHudiTablesInitializer;
 import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.type.TypeOperators;
 import io.trino.testing.AbstractTestQueryFramework;
@@ -26,6 +28,8 @@ import io.trino.testing.MaterializedResult;
 import io.trino.testing.QueryRunner;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -34,7 +38,11 @@ import java.util.List;
 import java.util.Map;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static io.trino.plugin.hudi.testing.HoodieSchemaTypesHudiTablesInitializer.ENUM_SYMBOLS;
 import static io.trino.plugin.hudi.testing.HoodieSchemaTypesHudiTablesInitializer.TABLE_SCHEMA;
+import static io.trino.plugin.hudi.testing.HoodieSchemaTypesHudiTablesInitializer.uuid;
+import static io.trino.spi.type.TimeZoneKey.UTC_KEY;
+import static io.trino.spi.type.TimeZoneKey.getTimeZoneKey;
 import static java.lang.String.join;
 import static java.time.format.DateTimeFormatter.ofPattern;
 import static java.util.stream.Collectors.joining;
@@ -66,8 +74,11 @@ public class TestHudiMorMergeModeSemantics
         return HudiQueryRunner.builder()
                 .setDataLoader(new CompositeHudiTablesInitializer(
                         new EventTimeDeletesHudiTablesInitializer(),
+                        new EventTimeDeletesHudiTablesInitializer(OrderingType.DECIMAL),
+                        new EventTimeDeletesHudiTablesInitializer(OrderingType.TIMESTAMP_MILLIS),
                         new CommitTimeOrderingHudiTablesInitializer(),
-                        new HoodieSchemaTypesHudiTablesInitializer()))
+                        new HoodieSchemaTypesHudiTablesInitializer(),
+                        new MislabeledTimestampHudiTablesInitializer()))
                 .build();
     }
 
@@ -84,14 +95,16 @@ public class TestHudiMorMergeModeSemantics
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT)), ('k2', 'k2_base', 20), ('k3', 'k3_base', 30)");
     }
 
-    @Test
-    public void testEventTimeMergeWithDeletes()
+    @ParameterizedTest
+    @EnumSource(OrderingType.class)
+    public void testEventTimeMergeWithDeletes(OrderingType orderingType)
     {
         // k1: higher-ts update wins; k2: hard-deleted; k3: soft-deleted (higher ts);
         // k4: OBSOLETE soft delete (lower ts) -> base row survives;
-        // k5: untouched; k6: OBSOLETE update (lower ts) -> base row survives
+        // k5: untouched; k6: OBSOLETE update (lower ts) -> base row survives.
+        // A decimal or timestamp ordering field compares the base row's converted value against the log's
         assertQuery(
-                "SELECT key, name, value FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
+                "SELECT key, name, value FROM " + orderingType.rtTableName() + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k4', 'k4_base', 40),"
                         + " ('k5', 'k5_base', 50), ('k6', 'k6_base', 60)");
     }
@@ -218,21 +231,71 @@ public class TestHudiMorMergeModeSemantics
         TrinoTypeMapper typeMapper = new TrinoTypeMapper(new TypeOperators());
         Map<String, String> expectedTypes = TABLE_SCHEMA.getFields().stream()
                 .collect(toImmutableMap(HoodieSchemaField::name, field -> typeMapper.toTypeSystem(field.schema()).getDisplayName()));
+        // Unfiltered by table name, information_schema goes through the column listing (streamRelationColumns), which
+        // has no table handle; DESCRIBE resolves the schema through the table handle
+        MaterializedResult listing = computeActual("SELECT table_name, column_name, data_type FROM information_schema.columns"
+                + " WHERE table_schema = '" + getSession().getSchema().orElseThrow() + "'");
         for (String table : List.of(HoodieSchemaTypesHudiTablesInitializer.TABLE_NAME, HoodieSchemaTypesHudiTablesInitializer.RT_TABLE_NAME)) {
-            // DESCRIBE resolves the schema through the table handle, information_schema from the metastore entry alone
-            assertThat(columnTypes(computeActual("DESCRIBE " + table)))
-                    .containsAllEntriesOf(expectedTypes);
-            assertThat(columnTypes(computeActual("SELECT column_name, data_type FROM information_schema.columns"
-                    + " WHERE table_schema = '" + getSession().getSchema().orElseThrow() + "' AND table_name = '" + table + "'")))
-                    .containsAllEntriesOf(expectedTypes);
+            Map<String, String> describedTypes = columnTypes(computeActual("DESCRIBE " + table));
+            assertThat(describedTypes).containsAllEntriesOf(expectedTypes);
             // The metastore declares these the way Hive sync does (binary, int, bigint); the schema types replace them
-            assertThat(columnTypes(computeActual("DESCRIBE " + table)))
-                    .containsAllEntriesOf(ImmutableMap.of(
-                            "c_uuid", "uuid",
-                            "c_time_millis", "time(3)",
-                            "c_timestamp_micros", "timestamp(6) with time zone",
-                            "c_local_timestamp_micros", "timestamp(6)",
-                            "c_vector_float", "array(real)"));
+            assertThat(describedTypes).containsAllEntriesOf(ImmutableMap.of(
+                    "c_uuid", "uuid",
+                    "c_time_millis", "time(3)",
+                    "c_timestamp_micros", "timestamp(6) with time zone",
+                    "c_local_timestamp_micros", "timestamp(6)",
+                    "c_vector_float", "array(real)"));
+            Map<String, String> listedTypes = listing.getMaterializedRows().stream()
+                    .filter(row -> row.getField(0).equals(table))
+                    .collect(toImmutableMap(row -> (String) row.getField(1), row -> (String) row.getField(2)));
+            assertThat(listedTypes).containsAllEntriesOf(expectedTypes);
+        }
+    }
+
+    @Test
+    public void testUtcAdjustedTimestampIsAnInstantInEverySessionZone()
+    {
+        // A UTC-adjusted timestamp reads as an instant, as Spark writes it. Flink stores its wall-clock TIMESTAMP(p)
+        // UTC-adjusted too, so a Flink table's values read as that wall-clock time at UTC: a plain timestamp literal is
+        // taken at the session zone and matches only in a UTC session
+        Session losAngeles = Session.builder(getSession())
+                .setTimeZoneKey(getTimeZoneKey("America/Los_Angeles"))
+                .build();
+        Session utc = Session.builder(getSession())
+                .setTimeZoneKey(UTC_KEY)
+                .build();
+        String rtTable = HoodieSchemaTypesHudiTablesInitializer.RT_TABLE_NAME;
+        String instant = "TIMESTAMP '" + timestampText(3) + ".123 UTC'";
+        String wallClock = "TIMESTAMP '" + timestampText(3) + ".123'";
+        assertThat(query(losAngeles, "SELECT key FROM " + rtTable + " WHERE c_timestamp_millis = " + instant))
+                .matches("VALUES VARCHAR 'k3'");
+        assertQueryReturnsEmptyResult(losAngeles, "SELECT key FROM " + rtTable + " WHERE c_timestamp_millis = " + wallClock);
+        assertThat(query(utc, "SELECT key FROM " + rtTable + " WHERE c_timestamp_millis = " + wallClock))
+                .matches("VALUES VARCHAR 'k3'");
+        // The value keeps its zone whatever the session's
+        assertThat(query(losAngeles, "SELECT c_timestamp_millis FROM " + rtTable + " WHERE key = 'k3'"))
+                .matches("VALUES " + instant);
+    }
+
+    @Test
+    public void testMislabeledTimestampsReadAsTheTableSchemaSays()
+    {
+        // k1's file labels c_ts micros and c_local_ts a plain long, both holding millis; k2's file is written as the
+        // table schema says. Both read as the table schema's millis, as the Avro readers repair them
+        for (String table : List.of(MislabeledTimestampHudiTablesInitializer.TABLE_NAME, MislabeledTimestampHudiTablesInitializer.RT_TABLE_NAME)) {
+            assertThat(query("SELECT key, c_ts, c_local_ts FROM " + table))
+                    .matches("VALUES"
+                            + " (VARCHAR 'k1', TIMESTAMP '2023-11-14 22:13:20.123 UTC', TIMESTAMP '2023-11-14 22:13:20.123'),"
+                            + " (VARCHAR 'k2', TIMESTAMP '2023-11-15 22:13:20.123 UTC', TIMESTAMP '2023-11-15 22:13:20.123')");
+            // The mislabeled file's statistics are misread the same way, so they must not prune it
+            assertThat(query("SELECT key FROM " + table + " WHERE c_ts = TIMESTAMP '2023-11-14 22:13:20.123 UTC'"))
+                    .matches("VALUES VARCHAR 'k1'");
+            assertThat(query("SELECT key FROM " + table + " WHERE c_ts < TIMESTAMP '2023-11-15 00:00:00 UTC'"))
+                    .matches("VALUES VARCHAR 'k1'");
+            assertThat(query("SELECT key FROM " + table + " WHERE c_ts > TIMESTAMP '2023-11-15 00:00:00 UTC'"))
+                    .matches("VALUES VARCHAR 'k2'");
+            assertThat(query("SELECT key FROM " + table + " WHERE c_local_ts = TIMESTAMP '2023-11-14 22:13:20.123'"))
+                    .matches("VALUES VARCHAR 'k1'");
         }
     }
 
@@ -289,6 +352,11 @@ public class TestHudiMorMergeModeSemantics
                 .matches("VALUES VARCHAR 'k1'");
         assertThat(query(session, "SELECT key FROM " + rtTable + " WHERE c_record.id = UUID '" + uuid(8, 1) + "'"))
                 .matches("VALUES VARCHAR 'k1'");
+        // uuids inside a list and a map convert too, on the base file and on the merged log record
+        assertThat(query(session, "SELECT key FROM " + roTable + " WHERE contains(c_array_uuid, UUID '" + uuid(2, 3) + "')"))
+                .matches("VALUES VARCHAR 'k2'");
+        assertThat(query(session, "SELECT key FROM " + rtTable + " WHERE element_at(c_map_uuid, 'a') = UUID '" + uuid(8, 4) + "'"))
+                .matches("VALUES VARCHAR 'k1'");
     }
 
     private static Map<String, String> columnTypes(MaterializedResult result)
@@ -324,7 +392,7 @@ public class TestHudiMorMergeModeSemantics
                 "DOUBLE '%s'".formatted(seed + 0.25),
                 "VARCHAR 'string-%s'".formatted(seed),
                 "X'CAFE%02X'".formatted(seed),
-                "VARCHAR '%s'".formatted(List.of("RED", "GREEN", "BLUE").get(seed % 3)),
+                "VARCHAR '%s'".formatted(ENUM_SYMBOLS.get(seed % ENUM_SYMBOLS.size())),
                 "X'DEADBE%02X'".formatted(seed),
                 "UUID '%s'".formatted(uuid(seed, 0)),
                 "CAST(DECIMAL '-%s.25' AS decimal(10, 2))".formatted(seed),
@@ -338,6 +406,8 @@ public class TestHudiMorMergeModeSemantics
                 "TIMESTAMP '%s.123456'".formatted(timestamp),
                 "ARRAY[BIGINT '%s', BIGINT '%s']".formatted(seed, seed + 1),
                 "MAP(ARRAY[VARCHAR 'a', VARCHAR 'b'], ARRAY[BIGINT '%s', BIGINT '%s'])".formatted(seed, 10 * seed),
+                "ARRAY[UUID '%s', UUID '%s']".formatted(uuid(seed, 2), uuid(seed, 3)),
+                "MAP(ARRAY[VARCHAR 'a'], ARRAY[UUID '%s'])".formatted(uuid(seed, 4)),
                 "CAST(ROW(VARCHAR 'record-%s', UUID '%s') AS ROW(\"name\" VARCHAR, \"id\" UUID))".formatted(seed, uuid(seed, 1)),
                 "ARRAY[REAL '%s', REAL '%s', REAL '%s']".formatted((float) seed, seed + 0.5f, (float) -seed),
                 "ARRAY[DOUBLE '%s', DOUBLE '%s']".formatted(seed + 0.25, -(seed + 0.25)),
@@ -367,8 +437,4 @@ public class TestHudiMorMergeModeSemantics
         return timestampOf(seed).format(ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
-    private static String uuid(int seed, int discriminator)
-    {
-        return "%08x-%04x-4000-8000-%012x".formatted(seed, discriminator, seed);
-    }
 }

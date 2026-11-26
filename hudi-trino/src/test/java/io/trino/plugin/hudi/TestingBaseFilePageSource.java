@@ -42,6 +42,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -108,7 +109,8 @@ final class TestingBaseFilePageSource
                 ParquetReaderOptions.builder().build(),
                 DateTimeZone.UTC,
                 dynamicFilter,
-                true)) {
+                true,
+                Optional.empty())) {
             return materializeSourceDataStream(pageSource, types).toTestTypes();
         }
     }

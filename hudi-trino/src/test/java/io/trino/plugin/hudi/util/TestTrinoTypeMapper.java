@@ -109,6 +109,28 @@ final class TestTrinoTypeMapper
     }
 
     @Test
+    void testNullOnlyRecordFieldsAreLeftOut()
+    {
+        // Hive sync leaves a "null" field out of the struct at any depth (#20354), and the Parquet writer does not write it
+        HoodieSchema nested = HoodieSchema.createRecord("inner", null, null, List.of(
+                HoodieSchemaField.of("b", HoodieSchema.create(HoodieSchemaType.NULL)),
+                HoodieSchemaField.of("c", HoodieSchema.create(HoodieSchemaType.INT))));
+        HoodieSchema record = HoodieSchema.createRecord("r", null, null, List.of(
+                HoodieSchemaField.of("a", HoodieSchema.create(HoodieSchemaType.STRING)),
+                HoodieSchemaField.of("b", HoodieSchema.create(HoodieSchemaType.NULL)),
+                HoodieSchemaField.of("inner", HoodieSchema.createNullable(nested))));
+        assertThat(MAPPER.toTypeSystem(record)).isEqualTo(RowType.from(List.of(
+                field("a", VARCHAR),
+                field("inner", RowType.from(List.of(field("c", INTEGER)))))));
+
+        // A row needs a field, so a record of nothing but null fields still has no Trino type
+        HoodieSchema allNull = HoodieSchema.createRecord("n", null, null, List.of(HoodieSchemaField.of("b", HoodieSchema.create(HoodieSchemaType.NULL))));
+        assertThatThrownBy(() -> MAPPER.toTypeSystem(allNull))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("every field of this record can only hold null");
+    }
+
+    @Test
     void testTypesWithoutATrinoType()
     {
         assertThatThrownBy(() -> MAPPER.toTypeSystem(HoodieSchema.createDecimal(39, 2)))

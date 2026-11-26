@@ -318,23 +318,21 @@ public class HudiMetadata
     /**
      * The column handles a column listing (information_schema over a schema) reports for a table known only by its metastore
      * entry. Listings have no table handle, so each table listed pays a meta client build and a schema resolution.
-     * A table whose Hudi schema cannot be resolved (missing or corrupt {@code .hoodie}, unreadable commit metadata)
-     * is listed with its metastore column types rather than failing the listing of every other table; reading or
-     * describing that table through its handle still fails. A schema that resolves but has a field with no Trino type
-     * fails the listing, as it fails every other use of the table.
+     * A table whose Hudi schema cannot be resolved (missing or corrupt {@code .hoodie}, unreadable commit metadata),
+     * or that has a field with no Trino type, is listed with its metastore column types rather than failing the
+     * listing of every other table; reading or describing that table through its handle still fails.
      */
     private List<HiveColumnHandle> getListingColumnHandles(ConnectorSession session, SchemaTableName tableName, Table table)
     {
-        HoodieSchema tableSchema;
         try {
             HoodieTableMetaClient metaClient = buildTableMetaClient(fileSystemFactory.create(session), tableName.toString(), table.getStorage().getLocation());
-            tableSchema = getLatestTableSchema(metaClient, tableName.getTableName());
+            HoodieSchema tableSchema = getLatestTableSchema(metaClient, tableName.getTableName());
+            return getColumnHandles(table, _ -> tableSchema);
         }
         catch (TrinoException e) {
-            log.warn(e, "Listing columns of %s with metastore column types: its Hudi table schema cannot be resolved", tableName);
+            log.warn(e, "Listing columns of %s with metastore column types: its Hudi table schema cannot be resolved or has no Trino type", tableName);
             return hiveColumnHandles(table, typeManager, NANOSECONDS);
         }
-        return getColumnHandles(table, _ -> tableSchema);
     }
 
     @Override
@@ -374,12 +372,14 @@ public class HudiMetadata
                 .map(_ -> singletonList(prefix.toSchemaTableName()))
                 .orElseGet(() -> listTables(session, prefix.getSchema()));
 
-        Map<SchemaTableName, RelationColumnsMetadata> relationColumns = tables.stream()
+        // Filter before resolving: every table listed costs a meta client and a schema resolution, which a table the
+        // access filter hides must not pay
+        Set<SchemaTableName> visibleTables = relationFilter.apply(ImmutableSet.copyOf(tables));
+        return tables.stream()
+                .filter(visibleTables::contains)
                 .map(table -> getTableColumnMetadata(session, table))
                 .flatMap(Optional::stream)
-                .collect(toImmutableMap(RelationColumnsMetadata::name, Function.identity()));
-        return relationFilter.apply(relationColumns.keySet()).stream()
-                .map(relationColumns::get)
+                .toList()
                 .iterator();
     }
 

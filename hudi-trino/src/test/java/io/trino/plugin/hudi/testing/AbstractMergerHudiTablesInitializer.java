@@ -289,11 +289,7 @@ public abstract class AbstractMergerHudiTablesInitializer
      */
     private List<Column> metastoreDataColumns()
     {
-        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-                .setConf(new HadoopStorageConfiguration(new Configuration()))
-                .setBasePath(stagingTablePath.toString())
-                .build();
-        return adjustHiveSyncColumns(HudiTestUtils.metastoreDataColumns(hiveSyncStorageSchema(metaClient, !includeMetaColumnsInMetastore()), false));
+        return adjustHiveSyncColumns(HudiTestUtils.metastoreDataColumns(hiveSyncStorageSchema(stagingTablePath.toString(), !includeMetaColumnsInMetastore()), false));
     }
 
     private Table createTableDefinition(String schemaName, String metastoreTableName, boolean isRtTable, List<Column> dataColumns)

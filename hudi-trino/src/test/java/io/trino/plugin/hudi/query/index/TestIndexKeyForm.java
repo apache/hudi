@@ -54,7 +54,6 @@ import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TimeType.TIME_MICROS;
 import static io.trino.spi.type.TimeType.TIME_MILLIS;
 import static io.trino.spi.type.TimeZoneKey.UTC_KEY;
-import static io.trino.spi.type.TimeZoneKey.getTimeZoneKey;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MICROS;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.TimestampWithTimeZoneType.TIMESTAMP_TZ_MICROS;
@@ -126,10 +125,6 @@ public class TestIndexKeyForm
         // A time keys as its stored count of its own unit; Trino holds picoseconds of the day
         assertRecordKey("t_millis", TIME_MILLIS, TIME_OF_DAY_MICROS / 1000 * 1000 * PICOS_PER_MICRO, "3723456");
         assertRecordKey("t_micros", TIME_MICROS, TIME_OF_DAY_MICROS * PICOS_PER_MICRO, "3723456789");
-        // A UTC timestamp keys as epoch millis or micros, whatever zone the literal is written in
-        assertRecordKey("ts_millis", TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(EPOCH_MILLIS, UTC_KEY), "1704103200123");
-        assertRecordKey("ts_millis", TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(EPOCH_MILLIS, getTimeZoneKey("Asia/Singapore")), "1704103200123");
-        assertRecordKey("ts_micros", TIMESTAMP_TZ_MICROS, LongTimestampWithTimeZone.fromEpochMillisAndFraction(EPOCH_MILLIS, 456_000_000, UTC_KEY), "1704103200123456");
         // A local timestamp keys as its wall-clock epoch millis or micros; Trino holds a short timestamp as micros
         assertRecordKey("lts_millis", TIMESTAMP_MILLIS, EPOCH_MILLIS * 1000, "1704103200123");
         assertRecordKey("lts_micros", TIMESTAMP_MICROS, EPOCH_MICROS, "1704103200123456");
@@ -140,10 +135,16 @@ public class TestIndexKeyForm
     {
         TupleDomain<String> domains = TupleDomain.withColumnDomains(Map.of(
                 "d", singleValue(DATE, 19_723L),
-                "ts_millis", multipleValues(TIMESTAMP_TZ_MILLIS, List.of(packDateTimeWithZone(EPOCH_MILLIS, UTC_KEY), packDateTimeWithZone(EPOCH_MILLIS + 1, UTC_KEY)))));
-        List<String> keys = constructRecordKeys(domains, List.of("d", "ts_millis"), SCHEMA, RECORD_KEY);
-        assertThat(keys).containsExactly("d:2024-01-01,ts_millis:1704103200123", "d:2024-01-01,ts_millis:1704103200124");
-        assertThat(keys.getFirst()).isEqualTo(KeyGenUtils.getRecordKey(WRITER_RECORD, List.of("d", "ts_millis"), false));
+                "lts_millis", multipleValues(TIMESTAMP_MILLIS, List.of(EPOCH_MILLIS * 1000, (EPOCH_MILLIS + 1) * 1000))));
+        List<String> keys = constructRecordKeys(domains, List.of("d", "lts_millis"), SCHEMA, RECORD_KEY);
+        assertThat(keys).containsExactly("d:2024-01-01,lts_millis:1704103200123", "d:2024-01-01,lts_millis:1704103200124");
+        assertThat(keys.getFirst()).isEqualTo(KeyGenUtils.getRecordKey(WRITER_RECORD, List.of("d", "lts_millis"), false));
+
+        // A UTC timestamp part has no key text, so the composite key is not built and nothing is pruned
+        TupleDomain<String> utcPart = TupleDomain.withColumnDomains(Map.of(
+                "d", singleValue(DATE, 19_723L),
+                "ts_millis", singleValue(TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(EPOCH_MILLIS, UTC_KEY))));
+        assertThat(constructRecordKeys(utcPart, List.of("d", "ts_millis"), SCHEMA, RECORD_KEY)).isEmpty();
 
         // An empty part keys as the writer's placeholder
         TupleDomain<String> emptyPart = TupleDomain.withColumnDomains(Map.of(
@@ -157,6 +158,10 @@ public class TestIndexKeyForm
     {
         // A nested value has no key form
         assertThat(RECORD_KEY.keyText("arr", fieldSchema("arr"), new ArrayType(BIGINT))).isEmpty();
+        // A UTC timestamp keys as a number on the Avro path but as java.sql.Timestamp text on Spark's row-writer path,
+        // so neither form can be trusted to be the one a table holds
+        assertThat(RECORD_KEY.keyText("ts_millis", fieldSchema("ts_millis"), TIMESTAMP_TZ_MILLIS)).isEmpty();
+        assertThat(RECORD_KEY.keyText("ts_micros", fieldSchema("ts_micros"), TIMESTAMP_TZ_MICROS)).isEmpty();
         // A column that does not carry the field's type (a partition column keeps its metastore type) is not keyed
         assertThat(RECORD_KEY.keyText("ts_millis", fieldSchema("ts_millis"), BIGINT)).isEmpty();
         assertThat(RECORD_KEY.keyText("ts_micros", fieldSchema("ts_micros"), TIMESTAMP_TZ_MILLIS)).isEmpty();

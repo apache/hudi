@@ -1215,9 +1215,9 @@ public class TestHudiSmokeTest
                         isRtTable ? "BIGINT '1101'" : "BIGINT '1100'"),
                 // col_boolean BOOLEAN
                 ImmutableList.of("true", "false", "CAST(NULL AS BOOLEAN)"),
-                // col_tinyint TINYINT: an Avro int in the table schema
+                // col_tinyint: the metastore declares tinyint, the table schema an Avro int, which wins
                 ImmutableList.of("INTEGER '1'", "INTEGER '2'", "CAST(NULL AS INTEGER)"),
-                // col_smallint SMALLINT: an Avro int in the table schema
+                // col_smallint: the metastore declares smallint, the table schema an Avro int, which wins
                 ImmutableList.of("INTEGER '100'", "INTEGER '200'", "CAST(NULL AS INTEGER)"),
                 // col_int
                 ImmutableList.of("INTEGER '1000'", "INTEGER '2000'", "CAST(NULL AS INTEGER)"),
@@ -1239,9 +1239,9 @@ public class TestHudiSmokeTest
                         "'string val 2'",
                         // Updates were performed on partition B values (RT table holds the updated value)
                         isRtTable ? "'updated string'" : "NULL"),
-                // col_varchar VARCHAR(50): an Avro string in the table schema
+                // col_varchar: the metastore declares varchar(50), the table schema an Avro string, which wins
                 ImmutableList.of("CAST('varchar val 1' AS VARCHAR)", "CAST('varchar val 2' AS VARCHAR)", "CAST(NULL AS VARCHAR)"),
-                // col_char CHAR(10): an Avro string in the table schema
+                // col_char: the metastore declares char(10), the table schema an Avro string, which wins
                 ImmutableList.of("CAST('charval1' AS VARCHAR)", "CAST('charval2' AS VARCHAR)", "CAST(NULL AS VARCHAR)"),
                 // col_binary BINARY -> VARBINARY: UTF-8 bytes of "binary1", "binary2", null
                 ImmutableList.of("X'62696e61727931'", "X'62696e61727932'", "CAST(NULL AS VARBINARY)"),

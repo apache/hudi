@@ -17,8 +17,10 @@ import com.google.common.collect.ImmutableList;
 import io.trino.metastore.Column;
 import io.trino.metastore.HiveType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import java.util.List;
 import java.util.Locale;
@@ -55,6 +57,16 @@ public final class HudiTestUtils
         }
     }
 
+    /** {@link #hiveSyncStorageSchema(HoodieTableMetaClient, boolean)} for the table at {@code basePath}. */
+    public static HoodieSchema hiveSyncStorageSchema(String basePath, boolean omitMetadataFields)
+    {
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+                .setConf(new HadoopStorageConfiguration(new Configuration()))
+                .setBasePath(basePath)
+                .build();
+        return hiveSyncStorageSchema(metaClient, omitMetadataFields);
+    }
+
     /**
      * The data columns Hive sync registers in the metastore for a table with {@code storageSchema} (see
      * {@link #hiveSyncStorageSchema}), the way its HMS path does: one column per schema field, in schema order, typed by
@@ -73,6 +85,21 @@ public final class HudiTestUtils
                         Optional.empty(),
                         Map.of()))
                 .filter(column -> !partitionNames.contains(column.getName()))
+                .collect(toImmutableList());
+    }
+
+    /**
+     * {@code columns} with the types in {@code declaredTypes} in place of their own, for a table whose metastore entry
+     * carries the types its DDL declared (a Spark SQL or Hive {@code CREATE TABLE}: {@code tinyint}, {@code varchar(n)},
+     * {@code char(n)}) where Hive sync would register the Hudi schema's ({@code int}, {@code string}). Reads that still
+     * return the schema's types then show the schema, not the metastore, typed the column.
+     */
+    public static List<Column> withDeclaredTypes(List<Column> columns, Map<String, HiveType> declaredTypes)
+    {
+        return columns.stream()
+                .map(column -> Optional.ofNullable(declaredTypes.get(column.getName()))
+                        .map(type -> new Column(column.getName(), type, column.getComment(), column.getProperties()))
+                        .orElse(column))
                 .collect(toImmutableList());
     }
 

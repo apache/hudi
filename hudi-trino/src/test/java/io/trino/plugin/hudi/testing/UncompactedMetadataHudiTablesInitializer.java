@@ -147,7 +147,7 @@ public class UncompactedMetadataHudiTablesInitializer
                 java.nio.file.Path tempTableDir = tempDir.resolve(tableName);
                 writeTable(new Path(tempTableDir.toUri()), tableName);
                 // Hive sync's columns for the table as written (its HMS path, support_timestamp off as by default)
-                List<Column> dataColumns = metastoreDataColumns(hiveSyncStorageSchema(createMetaClient(tempTableDir), false), false, ImmutableList.of(PARTITION_FIELD));
+                List<Column> dataColumns = metastoreDataColumns(hiveSyncStorageSchema(new Path(tempTableDir.toUri()).toString(), false), false, ImmutableList.of(PARTITION_FIELD));
                 if (tableName.equals(CORRUPTED_TABLE_NAME)) {
                     corruptMetadataLogFiles(tempTableDir);
                     verifyMetadataTableUnreadable(new Path(tempTableDir.toUri()));
@@ -355,13 +355,6 @@ public class UncompactedMetadataHudiTablesInitializer
         return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
     }
 
-    private static HoodieTableMetaClient createMetaClient(java.nio.file.Path tableDirectory)
-    {
-        return HoodieTableMetaClient.builder()
-                .setConf(new HadoopStorageConfiguration(new Configuration()))
-                .setBasePath(new Path(tableDirectory.toUri()).toString())
-                .build();
-    }
 
     private static Table createTableDefinition(String schemaName, String tableName, Location location, List<Column> dataColumns)
     {
