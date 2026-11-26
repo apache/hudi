@@ -122,17 +122,21 @@ public interface UpdateProcessor<T> {
   class PayloadUpdateProcessor<T> extends StandardUpdateProcessor<T> {
     private final String payloadClass;
     private final Properties properties;
+    // null for other payloads, and when no record is already merged
+    private final Integer mergedRecordSchemaId;
 
     public PayloadUpdateProcessor(HoodieReadStats readStats, HoodieReaderContext<T> readerContext, boolean emitDeletes,
                                   Properties properties, String payloadClass) {
       super(readStats, readerContext, emitDeletes);
       this.payloadClass = payloadClass;
       this.properties = properties;
+      HoodieSchema mergedRecordSchema = HoodieRecordUtils.isExpressionPayloadClass(payloadClass) ? readerContext.getSchemaHandler().getMergedRecordSchema() : null;
+      this.mergedRecordSchemaId = mergedRecordSchema == null ? null : readerContext.getRecordContext().encodeSchema(mergedRecordSchema);
     }
 
     @Override
     protected BufferedRecord<T> handleNonDeletes(BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord) {
-      if (previousRecord == null) {
+      if (previousRecord == null && (mergedRecordSchemaId == null || !mergedRecordSchemaId.equals(mergedRecord.getSchemaId()))) {
         // special case for payloads when there is no previous record
         HoodieSchema recordSchema = readerContext.getRecordContext().decodeAvroSchema(mergedRecord.getSchemaId());
         GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(mergedRecord.getRecord(), recordSchema);

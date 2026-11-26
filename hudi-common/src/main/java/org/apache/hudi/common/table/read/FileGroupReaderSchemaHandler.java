@@ -90,6 +90,12 @@ public class FileGroupReaderSchemaHandler<T> {
   @Getter
   protected HoodieSchema schemaForUpdates;
 
+  // the schema of the incoming records that are already merged with their current version, which the merger and the
+  // update processor keep as they are; null when the read has no such records
+  @Setter
+  @Getter
+  protected HoodieSchema mergedRecordSchema;
+
   @Getter
   protected final InternalSchema internalSchema;
 

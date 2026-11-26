@@ -37,6 +37,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
@@ -91,6 +92,39 @@ class TestBufferedRecordMergerFactory {
       assertEquals(Option.of(delete), merger.deltaMerge(delete, existing));
     }
     assertEquals(Option.empty(), merger.deltaMerge(DeleteRecord.create("key", "", 9), existing));
+  }
+
+  @Test
+  void testExpressionPayloadMergerKeepsMergedRecordsOnlyWhenTheReadSetsTheirSchema() throws IOException {
+    HoodieSchema mergedRecordSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    int mergedRecordSchemaId = 7;
+    RecordContext<String> recordContext = mock(RecordContext.class);
+    when(recordContext.encodeSchema(mergedRecordSchema)).thenReturn(mergedRecordSchemaId);
+    HoodieReaderContext<String> readerContext = mock(HoodieReaderContext.class);
+    when(readerContext.getRecordContext()).thenReturn(recordContext);
+    FileGroupReaderSchemaHandler<String> schemaHandler = mock(FileGroupReaderSchemaHandler.class);
+    when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
+
+    BufferedRecord<String> existing = new BufferedRecord<>("key", 1, "existing", mergedRecordSchemaId, null);
+    BufferedRecord<String> merged = new BufferedRecord<>("key", 1, "merged", mergedRecordSchemaId, null);
+    BufferedRecord<String> source = new BufferedRecord<>("key", 1, "source", 8, null);
+    BufferedRecord<String> evaluated = new BufferedRecord<>("key", 1, "evaluated", mergedRecordSchemaId, null);
+    HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
+    when(recordMerger.<String>merge(any(), any(), any(), any())).thenReturn(evaluated);
+
+    // Without the schema set on the read (a merger built outside the merge handle), every record is evaluated
+    assertSame(evaluated, createExpressionPayloadMerger(readerContext, recordMerger, mergedRecordSchema).finalMerge(existing, merged));
+
+    when(schemaHandler.getMergedRecordSchema()).thenReturn(mergedRecordSchema);
+    BufferedRecordMerger<String> merger = createExpressionPayloadMerger(readerContext, recordMerger, mergedRecordSchema);
+    assertSame(merged, merger.finalMerge(existing, merged));
+    assertSame(evaluated, merger.finalMerge(existing, source));
+  }
+
+  private static BufferedRecordMerger<String> createExpressionPayloadMerger(HoodieReaderContext<String> readerContext, HoodieRecordMerger recordMerger,
+                                                                            HoodieSchema readerSchema) {
+    return BufferedRecordMergerFactory.create(readerContext, RecordMergeMode.CUSTOM, false, Option.of(recordMerger), readerSchema,
+        Option.of(Pair.of("table.Payload", "org.apache.spark.sql.hudi.command.payload.ExpressionPayload")), new TypedProperties(), Option.empty());
   }
 
   private static void assertMerger(String expected,

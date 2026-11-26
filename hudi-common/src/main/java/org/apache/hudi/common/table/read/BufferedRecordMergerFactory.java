@@ -89,7 +89,8 @@ public class BufferedRecordMergerFactory {
       default:
         if (payloadClasses.isPresent()) {
           if (payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
-            return new ExpressionPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, payloadClasses.get().getRight(), readerSchema, props);
+            HoodieSchema mergedRecordSchema = readerContext.getSchemaHandler() == null ? null : readerContext.getSchemaHandler().getMergedRecordSchema();
+            return new ExpressionPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, payloadClasses.get().getRight(), readerSchema, props, mergedRecordSchema);
           } else {
             return new CustomPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, payloadClasses.get().getLeft(), readerSchema, props);
           }
@@ -384,11 +385,22 @@ public class BufferedRecordMergerFactory {
    */
   private static class ExpressionPayloadRecordMerger<T> extends CustomPayloadRecordMerger<T> {
     private final HoodieRecordMerger deltaMerger;
+    // null when no record is already merged
+    private final Integer mergedRecordSchemaId;
 
     public ExpressionPayloadRecordMerger(RecordContext<T> recordContext, Option<HoodieRecordMerger> recordMerger, String incomingPayloadClass,
-                                         HoodieSchema readerSchema, TypedProperties props) {
+                                         HoodieSchema readerSchema, TypedProperties props, HoodieSchema mergedRecordSchema) {
       super(recordContext, recordMerger, incomingPayloadClass, readerSchema, props);
       this.deltaMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger.get());
+      this.mergedRecordSchemaId = mergedRecordSchema == null ? null : recordContext.encodeSchema(mergedRecordSchema);
+    }
+
+    @Override
+    public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+      if (mergedRecordSchemaId != null && mergedRecordSchemaId.equals(newerRecord.getSchemaId())) {
+        return newerRecord;
+      }
+      return super.finalMerge(olderRecord, newerRecord);
     }
 
     @Override

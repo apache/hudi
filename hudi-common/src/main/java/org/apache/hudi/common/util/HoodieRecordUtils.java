@@ -66,6 +66,7 @@ import java.util.stream.Stream;
  * A utility class for HoodieRecord.
  */
 public class HoodieRecordUtils {
+  private static final String EXPRESSION_PAYLOAD_CLASS = "org.apache.spark.sql.hudi.command.payload.ExpressionPayload";
   private static final Map<String, Constructor<?>> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
   private static final Map<String, Constructor<?>> CONSTRUCTOR_CACHE_WITH_ORDERING_VALUE = new ConcurrentHashMap<>();
   private static final Set<String> DEPRECATED_PAYLOADS = Stream.of(
@@ -120,6 +121,19 @@ public class HoodieRecordUtils {
 
   public static boolean isPayloadClassDeprecated(String recordPayloadClass) {
     return DEPRECATED_PAYLOADS.contains(recordPayloadClass);
+  }
+
+  public static boolean isExpressionPayloadClass(String recordPayloadClass) {
+    return EXPRESSION_PAYLOAD_CLASS.equals(recordPayloadClass);
+  }
+
+  /**
+   * Whether an incoming record of a write that uses the ExpressionPayload (a Spark SQL MERGE INTO) is already merged
+   * with its current version. A global index merges a matched record while tagging it, and the result carries the
+   * table's payload, or an empty payload or no data for a delete, instead of the ExpressionPayload of the source records.
+   */
+  public static boolean isMergedRecordOfExpressionPayloadWrite(HoodieRecord<?> record) {
+    return record.getData() == null || !isExpressionPayloadClass(record.getData().getClass().getName());
   }
 
   /**

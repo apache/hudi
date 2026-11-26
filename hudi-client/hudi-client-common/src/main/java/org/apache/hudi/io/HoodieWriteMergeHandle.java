@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -115,6 +116,10 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   // for every record copied forward during a merge.
   protected final MetaFieldsMode metaFieldsMode =
       hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode();
+
+  // Whether a MERGE INTO writes through the handle; a table service, which preserves the metadata, reads its records
+  // from log files.
+  private final boolean usesExpressionPayload = !preserveMetadata && HoodieRecordUtils.isExpressionPayloadClass(config.getPayloadClass());
 
   protected long recordsWritten = 0;
   protected long recordsDeleted = 0;
@@ -385,7 +390,10 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
         BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, readerContext.getRecordContext(), props, orderingFields, false);
         BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema,
             readerContext.getRecordContext(), props, orderingFields, deleteContext);
-        BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
+        // A record that a global index already merged while tagging it is final: the MERGE clauses are not evaluated on it again
+        BufferedRecord<T> mergeResult = usesExpressionPayload && HoodieRecordUtils.isMergedRecordOfExpressionPayloadWrite(newRecord)
+            ? newBufferedRecord
+            : recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
         HoodieSchema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
         // The merge result is final: build it without the payload, which would decode it with the payload's own
         // schema and re-apply payload logic (e.g. the NOT MATCHED clause of ExpressionPayload) to the merged row.

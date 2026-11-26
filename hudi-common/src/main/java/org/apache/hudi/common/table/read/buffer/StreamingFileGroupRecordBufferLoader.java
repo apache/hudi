@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.read.UpdateProcessor;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -65,6 +66,16 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
     HoodieSchema recordSchema = HoodieSchemaCache.intern(getRecordSchema(readerContext, props));
     readerContext.getSchemaHandler().setSchemaForUpdates(recordSchema);
+    // A MERGE INTO with a global index merges a matched record with its current version while tagging it. The result
+    // carries the table's payload in the table schema and is final: it is buffered in that schema, which is set before
+    // the merger and the update processor are created, so that they keep the row rather than evaluate it.
+    boolean isExpressionPayload = isExpressionPayload(readerContext, props);
+    HoodieSchema mergedRecordSchema = isExpressionPayload
+        ? HoodieSchemaCache.intern(HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequiredSchema()))
+        : recordSchema;
+    if (isExpressionPayload) {
+      readerContext.getSchemaHandler().setMergedRecordSchema(mergedRecordSchema);
+    }
     HoodieTableConfig tableConfig = tableState.getTableConfig();
     Option<PartialUpdateMode> partialUpdateModeOpt = tableConfig.getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDeletes(), fileGroupUpdateCallback, props);
@@ -81,11 +92,14 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
     DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, recordSchema);
+    DeleteContext mergedRecordDeleteContext = isExpressionPayload ? DeleteContext.fromRecordSchema(props, mergedRecordSchema) : deleteContext;
     while (recordIterator.hasNext()) {
       HoodieRecord<T> hoodieRecord = recordIterator.next();
       try {
-        BufferedRecord<T> bufferedRecord = BufferedRecords.fromHoodieRecord(hoodieRecord, recordSchema, recordContext, props, orderingFieldsArray,
-            deleteContext);
+        boolean isMergedRecord = isExpressionPayload && HoodieRecordUtils.isMergedRecordOfExpressionPayloadWrite(hoodieRecord);
+        BufferedRecord<T> bufferedRecord = isMergedRecord
+            ? BufferedRecords.fromHoodieRecord(hoodieRecord, mergedRecordSchema, recordContext, props, orderingFieldsArray, mergedRecordDeleteContext)
+            : BufferedRecords.fromHoodieRecord(hoodieRecord, recordSchema, recordContext, props, orderingFieldsArray, deleteContext);
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {
         throw new HoodieIOException("Failed to process next buffered record", e);
@@ -94,9 +108,13 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     return Pair.of(recordBuffer, Collections.emptyList());
   }
 
-  private static <T> HoodieSchema getRecordSchema(HoodieReaderContext<T> readerContext, TypedProperties props) {
+  private static <T> boolean isExpressionPayload(HoodieReaderContext<T> readerContext, TypedProperties props) {
     Option<Pair<String, String>> payloadClasses = readerContext.getPayloadClasses(props);
-    if (payloadClasses.isPresent() && payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
+    return payloadClasses.isPresent() && HoodieRecordUtils.isExpressionPayloadClass(payloadClasses.get().getRight());
+  }
+
+  private static <T> HoodieSchema getRecordSchema(HoodieReaderContext<T> readerContext, TypedProperties props) {
+    if (isExpressionPayload(readerContext, props)) {
       String schemaStr = props.getString("hoodie.payload.record.schema");
       return HoodieSchema.parse(schemaStr);
     } else {
