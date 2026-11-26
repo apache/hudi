@@ -15,7 +15,7 @@ not applicable to Copy-on-Write (COW) tables and only applies to MOR tables.
 ### Why MOR tables need compaction?
 
 To understand the significance of compaction in MOR tables, it is helpful to understand the MOR table layout first. In Hudi,
-data is organized in terms of [file groups](table_format.md#native-format). Each file group in a MOR table
+data is organized in terms of [file groups](table_format.md#native-table-format). Each file group in a MOR table
 consists of a base file and one or more log files. Typically, during writes, inserts are stored in the base file, and updates
 are appended to log files.
 

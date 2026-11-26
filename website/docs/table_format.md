@@ -14,27 +14,10 @@ the table is created.
 
 | Table format                                             | `hoodie.table.format` | Implementation                                                    |
 |:---------------------------------------------------------|:----------------------|:------------------------------------------------------------------|
-| [Native format](#native-format)                          | `native` (default)    | Built into Hudi                                                   |
-| [Apache Iceberg](#apache-iceberg), as a pluggable format | `ICEBERG`             | [Apache XTable (incubating)](https://xtable.apache.org/), since 0.5.0 |
+| [Native table format](#native-table-format)              | `native` (default)    | Built into Hudi                                                   |
+| [Apache Iceberg](#apache-iceberg), as a pluggable format | `ICEBERG`             | [Apache XTable (incubating)](https://xtable.apache.org/)          |
 
-## File Formats
-
-A table format tracks files; the **_file format_** is how records are stored inside them. Hudi uses the file
-formats below for base files and for the data blocks in log files. Tables with Parquet base files can be queried from engines such as Spark, Flink, Hive, Presto and Trino
-(see [SQL Queries](sql_queries.md) for what each engine supports).
-
-| File format    | Used for                                                  | Characteristics                                                               |
-|:---------------|:----------------------------------------------------------|:------------------------------------------------------------------------------|
-| Apache Parquet | Base files (default), data blocks in log files            | Columnar, for vectorized reads and compression                                |
-| Apache ORC     | Base files                                                | Columnar, originally developed for Apache Hive                                |
-| HFile          | Base files and log data blocks of the [metadata table](metadata.md) | Sorted key-value pairs, for fast lookups by key                     |
-| Lance          | Base files ([Spark only](#lance-base-file-format))        | Columnar, for random access, `VECTOR` columns and AI/ML workloads             |
-| Apache Avro    | Data blocks in log files                                  | Row-oriented, for fast writes                                                 |
-
-The base file format is set per table with [hoodie.table.base.file.format](configurations.md#Hudi-Table-Basic-Configs).
-See [Base Files](#base-files) and [Log Files](#log-files) for how the native format uses them.
-
-## Native Format
+## Native Table Format
 
 The following describes the general organization of files in storage for a Hudi table.
 
@@ -52,6 +35,23 @@ The following describes the general organization of files in storage for a Hudi 
 ![file groups in a table partition](/assets/images/MOR_new.png)
 
 Please refer the **[tech spec](https://hudi.apache.org/tech-specs#file-layout-hierarchy)** for a more detailed description of the file layouts.
+
+### File Formats
+
+A table format tracks files; the **_file format_** is how records are stored inside them. Hudi uses the file
+formats below for base files and for the data blocks in log files. Tables with Parquet base files can be queried from engines such as Spark, Flink, Hive, Presto and Trino
+(see [SQL Queries](sql_queries.md) for what each engine supports).
+
+| File format    | Used for                                                  | Characteristics                                                               |
+|:---------------|:----------------------------------------------------------|:------------------------------------------------------------------------------|
+| Apache Parquet | Base files (default), data blocks in log files            | Columnar, for vectorized reads and compression                                |
+| Apache ORC     | Base files                                                | Columnar, originally developed for Apache Hive                                |
+| HFile          | Base files and log data blocks of the [metadata table](metadata.md) | Sorted key-value pairs, for fast lookups by key                     |
+| Lance          | Base files ([Spark only](#lance-base-file-format))        | Columnar, for random access, `VECTOR` columns and AI/ML workloads             |
+| Apache Avro    | Data blocks in log files                                  | Row-oriented, for fast writes                                                 |
+
+The base file format is set per table with [hoodie.table.base.file.format](configurations.md#Hudi-Table-Basic-Configs).
+See [Base Files](#base-files) and [Log Files](#log-files) below for how the native table format uses them.
 
 ### Base Files
 
@@ -197,56 +197,111 @@ Please refer [here](https://hudi.apache.org/docs/next/configurations/#Layout-Con
 
 Starting with Hudi 1.1, an external table format can be plugged in under the storage engine
 (see the [Hudi stack](hudi_stack.md#pluggable-table-format) and
-[RFC-93](https://github.com/apache/hudi/blob/master/rfc/rfc-93/rfc-93.md)). Hudi still organizes the data into file groups and
-records its actions on the [timeline](timeline.md). When a write, clustering, clean, rollback or savepoint completes on the
-timeline, Hudi calls the plugin, which records the action in the metadata of the external format. The plugin's timeline reports
-an action as complete only after both steps, so Hudi jobs that have the plugin and readers of the external format see the same
-table.
+[RFC-93](https://github.com/apache/hudi/blob/master/rfc/rfc-93/rfc-93.md)). Hudi still organizes the data into file groups,
+records its actions on the [timeline](timeline.md), and runs its indexes and table services. When a write, compaction,
+clustering, clean, rollback or savepoint completes on the timeline, Hudi calls the plugin, which records the action in the
+metadata of the external format. The plugin's timeline reports an action as complete only after both steps, so Hudi and the
+readers of the external format see the same table.
 
-A plugin implements the `HoodieTableFormat` interface and is loaded from the classpath by the name in `hoodie.table.format`,
-which is case-sensitive.
+A plugin implements the `HoodieTableFormat` interface and is loaded from the classpath by the name in `hoodie.table.format`.
+Its settings are table properties that start with `hoodie.table.format.`: Hudi stores them in `hoodie.properties` when the
+table is created, so every writer and table service uses the same ones.
 
 :::caution
-When no plugin on the classpath matches `hoodie.table.format`, Hudi does not fail and uses the native format. Commits written
-this way are not recorded in the external format, and a Hudi reader without the plugin can see commits that the external format
-does not have. Put the plugin on the classpath of every job that writes the table, including table services that run on their
-own, and of every Hudi reader.
+When no plugin on the classpath matches `hoodie.table.format`, Hudi fails with an error that lists the formats it found. Every
+job that writes or reads the table through Hudi needs the plugin jar, including table services that run on their own.
 :::
 
 ### Apache Iceberg
 
-With the Iceberg plugin, a Hudi write also commits an Iceberg snapshot that follows the
-[Iceberg table spec](https://iceberg.apache.org/spec/), so an Iceberg engine that reads the table by path sees the write as
-soon as it completes, with no separate sync job and no second copy of the data. [Apache XTable (incubating)](https://xtable.apache.org/)
-provides the plugin. See [Write Hudi tables as Iceberg tables](https://xtable.apache.org/docs/how-to-iceberg-table-format) in
-the XTable docs for the jars and settings.
+With the Iceberg plugin, available from Hudi 1.3, every Hudi action also commits an Iceberg snapshot that follows the
+[Iceberg table spec](https://iceberg.apache.org/spec/), at format version 3 by default. Engines that read Iceberg see each write
+as soon as it completes, with no sync job and no second copy of the data, while Hudi keeps its timeline,
+[metadata table](metadata.md), [indexes](indexes.md) and table services. [Apache XTable (incubating)](https://xtable.apache.org/)
+provides the plugin; see [Write Hudi tables as Iceberg tables](https://xtable.apache.org/docs/how-to-iceberg-table-format) in
+the XTable docs for the jars to add.
 
-The Iceberg metadata is stored under `metadata/` in the base path and refers to the same Parquet base files that Hudi writes.
-The plugin does not update a catalog: to read through one, register the latest `metadata.json` file again after new writes.
+| Feature                        | Support                                                                                                     |
+|:-------------------------------|:------------------------------------------------------------------------------------------------------------|
+| Iceberg format version         | 3 (default) or 2, chosen when the table is created                                                          |
+| Copy-on-write tables           | Format version 2 or 3                                                                                       |
+| Merge-on-read tables           | Format version 3. Updates and deletes are published as deletion vectors on the base files                   |
+| Row lineage                    | At format version 3, a row keeps its row ID when Hudi rewrites its file or updates it                       |
+| Catalogs                       | Any Iceberg catalog, such as AWS Glue, Hive Metastore or an Iceberg REST catalog, or none                   |
+| Hudi metadata table and indexes | Supported. Merge-on-read tables need one of the indexes listed under [Iceberg Configs](#iceberg-configs)   |
+| Partitioning                   | Partition paths that are plain column values. Timestamp-based key generators are not supported              |
+
 Hudi actions map to Iceberg as follows.
 
-| Hudi action                   | Iceberg metadata                                                                                         |
-|:------------------------------|:---------------------------------------------------------------------------------------------------------|
-| Write, [clustering](clustering.md) | A snapshot that adds the new data files and removes the ones they replace                           |
-| [Clean](cleaning.md), savepoint | A snapshot with the same data files as the one before it                                               |
-| [Rollback](rollbacks.md)      | A new snapshot that removes the rolled back files and brings back the previous ones                      |
-| Archival                      | The snapshots of the archived instants are expired                                                       |
+| Hudi action                                            | Iceberg metadata                                                                        |
+|:-------------------------------------------------------|:----------------------------------------------------------------------------------------|
+| Write                                                  | A snapshot that adds the new data files and deletes, and removes the files they replace |
+| [Compaction](compaction.md), [clustering](clustering.md) | A snapshot that replaces data files and keeps the rows the same                       |
+| [Clean](cleaning.md), savepoint                        | A snapshot with the same data files as the one before it                                |
+| [Rollback](rollbacks.md)                               | A new snapshot that removes the rolled back files and brings back the previous ones     |
+| Archival                                               | The snapshots of the archived instants are expired                                      |
 
 The Iceberg metadata is the source of truth. If a Hudi commit has no Iceberg snapshot, the commit stays pending and the next
 write rolls it back. If the Iceberg commit fails, the Hudi operation fails too. Snapshots are expired at archival, while a
 clean deletes replaced files earlier, so Iceberg time travel to a snapshot whose files were cleaned fails.
 
-The plugin in XTable 0.5.0 requires Hudi 1.2.x and has the following limitations.
+#### Iceberg Configs
 
-* Only [copy-on-write](table_types.md#copy-on-write-table) tables are supported.
-* The Hudi [metadata table](metadata.md) must be off (`hoodie.metadata.enable=false`) on every write, so the indexes stored in
-  it are not available.
-* Only identity partitioning is supported.
-* Restore is not supported.
-* Only one job can write the table at a time, including table services. All writes must go through Hudi; other engines can
-  only read the table as Iceberg.
-* The Iceberg table uses format version 2.
-* The plugin does not add field IDs to the Parquet files, which some engines such as BigQuery and Snowflake require.
+These table properties are set on the first write.
 
-See the [XTable docs](https://xtable.apache.org/docs/how-to-iceberg-table-format#limitations) for the full list. To add Iceberg
-metadata to an existing native table instead, see [syncing with XTable](syncing_xtable.md).
+| Config Name                                         | Default             | Description                                                                                                  |
+|:----------------------------------------------------|:--------------------|:-------------------------------------------------------------------------------------------------------------|
+| `hoodie.table.format`                               | `native`            | Set to `ICEBERG` to write the table as an Iceberg table.                                                     |
+| `hoodie.table.format.iceberg.format-version`        | `3`                 | Iceberg format version of the table, `2` or `3`. Merge-on-read tables need `3`.                              |
+| `hoodie.table.format.iceberg.catalog.impl`          | (none)              | Iceberg catalog class, for example `org.apache.iceberg.aws.glue.GlueCatalog`. Without a catalog, the Iceberg metadata is stored under `metadata/` in the base path. |
+| `hoodie.table.format.iceberg.catalog.name`          | `iceberg`           | Name of the catalog.                                                                                         |
+| `hoodie.table.format.iceberg.catalog.option.<key>`  | (none)              | Catalog properties, such as `warehouse` or `uri`.                                                            |
+| `hoodie.table.format.iceberg.namespace`             | (none)              | Namespace of the table in the catalog, for example `db`. The table name is the Hudi table name.              |
+
+The catalog can instead be set in the Hadoop configuration with `xtable.iceberg.catalog.impl`, `xtable.iceberg.catalog.name` and
+`xtable.iceberg.catalog.option.<key>`, which keeps credentials out of `hoodie.properties`. It is used only when the table
+properties name no catalog, and it is not stored with the table, so every job needs the same setting.
+
+A merge-on-read table also needs `hoodie.write.updates.as.deletes.and.inserts=true` on every write. An update is then written as
+a positional delete of the old row plus an insert of the new one, so the log files hold only deletes. This mode needs:
+
+* Commit-time ordering: set no ordering field, or set `hoodie.record.merge.mode=COMMIT_TIME_ORDERING`.
+* An index that supplies record positions: `GLOBAL_SIMPLE` (the Spark default for a partitioned table of a pluggable format),
+  `SIMPLE`, `BLOOM`, `GLOBAL_BLOOM` or `GLOBAL_RECORD_LEVEL_INDEX`.
+
+#### Usage
+
+A Spark write that creates a merge-on-read table registered in AWS Glue as `db.trips`:
+
+```scala
+df.write.format("hudi")
+  .option("hoodie.table.name", "trips")
+  .option("hoodie.datasource.write.table.type", "MERGE_ON_READ")
+  .option("hoodie.datasource.write.recordkey.field", "id")
+  .option("hoodie.datasource.write.partitionpath.field", "city")
+  .option("hoodie.write.updates.as.deletes.and.inserts", "true")
+  .option("hoodie.table.format", "ICEBERG")
+  .option("hoodie.table.format.iceberg.catalog.impl", "org.apache.iceberg.aws.glue.GlueCatalog")
+  .option("hoodie.table.format.iceberg.catalog.option.warehouse", "s3://example-bucket/warehouse")
+  .option("hoodie.table.format.iceberg.namespace", "db")
+  .mode("append")
+  .save("s3://example-bucket/warehouse/db/trips")
+```
+
+Later writes, including upserts and deletes, use the same options without the `hoodie.table.format` ones, which are now stored
+in the table. Hudi reads the table from its base path as usual, and Iceberg engines read `db.trips` from the catalog.
+
+#### Limitations
+
+* Hudi must be the only writer. Iceberg engines can read the table, but a snapshot committed by another Iceberg writer stops
+  Hudi reads and writes.
+* Only one job can write the table at a time, including table services.
+* The table must be at table version 8 or later.
+* Restore, schema evolution on read, and Iceberg branches and tags are not supported.
+* On merge-on-read tables, Flink writes, partial updates and log compaction are not supported.
+* Spark writes check duplicates by default on these tables: an insert fails when a record key repeats among the incoming rows,
+  and a `MERGE INTO` fails when more than one source row matches the same target row.
+* Engines that need field IDs in the Parquet files, such as BigQuery and Snowflake, also need the
+  [XTable Hudi writer extension](https://github.com/apache/incubator-xtable/tree/main/xtable-hudi-support/xtable-hudi-support-extensions).
+
+To add Iceberg metadata to an existing native table instead, see [syncing with XTable](syncing_xtable.md).
