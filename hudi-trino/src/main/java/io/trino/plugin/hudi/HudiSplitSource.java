@@ -95,42 +95,55 @@ public class HudiSplitSource
         this(
                 new ThrottledAsyncQueue<>(maxSplitsPerSecond, maxOutstandingSplits, executor),
                 splitLoaderExecutorService,
-                (queue, errorListener) -> {
-                    boolean enableMetadataTable = isHudiMetadataTableEnabled(session);
-                    Lazy<HoodieTableMetadata> lazyTableMetadata = Lazy.lazily(() -> {
-                        HoodieTimer timer = HoodieTimer.start();
-                        HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-                                .enable(enableMetadataTable)
-                                .build();
-                        HoodieTableMetaClient metaClient = tableHandle.getMetaClient();
-                        HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorage().getConf());
+                (queue, errorListener) -> () -> {
+                    // Everything below runs on the split loader executor, so getSplits never loads the meta client
+                    // or the timeline on the planning thread.
+                    try {
+                        // A table without completed commits has no file slices and may not have a resolvable
+                        // schema yet (the index supports built below resolve it), so finish with no splits.
+                        if (!tableHandle.hasCompletedCommits()) {
+                            queue.finish();
+                            return;
+                        }
+                        boolean enableMetadataTable = isHudiMetadataTableEnabled(session);
+                        Lazy<HoodieTableMetadata> lazyTableMetadata = Lazy.lazily(() -> {
+                            HoodieTimer timer = HoodieTimer.start();
+                            HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+                                    .enable(enableMetadataTable)
+                                    .build();
+                            HoodieTableMetaClient metaClient = tableHandle.getMetaClient();
+                            HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorage().getConf());
 
-                        // Defer to the native factory, which creates a HoodieBackedTableMetadata when the
-                        // metadata table is enabled and initialized, and falls back to FileSystemBackedTableMetadata
-                        // otherwise.
-                        HoodieTableMetadata tableMetadata = NativeTableMetadataFactory.getInstance().create(
-                                engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true);
-                        log.info("Loaded table metadata for table: %s in %s ms", tableHandle.getSchemaTableName(), timer.endTimer());
-                        return tableMetadata;
-                    });
+                            // Defer to the native factory, which creates a HoodieBackedTableMetadata when the
+                            // metadata table is enabled and initialized, and falls back to FileSystemBackedTableMetadata
+                            // otherwise.
+                            HoodieTableMetadata tableMetadata = NativeTableMetadataFactory.getInstance().create(
+                                    engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true);
+                            log.info("Loaded table metadata for table: %s in %s ms", tableHandle.getSchemaTableName(), timer.endTimer());
+                            return tableMetadata;
+                        });
 
-                    HudiDirectoryLister hudiDirectoryLister = new HudiSnapshotDirectoryLister(
-                            session,
-                            tableHandle,
-                            enableMetadataTable,
-                            lazyTableMetadata);
+                        HudiDirectoryLister hudiDirectoryLister = new HudiSnapshotDirectoryLister(
+                                session,
+                                tableHandle,
+                                enableMetadataTable,
+                                lazyTableMetadata);
 
-                    return new HudiBackgroundSplitLoader(
-                            session,
-                            tableHandle,
-                            hudiDirectoryLister,
-                            queue,
-                            executor,
-                            createSplitWeightProvider(session),
-                            lazyPartitions,
-                            enableMetadataTable,
-                            lazyTableMetadata,
-                            errorListener);
+                        new HudiBackgroundSplitLoader(
+                                session,
+                                tableHandle,
+                                hudiDirectoryLister,
+                                queue,
+                                executor,
+                                createSplitWeightProvider(session),
+                                lazyPartitions,
+                                enableMetadataTable,
+                                lazyTableMetadata,
+                                errorListener).run();
+                    }
+                    catch (Exception e) {
+                        errorListener.accept(e);
+                    }
                 },
                 tableHandle.getSchemaTableName(),
                 dynamicFilteringWaitTimeoutMillis);

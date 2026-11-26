@@ -30,8 +30,7 @@ import org.apache.hudi.execution.FileMetadataWriteStatusConverter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -45,9 +44,9 @@ import static org.apache.hudi.execution.FileMetadataWriteStatusConverter.TIME_TA
 /**
  * Write handle that is used to work on top of files rather than on individual records.
  */
+@Slf4j
 public class ExternalFileClusteringWriteHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ExternalFileClusteringWriteHandle.class);
   private final StoragePath path;
   private final String prevCommit;
 
@@ -63,7 +62,7 @@ public class ExternalFileClusteringWriteHandle<T extends HoodieRecordPayload, I,
 
     // Create inProgress marker file
     createMarkerFile(partitionPath, path.getName());
-    LOG.info("New ExternalFileClusteringWriteHandle for partition :{} with fileId {}", partitionPath, fileId);
+    log.info("New ExternalFileClusteringWriteHandle for partition :{} with fileId {}", partitionPath, fileId);
   }
 
   /**
@@ -82,7 +81,7 @@ public class ExternalFileClusteringWriteHandle<T extends HoodieRecordPayload, I,
       executionConfigs.put(TIME_TAKEN, timer.endTimer());
 
       this.writeStatus = generateWriteStatus(path.toString(), partitionPath, executionConfigs);
-      LOG.info(String.format("ExternalFileClusteringWriteHandle for partitionPath %s fileID %s, took %d ms.",
+      log.info(String.format("ExternalFileClusteringWriteHandle for partitionPath %s fileID %s, took %d ms.",
           writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
           writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));
 

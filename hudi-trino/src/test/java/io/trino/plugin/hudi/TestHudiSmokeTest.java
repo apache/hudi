@@ -15,19 +15,26 @@ package io.trino.plugin.hudi;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.io.Closer;
 import com.google.common.io.Resources;
 import io.trino.Session;
 import io.trino.blob.cache.alluxio.AlluxioBlobCachePlugin;
 import io.trino.filesystem.Location;
+import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.filesystem.TrinoInputFile;
 import io.trino.filesystem.local.LocalInputFile;
+import io.trino.metastore.Column;
+import io.trino.metastore.HiveMetastore;
+import io.trino.metastore.HiveMetastoreFactory;
 import io.trino.parquet.ParquetReaderOptions;
 import io.trino.plugin.base.metrics.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveTimestampPrecision;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
+import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
 import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.KeyBasedTestRecordMerger;
 import io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.SchemaEvolutionHudiTablesInitializer;
 import io.trino.spi.SplitWeight;
@@ -43,6 +50,9 @@ import io.trino.testing.MaterializedResult;
 import io.trino.testing.MaterializedRow;
 import io.trino.testing.QueryRunner;
 import io.trino.testing.TestingConnectorSession;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.intellij.lang.annotations.Language;
@@ -57,6 +67,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.Iterator;
@@ -64,12 +75,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.concurrent.locks.Lock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
+import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_TIMESTAMP;
 import static io.trino.plugin.hive.HiveColumnHandle.ColumnType.REGULAR;
 import static io.trino.plugin.hive.HiveColumnHandle.createBaseColumn;
@@ -101,6 +115,7 @@ import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.Testing
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.STOCK_TICKS_MOR;
 import static io.trino.spi.type.TimestampType.createTimestampType;
 import static io.trino.testing.MaterializedResult.materializeSourceDataStream;
+import static io.trino.testing.TestingNames.randomNameSuffix;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestHudiSmokeTest
@@ -145,6 +160,68 @@ public class TestHudiSmokeTest
     }
 
     @Test
+    public void testInitializedTableWithoutCommits()
+            throws IOException
+    {
+        assertInitializedTableWithoutCommitsIsEmpty(HoodieTableType.COPY_ON_WRITE, false);
+        // Under a CUSTOM merge mode with a session merger, the merge-required columns are resolved from the
+        // table schema, which a table without commits does not have yet
+        assertInitializedTableWithoutCommitsIsEmpty(HoodieTableType.MERGE_ON_READ, true);
+    }
+
+    private void assertInitializedTableWithoutCommitsIsEmpty(HoodieTableType tableType, boolean customMerger)
+            throws IOException
+    {
+        String schemaName = getSession().getSchema().orElseThrow();
+        String tableName = "empty_without_commits_" + randomNameSuffix();
+        HiveMetastore metastore = metastore();
+        Location location = Location.of(metastore.getTable(schemaName, HUDI_NON_PART_COW.getTableName()).orElseThrow().getStorage().getLocation())
+                .parentDirectory()
+                .appendPath(tableName);
+        TrinoFileSystem fileSystem = fileSystem();
+
+        try (Closer closer = Closer.create()) {
+            closer.register(() -> fileSystem.deleteDirectory(location));
+            HoodieTableMetaClient.TableBuilder tableBuilder = HoodieTableMetaClient.newTableBuilder()
+                    .setTableName(tableName)
+                    .setTableType(tableType)
+                    .setRecordKeyFields("id");
+            if (customMerger) {
+                tableBuilder.setRecordMergeMode(RecordMergeMode.CUSTOM)
+                        .setRecordMergeStrategyId(KeyBasedTestRecordMerger.MERGE_STRATEGY_ID);
+            }
+            tableBuilder.initTable(new TrinoStorageConfiguration(fileSystem), location.toString());
+            ResourceHudiTablesInitializer.createTable(
+                    getQueryRunner(),
+                    schemaName,
+                    location,
+                    tableName,
+                    List.of(new Column("id", HIVE_LONG, Optional.empty(), Map.of())),
+                    List.of(),
+                    Map.of(),
+                    tableType == HoodieTableType.MERGE_ON_READ);
+            closer.register(() -> metastore.dropTable(schemaName, tableName, false));
+
+            for (boolean metadata : List.of(false, true)) {
+                for (boolean casing : List.of(false, true)) {
+                    SessionBuilder sessionBuilder = SessionBuilder.from(getSession())
+                            .withMdtEnabled(metadata)
+                            .withResolveColumnNameCasingEnabled(casing);
+                    if (customMerger) {
+                        sessionBuilder.withRecordMergerImpls(KeyBasedTestRecordMerger.class.getName());
+                    }
+                    Session session = sessionBuilder.build();
+                    assertThat(computeScalar(session, "SELECT count(*) FROM " + tableName)).isEqualTo(0L);
+                    assertThat(computeActual(session, "SELECT id FROM " + tableName).getRowCount()).isZero();
+                    // A predicate makes split generation build the index supports, which resolve the table schema
+                    // when the metadata table and column-name casing are both enabled
+                    assertThat(computeActual(session, "SELECT id FROM " + tableName + " WHERE id = 1").getRowCount()).isZero();
+                }
+            }
+        }
+    }
+
+    @Test
     public void testReadPartitionedTables()
     {
         assertQuery("SELECT symbol, max(ts) FROM " + STOCK_TICKS_COW + " GROUP BY symbol HAVING symbol = 'GOOG'",
@@ -160,6 +237,47 @@ public class TestHudiSmokeTest
         System.out.println(res);
         assertQuery("SELECT dt, count(1) FROM " + STOCK_TICKS_MOR + " GROUP BY dt",
                 "SELECT * FROM VALUES ('2018-08-31', '99')");
+    }
+
+    @Test
+    public void testReadOptimizedSkipsLogOnlyFileGroup()
+            throws IOException
+    {
+        Session session = SessionBuilder.from(getSession())
+                .withMdtEnabled(false)
+                .withTableStatisticsEnabled(false)
+                .withResolveColumnNameCasingEnabled(false)
+                .build();
+        String schemaName = session.getSchema().orElseThrow();
+        String tableName = STOCK_TICKS_MOR.getTableName();
+        String query = "SELECT count(*) FROM " + tableName;
+        String basePath = metastore()
+                .getTable(schemaName, tableName).orElseThrow()
+                .getStorage().getLocation();
+
+        TrinoFileSystem fileSystem = fileSystem();
+        HoodieTableMetaClient metaClient = HudiUtil.buildTableMetaClient(fileSystem, schemaName + "." + tableName, basePath);
+        String commit = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().requestedTime();
+        Location partition = Location.of(basePath).appendPath(getOnlyElement(STOCK_TICKS_MOR.getPartitions().values()));
+        Location log = partition.appendPath(".logonly_" + commit + ".log.1_0-0-0");
+
+        // Keep the temporary file out of other queries that use this fixture.
+        Lock lock = getQueryRunner().getExclusiveLock();
+        lock.lock();
+        try {
+            assertThat(computeScalar(session, query)).isEqualTo(99L);
+            try {
+                // Read-optimized planning skips the file group before it opens the synthetic log.
+                fileSystem.newOutputFile(log).createOrOverwrite(new byte[100]);
+                assertThat(computeScalar(session, query)).isEqualTo(99L);
+            }
+            finally {
+                fileSystem.deleteFile(log);
+            }
+        }
+        finally {
+            lock.unlock();
+        }
     }
 
     @Test
@@ -325,6 +443,25 @@ public class TestHudiSmokeTest
         ZonedDateTime fileModifiedTime = (ZonedDateTime) computeScalar("SELECT \"$file_modified_time\" FROM " + HUDI_COW_PT_TBL + " WHERE id = 1");
         assertThat(fileModifiedTime.toInstant().toEpochMilli())
                 .isEqualTo(toInputFile(path).lastModified().toEpochMilli());
+    }
+
+    @Test
+    public void testHiddenColumnPredicatesWithCaseResolution()
+    {
+        Session session = SessionBuilder.from(getSession())
+                .withMdtEnabled(true)
+                .withResolveColumnNameCasingEnabled(true)
+                .withTableStatisticsEnabled(false)
+                .build();
+        String query = "SELECT count(*) FROM " + HUDI_NON_PART_COW;
+
+        assertThat(computeScalar(session, query)).isEqualTo(2L);
+        assertThat(computeScalar(session, query + " WHERE \"$path\" = 'not-a-file'")).isEqualTo(0L);
+        assertThat(computeScalar(session, query + " WHERE id = 1 AND \"$path\" = 'not-a-file'")).isEqualTo(0L);
+        assertThat(computeScalar(session, query + " WHERE \"$file_size\" > 0")).isEqualTo(2L);
+        assertThat(computeScalar(session, query + " WHERE \"$file_modified_time\" IS NOT NULL")).isEqualTo(2L);
+        // $partition only exists on partitioned tables
+        assertThat(computeScalar(session, "SELECT count(*) FROM " + HUDI_COW_PT_TBL + " WHERE \"$partition\" = 'dt=2021-12-09/hh=10'")).isEqualTo(1L);
     }
 
     @Test
@@ -766,6 +903,11 @@ public class TestHudiSmokeTest
         assertThat(prunedSplits).isEqualTo(1);
         assertThat(totalRows).isEqualTo(2);
         assertThat(prunedRows).isEqualTo(1);
+
+        // A hidden-column conjunct must not cost the physical predicate its index pruning
+        MaterializedResult hiddenRes = getQueryRunner().execute(session, "SELECT * FROM " + table + " WHERE name='Alice' AND \"$file_size\" > 0");
+        assertThat(hiddenRes.getStatementStats().get().getTotalSplits()).isEqualTo(1);
+        assertThat(hiddenRes.getRowCount()).isEqualTo(1);
     }
 
     @Test
@@ -1441,10 +1583,26 @@ public class TestHudiSmokeTest
 
     private TrinoInputFile toInputFile(String path)
     {
-        return ((HudiConnector) getDistributedQueryRunner().getCoordinator().getConnector("hudi")).getInjector()
+        return fileSystem().newInputFile(Location.of(path));
+    }
+
+    private TrinoFileSystem fileSystem()
+    {
+        return hudiConnector().getInjector()
                 .getInstance(TrinoFileSystemFactory.class)
-                .create(ConnectorIdentity.ofUser("test"))
-                .newInputFile(Location.of(path));
+                .create(ConnectorIdentity.ofUser("test"));
+    }
+
+    private HiveMetastore metastore()
+    {
+        return hudiConnector().getInjector()
+                .getInstance(HiveMetastoreFactory.class)
+                .createMetastore(Optional.empty());
+    }
+
+    private HudiConnector hudiConnector()
+    {
+        return (HudiConnector) getDistributedQueryRunner().getCoordinator().getConnector("hudi");
     }
 
     public static <K, V> Map<K, V> listsToMap(List<K> keys, List<V> values)

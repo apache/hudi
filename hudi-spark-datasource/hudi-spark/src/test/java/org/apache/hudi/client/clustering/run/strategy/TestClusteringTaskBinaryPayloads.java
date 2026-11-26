@@ -44,6 +44,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.types.StructType;
@@ -93,6 +94,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * written in full.
  */
 @Tag("functional")
+@Slf4j
 public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
 
   private static final int SMALL_PLAN_GROUPS = 2;
@@ -151,7 +153,7 @@ public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
     TaskBinary small = taskBinary(strategy, config, firstGroups(plan, SMALL_PLAN_GROUPS), schema, clusteringInstant);
     TaskBinary large = taskBinary(strategy, config, firstGroups(plan, LARGE_PLAN_GROUPS), schema, clusteringInstant);
     String report = report(small, large);
-    LOG.info("Clustering task binary payloads, {}, row writer {}:\n{}", strategy, rowWriter, report);
+    log.info("Clustering task binary payloads, {}, row writer {}:\n{}", strategy, rowWriter, report);
 
     int extraGroups = large.groups - small.groups;
     for (String payload : small.counts.keySet()) {

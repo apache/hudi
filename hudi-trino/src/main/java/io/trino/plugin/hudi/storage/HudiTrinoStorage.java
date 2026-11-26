@@ -223,6 +223,14 @@ public class HudiTrinoStorage
     }
 
     @Override
+    public boolean isEmpty(StoragePath path)
+            throws IOException
+    {
+        FileIterator fileIterator = fileSystem.listFiles(convertToLocation(path));
+        return !fileIterator.hasNext();
+    }
+
+    @Override
     public List<StoragePathInfo> listDirectEntries(StoragePath path, StoragePathFilter filter)
             throws IOException
     {

@@ -22,6 +22,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -153,11 +155,17 @@ public class BootstrapExecutorUtils implements Serializable {
             .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadClass(cfg.payloadClass).build())
             .withProps(props);
 
-    if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
-      builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
+    HoodieSchema targetSchema = schemaProvider == null ? null : schemaProvider.getTargetHoodieSchema();
+    if (targetSchema != null) {
+      builder = builder.withSchema(targetSchema.toString());
     }
     this.bootstrapConfig = builder.build();
     log.info("Created bootstrap executor with configs : {}", bootstrapConfig.getProps());
+  }
+
+  @VisibleForTesting
+  HoodieWriteConfig getBootstrapConfig() {
+    return bootstrapConfig;
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,

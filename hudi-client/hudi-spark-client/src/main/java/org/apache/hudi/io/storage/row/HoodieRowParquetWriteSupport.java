@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
@@ -70,8 +71,6 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.YearMonthIntervalType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.apache.spark.util.VersionUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -112,9 +111,9 @@ import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
  *   <li>The scale of the timestamps is determined by the Hudi writer schema instead of relying on Spark configuration</li>
  * </ul>
  */
+@Slf4j
 public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRowParquetWriteSupport.class);
   private static final HoodieSchema MAP_KEY_SCHEMA = HoodieSchema.create(HoodieSchemaType.STRING);
   private static final String MAP_REPEATED_NAME = "key_value";
   private static final String MAP_KEY_NAME = "key";
@@ -263,7 +262,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
             continue;
           }
         } else {
-          LOG.warn("Variant field '{}' has no corresponding HoodieSchema; "
+          log.warn("Variant field '{}' has no corresponding HoodieSchema; "
               + "shredding will be skipped. This may indicate a schema mismatch.", field.name());
         }
       }
@@ -522,6 +521,8 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       return (row, ordinal) -> recordConsumer.addBoolean(row.getBoolean(ordinal));
     } else if (dataType == DataTypes.DateType) {
       return (row, ordinal) -> recordConsumer.addInteger((Integer) dateRebaseFunction.apply(row.getInt(ordinal)));
+    } else if (dataType == DataTypes.ByteType) {
+      return (row, ordinal) -> recordConsumer.addInteger(row.getByte(ordinal));
     } else if (dataType == DataTypes.ShortType) {
       return (row, ordinal) -> recordConsumer.addInteger(row.getShort(ordinal));
     } else if (dataType == DataTypes.IntegerType || dataType instanceof YearMonthIntervalType) {
@@ -789,9 +790,11 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType == DataTypes.DateType) {
       return Types.primitive(INT32, repetition)
           .as(LogicalTypeAnnotation.dateType()).named(structField.name());
-    } else if (dataType == DataTypes.ShortType) {
-      return Types.primitive(INT32, repetition)
-          .as(LogicalTypeAnnotation.intType(16, true)).named(structField.name());
+    } else if (dataType == DataTypes.ByteType || dataType == DataTypes.ShortType) {
+      // Plain INT32 without an INT(8) / INT(16) annotation: the table schema has no 8- or 16-bit
+      // integer type and records these columns as int, which is what the other Spark write paths
+      // write too. An annotated column reads back as ByteType / ShortType instead of the table's int (#20503).
+      return Types.primitive(INT32, repetition).named(structField.name());
     } else if (dataType == DataTypes.IntegerType || dataType instanceof YearMonthIntervalType) {
       return Types.primitive(INT32, repetition).named(structField.name());
     } else if (dataType == DataTypes.LongType || dataType instanceof DayTimeIntervalType) {

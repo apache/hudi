@@ -85,12 +85,12 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
       HoodieScanContext scanContext,
       SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
       SerializableComparator<HoodieSourceSplit> splitComparator,
-      HoodieTableMetaClient metaClient,
+      @Nullable HoodieTableMetaClient metaClient,
       HoodieRecordEmitter<T> recordEmitter) {
     ValidationUtils.checkArgument(scanContext != null, "scanContext can't be null.");
     ValidationUtils.checkArgument(readerFunctionSupplier != null, "readerFunctionSupplier can't be null.");
     ValidationUtils.checkArgument(splitComparator != null, "splitComparator can't be null.");
-    ValidationUtils.checkArgument(metaClient != null, "metaClient can't be null.");
+    ValidationUtils.checkArgument(scanContext.isStreaming() || metaClient != null, "Bounded reads require a meta client.");
     ValidationUtils.checkArgument(recordEmitter != null, "recordEmitter can't be null.");
 
     this.scanContext = scanContext;
@@ -98,7 +98,9 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
     this.splitComparator = splitComparator;
     this.metaClient = metaClient;
     this.recordEmitter = recordEmitter;
-    this.tableName = metaClient.getTableConfig().getTableName();
+    this.tableName = metaClient == null
+        ? scanContext.getConf().get(FlinkOptions.TABLE_NAME)
+        : metaClient.getTableConfig().getTableName();
   }
 
   @Override

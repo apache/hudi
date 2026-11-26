@@ -58,7 +58,7 @@ import java.util.stream.Stream;
  *   <li>record-key and delete-log schemas: {@link #getRecordKeySchema()},
  *       {@link #getRecordKeyPartitionPathSchema()}, {@link #createDeleteLogSchema(HoodieSchema, List)}</li>
  *   <li>projection and pruning: {@link #generateProjectionSchema(HoodieSchema, List)},
- *       {@link #projectSchema(HoodieSchema, List)}, {@link #pruneDataSchema(HoodieSchema, HoodieSchema, Set)},
+ *       {@link #generateProjectionSchema(HoodieSchema, Map, List)}, {@link #projectSchema(HoodieSchema, List)}, {@link #pruneDataSchema(HoodieSchema, HoodieSchema, Set)},
  *       {@link #removeFields(HoodieSchema, Set)}</li>
  *   <li>appending and merging fields: {@link #appendFieldsToSchema(HoodieSchema, List)},
  *       {@link #appendFieldsToSchemaDedupNested(HoodieSchema, List)},
@@ -72,7 +72,8 @@ import java.util.stream.Stream;
  *   <li>error text: {@link #createSchemaErrorString(String, HoodieSchema, HoodieSchema)}</li>
  *   <li>lookups and predicates that need more than {@link HoodieSchema} offers on its own:
  *       {@link #findNestedField(HoodieSchema, String)}, {@link #findMissingFields(HoodieSchema, HoodieSchema)},
- *       {@link #resolveUnionSchema(HoodieSchema, String)}, {@link #hasDecimalField(HoodieSchema)}</li>
+ *       {@link #resolveUnionSchema(HoodieSchema, String)}, {@link #hasDecimalField(HoodieSchema)},
+ *       {@link #isTimestampMillisField(HoodieSchema)}</li>
  * </ul>
  *
  * <p>Not here:</p>
@@ -487,7 +488,7 @@ public final class HoodieSchemaUtils {
    *
    * <p>Field names are matched case-insensitively and the projected field keeps the schema's original casing:
    * Avro field names are case-sensitive while Hive lowercases column projections before they reach the reader
-   * (see {@code HoodieRealtimeRecordReaderUtils#generateProjectionSchema}), so both sides are lowercased with
+   * (see {@link #generateProjectionSchema(HoodieSchema, Map, List)}), so both sides are lowercased with
    * {@code Locale.ROOT} for the lookup. The default locale would map an upper-case I to dotless-i under a Turkish
    * or Azeri locale and break the match with {@code HiveHoodieReaderContext}, which pre-lowercases with
    * {@code Locale.ROOT}. A schema with two fields that differ only in case cannot be projected and fails on the
@@ -506,18 +507,55 @@ public final class HoodieSchemaUtils {
     Map<String, HoodieSchemaField> schemaFieldsMap = originalSchema.getFields().stream()
         .map(r -> Pair.of(r.name().toLowerCase(Locale.ROOT), r))
         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+
+    return generateProjectionSchema(originalSchema, schemaFieldsMap, fieldNames);
+  }
+
+  /**
+   * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
+   *
+   * <p>This overload is intended for callers that already have a name-to-field map,
+   * such as the realtime reader.</p>
+   *
+   * @param writeSchema      the source schema
+   * @param schemaFieldsMap  field map keyed by names lowercased with {@code Locale.ROOT}, as built by
+   *                         {@code HoodieRealtimeRecordReaderUtils#getNameToFieldMap}
+   * @param fieldNames       the list of field names to include in the projection
+   * @return new HoodieSchema containing only the specified fields
+   * @throws IllegalArgumentException if {@code writeSchema}, {@code schemaFieldsMap},
+   *     or {@code fieldNames} is null
+   * @since 1.2.0
+   */
+  public static HoodieSchema generateProjectionSchema(HoodieSchema writeSchema,
+                                                      Map<String, HoodieSchemaField> schemaFieldsMap,
+                                                      List<String> fieldNames) {
+    ValidationUtils.checkArgument(writeSchema != null, "Write schema cannot be null");
+    ValidationUtils.checkArgument(schemaFieldsMap != null, "Schema fields map cannot be null");
+    ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
+
+    /*
+     * Avro & Presto field names seems to be case sensitive (support fields differing only in case) whereas
+     * Hive/Impala/SparkSQL(default) are case-insensitive. Spark allows this to be configurable using
+     * spark.sql.caseSensitive=true
+     *
+     * For a RT table setup with no delta-files (for a latest file-slice) -> we translate parquet schema to Avro Here
+     * the field-name case is dependent on parquet schema. Hive (1.x/2.x/CDH) translate column projections to
+     * lower-cases
+     *
+     */
     List<HoodieSchemaField> projectedFields = new ArrayList<>(fieldNames.size());
-    for (String fn : fieldNames) {
-      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
+    for (String fieldName : fieldNames) {
+      HoodieSchemaField field = schemaFieldsMap.get(fieldName.toLowerCase(Locale.ROOT));
       if (field == null) {
-        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
+        throw new HoodieException("Field " + fieldName + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
         projectedFields.add(createNewSchemaField(field));
       }
     }
 
-    return HoodieSchema.createRecord(originalSchema.getName(), originalSchema.getNamespace().orElse(null), originalSchema.getDoc().orElse(null), projectedFields);
+    return HoodieSchema.createRecord(writeSchema.getName(), writeSchema.getDoc().orElse(null),
+        writeSchema.getNamespace().orElse(null), writeSchema.isError(), projectedFields);
   }
 
   /**
@@ -793,10 +831,12 @@ public final class HoodieSchemaUtils {
    * the top level field, b is at second level and so on. Field names are matched case-sensitively.
    * This is equivalent to {@link HoodieAvroUtils#projectSchema(Schema, List)} but operates on HoodieSchema.
    *
-   * <p>The two sibling projection helpers differ:</p>
+   * <p>The sibling projection helpers differ:</p>
    * <ul>
    *   <li>{@link #generateProjectionSchema(HoodieSchema, List)} - top-level fields only, matched
    *       case-insensitively</li>
+   *   <li>{@link #generateProjectionSchema(HoodieSchema, Map, List)} - the same projection for callers that
+   *       already hold the lowercased name-to-field map</li>
    *   <li>{@link #pruneDataSchema(HoodieSchema, HoodieSchema, Set)} - prunes to the shape of a required
    *       schema instead of to a list of names</li>
    * </ul>
@@ -1019,5 +1059,22 @@ public final class HoodieSchemaUtils {
     }
 
     return createNewSchemaFromFieldsWithReference(schema, fields);
+  }
+
+  /**
+   * Checks if a schema field is of type timestamp_millis (timestamp-millis or local-timestamp-millis).
+   *
+   * <p>For multi-branch unions, this method returns false.</p>
+   *
+   * @param fieldSchema The schema of the field to check
+   * @return true if the field is of type timestamp_millis, false otherwise
+   */
+  public static boolean isTimestampMillisField(HoodieSchema fieldSchema) {
+    HoodieSchema nonNullableSchema = fieldSchema.getNonNullType();
+    if (nonNullableSchema.getType() == HoodieSchemaType.TIMESTAMP) {
+      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) nonNullableSchema;
+      return timestampSchema.getPrecision().equals(HoodieSchema.TimePrecision.MILLIS);
+    }
+    return false;
   }
 }

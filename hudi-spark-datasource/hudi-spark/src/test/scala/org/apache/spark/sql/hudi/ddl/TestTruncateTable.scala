@@ -20,13 +20,42 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestTruncateTable extends HoodieSparkSqlTestBase {
+
+  Seq("cow", "mor").foreach { tableType =>
+    Seq(false, true).foreach { partitioned =>
+      test(s"Truncate retains evolved schema across empty refreshes: $tableType, partitioned=$partitioned") {
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          val partitionClause = if (partitioned) "partitioned by (value)" else ""
+          spark.sql(s"create table $tableName (id int, value string) using hudi $partitionClause " +
+            s"location '$tablePath' tblproperties (type='$tableType', primaryKey='id')")
+          spark.sql(s"insert into $tableName values (1, 'before')")
+          spark.sql(s"alter table $tableName add columns (extra string)")
+          val expectedSchema = new TableSchemaResolver(createMetaClient(spark, tablePath)).getTableSchema(false)
+
+          // The second purge has no commits or data files from which to recover a schema.
+          (1 to 2).foreach { _ =>
+            spark.sql(s"truncate table $tableName")
+            val metaClient = createMetaClient(spark, tablePath)
+            assert(metaClient.getActiveTimeline.getWriteTimeline.filterCompletedInstants().empty())
+            assertResult(expectedSchema)(metaClient.getTableConfig.getTableCreateSchema.get())
+            checkAnswer(s"select id, value, extra from $tableName")()
+          }
+          spark.sql(s"insert into $tableName (id, value, extra) values (2, 'after', 'retained')")
+          checkAnswer(s"select id, value, extra from $tableName")(Seq(2, "after", "retained"))
+        }
+      }
+    }
+  }
 
   test("Test Truncate non-partitioned Table") {
     Seq("cow", "mor").foreach { tableType =>

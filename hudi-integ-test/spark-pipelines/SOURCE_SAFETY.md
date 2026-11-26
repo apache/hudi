@@ -1,0 +1,178 @@
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements. See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to You under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+# Hudi streaming source recovery
+
+The streaming source supports insert/upsert/delete plus compaction and clustering.
+`INSERT OVERWRITE` (table or partition), `delete_partition` writes and partition
+TTL on an upstream table require recovery for downstream consumers and fail by
+default. This includes TTL run inline with `hoodie.partition.ttl.inline`, which
+writes `DELETE_PARTITION` replace commits. `READ_LATEST` drops the overwrite's
+new rows along with the unread range; `READ_UPTO_LATEST_COMMIT` replays the whole
+table, including unaffected partitions. Latest-state reads do not propagate hard
+deletes to downstream tables.
+
+`hoodie.datasource.read.streaming.recovery.strategy` defaults to `FAIL` for
+latest-state structured-streaming readers, including SDP. It replaces the
+unreleased boolean guard. An unreadable saved offset (archived or cleaned
+history), logical overwrite/truncate, or physical recreation produces an
+error naming the strategy config and the coordinated rebuild procedure.
+
+| Strategy | Recovery batch | Consequence |
+| --- | --- | --- |
+| `FAIL` (default) | Stop before executing an unsafe batch | Rebuild downstream tables and checkpoints together |
+| `READ_UPTO_LATEST_COMMIT` | One full snapshot bounded by Spark's recorded batch end, then resume increments | Append targets may duplicate rows; upsert targets may retain keys deleted upstream |
+| `READ_LATEST` | Empty batch acknowledging Spark's recorded latest end, then resume increments | Deliberately skip the unread range, accepting data loss |
+
+These are recovery policies, not alternate settings for every healthy batch.
+An explicit choice takes precedence over
+`hoodie.datasource.read.incr.fallback.fulltablescan.enable`; latest-state
+streaming incremental reads disable that legacy silent fallback after the initial
+earliest offset. Fresh earliest starts retain the configured fallback so a
+coordinated rebuild can read tables with cleaned, replaced files. The strategy
+is captured at source construction. Restart the query to change it. Initial
+startup still uses `hoodie.datasource.streaming.startOffset` (earliest, latest,
+or an explicit instant); a fresh earliest checkpoint can read the current state.
+CDC behavior is unchanged. Validation runs during batch planning, but safety
+rejections are raised only when the batch executes. Spark may therefore re-plan
+and discard the last committed batch on restart without failing on that
+already-delivered range.
+
+For direct readers:
+
+```python
+spark.readStream.option(
+    "hoodie.datasource.read.streaming.recovery.strategy", "FAIL"
+).table("sdp_test.upstream").select("id", "ts", "value")
+```
+
+For SDP graph-internal reads, Spark 4.1.1 discards explicit reader options.
+Use pipeline configuration or the flow's SQLConf to select recovery:
+
+```yaml
+configuration:
+  spark.hoodie.datasource.read.streaming.recovery.strategy: READ_UPTO_LATEST_COMMIT
+```
+
+Direct reader options take precedence when Spark forwards them. There is no
+need to set the configuration merely to obtain the default `FAIL` behavior.
+
+## Recovery boundaries and limits
+
+Stop consumers and rebuild affected downstream tables **and** checkpoints in
+upstream-to-downstream order. Merely discarding a checkpoint can duplicate rows
+or retain stale rows. Snapshot recovery is explicit permission to accept those
+risks; it does not truncate or reconcile the downstream table. Every external
+source must retain enough data for a complete coordinated rebuild.
+
+Spark owns each batch end and checkpoint. Recovery never reads a newer snapshot
+while acknowledging an older end. Snapshot recovery uses a time-travel snapshot
+at that batch's last included write. If that snapshot cannot be reconstructed
+(for example, recreation removed it, cleaning expired its files, or completion
+ordering cannot be represented by the requested-time snapshot), rebuild tables
+and checkpoints together. Concurrent destructive operations must still be
+coordinated: validation and execution are not atomic.
+
+If an overwrite completes after a restarted uncommitted batch's recorded end,
+`READ_UPTO_LATEST_COMMIT` can replay two full snapshots: the pre-reset snapshot
+for that batch (if reconstructible), then the post-reset snapshot when the next
+batch includes the replace commit. Append targets can therefore receive the
+whole table twice.
+
+Keep consumer lag within the cleaner retention window (`hoodie.clean.commits.retained`,
+formerly `hoodie.cleaner.commits.retained`) as well as the archival window.
+`READ_UPTO_LATEST_COMMIT` uses the failed batch end already recorded by Spark;
+it only works while that end remains readable. Once cleaning passes that end,
+use `READ_LATEST` (accepting data loss) or rebuild. Pending non-clustering writes
+at or before the snapshot bound must complete before snapshot replay can proceed.
+After a successful recovery, restart with `FAIL` again. Leaving snapshot recovery
+on with daily partition TTL can replay the entire table every day.
+
+Retain sufficient active history for the slowest consumer with
+`hoodie.keep.min.commits` / `hoodie.keep.max.commits`. An archived checkpoint
+requires recovery even if some data files remain. With
+`hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS`, a clean after the checkpoint
+that deletes any files requires recovery, even when those files were not needed:
+that policy records no earliest retained commit. Choose a policy with a retention
+boundary when incremental continuity must be established.
+
+Non-clustering replace commits are logical resets; clustering and compaction
+remain readable. This includes the timeline-preserving `TRUNCATE TABLE` proposed
+in #20378. Physical recreation is detected at the next resumed batch, not while
+an empty source produces no batch. Copying identical timeline history does not
+establish a new table identity.
+
+Snapshot recovery is a single unbounded batch. Chunked bootstrap and source
+admission control remain follow-ups; size the backlog and snapshot accordingly.
+Latest-state chaining does not propagate hard deletes or every intermediate
+change. Coordinated CLI full refresh rebuilds both targets; recovery strategies
+alone do not reconcile a downstream snapshot.
+
+## Verification
+
+`TestStreamingSource` covers both offset versions and COW/MOR: default failure,
+explicit strategy precedence, reset/recreation, cleaner boundaries, clustering,
+exact snapshot rows, bounded recovery after a newer write, and incremental
+continuation after recovery.
+
+`source_safety_acceptance.py` uses the #20453 Spark 4.1.1 CLI/Connect harness.
+It verifies exact two-stage rows, unchanged restarts, recreation rejection before
+any downstream commit, and coordinated rebuild using `--full-refresh-all`. It
+retains the storage root while SDP resets both checkpoints and purges/rebuilds
+both targets. A subsequent ordinary restart must preserve exact rows and add no
+Hudi commits. Metadata is enabled by default. Checks remain active under Python
+optimization, including verification subprocesses.
+
+`TestHoodieSparkConnectPipelines` also covers COW/MOR `SELECT *` chaining through
+the real CLI: reserved upstream metadata must not create duplicate target fields,
+and an explicitly computed boolean `_hoodie_is_deleted` must remove only the
+intended key. This tests a delete marker carried by the flow, not propagation of
+an upstream hard delete. Reader-option precedence, expired history, logical
+resets, physical recreation and ordinary clustering are covered by the merged
+`TestStreamingSource` regressions for both offset versions and COW/MOR.
+
+```sh
+PYTHONOPTIMIZE=1 python hudi-integ-test/spark-pipelines/source_safety_acceptance.py \
+  --bundle /path/to/candidate-hudi-spark4.1-bundle.jar \
+  --table-type cow
+# Repeat with --table-type mor.
+```
+
+`FAIL` requires the sink to propagate batch execution errors. Safety rejections
+are deferred until execution so Spark can discard the last committed batch plan
+on restart. For Hudi sinks, keep
+`hoodie.datasource.write.streaming.ignore.failed.batch=false` (the default).
+Setting it to `true`, or swallowing errors in a custom sink, can acknowledge a
+rejected batch and advance the checkpoint past unread data even under `FAIL`.
+Healthy batches retain their scan relations for column pruning and filter pushdown.
+
+## Table upgrades and legacy checkpoints
+
+Before upgrading a source table from v6 to v8 or newer, pin existing requested-time
+(`BLOCK`/`FAIL` hollow-commit mode) readers with
+`.option("hoodie.datasource.read.streaming.table.version", "6")` and keep that
+option on every restart using the same checkpoint. Offsets have no version marker;
+automatically selecting V2 after the table upgrade interprets an old requested
+time as a completion time and fails validation. Do not change offset semantics
+in place. To adopt V2, coordinate a downstream/checkpoint rebuild. Readers already
+using `USE_TRANSITION_TIME` use completion times and do not need this conversion.
+
+New offsets come only from completed writes, so rolling back a checkpointed write
+via restore requires recovery. Existing service-time checkpoints remain supported:
+on restart, an active legacy clean/rollback offset is retained until a later write
+arrives. Such legacy positions cannot prove that earlier writes survived a restore;
+coordinate restore with downstream rebuilding even when a legacy position survives.

@@ -44,7 +44,6 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
       HoodieScanContext scanContext) {
     this.scanContext = scanContext;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(scanContext.getConf());
-    this.metaClient = getOrCreateMetaClient();
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(scanContext.getConf())
         .path(new Path(scanContext.getPath().toUri()))
@@ -58,23 +57,19 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
 
   @Override
   public HoodieContinuousSplitBatch discoverSplits(String lastInstant) {
-    if (metaClient == null) {
+    HoodieTableMetaClient client = getOrCreateMetaClient();
+    if (client == null) {
       return HoodieContinuousSplitBatch.EMPTY;
     }
 
-    return incrementalInputSplits.inputHoodieSourceSplits(metaClient, lastInstant, scanContext.isCdcEnabled());
+    return incrementalInputSplits.inputHoodieSourceSplits(client, lastInstant, scanContext.isCdcEnabled());
   }
 
   @Nullable
   private HoodieTableMetaClient getOrCreateMetaClient() {
-    if (this.metaClient != null) {
-      return this.metaClient;
+    if (metaClient == null && StreamerUtil.tableExists(scanContext.getPath().toString(), hadoopConf)) {
+      metaClient = StreamerUtil.createMetaClient(scanContext.getPath().toString(), hadoopConf);
     }
-    if (StreamerUtil.tableExists(this.scanContext.getPath().toString(), hadoopConf)) {
-      this.metaClient = StreamerUtil.createMetaClient(this.scanContext.getPath().toString(), hadoopConf);
-      return this.metaClient;
-    }
-    // fallback
-    return null;
+    return metaClient;
   }
 }

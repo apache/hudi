@@ -330,7 +330,7 @@ public final class HudiUtil
     }
 
     /**
-     * Retrieves a field from the given Avro schema by column name.
+     * Looks up a field in the given Avro schema by column name.
      * <p>
      * The lookup proceeds in two steps:
      * <ul>
@@ -340,30 +340,35 @@ public final class HudiUtil
      *
      * @param columnName Column name to search for.
      * @param schema Avro {@link Schema} in which to search.
-     * @return The matching {@link Schema.Field}, if found.
-     * @throws TrinoException if no field matches the given column name.
+     * @return The matching {@link Schema.Field}, or empty if the schema has no such field.
      */
-    public static Schema.Field getFieldFromSchema(String columnName, Schema schema)
+    public static Optional<Schema.Field> findFieldInSchema(String columnName, Schema schema)
     {
         Schema.Field field = schema.getField(columnName);
         if (field != null) {
-            return field;
+            return Optional.of(field);
         }
 
         try {
-            field = SCHEMA_FIELD_CACHE
-                    .get(schema, () -> buildFieldLookup(schema)).get(columnName.toLowerCase(Locale.ROOT));
-            if (field != null) {
-                return field;
-            }
+            return Optional.ofNullable(SCHEMA_FIELD_CACHE
+                    .get(schema, () -> buildFieldLookup(schema)).get(columnName.toLowerCase(Locale.ROOT)));
         }
         catch (ExecutionException e) {
             throw new TrinoException(HUDI_SCHEMA_ERROR,
                     "Failed to build field lookup for schema", e);
         }
+    }
 
-        throw new TrinoException(HUDI_SCHEMA_ERROR,
-                "Failed to get column " + columnName + " from table schema");
+    /**
+     * Same lookup as {@link #findFieldInSchema}, for callers that require the field to exist.
+     *
+     * @throws TrinoException if no field matches the given column name.
+     */
+    public static Schema.Field getFieldFromSchema(String columnName, Schema schema)
+    {
+        return findFieldInSchema(columnName, schema)
+                .orElseThrow(() -> new TrinoException(HUDI_SCHEMA_ERROR,
+                        "Failed to get column " + columnName + " from table schema"));
     }
 
     /**

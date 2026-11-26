@@ -26,8 +26,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -62,9 +61,8 @@ import java.util.Set;
  * <p>Retaining the mode on a version 9 table is safe mechanically: the property carries no
  * {@code sinceVersion}, so {@code dropInvalidConfigs} does not strip it on load.
  */
+@Slf4j
 public class TenToNineDowngradeHandler implements DowngradeHandler {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TenToNineDowngradeHandler.class);
 
   @Override
   public UpgradeDowngrade.TableConfigChangeSet downgrade(
@@ -106,7 +104,7 @@ public class TenToNineDowngradeHandler implements DowngradeHandler {
         //
         // Keeping it is also what makes the round trip lossless: a later re-upgrade finds the mode
         // intact instead of deriving NONE from the boolean.
-        LOG.warn("Downgrading a table on {}={} to table version 9, retaining the mode on the downgraded "
+        log.warn("Downgrading a table on {}={} to table version 9, retaining the mode on the downgraded "
                 + "table (created at table version {}). Version 9 does not formally understand it, so "
                 + "every reader of this table must honor {} rather than relying on {} alone -- which now "
                 + "reads false and would have them treat the table as NONE.",

@@ -23,8 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.util.Date;
@@ -33,9 +32,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@Slf4j
 public class HoodieTimelineCleanupUtil {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTimelineCleanupUtil.class);
-
   public static List<HoodieInstant> inflightWriteCommitsOlderThan(HoodieTableMetaClient metaClient, long ageMinutes, boolean includeIngestionCommits) {
     long goBackMs = Duration.ofMinutes(ageMinutes).toMillis();
     String oldestAllowedTimestamp = HoodieInstantTimeGenerator.formatDate(new Date(System.currentTimeMillis() - goBackMs));
@@ -53,7 +51,7 @@ public class HoodieTimelineCleanupUtil {
       inflightInstants = inflightInstants.filter(ingestionCommitsFilter.negate());
     }
     List<HoodieInstant> inflightInstantsList = inflightInstants.collect(Collectors.toList());
-    LOG.info("Inflight commits older than {} minutes: {}", ageMinutes, inflightInstantsList);
+    log.info("Inflight commits older than {} minutes: {}", ageMinutes, inflightInstantsList);
     return inflightInstantsList;
   }
 }

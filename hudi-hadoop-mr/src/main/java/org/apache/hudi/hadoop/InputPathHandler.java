@@ -24,10 +24,9 @@ import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,9 +49,8 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableMetaCl
  * This class is written in such a way that it can handle multiple tables and properties unique to
  * a table but for table level property such check is not required.
  */
+@Slf4j
 public class InputPathHandler {
-
-  public static final Logger LOG = LoggerFactory.getLogger(InputPathHandler.class);
 
   private final Configuration conf;
   // tableName to metadata mapping for all Hoodie tables(both incremental & snapshot)
@@ -114,7 +112,7 @@ public class InputPathHandler {
           tagAsIncrementalOrSnapshot(inputPath, metaClient, incrementalTables);
         } catch (TableNotFoundException | InvalidTableException e) {
           // This is a non Hoodie inputPath
-          LOG.info("Handling a non-hoodie path {}", inputPath);
+          log.info("Handling a non-hoodie path {}", inputPath);
           nonHoodieInputPaths.add(inputPath);
         }
       }

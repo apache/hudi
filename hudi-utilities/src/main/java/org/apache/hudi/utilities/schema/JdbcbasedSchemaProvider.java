@@ -56,7 +56,11 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
     options.put("nullable", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_NULLABLE, "true"));
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
   @Override
+  @Deprecated
   public Schema getSourceSchema() {
     if (this.sourceSchema != null) {
       return sourceSchema;

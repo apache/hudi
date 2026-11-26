@@ -25,6 +25,7 @@ import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 import org.apache.hudi.io.util.IOUtils;
 
 import com.google.protobuf.CodedOutputStream;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.hbase.CellComparatorImpl;
@@ -36,8 +37,6 @@ import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.WritableUtils;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -69,8 +68,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 class TestHFileWriter {
-  private static final Logger LOG = LoggerFactory.getLogger(TestHFileWriter.class);
   private static final HFileContext CONTEXT = HFileContext.builder().build();
   private static final String[] THREE_KEYS = {"key1", "key2", "key3"};
   private static final byte[][] THREE_VALUES = {bytes("value1"), bytes("value2"), bytes("value3")};
@@ -142,7 +141,7 @@ class TestHFileWriter {
     validateHFileStructure(hfile);
     // 4. Validate consistency with HFileReader.
     validateConsistencyWithHFileReader(hfile);
-    LOG.info("All validations passed!");
+    log.info("All validations passed!");
   }
 
   @Test
@@ -342,8 +341,8 @@ class TestHFileWriter {
     assertEquals(hbaseBlocks[0], nativeBlocks[0], "native vs HBase data block bytes");
     assertEquals(hbaseBlocks[1], nativeBlocks[1], "native vs HBase root index bytes");
     if (dataGolden != null) {
-      LOG.info("DATA_REGION_HEX={}", nativeBlocks[0]);
-      LOG.info("ROOT_INDEX_BLOCK_HEX={}", nativeBlocks[1]);
+      log.info("DATA_REGION_HEX={}", nativeBlocks[0]);
+      log.info("ROOT_INDEX_BLOCK_HEX={}", nativeBlocks[1]);
       assertEquals(dataGolden, nativeBlocks[0], "data block bytes changed (storage-format change)");
       assertEquals(rootGolden, nativeBlocks[1], "root index bytes changed (storage-format change)");
     }

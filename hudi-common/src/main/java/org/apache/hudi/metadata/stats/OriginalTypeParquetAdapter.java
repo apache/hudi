@@ -54,6 +54,15 @@ public class OriginalTypeParquetAdapter implements ParquetAdapter {
           return ValueType.LOCAL_TIMESTAMP_MICROS;
         }
         return ValueType.TIMESTAMP_MICROS;
+      // Same mapping as LogicalTypeParquetAdapter: unsigned 32/64-bit values do not order as signed
+      case INT_8:
+      case INT_16:
+      case INT_32:
+      case UINT_8:
+      case UINT_16:
+        return ValueType.INT;
+      case INT_64:
+        return ValueType.LONG;
       default:
         throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
     }

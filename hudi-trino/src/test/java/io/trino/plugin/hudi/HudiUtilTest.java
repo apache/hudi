@@ -15,13 +15,18 @@ package io.trino.plugin.hudi;
 
 import com.google.common.collect.ImmutableList;
 import io.trino.metastore.HiveType;
+import io.trino.spi.TrinoException;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.Test;
 
 import java.io.UncheckedIOException;
 import java.util.List;
 
+import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
 import static io.trino.plugin.hudi.HudiUtil.constructSchema;
+import static io.trino.plugin.hudi.HudiUtil.findFieldInSchema;
+import static io.trino.plugin.hudi.HudiUtil.getFieldFromSchema;
 import static io.trino.plugin.hudi.testing.TypeInfoHelper.INT_TYPE_INFO;
 import static io.trino.plugin.hudi.testing.TypeInfoHelper.LONG_TYPE_INFO;
 import static io.trino.plugin.hudi.testing.TypeInfoHelper.STRING_TYPE_INFO;
@@ -110,6 +115,29 @@ class HudiUtilTest
         assertThatThrownBy(() -> constructSchema(columnNames, columnTypes))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Number of column name and column type differs");
+    }
+
+    @Test
+    void testFindFieldInSchema()
+    {
+        Schema schema = SchemaBuilder.record("test").fields()
+                .requiredString("Name")
+                .requiredString("city")
+                .endRecord();
+
+        // exact match
+        assertThat(findFieldInSchema("city", schema)).map(Schema.Field::name).hasValue("city");
+        // case-insensitive match returns the schema's own casing
+        assertThat(findFieldInSchema("name", schema)).map(Schema.Field::name).hasValue("Name");
+        assertThat(findFieldInSchema("CITY", schema)).map(Schema.Field::name).hasValue("city");
+        assertThat(findFieldInSchema("missing", schema)).isEmpty();
+
+        assertThat(getFieldFromSchema("name", schema).name()).isEqualTo("Name");
+        assertThatThrownBy(() -> getFieldFromSchema("missing", schema))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Failed to get column missing from table schema")
+                .extracting(e -> ((TrinoException) e).getErrorCode())
+                .isEqualTo(HUDI_SCHEMA_ERROR.toErrorCode());
     }
 
     /**

@@ -41,7 +41,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
@@ -419,12 +418,21 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testTableCreation() throws Exception {
-    Exception e = assertThrows(TableNotFoundException.class, () -> {
+    Exception e = assertThrows(HoodieException.class, () -> {
       fs.mkdirs(new Path(basePath + "/not_a_table"));
+      fs.createNewFile(new Path(basePath + "/not_a_table/test.txt"));
       syncOnce(TestHelpers.makeConfig(basePath + "/not_a_table", WriteOperationType.BULK_INSERT));
-    }, "Should error out when pointed out at a dir thats not a table");
+    }, "Should error out when pointed out at a dir that's not a table");
     // expected
     log.debug("Expected error during table creation", e);
+  }
+
+  @Test
+  public void testTableCreationOnEmptyPath() throws Exception {
+    assertDoesNotThrow(() -> {
+      fs.mkdirs(new Path(basePath + "/empty_path"));
+      syncOnce(TestHelpers.makeConfig(basePath + "/empty_path", WriteOperationType.BULK_INSERT));
+    });
   }
 
   @ParameterizedTest

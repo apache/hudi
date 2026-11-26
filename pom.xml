@@ -147,8 +147,8 @@
          for local E2E runs; CI's E2E server image is built from trino.sha); the nightly
          pin-advance job refreshes all three, humans merge its bot/trino-pin branch. Keep each
          property on one line: the workflows and scripts/trino/bootstrap_trino.sh read them with sed. -->
-    <trino.version>484-SNAPSHOT</trino.version>
-    <trino.sha>40b70400a8a67dfcc12cd9192e9050ea09b7c995</trino.sha>
+    <trino.version>485-SNAPSHOT</trino.version>
+    <trino.sha>17328825f46ce6f757c5b09f69498cd2b9db35f6</trino.sha>
     <trino.e2e.version>483</trino.e2e.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
@@ -193,7 +193,7 @@
     <rocksdbjni.version>7.5.3</rocksdbjni.version>
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
-    <spark35.version>3.5.9</spark35.version>
+    <spark35.version>3.5.10</spark35.version>
     <spark40.version>4.0.2</spark40.version>
     <spark41.version>4.1.1</spark41.version>
     <spark42.version>4.2.0</spark42.version>
@@ -277,6 +277,11 @@
     <lance.spark.connector.version>0.4.0</lance.spark.connector.version>
     <lance.spark.artifact>lance-spark-3.5_${scala.binary.version}</lance.spark.artifact>
     <lance.skip.tests>false</lance.skip.tests>
+    <!-- Scala SQL suites: one shared SparkContext per JVM with a child session per suite (see HoodieSparkSqlTestBase) -->
+    <hudi.spark.test.sharedSession>false</hudi.spark.test.sharedSession>
+    <!-- Run scalatest suites concurrently (needs hudi.spark.test.sharedSession=true); 0 threads = scalatest's default -->
+    <hudi.scalatest.parallel>false</hudi.scalatest.parallel>
+    <hudi.scalatest.threads>0</hudi.scalatest.threads>
     <vortex.version>0.76.0</vortex.version>
     <vortex.spark.artifact>vortex-spark_${scala.binary.version}</vortex.spark.artifact>
     <vortex.skip.tests>false</vortex.skip.tests>
@@ -625,7 +630,10 @@
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
               <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
               <vortex.skip.tests>${vortex.skip.tests}</vortex.skip.tests>
+              <hudi.spark.test.sharedSession>${hudi.spark.test.sharedSession}</hudi.spark.test.sharedSession>
             </systemProperties>
+            <parallel>${hudi.scalatest.parallel}</parallel>
+            <threadCount>${hudi.scalatest.threads}</threadCount>
           </configuration>
           <executions>
             <execution>

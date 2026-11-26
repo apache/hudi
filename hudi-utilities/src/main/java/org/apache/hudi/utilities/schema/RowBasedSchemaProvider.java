@@ -42,7 +42,11 @@ public class RowBasedSchemaProvider extends SchemaProvider {
     this.rowStruct = rowStruct;
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
   @Override
+  @Deprecated
   public Schema getSourceSchema() {
     return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toAvroSchema();
   }

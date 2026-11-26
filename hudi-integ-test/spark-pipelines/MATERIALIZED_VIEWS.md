@@ -57,5 +57,68 @@ together beyond this release under #20404; atomic refresh is also out of scope.
 Metadata indexing is disabled. The test does not establish streaming-table
 chaining or streaming-table full-refresh behavior.
 
+## Schema changes and failed refreshes
+
+The same command also runs an isolated SQL materialized view, `contract_mv`,
+through the real CLI. It starts with `id` and `value`, adds an `extra STRING`
+column, and reruns the unchanged definition. Each successful nonempty run checks
+exact rows, catalog and persisted schemas, target location/type, and persisted
+record-key/partition settings.
+
+Full-table truncate resolves the current schema before deleting the timeline and
+uses it to initialize the empty table. An evolved schema therefore survives both
+the next refresh and repeated truncation of an empty table. This preserves schema,
+not history or savepoints; the purge-style contract is unchanged.
+
+The failure cases use real invalid definitions or a data-dependent SQL
+`raise_error`, without production fault-injection hooks:
+
+| Case | Boundary checked | Expected state before retry |
+| --- | --- | --- |
+| Unresolved input column | Resolution before purge | Previous rows and completed timeline unchanged |
+| Changed partition columns | Partition validation before purge | Previous rows and completed timeline unchanged |
+| Changed primary key | Catalog reconciliation after purge | Empty target, no completed writes, original key/partition identity retained |
+| Data-dependent `raise_error` | Result-write execution after purge | Empty target and no completed writes |
+
+Every failure must reach the CLI with its expected diagnostic and leave the
+Connect server running. The scenario then restores a valid definition and
+reruns the refresh, checking exact recomputation. The result-write failure is
+followed by an empty recomputation and then a nonempty refresh. Verification logs
+include all timeline filenames, including requested/inflight actions, and the
+catalog schema; generated SQL and expected rows are retained with the CLI logs.
+Checks remain active under `python -O`.
+
+In particular, rejection of a primary-key change is **not** a guarantee that the
+old data survives: SDP truncates before asking the catalog to reconcile that
+property. Fix the definition and rerun the complete refresh from a replayable
+source. There is no rollback across truncate, reconciliation and writing.
+
+These cases exercise failures before purge, after purge during reconciliation,
+and during result writing. They do not inject an I/O failure partway through the
+filesystem purge or promise recovery of the old snapshot after deletion begins.
+Timeline-preserving truncate and its commit-boundary failure semantics remain
+under #20404.
+
+## Manual external-target acceptance
+
+Run the same matrix manually against an explicitly located, pre-created external
+target:
+
+```sh
+python -O hudi-integ-test/spark-pipelines/materialized_views.py \
+  --harness-dir /path/to/harness/hudi-integ-test/spark-pipelines \
+  --bundle /path/to/candidate-hudi-spark4.1-bundle.jar \
+  --external --logs target/mv-external-acceptance-logs
+```
+
+The baseline three views still use managed targets. The contract matrix creates
+`contract_mv` with `CREATE TABLE ... USING hudi ... LOCATION ...` before running
+its materialized-view definition. It verifies `EXTERNAL` catalog type and that
+the explicit location remains unchanged after refresh, schema changes and
+retries. Without `--external`, it verifies the managed target and warehouse
+location. Both modes use COW with metadata indexing disabled; this is not a MOR
+or metadata-indexing compatibility matrix. External-target acceptance is opt-in
+and adds no CI job.
+
 The harness bounds each client/CLI process and removes its temporary data.
 Logs and generated pipeline definitions remain under `target/mv-acceptance-logs`.

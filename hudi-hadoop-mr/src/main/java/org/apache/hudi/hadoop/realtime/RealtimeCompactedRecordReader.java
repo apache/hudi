@@ -43,6 +43,7 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.util.FileIOUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.io.ArrayWritable;
@@ -50,8 +51,6 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -59,14 +58,15 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
+@Slf4j(topic = "org.apache.hudi.hadoop.realtime.AbstractRealtimeRecordReader")
 public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     implements RecordReader<NullWritable, ArrayWritable> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractRealtimeRecordReader.class);
 
   protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
   private final Map<String, HoodieRecord> deltaRecordMap;
 
+  // Schema registration during merging must stay local to this reader.
+  private final RecordContext<IndexedRecord> recordContext = new AvroRecordContext();
   private final HoodieRecordMerger merger = new HoodieAvroRecordMerger();
   private final Set<String> deltaRecordKeys;
   private final HoodieMergedLogRecordScanner mergedLogRecordScanner;
@@ -174,8 +174,8 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // schema, we use writerSchema to create the arrayWritable from the latest generic record
     ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(recordToReturn, getHiveSchema().toAvroSchema(), isSupportTimestamp());
     Writable[] replaceValue = aWritable.get();
-    if (LOG.isDebugEnabled()) {
-      LOG.debug(String.format("key %s, base values: %s, log values: %s", key, HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable),
+    if (log.isDebugEnabled()) {
+      log.debug(String.format("key %s, base values: %s, log values: %s", key, HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable),
           HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable)));
     }
     Writable[] originalValue = arrayWritable.get();
@@ -186,9 +186,9 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
           Math.min(originalValue.length, replaceValue.length));
       arrayWritable.set(originalValue);
     } catch (RuntimeException re) {
-      LOG.error("Got exception when doing array copy", re);
-      LOG.error("Base record :{}", HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable));
-      LOG.error("Log record :{}", HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable));
+      log.error("Got exception when doing array copy", re);
+      log.error("Base record :{}", HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable));
+      log.error("Log record :{}", HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable));
       String errMsg = "Base-record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable)
           + " ,Log-record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable) + " ,Error :" + re.getMessage();
       throw new RuntimeException(errMsg, re);
@@ -204,7 +204,6 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // so to be compatible with hive and presto, we should rewrite oldRecord before we call combineAndGetUpdateValue,
     // once presto on hudi have its own mor reader, we can remove the rewrite logical.
     GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
-    RecordContext<IndexedRecord> recordContext = AvroRecordContext.getFieldAccessorInstance();
     BufferedRecord record = BufferedRecords.fromEngineRecord(genericRecord, HoodieAvroSchemaCache.intern(genericRecord.getSchema()), recordContext, orderingFields, newRecord.getRecordKey(), false);
     BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieAvroSchemaCache.intern(getLogScannerReaderSchema().toAvroSchema()),
         recordContext, payloadProps, orderingFields, deleteContext);

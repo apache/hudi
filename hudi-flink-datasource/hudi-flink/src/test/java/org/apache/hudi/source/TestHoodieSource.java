@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -38,13 +39,16 @@ import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.reader.HoodieRecordEmitter;
 import org.apache.hudi.source.reader.function.HoodieSplitReaderFunction;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
+import org.apache.hudi.source.split.HoodieCdcSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplitComparator;
 import org.apache.hudi.source.split.SerializableComparator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -53,6 +57,8 @@ import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.transformations.SourceTransformation;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.CallExpression;
@@ -66,6 +72,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.Arrays;
@@ -164,6 +171,30 @@ public class TestHoodieSource {
     List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
 
     assertNotNull(splits, "Splits should not be null for incremental query");
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {100, 256})
+  void testCdcSplitCompactionMemoryInBytes(int memoryMiB) throws Exception {
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.CDC_ENABLED, true);
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_MAX_MEMORY, memoryMiB);
+    TestData.writeData(Collections.singletonList(TestData.DATA_SET_INSERT.get(0)), conf);
+
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    HoodieTableSource tableSource = new HoodieTableSource(
+        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA), tablePath,
+        Collections.singletonList(conf.get(FlinkOptions.PARTITION_PATH_FIELD)), "default-par", conf);
+    DataStreamScanProviderAdapter provider = (DataStreamScanProviderAdapter) tableSource.getScanRuntimeProvider(null);
+    SourceTransformation<?, ?, ?> transformation = (SourceTransformation<?, ?, ?>)
+        provider.produceDataStream(StreamExecutionEnvironment.getExecutionEnvironment()).getTransformation();
+    HoodieSource<?> source = (HoodieSource<?>) transformation.getSource();
+
+    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
+    assertEquals(1, splits.size());
+    HoodieCdcSourceSplit split = assertInstanceOf(HoodieCdcSourceSplit.class, splits.get(0));
+    assertEquals(memoryMiB * 1024L * 1024, split.getMaxCompactionMemoryInBytes());
   }
 
   @Test

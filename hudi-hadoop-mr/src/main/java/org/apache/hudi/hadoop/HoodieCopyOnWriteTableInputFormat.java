@@ -36,6 +36,7 @@ import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -48,8 +49,6 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.Job;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -77,9 +76,8 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
  *
  * NOTE: This class is invariant of the underlying file-format of the files being read
  */
+@Slf4j
 public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCopyOnWriteTableInputFormat.class);
 
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
@@ -212,7 +210,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
 
   private BootstrapBaseFileSplit makeExternalFileSplit(PathWithBootstrapFileStatus file, FileSplit split) {
     try {
-      LOG.info("Making external data split for {}", file);
+      log.info("Making external data split for {}", file);
       FileStatus externalFileStatus = file.getBootstrapFileStatus();
       FileSplit externalFileSplit = makeSplit(externalFileStatus.getPath(), 0, externalFileStatus.getLen(),
           new String[0], new String[0]);

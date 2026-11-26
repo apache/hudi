@@ -45,9 +45,13 @@ import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.connector.ProviderContext;
+import org.apache.flink.table.connector.source.DataStreamScanProvider;
 import org.apache.flink.table.connector.source.LookupTableSource;
+import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.lookup.AsyncLookupFunctionProvider;
 import org.apache.flink.table.connector.source.lookup.LookupFunctionProvider;
 import org.apache.flink.table.data.RowData;
@@ -165,6 +169,25 @@ public class TestHoodieTableSource {
 
     tableSource.getConf().set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED);
     assertThrows(HoodieException.class, () -> tableSource.getInputFormat(true));
+  }
+
+  @ParameterizedTest(name = "read.source-v2.enabled={0}")
+  @ValueSource(booleans = {false, true})
+  void testStreamingSourcePlanningBeforeFirstWrite(boolean isSourceV2) {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, isSourceV2);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    tableSource.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
+    assertTrue(tableSource.getDataBucketFunc().isPresent());
+
+    DataStreamScanProvider provider = (DataStreamScanProvider)
+        tableSource.getScanRuntimeProvider(mock(ScanTableSource.ScanContext.class));
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+    assertNotNull(provider.produceDataStream(mock(ProviderContext.class), env));
   }
 
   @ParameterizedTest
