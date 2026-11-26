@@ -164,7 +164,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   public void appendRecord(HoodieRecord record, HoodieSchema recordSchema) throws IOException {
     try {
       ensureDataFileWriter(recordSchema);
-    } catch (IOException | RuntimeException e) {
+    } catch (Exception e) {
       throw new HoodieAppendException("Failed to initialize native data log for file group " + logFileId, e);
     }
     dataFileWriter.write(record.getRecordKey(),
@@ -177,7 +177,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   public void appendDeleteRecord(HoodieRecord record, HoodieSchema recordSchema) throws IOException {
     try {
       ensureDeleteFileWriter();
-    } catch (IOException | RuntimeException e) {
+    } catch (Exception e) {
       throw new HoodieAppendException("Failed to initialize native delete log for file group " + logFileId, e);
     }
     String recordKey = record.getRecordKey();
