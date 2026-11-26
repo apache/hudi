@@ -254,6 +254,17 @@ License: http://www.apache.org/licenses/LICENSE-2.0
 
 --------------------------------------------------------------------------------
 
+This product includes code from Vortex
+
+* org.apache.hudi.io.storage.VortexArrowColumnVector copied from dev.vortex.spark.read.VortexArrowColumnVector
+* org.apache.hudi.io.storage.VortexArrowUtils copied from dev.vortex.spark.ArrowUtils
+
+Copyright: the Vortex contributors
+Home page: https://github.com/vortex-data/vortex
+License: http://www.apache.org/licenses/LICENSE-2.0
+
+--------------------------------------------------------------------------------
+
 This product includes code from https://github.com/big-data-europe/README
 
 * docker/hoodie/hadoop/base/entrypoint.sh copied from https://github.com/big-data-europe/docker-hadoop/blob/master/base/entrypoint.sh 

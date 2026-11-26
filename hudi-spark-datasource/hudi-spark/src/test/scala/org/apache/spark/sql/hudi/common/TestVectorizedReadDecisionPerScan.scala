@@ -106,7 +106,7 @@ class TestVectorizedReadDecisionPerScan extends HoodieSparkSqlTestBase with Adap
     }
 
     // Every scan now asks canReadVectorized, so a format it does not know fails every read, not only narrow ones
-    test(s"Test narrow and wide scans of a Vortex table read row-based for $tableType table") {
+    test(s"Test narrow and wide scans of a Vortex table for $tableType table") {
       assume(SparkAdapterSupport.sparkAdapter.createVortexFileReader(vectorized = false, spark.sessionState.conf,
         Map.empty, new Configuration()).isDefined, "Vortex reads need a Spark 4.x adapter")
       // Vortex files are written from Spark records only
@@ -116,8 +116,10 @@ class TestVectorizedReadDecisionPerScan extends HoodieSparkSqlTestBase with Adap
           val tableName = generateTableName
           createWideTable(tableName, tableType, tmp, Map(HoodieTableConfig.BASE_FILE_FORMAT.key -> "VORTEX"))
 
-          assert(!scanIsBatched(s"select id, name, dt from $tableName"))
+          // A narrow COW scan returns Vortex batches. MOR merges rows, so its scans are never columnar
+          assertResult(tableType == "cow")(scanIsBatched(s"select id, name, dt from $tableName"))
           checkNarrowScan(tableName, insertedRows)
+          // The wide scan is never asked supportBatch
           assert(!scanIsBatched(s"select * from $tableName"))
           checkWideScan(tableName, insertedRows)
           assertResult("true")(spark.conf.get(vectorizedReaderConf))

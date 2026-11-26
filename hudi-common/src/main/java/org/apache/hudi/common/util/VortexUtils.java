@@ -110,9 +110,14 @@ public class VortexUtils extends FileFormatUtils {
     throw new UnsupportedOperationException("readAvroRecords with schema is not yet supported for Vortex format");
   }
 
+  /**
+   * Reading the footer needs vortex-jni, which only a JDK 17 build has. The subclass
+   * {@code org.apache.hudi.io.vortex.HoodieVortexFileFormatUtils} implements it. The bloom filter and
+   * the min/max record keys are read through this method.
+   */
   @Override
   public Map<String, String> readFooter(HoodieStorage storage, boolean required, StoragePath filePath, String... footerNames) {
-    throw new UnsupportedOperationException("readFooter is not yet supported for Vortex format");
+    throw new UnsupportedOperationException("readFooter of Vortex files needs vortex-jni, which needs JDK 17");
   }
 
   @Override
@@ -150,7 +155,7 @@ public class VortexUtils extends FileFormatUtils {
                                                                                   StoragePath filePath,
                                                                                   List<String> columnList,
                                                                                   HoodieIndexVersion indexVersion) {
-    throw new UnsupportedOperationException("readColumnStatsFromMetadata is not yet supported for Vortex format");
+    throw new UnsupportedOperationException("Column statistics of Vortex files need vortex-jni, which needs JDK 17");
   }
 
   @Override

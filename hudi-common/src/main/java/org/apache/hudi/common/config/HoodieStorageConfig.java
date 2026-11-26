@@ -155,6 +155,59 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "the writer flushes the current batch when the sum of FieldVector buffer sizes "
           + "reaches this value, in addition to the row-count batch threshold.");
 
+  public static final ConfigProperty<String> VORTEX_WRITE_EDITION = ConfigProperty
+      .key("hoodie.vortex.write.edition")
+      .defaultValue("core2025.10.0")
+      .sinceVersion("1.3.0")
+      .withDocumentation("Vortex file format edition that the Vortex writer uses. The edition sets which "
+          + "encodings, layouts and statistics the writer can use, and thus which Vortex readers can read "
+          + "the files. The default, core2025.10.0, is the edition that earlier Hudi versions write. Vortex "
+          + "0.54.0 or later reads it. core2026.08.3 adds zone maps, which let a filter skip chunks of rows, "
+          + "and the min, max and null count statistics that the column stats index reads. Vortex 0.85.0 or "
+          + "later reads it. To change the edition, first upgrade Hudi on all writers and readers of the "
+          + "table and validate the upgrade with the default edition. Only then set a newer edition. The "
+          + "default edition stays the same when the Vortex version changes.");
+
+  public static final ConfigProperty<Boolean> VORTEX_WRITE_COMPACT = ConfigProperty
+      .key("hoodie.vortex.write.compact")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("If true, the Vortex writer uses the compact strategy, which prefers a smaller "
+          + "file over read speed. Use it for data that is read rarely.");
+
+  public static final ConfigProperty<Integer> VORTEX_WORKER_THREADS = ConfigProperty
+      .key("hoodie.vortex.worker.threads")
+      .defaultValue(4)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("The minimum number of native worker threads that Vortex uses in the JVM, for reads "
+          + "and writes. Without workers, Vortex does its work only on the Java thread that waits for it. Then "
+          + "a writer does not compress data while the Java thread makes the next batch, and the writer can not "
+          + "estimate the file size well. All Vortex files in the JVM share the workers. The number of workers "
+          + "increases to the largest value that a reader or a writer asks for, and it does not decrease. "
+          + "0 adds no workers. Do not use 0 for writes: the writer then compresses its data only when its "
+          + "queue is full, and until then it counts the queued data as not compressed. Thus the writer "
+          + "closes files at a small part of the maximum file size.");
+
+  public static final ConfigProperty<Integer> VORTEX_READ_SPLIT_CONCURRENCY = ConfigProperty
+      .key("hoodie.vortex.read.split.concurrency")
+      .defaultValue(0)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("The maximum number of splits that one Vortex scan decodes at the same time. "
+          + "0 uses the Vortex default, which is the number of cores. When many tasks read at the same time, "
+          + "for example in a Spark executor, a lower value uses less memory and fewer threads.");
+
+  public static final ConfigProperty<Integer> VORTEX_READ_IO_CONCURRENCY = ConfigProperty
+      .key("hoodie.vortex.read.io.concurrency")
+      .defaultValue(0)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("The maximum number of reads that one Vortex file has in progress at the same time, "
+          + "when the file is read through the Hadoop file system. Each read uses one input stream. "
+          + "0 uses the Vortex default. A higher value can help on object stores, which have a high latency.");
+
   public static final ConfigProperty<String> VORTEX_READ_ALLOCATOR_SIZE_BYTES = ConfigProperty
       .key("hoodie.vortex.read.allocator.size.bytes")
       .defaultValue(String.valueOf(256 * 1024 * 1024))
@@ -739,6 +792,31 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder vortexMaxFileSize(long maxFileSize) {
       storageConfig.setValue(VORTEX_MAX_FILE_SIZE, String.valueOf(maxFileSize));
+      return this;
+    }
+
+    public Builder vortexWriteEdition(String edition) {
+      storageConfig.setValue(VORTEX_WRITE_EDITION, edition);
+      return this;
+    }
+
+    public Builder vortexWriteCompact(boolean compact) {
+      storageConfig.setValue(VORTEX_WRITE_COMPACT, String.valueOf(compact));
+      return this;
+    }
+
+    public Builder vortexWorkerThreads(int workerThreads) {
+      storageConfig.setValue(VORTEX_WORKER_THREADS, String.valueOf(workerThreads));
+      return this;
+    }
+
+    public Builder vortexReadSplitConcurrency(int splitConcurrency) {
+      storageConfig.setValue(VORTEX_READ_SPLIT_CONCURRENCY, String.valueOf(splitConcurrency));
+      return this;
+    }
+
+    public Builder vortexReadIoConcurrency(int ioConcurrency) {
+      storageConfig.setValue(VORTEX_READ_IO_CONCURRENCY, String.valueOf(ioConcurrency));
       return this;
     }
 

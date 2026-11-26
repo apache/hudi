@@ -197,15 +197,18 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     long maxFileSize = config.getLongOrDefault(HoodieStorageConfig.VORTEX_MAX_FILE_SIZE);
     long allocatorSize = config.getLongOrDefault(HoodieStorageConfig.VORTEX_WRITE_ALLOCATOR_SIZE_BYTES);
     long flushByteWatermark = config.getLongOrDefault(HoodieStorageConfig.VORTEX_WRITE_FLUSH_BYTE_WATERMARK);
+    String edition = config.getStringOrDefault(HoodieStorageConfig.VORTEX_WRITE_EDITION);
+    boolean compact = config.getBooleanOrDefault(HoodieStorageConfig.VORTEX_WRITE_COMPACT);
+    int workerThreads = config.getIntOrDefault(HoodieStorageConfig.VORTEX_WORKER_THREADS);
 
     // Vortex sources are compiled only under JDK 17 (see the vortex profile in this module's pom),
     // so build the writer reflectively to keep this factory compilable on the Java 11 build.
     return (HoodieFileWriter) ReflectionUtils.invokeStaticMethod(
         "org.apache.hudi.io.storage.HoodieSparkVortexWriter", "newWriter",
         new Object[] {path, structType, instantTime, taskContextSupplier, storage, populateMetaFields,
-            bloomFilter, maxFileSize, allocatorSize, flushByteWatermark},
+            bloomFilter, maxFileSize, allocatorSize, flushByteWatermark, edition, compact, workerThreads},
         StoragePath.class, StructType.class, String.class, TaskContextSupplier.class, HoodieStorage.class,
-        boolean.class, Option.class, long.class, long.class, long.class);
+        boolean.class, Option.class, long.class, long.class, long.class, String.class, boolean.class, int.class);
   }
 
   private static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(StorageConfiguration<?> conf, HoodieSchema schema,

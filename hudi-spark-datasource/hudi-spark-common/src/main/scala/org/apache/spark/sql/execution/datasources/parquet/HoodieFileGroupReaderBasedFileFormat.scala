@@ -198,8 +198,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
           s.dataType, sparkSession.sessionState.conf.orcVectorizedReaderNestedColumnEnabled))
       // TODO: Implement columnar batch reading https://github.com/apache/hudi/issues/17736
       val lanceBatchSupported = false
-      // The Vortex reader returns rows only
-      val vortexBatchSupported = false
+      // The Vortex reader returns batches of Arrow column vectors (see vectorTypes)
+      val vortexBatchSupported = true
 
       val formatSupportsBatch = if (isMultipleBaseFileFormatsEnabled) {
         parquetBatchSupported && orcBatchSupported
@@ -246,7 +246,12 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                            partitionSchema: StructType,
                            sqlConf: SQLConf): Option[Seq[String]] = {
     val originalVectorTypes = super.vectorTypes(requiredSchema, partitionSchema, sqlConf)
-    if (mandatoryFields.isEmpty) {
+    if (hoodieFileFormat == HoodieFileFormat.VORTEX || isMultipleBaseFileFormatsEnabled) {
+      // The Vortex batches have Arrow and constant column vectors, and a table with more than one
+      // base file format can have Vortex files. Without vector types, the generated code reads
+      // all columns through the ColumnVector interface.
+      None
+    } else if (mandatoryFields.isEmpty) {
       originalVectorTypes
     } else {
       val regularVectorType = if (!sqlConf.offHeapColumnVectorEnabled) {

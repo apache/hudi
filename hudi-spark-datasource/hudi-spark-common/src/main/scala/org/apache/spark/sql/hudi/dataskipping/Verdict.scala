@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dataskipping
 
-import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, PredicateHelper, StartsWith}
+import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, PredicateHelper, StartsWith, Substring}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -43,8 +43,7 @@ object Verdict extends PredicateHelper {
     case Op.InSet(values) => anyOf(values.toSeq.map(toLiteral).map(v => mayContain(r, v)))
     case Op.NotIn => Not(anyOf(leaf.values.map(v => onlyContains(r, v))))
 
-    // Bug #20430: checks `lo <= p AND hi >= p`, which drops a file whose min extends `p` (min 'abcd' > 'abc')
-    case Op.StartsWith => mayContain(r, single(leaf))
+    case Op.StartsWith => mayStartWith(r, single(leaf))
     case Op.NotStartsWith =>
       val prefix = single(leaf)
       Not(And(StartsWith(r.lo, prefix), StartsWith(r.hi, prefix)))
@@ -69,6 +68,16 @@ object Verdict extends PredicateHelper {
   // Some value of the file may equal `v`: lo <= v <= hi
   private def mayContain(r: TermRange, v: Expression): Expression =
     And(LessThanOrEqual(r.lo, v), GreaterThanOrEqual(r.hi, v))
+
+  // Some value of the file may start with the prefix `p`. The values that start with `p` are not less
+  // than `p`, and their first len(p) characters are `p`. Thus a file may hold one only if hi >= p and the
+  // first len(p) characters of lo are <= p. This also holds for a min 'abcd' and the prefix 'abc' (#20430).
+  // A bound that is wider than the values keeps the file, thus truncated bounds are safe.
+  private def mayStartWith(r: TermRange, prefix: Expression): Expression = prefix match {
+    case Literal(p: UTF8String, _) =>
+      And(LessThanOrEqual(Substring(r.lo, Literal(1), Literal(p.numChars())), prefix), GreaterThanOrEqual(r.hi, prefix))
+    case _ => TrueLiteral
+  }
 
   // Every value of the file equals `v`: lo = v = hi
   private def onlyContains(r: TermRange, v: Expression): Expression =

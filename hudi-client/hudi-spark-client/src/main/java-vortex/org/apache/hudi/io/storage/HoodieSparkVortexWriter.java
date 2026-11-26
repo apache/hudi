@@ -35,7 +35,6 @@ import lombok.Builder;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.execution.arrow.ArrowWriter$;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.ArrowUtils$;
 import org.apache.spark.unsafe.types.UTF8String;
@@ -86,16 +85,22 @@ public class HoodieSparkVortexWriter extends HoodieBaseVortexWriter<InternalRow,
       Option<BloomFilter> bloomFilterOpt,
       long maxFileSize,
       long allocatorSize,
-      long flushByteWatermark) {
+      long flushByteWatermark,
+      String edition,
+      boolean compact,
+      int workerThreads) {
     checkArgument(maxFileSize > 0, "maxFileSize must be a positive number");
     checkArgument(allocatorSize > 0, "allocatorSize must be a positive number");
     checkArgument(flushByteWatermark > 0, "flushByteWatermark must be a positive number");
     checkArgument(flushByteWatermark < allocatorSize,
         "flushByteWatermark (" + flushByteWatermark + ") must be less than allocatorSize ("
             + allocatorSize + ") so the byte-aware flush prevents reallocations from exceeding the cap");
+    checkArgument(edition != null && !edition.trim().isEmpty(), "edition must be a non-empty string");
+    checkArgument(workerThreads >= 0, "workerThreads must not be negative");
+
     return new HoodieSparkVortexWriter(file, sparkSchema, instantTime,
         taskContextSupplier, storage, populateMetaFields, bloomFilterOpt, maxFileSize,
-        allocatorSize, flushByteWatermark);
+        allocatorSize, flushByteWatermark, edition, compact, workerThreads);
   }
 
   /**
@@ -113,7 +118,10 @@ public class HoodieSparkVortexWriter extends HoodieBaseVortexWriter<InternalRow,
       Option<BloomFilter> bloomFilterOpt,
       long maxFileSize,
       long allocatorSize,
-      long flushByteWatermark) {
+      long flushByteWatermark,
+      String edition,
+      boolean compact,
+      int workerThreads) {
     return builder()
         .file(file)
         .sparkSchema(sparkSchema)
@@ -125,6 +133,9 @@ public class HoodieSparkVortexWriter extends HoodieBaseVortexWriter<InternalRow,
         .maxFileSize(maxFileSize)
         .allocatorSize(allocatorSize)
         .flushByteWatermark(flushByteWatermark)
+        .edition(edition)
+        .compact(compact)
+        .workerThreads(workerThreads)
         .build();
   }
 
@@ -137,6 +148,9 @@ public class HoodieSparkVortexWriter extends HoodieBaseVortexWriter<InternalRow,
     private long maxFileSize = Long.parseLong(HoodieStorageConfig.VORTEX_MAX_FILE_SIZE.defaultValue());
     private long allocatorSize = Long.parseLong(HoodieStorageConfig.VORTEX_WRITE_ALLOCATOR_SIZE_BYTES.defaultValue());
     private long flushByteWatermark = Long.parseLong(HoodieStorageConfig.VORTEX_WRITE_FLUSH_BYTE_WATERMARK.defaultValue());
+    private String edition = HoodieStorageConfig.VORTEX_WRITE_EDITION.defaultValue();
+    private boolean compact = HoodieStorageConfig.VORTEX_WRITE_COMPACT.defaultValue();
+    private int workerThreads = HoodieStorageConfig.VORTEX_WORKER_THREADS.defaultValue();
   }
 
   private HoodieSparkVortexWriter(StoragePath file,
@@ -148,8 +162,11 @@ public class HoodieSparkVortexWriter extends HoodieBaseVortexWriter<InternalRow,
                                   Option<BloomFilter> bloomFilterOpt,
                                   long maxFileSize,
                                   long allocatorSize,
-                                  long flushByteWatermark) {
-    super(file, DEFAULT_BATCH_SIZE, allocatorSize, flushByteWatermark,
+                                  long flushByteWatermark,
+                                  String edition,
+                                  boolean compact,
+                                  int workerThreads) {
+    super(file, DEFAULT_BATCH_SIZE, allocatorSize, flushByteWatermark, edition, compact, workerThreads, storage,
         bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new));
     this.sparkSchema = sparkSchema;
     this.arrowSchema = ArrowUtils$.MODULE$.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, false, false);
@@ -193,7 +210,7 @@ public class HoodieSparkVortexWriter extends HoodieBaseVortexWriter<InternalRow,
 
   @Override
   protected HoodieBaseVortexWriter.ArrowWriter<InternalRow> createArrowWriter(VectorSchemaRoot root) {
-    return SparkArrowWriterAdapter.of(ArrowWriter$.MODULE$.create(root));
+    return SparkArrowWriterAdapter.of(VortexArrowFieldWriters.create(root));
   }
 
   /**

@@ -21,8 +21,10 @@ package org.apache.hudi.io.vortex;
 
 import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import dev.vortex.api.Session;
@@ -30,9 +32,6 @@ import dev.vortex.api.VortexWriter;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.FieldVector;
@@ -45,7 +44,9 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Base class for Hudi Vortex file writers supporting different record types.
@@ -53,32 +54,58 @@ import java.util.Collections;
  * This class handles common Vortex file operations including:
  * - {@link VortexWriter} lifecycle management (vortex-jni {@code dev.vortex.api})
  * - BufferAllocator management
- * - Record buffering and batch flushing. Each flushed batch is exported through the Arrow C Data
- *   Interface and handed to {@link VortexWriter#writeBatch(long, long)}; because vortex copies the
- *   batch without invoking the C release callback, {@link ArrowArray#release()} is called after each
- *   write so the exported buffers are freed.
+ * - Record buffering and batch flushing. Each flushed batch goes to
+ *   {@link VortexWriter#writeBatch(VectorSchemaRoot, BufferAllocator)}, which gives its buffers to
+ *   the native writer without a copy.
  * - File size checks
+ * - Footer metadata. When the writer closes, the bloom filter and the min/max record keys from
+ *   {@link #bloomFilterWriteSupportOpt}, and the entries from {@link #addFooterMetadata}, go into
+ *   the Vortex file metadata segments, with the same keys as the Parquet footer. Each value is the
+ *   UTF-8 bytes of the footer string.
+ * - Output. If the caller gives a {@link HoodieStorage}, the file is written through it, thus to
+ *   every storage that Hudi supports. Otherwise the native writer writes to the URI of the path.
  *
  * Subclasses must implement type-specific conversion to Arrow format and provide the Arrow schema.
- *
- * <p>NOTE: vortex-jni 0.76.0 exposes no file-level custom-metadata API, so Hudi's bloom filter and
- * min/max record-key footers cannot be persisted into the Vortex file yet. Record keys are still
- * tracked via {@link #bloomFilterWriteSupportOpt} but the finalized metadata is not written.
- * TODO(#18623): persist bloom/min-max footers once Vortex supports file metadata.
  *
  * @param <R> The record type (e.g., GenericRecord, InternalRow)
  */
 @Slf4j
 @NotThreadSafe
 public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> implements Closeable {
-  protected static final int DEFAULT_BATCH_SIZE = 1000;
+
+  static {
+    // Set the Arrow properties before this class uses Arrow buffers and vectors.
+    VortexArrowProperties.ensureConfigured();
+  }
+  // The row block size of the Vortex writer. A batch of this size goes to the compressor without
+  // a concatenation with other batches.
+  protected static final int DEFAULT_BATCH_SIZE = 8192;
+
+  // The writer checks the byte size of the current batch after this number of rows. A sum over
+  // all vectors for each row costs more than the write of the row.
+  private static final int BYTE_CHECK_INTERVAL = 256;
+
   private final StoragePath path;
+  private final HoodieStorage storage;
   private final BufferAllocator allocator;
   private final int batchSize;
   private final long flushByteWatermark;
+
+  // Vortex file format edition for this writer. Set it explicitly: a newer vortex-jni can change
+  // its default edition, and older Vortex readers cannot read files from a newer edition.
+  private final String edition;
+
+  // If true, the writer prefers a smaller file over read speed.
+  private final boolean compact;
+
+  // The minimum number of native worker threads. With workers, the writer compresses data while
+  // the Java thread makes the next batch.
+  private final int workerThreads;
+
+  // Footer entries from the caller, for example the log block header of a native log file.
+  private final Map<String, String> extraFooterMetadata = new LinkedHashMap<>();
   @Getter(value = AccessLevel.PROTECTED)
   private long writtenRecordCount = 0;
-  private long totalFlushedDataSize = 0;
   private int currentBatchSize = 0;
   private VectorSchemaRoot root;
   private ArrowWriter<R> arrowWriter;
@@ -89,8 +116,9 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
   private Session session;
   private VortexWriter writer;
   private BufferAllocator nativeAllocator;
-  private ArrowSchema exportedSchema;
-  private long exportedSchemaAddr;
+
+  // The output when the file is written through the storage. The native writer does not close it.
+  private HoodieVortexWritable writable;
 
   /**
    * Constructor for base Vortex writer.
@@ -98,17 +126,26 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
    * @param path Path where Vortex file will be written
    * @param batchSize Row-count threshold; the current batch is flushed when this many records have been buffered
    * @param allocatorSize Maximum bytes the per-writer Arrow child allocator may hold at once
-   * @param flushByteWatermark Byte-size threshold; the current batch is flushed when the sum of in-flight
+   * @param flushByteWatermark Byte-size threshold; the current batch is flushed when the sum of its
    *                           FieldVector buffer sizes reaches this value
+   * @param edition Vortex file format edition to write, for example {@code core2026.08.3}
+   * @param compact If true, the writer prefers a smaller file over read speed
+   * @param workerThreads Minimum number of native Vortex worker threads in the JVM
+   * @param storage Storage to write the file through, or null to write to the URI of the path
    * @param bloomFilterWriteSupportOpt Optional bloom filter write support for record key tracking
    */
   protected HoodieBaseVortexWriter(StoragePath path, int batchSize, long allocatorSize, long flushByteWatermark,
+                                   String edition, boolean compact, int workerThreads, HoodieStorage storage,
                                    Option<HoodieBloomFilterWriteSupport<K>> bloomFilterWriteSupportOpt) {
     this.path = path;
+    this.storage = storage;
     this.allocator = HoodieArrowAllocator.newChildAllocator(
         getClass().getSimpleName() + "-data-" + path.getName(), allocatorSize);
     this.batchSize = batchSize;
     this.flushByteWatermark = flushByteWatermark;
+    this.edition = edition;
+    this.compact = compact;
+    this.workerThreads = workerThreads;
     this.bloomFilterWriteSupportOpt = bloomFilterWriteSupportOpt;
   }
 
@@ -142,6 +179,13 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
     }
     if (root == null) {
       root = VectorSchemaRoot.create(getArrowSchema(), allocator);
+
+      // Allocate the vectors for a full batch. The Arrow default is 3970 values, which is too
+      // large for a small batch and too small for a large one. The native writer keeps each batch
+      // until it compresses it, thus memory that a batch does not use is held too.
+      for (FieldVector vector : root.getFieldVectors()) {
+        vector.setInitialCapacity(batchSize);
+      }
     }
     if (arrowWriter == null) {
       arrowWriter = createArrowWriter(root);
@@ -156,17 +200,22 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
     currentBatchSize++;
     writtenRecordCount++;
 
-    // Flush when row-count batch is full OR in-flight Arrow buffers cross the byte watermark.
-    if (currentBatchSize >= batchSize || currentBufferBytes() >= flushByteWatermark) {
+    // Flush when the batch has the maximum number of rows or bytes. Count only the bytes of this
+    // batch: the allocator also has the earlier batches, which the native writer keeps until it
+    // compresses them. With those bytes, the writer would flush after each row.
+    if (currentBatchSize >= batchSize
+        || (currentBatchSize % BYTE_CHECK_INTERVAL == 0 && currentBatchBytes() >= flushByteWatermark)) {
       flushBatch();
     }
   }
 
   /**
-   * Bytes currently held by the writer's Arrow child allocator.
+   * Adds entries to the footer of the file. The writer writes them when it closes.
    */
-  private long currentBufferBytes() {
-    return allocator.getAllocatedMemory();
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    if (footerMetadata != null) {
+      extraFooterMetadata.putAll(footerMetadata);
+    }
   }
 
   /**
@@ -189,27 +238,31 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
         initializeWriter();
         try (VectorSchemaRoot emptyRoot = VectorSchemaRoot.create(getArrowSchema(), allocator)) {
           emptyRoot.setRowCount(0);
-          writeBatchFfi(emptyRoot);
+          writeBatch(emptyRoot);
         }
       }
     } catch (Exception e) {
       primaryException = e;
     }
 
-    // Close Vortex writer (finalizes the file)
+    // Finalize the file. Write the footer metadata only if all records were flushed, because
+    // the footer must agree with the data in the file.
     if (writer != null) {
       try {
-        writer.close();
+        if (primaryException == null) {
+          writer.finish(footerMetadata());
+        } else {
+          writer.close();
+        }
       } catch (Exception e) {
         primaryException = addSuppressed(primaryException, e);
       }
     }
 
-    // Close the exported schema handle.
-    if (exportedSchema != null) {
+    // The native writer flushed the output, but did not close it.
+    if (writable != null) {
       try {
-        exportedSchema.release();
-        exportedSchema.close();
+        writable.close();
       } catch (Exception e) {
         primaryException = addSuppressed(primaryException, e);
       }
@@ -231,17 +284,15 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
       primaryException = addSuppressed(primaryException, e);
     }
 
-    // Close the native allocator last. vortex-jni 0.76.0's VortexWriter.create exports the file
-    // schema into this allocator and relies on GC/Cleaner-based cleanup rather than freeing it on
-    // close(), so a small one-time amount can still be outstanding here; tolerate it (it is freed
-    // when the native writer is reclaimed) rather than failing the whole write.
-    // TODO(#18623): drop this once vortex-jni frees the create() schema export on writer close.
+    // Close the native allocator last. VortexWriter.Builder#build releases the schema that it
+    // exports into this allocator, so the allocator closes clean. Tolerate retained memory
+    // nonetheless, so that a delay in native cleanup does not fail the whole write.
     if (nativeAllocator != null) {
       try {
         nativeAllocator.close();
       } catch (IllegalStateException e) {
-        log.warn("Vortex native allocator retained memory at close for {} (vortex-jni create() "
-            + "schema export, reclaimed on GC): {}", path, e.getMessage());
+        log.warn("Vortex native allocator retained memory at close for {} (native writer "
+            + "cleanup, reclaimed on GC): {}", path, e.getMessage());
       }
     }
 
@@ -259,12 +310,55 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
   }
 
   /**
-   * Returns the estimated data size in bytes, including both flushed batches and the current
-   * in-progress batch.
+   * Returns the footer metadata segments for the Vortex file: the entries from
+   * {@link #addFooterMetadata}, and the finalized bloom filter and min/max record keys, encoded as
+   * UTF-8 bytes.
+   */
+  private Map<String, byte[]> footerMetadata() {
+    Map<String, byte[]> metadata = new HashMap<>();
+    extraFooterMetadata.forEach((key, value) -> metadata.put(key, StringUtils.getUTF8Bytes(value)));
+    if (bloomFilterWriteSupportOpt.isPresent()) {
+      bloomFilterWriteSupportOpt.get().finalizeMetadata()
+          .forEach((key, value) -> metadata.put(key, StringUtils.getUTF8Bytes(value)));
+    }
+    return metadata;
+  }
+
+  /**
+   * Returns the estimated file size in bytes. The Vortex writer gives an estimate of the
+   * compressed size of the data that it has. The records in the current batch are not in the
+   * Vortex writer yet, so their Arrow size is multiplied by the compression ratio of the writer.
+   *
+   * <p>The Vortex writer uses a compression ratio of 1.0 until it compresses its first block of
+   * rows. Thus, before that block, this estimate is the uncompressed size.
    */
   protected long getDataSize() {
-    long currentBufferSize = currentBatchSize > 0 ? allocator.getAllocatedMemory() : 0;
-    return totalFlushedDataSize + currentBufferSize;
+    long currentBatchBytes = currentBatchBytes();
+    if (writer == null) {
+      return currentBatchBytes;
+    }
+
+    return writer.estimatedSize() + (long) (currentBatchBytes * writer.compressionRatio());
+  }
+
+  /**
+   * Bytes that the vectors of the current batch use. Do not use the allocator memory here: the
+   * native writer can keep the buffers of earlier batches until it compresses them, and these
+   * buffers are already in the estimate of the Vortex writer.
+   *
+   * <p>The Arrow writer sets the value count of the vectors only when the batch is complete. Thus
+   * ask for the size of the rows written so far, which the vectors find from their offsets.
+   */
+  private long currentBatchBytes() {
+    if (currentBatchSize == 0 || root == null) {
+      return 0;
+    }
+
+    long bytes = 0;
+    for (FieldVector vector : root.getFieldVectors()) {
+      bytes += vector.getBufferSizeFor(currentBatchSize);
+    }
+    return bytes;
   }
 
   /**
@@ -276,12 +370,7 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
     }
 
     arrowWriter.finishBatch();
-
-    for (FieldVector vector : root.getFieldVectors()) {
-      totalFlushedDataSize += vector.getBufferSize();
-    }
-
-    writeBatchFfi(root);
+    writeBatch(root);
 
     // Release Arrow buffers so capacity does not accumulate across batches.
     root.close();
@@ -292,31 +381,53 @@ public abstract class HoodieBaseVortexWriter<R, K extends Comparable<K>> impleme
   }
 
   /**
-   * Export a VectorSchemaRoot's array through the Arrow C Data Interface and write it to the Vortex
-   * file. The array is exported from the strict data allocator and released after the write (vortex
-   * copies the batch but does not invoke the C release callback), so no data-allocator memory leaks.
+   * Writes a batch to the Vortex file without a copy of its data. The native writer keeps each
+   * buffer until it compresses the batch, and releases each buffer separately.
+   *
+   * <p>Do not export the batch with {@code Data.exportVectorSchemaRoot} and
+   * {@link VortexWriter#writeBatch(long)}. With that path, the native writer releases the batch on
+   * its worker threads through the release callback of the Arrow C Data library. The callback
+   * attaches the thread to the JVM and detaches it again, thus each batch makes a new JVM thread.
+   * With this method, vortex-jni releases the buffers from threads that stay attached.
    */
-  private void writeBatchFfi(VectorSchemaRoot batch) throws IOException {
-    try (ArrowArray cArray = ArrowArray.allocateNew(allocator)) {
-      Data.exportVectorSchemaRoot(allocator, batch, null, cArray);
-      writer.writeBatch(cArray.memoryAddress(), exportedSchemaAddr);
-      cArray.release();
-    }
+  private void writeBatch(VectorSchemaRoot batch) throws IOException {
+    writer.writeBatch(batch, allocator);
   }
 
+
   /**
-   * Initialize the {@link VortexWriter} (lazy initialization). The writer and its exported schema
-   * use a dedicated {@link #nativeAllocator} so the native side's non-deterministic cleanup does
-   * not pollute the strict per-batch data allocator.
+   * Initialize the {@link VortexWriter} (lazy initialization). The writer uses a dedicated
+   * {@link #nativeAllocator} so the native side's non-deterministic cleanup does not pollute the
+   * strict per-batch data allocator.
    */
   private void initializeWriter() throws IOException {
+    VortexWorkerThreads.ensureAtLeast(workerThreads);
     session = Session.create();
+    session.enableEdition(edition);
+
     nativeAllocator = new RootAllocator();
     Schema arrowSchema = getArrowSchema();
-    writer = VortexWriter.create(session, toVortexUri(path), arrowSchema, Collections.emptyMap(), nativeAllocator);
-    exportedSchema = ArrowSchema.allocateNew(nativeAllocator);
-    Data.exportSchema(nativeAllocator, arrowSchema, null, exportedSchema);
-    exportedSchemaAddr = exportedSchema.memoryAddress();
+    if (storage == null) {
+      writer = VortexWriter.builder(session, toVortexUri(path), arrowSchema, nativeAllocator)
+          .compact(compact)
+          .build();
+      return;
+    }
+
+    HoodieVortexWritable output = new HoodieVortexWritable(storage.create(path, true));
+    try {
+      writer = VortexWriter.builder(session, output, arrowSchema, nativeAllocator)
+          .compact(compact)
+          .build();
+    } catch (IOException | RuntimeException e) {
+      try {
+        output.close();
+      } catch (IOException closeFailure) {
+        e.addSuppressed(closeFailure);
+      }
+      throw e;
+    }
+    writable = output;
   }
 
   /**

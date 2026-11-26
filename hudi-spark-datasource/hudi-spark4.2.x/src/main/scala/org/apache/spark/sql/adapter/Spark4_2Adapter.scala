@@ -199,7 +199,8 @@ class Spark4_2Adapter extends BaseSpark4Adapter {
                                       sqlConf: SQLConf,
                                       options: Map[String, String],
                                       hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
-    Some(new SparkVortexReaderBase(vectorized))
+    val returningBatch = vectorized && options.getOrElse(FileFormat.OPTION_RETURNING_BATCH, "false").toBoolean
+    Some(new SparkVortexReaderBase(vectorized, returningBatch))
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {

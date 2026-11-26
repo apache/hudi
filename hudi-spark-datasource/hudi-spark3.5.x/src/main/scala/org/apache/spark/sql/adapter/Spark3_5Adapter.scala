@@ -185,9 +185,10 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
                                       sqlConf: SQLConf,
                                       options: Map[String, String],
                                       hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
-    // Vortex requires Java 17 (vortex-jni ships Java 17 bytecode) and is wired only through the
-    // Spark 4.x adapters. Spark 3.5 runs on Java 11, where SparkVortexReaderBase is not compiled.
-    None
+    // Vortex requires Java 17, because vortex-jni ships Java 17 bytecode. A Java 11 build does not
+    // compile SparkVortexReaderBase, thus load it by name. Spark 3.5 on Java 17 then reads Vortex.
+    val returningBatch = vectorized && options.getOrElse(FileFormat.OPTION_RETURNING_BATCH, "false").toBoolean
+    Spark3_5Adapter.vortexReaderConstructor.map(_.newInstance(Boolean.box(vectorized), Boolean.box(returningBatch)))
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
@@ -235,4 +236,21 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
       storageConf.getBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis),
       getRebaseSpec("CORRECTED"))
   }
+}
+
+object Spark3_5Adapter {
+
+  private val VortexReaderClassName =
+    "org.apache.spark.sql.execution.datasources.vortex.SparkVortexReaderBase"
+
+  /**
+   * The constructor of the Vortex reader, or None when the build does not have the class.
+   */
+  private lazy val vortexReaderConstructor: Option[java.lang.reflect.Constructor[_ <: SparkColumnarFileReader]] =
+    try {
+      val readerClass = Class.forName(VortexReaderClassName).asSubclass(classOf[SparkColumnarFileReader])
+      Some(readerClass.getConstructor(java.lang.Boolean.TYPE, java.lang.Boolean.TYPE))
+    } catch {
+      case _: ClassNotFoundException | _: LinkageError => None
+    }
 }

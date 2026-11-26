@@ -19,24 +19,29 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.vortex.VortexInputFile;
 
+import dev.vortex.api.Scan;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.ipc.ArrowReader;
 
 /**
- * Shared close logic for the Vortex reader iterator (vortex-jni 0.76.0). Closes the current Arrow
- * reader (which owns the exported VectorSchemaRoot / column vectors) and then the allocator,
- * rethrowing after the allocator is closed so a failed reader close never leaks the allocator.
- *
- * <p>The Vortex Session/DataSource/Scan handles are not AutoCloseable in 0.76.0 (native cleanup is
- * implicit), so they are not closed here.
+ * Shared close logic for the Vortex reader iterator. Closes the current Arrow reader (which owns
+ * the exported VectorSchemaRoot / column vectors), the Vortex scan, the file, and then the
+ * allocator. The file is closed after the scan, because the native code reads through it until
+ * the scan and its readers are closed. A failed close is thrown again after the allocator is
+ * closed, so it never leaks the allocator.
  */
 final class VortexResourceCloser {
 
   private VortexResourceCloser() {
   }
 
-  static void closeAll(ArrowReader currentReader, BufferAllocator allocator, String path) {
+  static void closeAll(ArrowReader currentReader,
+                       Scan scan,
+                       VortexInputFile file,
+                       BufferAllocator allocator,
+                       String path) {
     Exception readerException = null;
 
     if (currentReader != null) {
@@ -46,12 +51,33 @@ final class VortexResourceCloser {
         readerException = e;
       }
     }
+
+    if (scan != null) {
+      scan.close();
+    }
+
+    if (file != null) {
+      try {
+        file.close();
+      } catch (Exception e) {
+        readerException = addSuppressed(readerException, e);
+      }
+    }
+
     if (allocator != null) {
       allocator.close();
     }
 
     if (readerException != null) {
-      throw new HoodieException("Failed to close Vortex Arrow reader for file: " + path, readerException);
+      throw new HoodieException("Failed to close Vortex reader for file: " + path, readerException);
     }
+  }
+
+  private static Exception addSuppressed(Exception primary, Exception e) {
+    if (primary == null) {
+      return e;
+    }
+    primary.addSuppressed(e);
+    return primary;
   }
 }
