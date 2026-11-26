@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_WRITES_PREPPED_KEY
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
@@ -35,6 +35,7 @@ import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{isSparkSqlOptimizedWrite, validateUpdatesAsDeletesAndInserts}
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
@@ -54,8 +55,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
     val tableId = catalogTable.table.qualifiedName
 
     logInfo(s"Executing 'UPDATE' command for $tableId")
-    val config = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val config = if (isSparkSqlOptimizedWrite(sparkSession.sessionState.conf, catalogTable)) {
       // Set config to show that this is a prepped write.
       buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
     } else {
@@ -122,6 +122,7 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
   def inputPlan(sparkSession: SparkSession, ut: UpdateTable): LogicalPlan = {
     val hoodieCatalogTable = catalogTable(sparkSession, ut)
     val tableId = hoodieCatalogTable.table.qualifiedName
+    validateUpdatesAsDeletesAndInserts(sparkSession.sessionState.conf, hoodieCatalogTable)
 
     logInfo(s"Executing 'UPDATE' command for $tableId")
 
@@ -147,8 +148,7 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
       assignedAttributes
     )
 
-    val filteredOutput = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val filteredOutput = if (isSparkSqlOptimizedWrite(sparkSession.sessionState.conf, hoodieCatalogTable)) {
       ut.table.output
     } else {
       removeMetaFields(ut.table.output)

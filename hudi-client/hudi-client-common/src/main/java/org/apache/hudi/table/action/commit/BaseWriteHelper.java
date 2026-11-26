@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -30,6 +31,8 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
@@ -39,15 +42,18 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.List;
 
 public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
@@ -79,6 +85,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
             && table.getConfig().isSparkSqlMergeIntoReadingTarget()) {
           taggedRecords = mergeLocatedSqlMergeIntoRecords(taggedRecords, instantTime, context, table, configuredShuffleParallelism);
         }
+        if (shouldWriteUpdatesAsDeletesAndInserts(table, operationType)) {
+          taggedRecords = updatesAsDeletesAndInserts(taggedRecords, table, configuredShuffleParallelism);
+        }
       }
 
       HoodieWriteMetadata<O> result = executor.execute(taggedRecords, Option.of(sourceReadAndIndexTimer));
@@ -90,6 +99,17 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       throw new HoodieUpsertException("Failed to upsert for commit time " + instantTime, e);
     }
   }
+
+  /**
+   * Index types that tag a record with its row position in the base file and write merge-on-read
+   * inserts to base files, which the update-as-delete-insert write mode needs to keep log files to
+   * positional deletes. The global variants and the record index tag through a global location, which
+   * takes the position from the base file of the located file group.
+   */
+  private static final EnumSet<HoodieIndex.IndexType> POSITION_PRODUCING_INDEX_TYPES = EnumSet.of(
+      HoodieIndex.IndexType.BLOOM, HoodieIndex.IndexType.SIMPLE,
+      HoodieIndex.IndexType.GLOBAL_BLOOM, HoodieIndex.IndexType.GLOBAL_SIMPLE,
+      HoodieIndex.IndexType.RECORD_INDEX, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX);
 
   protected abstract I tag(
       I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table);
@@ -103,6 +123,116 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                               HoodieTable<T, I, K, O> table, int configuredShuffleParallelism) {
     throw new HoodieNotSupportedException(
         HoodieWriteConfig.SPARK_SQL_MERGE_INTO_READS_TARGET_KEY + " is not supported by " + this.getClass().getName());
+  }
+
+  private boolean shouldWriteUpdatesAsDeletesAndInserts(HoodieTable<T, I, K, O> table, WriteOperationType operationType) {
+    if (operationType != WriteOperationType.UPSERT
+        || table.getMetaClient().getTableType() != HoodieTableType.MERGE_ON_READ
+        || !table.getConfig().shouldWriteUpdatesAsDeletesAndInserts()) {
+      return false;
+    }
+    validateUpdatesAsDeletesAndInserts(table.getConfig(), table.getMetaClient(), operationType);
+    return true;
+  }
+
+  /**
+   * Validates the requirements of {@link HoodieWriteConfig#WRITE_UPDATES_AS_DELETES_AND_INSERTS} for a
+   * write that can append to the log files of a merge-on-read table.
+   */
+  public static void validateUpdatesAsDeletesAndInserts(HoodieWriteConfig config, HoodieTableMetaClient metaClient,
+                                                        WriteOperationType operationType) {
+    HoodieTableVersion writeVersion = config.getWriteVersion();
+    if (writeVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      // Log files carry record positions only from write table version 8 on
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
+              + " requires write table version 8 or higher to write record positions but the write table version is "
+              + writeVersion.versionCode());
+    }
+    RecordMergeMode mergeMode = metaClient.getTableConfig().getRecordMergeMode();
+    if (mergeMode != RecordMergeMode.COMMIT_TIME_ORDERING) {
+      // The decomposed delete unconditionally tombstones the current version, so a late-arriving
+      // update with a lower ordering value would incorrectly win under event-time ordering
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
+              + " requires commit-time ordering merge semantics but the table uses " + mergeMode);
+    }
+    if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
+      // A custom index class takes precedence over the index type checked below
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " does not support a custom index class but "
+              + HoodieIndexConfig.INDEX_CLASS_NAME.key() + " is " + config.getIndexClass());
+    }
+    HoodieIndex.IndexType indexType = config.getIndexType();
+    if (!POSITION_PRODUCING_INDEX_TYPES.contains(indexType)) {
+      // Without a base file position a delete cannot be represented as a positional delete, and an
+      // index that routes by key hash or can index log files appends inserts to logs
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
+              + " requires an index that produces record positions " + POSITION_PRODUCING_INDEX_TYPES
+              + " but the index type is " + indexType);
+    }
+    if (!config.shouldWriteRecordPositions()) {
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
+              + " requires " + HoodieWriteConfig.WRITE_RECORD_POSITIONS.key() + " to be enabled");
+    }
+    if (config.shouldWritePartialUpdates()) {
+      // The new version of an updated record is inserted into a base file, so it has to carry every column
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " does not support partial updates but "
+              + HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key() + " is set");
+    }
+    if (operationType != WriteOperationType.INSERT && !hasRecordKeyFields(metaClient.getTableConfig())
+        && KeyGenUtils.isAutoGeneratedRecordKeysEnabled(config.getProps())) {
+      // An insert locates no existing row, so only updates and deletes need the record key
+      throw keylessTableNotSupported();
+    }
+  }
+
+  /**
+   * Whether the table declares a primary key in {@link HoodieTableConfig#RECORDKEY_FIELDS}.
+   */
+  public static boolean hasRecordKeyFields(HoodieTableConfig tableConfig) {
+    return tableConfig.getRecordKeyFields().map(fields -> fields.length > 0).orElse(false);
+  }
+
+  /**
+   * The refusal of {@link HoodieWriteConfig#WRITE_UPDATES_AS_DELETES_AND_INSERTS} for an update or delete of a table
+   * without a primary key. The writer keys its rows with generated record keys, so an update or delete cannot
+   * locate the current version of a row by its key and would leave it in place next to the new version.
+   */
+  public static HoodieNotSupportedException keylessTableNotSupported() {
+    return new HoodieNotSupportedException(
+        HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " requires a table with a primary key to update "
+            + "or delete rows, but the table declares no " + HoodieTableConfig.RECORDKEY_FIELDS.key() + " and its rows "
+            + "carry generated record keys, so an update or delete cannot locate the current version of a row and would "
+            + "leave it next to the new one. Create the table with a primary key, or set "
+            + HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " to false.");
+  }
+
+  /**
+   * Rewrites each tagged update into a positional delete to the record's current file group plus an
+   * untagged insert of the new version, so the insert partitioner routes the new version to a file
+   * group chosen for inserts. See {@link HoodieWriteConfig#WRITE_UPDATES_AS_DELETES_AND_INSERTS}.
+   */
+  protected I updatesAsDeletesAndInserts(I taggedRecords, HoodieTable<T, I, K, O> table, int configuredShuffleParallelism) {
+    throw new HoodieNotSupportedException(
+        HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " is not supported by " + this.getClass().getName());
+  }
+
+  /**
+   * Picks the copy of a multi-tagged record whose location is the latest. Under this write mode a
+   * key moves file groups on every update and older file groups keep a tombstoned physical copy,
+   * so an index that scans base files can tag the incoming record once per copy; only the latest
+   * location is live.
+   */
+  protected static <T> HoodieRecord<T> latestLocation(HoodieRecord<T> left, HoodieRecord<T> right) {
+    String leftInstant =
+        left.isCurrentLocationKnown() ? left.getCurrentLocation().getInstantTime() : "";
+    String rightInstant =
+        right.isCurrentLocationKnown() ? right.getCurrentLocation().getInstantTime() : "";
+    return leftInstant.compareTo(rightInstant) >= 0 ? left : right;
   }
 
   public I combineOnCondition(

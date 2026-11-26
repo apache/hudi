@@ -27,8 +27,10 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -52,6 +54,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -70,6 +73,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
@@ -117,6 +121,36 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
   public HoodieWriteMetadata<O> execute(I inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     return this.execute(inputRecords);
+  }
+
+  /**
+   * Refuses a write in the {@link HoodieWriteConfig#WRITE_UPDATES_AS_DELETES_AND_INSERTS} write mode that
+   * locates a record in a file group with a pending compaction. The record becomes a positional delete
+   * appended to the file slice of the compaction, while its positions point into the base file the
+   * compaction rewrites, so they would mark the wrong rows of the compacted base file.
+   */
+  protected void validateNoPositionalDeletesUnderPendingCompaction(WorkloadProfile profile) {
+    if (!config.shouldWriteUpdatesAsDeletesAndInserts()
+        || table.getMetaClient().getTableType() != HoodieTableType.MERGE_ON_READ) {
+      return;
+    }
+    Map<HoodieFileGroupId, String> pendingCompactionInstants = table.getFileSystemView().getPendingCompactionOperations()
+        .collect(Collectors.toMap(operation -> operation.getValue().getFileGroupId(), Pair::getKey));
+    if (pendingCompactionInstants.isEmpty()) {
+      return;
+    }
+    for (String partitionPath : profile.getPartitionPaths()) {
+      for (String fileId : profile.getWorkloadStat(partitionPath).getUpdateLocationToCount().keySet()) {
+        HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partitionPath, fileId);
+        String compactionInstant = pendingCompactionInstants.get(fileGroupId);
+        if (compactionInstant != null) {
+          throw new HoodieNotSupportedException(HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
+              + " cannot update or delete records of file group " + fileGroupId + " while compaction " + compactionInstant
+              + " is pending on it, since the record positions of the deletes refer to the base file being compacted. "
+              + "Retry the write after the compaction completes.");
+        }
+      }
+    }
   }
 
   /**

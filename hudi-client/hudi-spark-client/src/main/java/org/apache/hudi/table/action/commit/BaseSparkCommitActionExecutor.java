@@ -233,6 +233,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     log.info("Num spark partitions for inputRecords before triggering workload profile {}", inputRecordsWithClusteringUpdate.getNumPartitions());
 
     WorkloadProfile workloadProfile = prepareWorkloadProfile(inputRecordsWithClusteringUpdate);
+    validateNoPositionalDeletesUnderPendingCompaction(workloadProfile);
     Long sourceReadAndIndexDurationMs = null;
     if (sourceReadAndIndexTimer.isPresent()) {
       sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();

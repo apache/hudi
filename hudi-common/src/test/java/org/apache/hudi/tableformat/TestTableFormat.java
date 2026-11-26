@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.HoodieTableFormat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
@@ -33,6 +34,7 @@ import lombok.NoArgsConstructor;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
@@ -45,18 +47,34 @@ import java.util.function.Supplier;
 public class TestTableFormat implements HoodieTableFormat {
 
   private static final Map<String, List<HoodieInstant>> RECORDED_INSTANTS = new ConcurrentHashMap<>();
+  private static final Map<String, Properties> INIT_PROPERTIES = new ConcurrentHashMap<>();
 
   public static List<HoodieInstant> getRecordedInstants(String basePath) {
     return RECORDED_INSTANTS.getOrDefault(basePath, Collections.emptyList());
   }
 
+  /**
+   * Returns the properties of the latest {@link #init} call for the table with the given name.
+   */
+  public static Properties getInitProperties(String tableName) {
+    return INIT_PROPERTIES.get(tableName);
+  }
+
   public static void tearDown() {
     RECORDED_INSTANTS.clear();
+    INIT_PROPERTIES.clear();
   }
 
   @Override
   public String getName() {
     return "test-format";
+  }
+
+  @Override
+  public void init(Properties properties) {
+    Properties copy = new Properties();
+    copy.putAll(properties);
+    INIT_PROPERTIES.put(properties.getProperty(HoodieTableConfig.NAME.key(), ""), copy);
   }
 
   @Override
