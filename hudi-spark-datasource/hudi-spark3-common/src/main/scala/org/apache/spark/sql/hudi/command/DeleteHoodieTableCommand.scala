@@ -26,7 +26,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.plans.QueryPlan
-import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, Filter, LogicalPlan, Project, UpdateTable}
+import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, Filter, LocalRelation, LogicalPlan, Project, UpdateTable}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
@@ -51,15 +51,20 @@ case class DeleteHoodieTableCommand(catalogTable: HoodieCatalogTable, query: Log
 
   override def run(sparkSession: SparkSession, queryPlan: SparkPlan): Seq[Row] = {
     val tableId = catalogTable.table.qualifiedName
-    logInfo(s"Executing 'DELETE FROM' command for $tableId")
-    val df = sparkSession.internalCreateDataFrame(queryPlan.execute(), queryPlan.schema)
-    val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
-    if (success && commitInstantTime.isPresent) {
-      updateCommitMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
-      DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
+    if (DeleteHoodieTableCommand.deletesNothing(query)) {
+      // The optimized input is empty, so no row can match and nothing is written
+      logInfo(s"Skipping 'DELETE FROM' command for $tableId as its optimized input is empty")
+    } else {
+      logInfo(s"Executing 'DELETE FROM' command for $tableId")
+      val df = sparkSession.internalCreateDataFrame(queryPlan.execute(), queryPlan.schema)
+      val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
+      if (success && commitInstantTime.isPresent) {
+        updateCommitMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
+        DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
+      }
+      sparkSession.catalog.refreshTable(tableId)
+      logInfo(s"Finished executing 'DELETE FROM' command for $tableId")
     }
-    sparkSession.catalog.refreshTable(tableId)
-    logInfo(s"Finished executing 'DELETE FROM' command for $tableId")
     Seq.empty[Row]
   }
 
@@ -67,6 +72,15 @@ case class DeleteHoodieTableCommand(catalogTable: HoodieCatalogTable, query: Log
 }
 
 object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieConfig{
+
+  /**
+   * Whether the optimized input of a DELETE is an empty local relation, as the optimizer makes it for a condition
+   * that folds to false or null, or for a condition on an empty subquery.
+   */
+  private def deletesNothing(optimizedQuery: LogicalPlan): Boolean = optimizedQuery match {
+    case relation: LocalRelation => relation.data.isEmpty
+    case _ => false
+  }
 
   def inputPlan(sparkSession: SparkSession, dft: DeleteFromTable, catalogTable: HoodieCatalogTable): (LogicalPlan, Map[String, String]) = {
     val condition = sparkAdapter.extractDeleteCondition(dft)
