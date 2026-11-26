@@ -74,6 +74,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -458,6 +459,71 @@ final class TestTrinoRecordContext
             serializer.buildRecordInPage(fromAvro, record);
         }
         assertPageEquals(types, fromRows.build(), fromAvro.build());
+    }
+
+    /**
+     * Each field of an Avro log record, the primitive ones wrapped directly and the rest written through a block builder,
+     * holds the value the field's block writer writes, and a null field is a null block.
+     */
+    @Test
+    void testAvroRecordFieldsHoldTheBlockWritersValues()
+            throws IOException
+    {
+        TrinoRecordContext recordContext = recordContext(tableConfig("ts"), new TypedProperties());
+        GenericRecord nulls = new GenericData.Record(TABLE_SCHEMA.toAvroSchema());
+        nulls.put("key", "k2");
+        nulls.put("ts", 200L);
+        for (GenericRecord record : List.of(decode(populatedRecord("k1", 100, 1)), decode(nulls), decode(populatedRecord("k3", 300, 8)))) {
+            assertFieldsHoldTheBlockWritersValues(recordContext, record);
+        }
+
+        // Values a decoder does not produce: a Utf8 whose buffer is longer than its bytes, multi-byte and empty strings,
+        // a String, extreme numbers, and Java classes that keep the block writer
+        Utf8 reused = new Utf8("abcdefghijklmnopqrs");
+        reused.setByteLength(3);
+        List<Map<String, Object>> edgeValues = List.of(
+                Map.of("c_string", reused, "c_int", Integer.MIN_VALUE, "c_long", Long.MAX_VALUE, "c_double", Double.NaN, "c_date", 0),
+                Map.of("c_string", new Utf8("na\u00efve \u65e5\u672c \uD83D\uDE00"), "c_int", Integer.MAX_VALUE, "c_long", Long.MIN_VALUE, "c_double", -0.0d, "c_date", -1),
+                Map.of("c_string", new Utf8(""), "c_double", Double.NEGATIVE_INFINITY),
+                Map.of("c_string", "a String", "c_int", 7L, "c_long", 8, "c_double", 1.5f, "c_date", LocalDate.of(2022, 1, 15)));
+        for (Map<String, Object> values : edgeValues) {
+            GenericRecord record = new GenericData.Record(TABLE_SCHEMA.toAvroSchema());
+            record.put("key", new Utf8("k9"));
+            record.put("ts", 900L);
+            values.forEach(record::put);
+            assertFieldsHoldTheBlockWritersValues(recordContext, record);
+        }
+        assertThat(VARCHAR.getSlice(recordContext.convertAvroRecord(recordWithString(reused)).getBlock(TABLE_SCHEMA.getField("c_string").get().pos()), 0))
+                .isEqualTo(utf8Slice("abc"));
+    }
+
+    private static GenericRecord recordWithString(Utf8 value)
+    {
+        GenericRecord record = new GenericData.Record(TABLE_SCHEMA.toAvroSchema());
+        record.put("key", new Utf8("k9"));
+        record.put("ts", 900L);
+        record.put("c_string", value);
+        return record;
+    }
+
+    private static void assertFieldsHoldTheBlockWritersValues(TrinoRecordContext recordContext, GenericRecord record)
+    {
+        TrinoRow row = recordContext.convertAvroRecord(record);
+        for (HoodieSchemaField field : TABLE_SCHEMA.getFields()) {
+            Type type = row.getLayout().getType(field.pos());
+            Block actual = row.getBlock(field.pos());
+            assertThat(actual.getPositionCount()).as(field.name()).isEqualTo(1);
+            Object value = record.get(field.pos());
+            if (value == null) {
+                assertThat(actual.isNull(0)).as(field.name()).isTrue();
+                continue;
+            }
+            BlockBuilder expected = type.createBlockBuilder(null, 1);
+            HoodieSchemaAvroSerializer.toBlock(field.name(), field.schema(), type).append(value, expected);
+            Block expectedBlock = expected.build();
+            assertThat(actual.getClass()).as(field.name()).isEqualTo(expectedBlock.getClass());
+            assertThat(type.getObjectValue(actual, 0)).as(field.name()).isEqualTo(type.getObjectValue(expectedBlock, 0));
+        }
     }
 
     @Test

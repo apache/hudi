@@ -13,6 +13,7 @@
  */
 package io.trino.plugin.hudi.reader;
 
+import io.airlift.slice.Slices;
 import io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer;
 import io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer.AvroToBlock;
 import io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer.ValueToAvro;
@@ -20,11 +21,15 @@ import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.IntArrayBlock;
+import io.trino.spi.block.LongArrayBlock;
 import io.trino.spi.block.SqlRow;
+import io.trino.spi.block.VariableWidthBlock;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.Int128;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
+import io.trino.spi.type.VarcharType;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -39,6 +44,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.serialization.RecordSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -52,17 +58,24 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.function.UnaryOperator;
 
 import static io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer.nonNullSchema;
 import static io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer.rowFieldIndex;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
+import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.DateType.DATE;
+import static io.trino.spi.type.DoubleType.DOUBLE;
+import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.UuidType.trinoUuidToJavaUuid;
+import static java.lang.Double.doubleToLongBits;
 import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.avro.HoodieAvroUtils.avroToBytes;
 import static org.apache.hudi.common.avro.HoodieAvroUtils.bytesToAvro;
@@ -254,10 +267,10 @@ public class TrinoRecordContext
     public TrinoRow convertAvroRecord(IndexedRecord avroRecord)
     {
         TrinoRow.Layout layout = avroLayout(avroRecord.getSchema());
-        AvroToBlock[] writers = accessors(layout).blockWriters();
+        ValueToBlock[] converters = accessors(layout).valueBlocks();
         Block[] blocks = new Block[layout.getFieldCount()];
         for (int field = 0; field < blocks.length; field++) {
-            blocks[field] = singleValueBlock(layout.getType(field), writers[field], avroRecord.get(field));
+            blocks[field] = converters[field].toBlock(avroRecord.get(field));
         }
         return TrinoRow.ofSingleValueBlocks(layout, blocks);
     }
@@ -463,6 +476,58 @@ public class TrinoRecordContext
         return lastAccessors;
     }
 
+    /**
+     * Turns an Avro value of a field into a block holding that value alone.
+     */
+    @FunctionalInterface
+    private interface ValueToBlock
+    {
+        Block toBlock(Object value);
+    }
+
+    /**
+     * Compiles the conversion of a field's Avro values to single-value blocks. Nulls share one null block, and the values
+     * of the common primitive types are wrapped in a block directly instead of going through a block builder; every other
+     * value is written by {@code writer}.
+     */
+    private static ValueToBlock valueToBlock(HoodieSchemaField field, Type type, AvroToBlock writer)
+    {
+        Block nullBlock = type.createNullBlock();
+        HoodieSchemaType schemaType = nonNullSchema(field.name(), field.schema()).getType();
+        if (schemaType == HoodieSchemaType.STRING && type instanceof VarcharType varcharType && varcharType.isUnbounded()) {
+            return value -> switch (value) {
+                case null -> nullBlock;
+                case Utf8 utf8 -> {
+                    int length = utf8.getByteLength();
+                    yield new VariableWidthBlock(1, Slices.wrappedBuffer(Arrays.copyOf(utf8.getBytes(), length)), new int[] {0, length}, Optional.empty());
+                }
+                default -> singleValueBlock(type, writer, value);
+            };
+        }
+        if ((schemaType == HoodieSchemaType.INT && type.equals(INTEGER)) || (schemaType == HoodieSchemaType.DATE && type.equals(DATE))) {
+            return value -> switch (value) {
+                case null -> nullBlock;
+                case Integer integer -> new IntArrayBlock(1, Optional.empty(), new int[] {integer});
+                default -> singleValueBlock(type, writer, value);
+            };
+        }
+        if (schemaType == HoodieSchemaType.LONG && type.equals(BIGINT)) {
+            return value -> switch (value) {
+                case null -> nullBlock;
+                case Long longValue -> new LongArrayBlock(1, Optional.empty(), new long[] {longValue});
+                default -> singleValueBlock(type, writer, value);
+            };
+        }
+        if (schemaType == HoodieSchemaType.DOUBLE && type.equals(DOUBLE)) {
+            return value -> switch (value) {
+                case null -> nullBlock;
+                case Double doubleValue -> new LongArrayBlock(1, Optional.empty(), new long[] {doubleToLongBits(doubleValue)});
+                default -> singleValueBlock(type, writer, value);
+            };
+        }
+        return value -> value == null ? nullBlock : singleValueBlock(type, writer, value);
+    }
+
     private static Block singleValueBlock(Type type, AvroToBlock writer, Object value)
     {
         BlockBuilder builder = type.createBlockBuilder(null, 1);
@@ -504,6 +569,7 @@ public class TrinoRecordContext
         private Schema avroSchema;
         private ValueToAvro[] avroReaders;
         private AvroToBlock[] blockWriters;
+        private ValueToBlock[] valueBlocks;
 
         private LayoutAccessors(TrinoRow.Layout layout)
         {
@@ -552,6 +618,19 @@ public class TrinoRecordContext
                 blockWriters = writers;
             }
             return blockWriters;
+        }
+
+        ValueToBlock[] valueBlocks()
+        {
+            if (valueBlocks == null) {
+                AvroToBlock[] writers = blockWriters();
+                ValueToBlock[] converters = new ValueToBlock[writers.length];
+                for (int field = 0; field < converters.length; field++) {
+                    converters[field] = valueToBlock(layout.getField(field), layout.getType(field), writers[field]);
+                }
+                valueBlocks = converters;
+            }
+            return valueBlocks;
         }
     }
 
