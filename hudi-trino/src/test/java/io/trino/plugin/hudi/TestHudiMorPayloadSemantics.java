@@ -13,6 +13,7 @@
  */
 package io.trino.plugin.hudi;
 
+import io.trino.Session;
 import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.DmsPayloadHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.OverwriteNonDefaultsPayloadHudiTablesInitializer;
@@ -20,7 +21,8 @@ import io.trino.plugin.hudi.testing.SummingPayloadHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.SummingTestPayload;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,6 +44,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       {@code combineAndGetUpdateValue} executed (overwrite would yield the incoming value), and a hard
  *       delete routed through the same arm must remove its row.</li>
  * </ul>
+ * Every test runs with {@code schema_column_types_enabled} off and on: on, these merges run on Trino rows
+ * ({@code HudiTrinoRowReaderContext}), the payload merges converting just the two records they merge to Avro.
  */
 public class TestHudiMorPayloadSemantics
         extends AbstractTestQueryFramework
@@ -58,72 +62,91 @@ public class TestHudiMorPayloadSemantics
                 .build();
     }
 
-    @Test
-    public void testDmsDeleteMarkerRemovesRowOnSnapshotRead()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testDmsDeleteMarkerRemovesRowOnSnapshotRead(boolean schemaColumnTypes)
     {
         // Read-optimized: both rows (the log records are not merged)
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value, Op FROM " + DmsPayloadHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT), 'I'), ('k2', 'k2_base', 20, 'I')");
         // Snapshot: k2 is deleted by the Op='D' log record via the delete-key/marker table properties,
         // while k1's NON-marker Op='U' log record must apply as an update -- a marker comparison that
         // fires on any non-null Op would wrongly delete k1 too
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value, Op FROM " + DmsPayloadHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT), 'U')");
     }
 
-    @Test
-    public void testDmsNarrowProjectionMergesCorrectly()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testDmsNarrowProjectionMergesCorrectly(boolean schemaColumnTypes)
     {
         // The Op column is NOT projected, so the connector must predict it as a merge-required column
         // from the PREFIXED table properties (hoodie.record.merge.property.hoodie.payload.delete.field)
         // for the base read -- the regression this suite pins for HudiUtil.mergeRequiredColumnNames
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, value FROM " + DmsPayloadHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', CAST(11 AS BIGINT))");
-        assertThat(computeScalar("SELECT count(*) FROM " + DmsPayloadHudiTablesInitializer.RT_TABLE_NAME)).isEqualTo(1L);
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT count(*) FROM " + DmsPayloadHudiTablesInitializer.RT_TABLE_NAME)).isEqualTo(1L);
     }
 
-    @Test
-    public void testOverwriteNonDefaultsKeepsStoredValueForDefaultColumns()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testOverwriteNonDefaultsKeepsStoredValueForDefaultColumns(boolean schemaColumnTypes)
     {
         // Read-optimized: base values
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, a, b FROM " + OverwriteNonDefaultsPayloadHudiTablesInitializer.TABLE_NAME,
                 "VALUES ('k1', 'base_a', 'base_b')");
         // Snapshot: the update carried a='new_a' and b=null (the schema default); IGNORE_DEFAULTS
         // partial merging takes the update's a but keeps the STORED b
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, a, b FROM " + OverwriteNonDefaultsPayloadHudiTablesInitializer.RT_TABLE_NAME,
                 "VALUES ('k1', 'new_a', 'base_b')");
     }
 
-    @Test
-    public void testSummingPayloadRunsCombineAndGetUpdateValueOnRead()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testSummingPayloadRunsCombineAndGetUpdateValueOnRead(boolean schemaColumnTypes)
     {
         // Read-optimized: the base values
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, value FROM " + SummingPayloadHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', CAST(10 AS BIGINT)), ('k2', 20)");
         // Snapshot: 10 + 99 = 109 -- only the payload's combineAndGetUpdateValue can produce this
         // (newest-wins would yield 99, base-only 10), proving the CUSTOM payload-strategy branch ran;
         // k2 is hard-deleted
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, value FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', CAST(109 AS BIGINT))");
     }
 
-    @Test
-    public void testSummingPayloadHardDeleteRemovesRowOnSnapshotRead()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testSummingPayloadHardDeleteRemovesRowOnSnapshotRead(boolean schemaColumnTypes)
     {
         // The hard delete is a native delete log record routed to the payload-based CUSTOM merge arm,
         // where it wins on HoodieAvroRecordMerger's isCommitTimeOrderingDelete short-circuit (the
         // delete carries the sentinel ordering value) -- the delete path of the user-merger dispatch,
         // which both ordering arms already cover
-        assertThat(computeScalar("SELECT count(*) FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k2'"))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT count(*) FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k2'"))
                 .isEqualTo(0L);
-        assertThat(computeScalar("SELECT count(*) FROM " + SummingPayloadHudiTablesInitializer.TABLE_NAME + " WHERE key = 'k2'"))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT count(*) FROM " + SummingPayloadHudiTablesInitializer.TABLE_NAME + " WHERE key = 'k2'"))
                 .isEqualTo(1L);
+    }
+
+    private Session session(boolean schemaColumnTypes)
+    {
+        return SessionBuilder.from(getSession())
+                .withSchemaColumnTypesEnabled(schemaColumnTypes)
+                .build();
     }
 }

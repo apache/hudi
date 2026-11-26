@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import static io.trino.plugin.hudi.HudiSessionProperties.getColumnsToHide;
 import static io.trino.plugin.hudi.HudiSessionProperties.getRecordMergerImpls;
 import static io.trino.plugin.hudi.HudiSessionProperties.getTargetSplitSize;
+import static io.trino.plugin.hudi.HudiSessionProperties.isSchemaColumnTypesEnabled;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -53,6 +54,29 @@ public class TestHudiSessionProperties
                 .build();
         assertThat(getRecordMergerImpls(session))
                 .containsExactly("com.example.MergerOne", "com.example.MergerTwo");
+    }
+
+    @Test
+    public void testSessionPropertySchemaColumnTypes()
+    {
+        HudiSessionProperties defaultProperties = new HudiSessionProperties(new HudiConfig(), new ParquetReaderConfig());
+        ConnectorSession defaultSession = TestingConnectorSession.builder()
+                .setPropertyMetadata(defaultProperties.getSessionProperties())
+                .build();
+        assertThat(isSchemaColumnTypesEnabled(defaultSession)).isFalse();
+
+        HudiSessionProperties enabledProperties = new HudiSessionProperties(new HudiConfig().setSchemaColumnTypesEnabled(true), new ParquetReaderConfig());
+        ConnectorSession enabledSession = TestingConnectorSession.builder()
+                .setPropertyMetadata(enabledProperties.getSessionProperties())
+                .build();
+        assertThat(isSchemaColumnTypesEnabled(enabledSession)).isTrue();
+
+        // The session property overrides the catalog default
+        ConnectorSession overriddenSession = TestingConnectorSession.builder()
+                .setPropertyMetadata(enabledProperties.getSessionProperties())
+                .setPropertyValues(ImmutableMap.of("schema_column_types_enabled", false))
+                .build();
+        assertThat(isSchemaColumnTypesEnabled(overriddenSession)).isFalse();
     }
 
     @Test

@@ -14,6 +14,11 @@
 package io.trino.plugin.hudi;
 
 import io.trino.plugin.hive.HiveColumnHandle;
+import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
+import io.trino.plugin.hudi.reader.HudiTrinoRowReaderContext;
+import io.trino.plugin.hudi.reader.TrinoRow;
+import io.trino.plugin.hudi.reader.TrinoRowAppender;
+import io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer;
 import io.trino.plugin.hudi.util.HudiAvroSerializer;
 import io.trino.plugin.hudi.util.PrefilledColumnValues;
 import io.trino.spi.Page;
@@ -21,6 +26,7 @@ import io.trino.spi.PageBuilder;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.SourcePage;
+import io.trino.plugin.base.metrics.LongCount;
 import io.trino.spi.metrics.Metrics;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -28,33 +34,81 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Throwables.getCausalChain;
 import static com.google.common.base.Throwables.throwIfUnchecked;
 
-public class HudiPageSource
+/**
+ * The page source of a merge read: pages built from the records the file-group reader merges, Avro records
+ * ({@link HudiTrinoReaderContext}) or {@link TrinoRow}s ({@link HudiTrinoRowReaderContext}).
+ */
+public class HudiPageSource<T>
         implements ConnectorPageSource
 {
-    private final HoodieFileGroupReader<IndexedRecord> fileGroupReader;
+    /**
+     * Connector metric counting the splits merged as {@link TrinoRow}s; EXPLAIN ANALYZE VERBOSE and query stats show it.
+     */
+    public static final String TRINO_ROW_MERGE_SPLITS = "hudiTrinoRowMergeSplits";
+
+    private final HoodieFileGroupReader<T> fileGroupReader;
     // Reads flow through fileGroupReader; pageSource is kept for stats/isBlocked delegation
     private final ConnectorPageSource pageSource;
     private final PageBuilder pageBuilder;
-    private final HudiAvroSerializer avroSerializer;
-    private final ClosableIterator<IndexedRecord> recordIterator;
+    private final BiConsumer<PageBuilder, T> recordAppender;
+    private final ClosableIterator<T> recordIterator;
+    private final Metrics metrics;
 
-    public HudiPageSource(
+    /**
+     * A page source over Avro records. The columns carry TrinoTypeMapper types when schema column types are on, which
+     * only the HoodieSchema-driven serializer writes.
+     */
+    public static HudiPageSource<IndexedRecord> forAvroRecords(
             ConnectorPageSource pageSource,
             HoodieFileGroupReader<IndexedRecord> fileGroupReader,
             List<HiveColumnHandle> columnHandles,
+            PrefilledColumnValues prefilledColumnValues,
+            boolean schemaColumnTypes)
+    {
+        BiConsumer<PageBuilder, IndexedRecord> recordAppender = schemaColumnTypes
+                ? new HoodieSchemaAvroSerializer(columnHandles, prefilledColumnValues)::buildRecordInPage
+                : new HudiAvroSerializer(columnHandles, prefilledColumnValues)::buildRecordInPage;
+        return new HudiPageSource<>(pageSource, fileGroupReader, columnHandles, recordAppender, Metrics.EMPTY);
+    }
+
+    /**
+     * A page source over {@link TrinoRow}s, whose values are copied position by position.
+     */
+    public static HudiPageSource<TrinoRow> forTrinoRows(
+            ConnectorPageSource pageSource,
+            HoodieFileGroupReader<TrinoRow> fileGroupReader,
+            List<HiveColumnHandle> columnHandles,
             PrefilledColumnValues prefilledColumnValues)
     {
+        return new HudiPageSource<>(
+                pageSource,
+                fileGroupReader,
+                columnHandles,
+                new TrinoRowAppender(columnHandles, prefilledColumnValues)::append,
+                new Metrics(Map.of(TRINO_ROW_MERGE_SPLITS, new LongCount(1))));
+    }
+
+    private HudiPageSource(
+            ConnectorPageSource pageSource,
+            HoodieFileGroupReader<T> fileGroupReader,
+            List<HiveColumnHandle> columnHandles,
+            BiConsumer<PageBuilder, T> recordAppender,
+            Metrics metrics)
+    {
+        this.metrics = metrics;
         this.pageSource = pageSource;
         this.fileGroupReader = fileGroupReader;
         this.pageBuilder = new PageBuilder(columnHandles.stream().map(HiveColumnHandle::getType).toList());
-        this.avroSerializer = new HudiAvroSerializer(columnHandles, prefilledColumnValues);
+        this.recordAppender = recordAppender;
         try {
             this.recordIterator = fileGroupReader.getClosableIterator();
         }
@@ -117,7 +171,7 @@ public class HudiPageSource
     {
         checkState(pageBuilder.isEmpty(), "PageBuilder is not empty at the beginning of a new page");
         while (recordIterator.hasNext()) {
-            avroSerializer.buildRecordInPage(pageBuilder, recordIterator.next());
+            recordAppender.accept(pageBuilder, recordIterator.next());
         }
 
         Page newPage = pageBuilder.build();
@@ -150,6 +204,9 @@ public class HudiPageSource
     @Override
     public Metrics getMetrics()
     {
-        return pageSource.getMetrics();
+        if (metrics.getMetrics().isEmpty()) {
+            return pageSource.getMetrics();
+        }
+        return pageSource.getMetrics().mergeWith(metrics);
     }
 }
