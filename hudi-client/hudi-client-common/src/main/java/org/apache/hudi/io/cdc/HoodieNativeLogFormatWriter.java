@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -265,8 +266,14 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   private void ensureDeleteFileWriter() throws IOException {
     ensureAppendVersion();
     if (deleteFileWriter == null) {
+      try {
+        deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, orderingFieldNames);
+      } catch (IllegalArgumentException e) {
+        // The schema is shared by every delete in this file, so a record-level failure would drop deletes.
+        throw new HoodieAppendException("Native delete logs require top-level ordering fields in the table schema. "
+            + "Configured ordering fields: " + orderingFieldNames, e);
+      }
       deleteLogFile = createNativeLogFile(currentAppendVersion, DELETE_LOG_EXTENSION);
-      deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, orderingFieldNames);
       // The delete records are built through recordContext#constructEngineRecord (see #appendDeleteRecord), so the
       // writer must match the record context's engine type rather than the merger's record type: on Spark executors
       // the reader context for write degrades to Avro (no engine context available), and using the merger record
