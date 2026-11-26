@@ -38,15 +38,23 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
     this.schemaPostProcessor = schemaPostProcessor;
   }
 
+  @Override
+  public HoodieSchema getSourceHoodieSchema() {
+    return resolveSourceHoodieSchema(SchemaProviderWithPostProcessor.class, this::processedSourceSchema);
+  }
+
+  @Override
+  public HoodieSchema getTargetHoodieSchema() {
+    return resolveTargetHoodieSchema(SchemaProviderWithPostProcessor.class, this::processedTargetSchema);
+  }
+
   /**
    * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
    */
   @Override
   @Deprecated
   public Schema getSourceSchema() {
-    HoodieSchema sourceSchema = schemaProvider.getSourceHoodieSchema();
-    return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema).toAvroSchema())
-        .orElse(sourceSchema.toAvroSchema());
+    return resolveSourceAvroSchema(SchemaProviderWithPostProcessor.class, this::processedSourceSchema);
   }
 
   /**
@@ -55,9 +63,23 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getTargetSchema() {
-    HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
-    return schemaPostProcessor.map(processor -> processor.processSchema(targetSchema).toAvroSchema())
-        .orElse(targetSchema.toAvroSchema());
+    return resolveTargetAvroSchema(SchemaProviderWithPostProcessor.class, this::processedTargetSchema);
+  }
+
+  private HoodieSchema processedSourceSchema() {
+    return process(schemaProvider.getSourceHoodieSchema());
+  }
+
+  private HoodieSchema processedTargetSchema() {
+    return process(schemaProvider.getTargetHoodieSchema());
+  }
+
+  private HoodieSchema process(HoodieSchema schema) {
+    // A null schema (e.g. a provider that leaves the target to be inferred from the table) stays null.
+    if (schema == null) {
+      return null;
+    }
+    return schemaPostProcessor.map(processor -> processor.processSchema(schema)).orElse(schema);
   }
 
   public SchemaProvider getOriginalSchemaProvider() {

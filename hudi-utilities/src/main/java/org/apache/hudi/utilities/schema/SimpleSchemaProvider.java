@@ -25,12 +25,16 @@ import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 public class SimpleSchemaProvider extends SchemaProvider {
-
-  private final Schema sourceSchema;
+  private final HoodieSchema sourceSchema;
 
   public SimpleSchemaProvider(JavaSparkContext jssc, HoodieSchema sourceSchema, TypedProperties props) {
     super(props, jssc);
-    this.sourceSchema = sourceSchema.toAvroSchema();
+    this.sourceSchema = sourceSchema;
+  }
+
+  @Override
+  public HoodieSchema getSourceHoodieSchema() {
+    return resolveSourceHoodieSchema(SimpleSchemaProvider.class, () -> sourceSchema);
   }
 
   /**
@@ -39,6 +43,6 @@ public class SimpleSchemaProvider extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getSourceSchema() {
-    return sourceSchema;
+    return resolveSourceAvroSchema(SimpleSchemaProvider.class, () -> sourceSchema);
   }
 }
