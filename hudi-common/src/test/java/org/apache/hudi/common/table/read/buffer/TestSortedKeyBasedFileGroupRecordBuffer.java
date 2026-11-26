@@ -120,6 +120,34 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
   }
 
   @Test
+  void deleteAppliesToEveryBaseRecordWithTheKey() throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieReaderContext<TestRecord> mockReaderContext = mock(HoodieReaderContext.class, RETURNS_DEEP_STUBS);
+    SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(mockReaderContext, readStats);
+
+    // Two base records share key 3, and two share key 6, the last key of the base file and of the log file
+    TestRecord testRecord6Copy = new TestRecord("6", 2);
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(
+        Arrays.asList(testRecord2, testRecord3, new TestRecord("3", 2), testRecord5, testRecord6, testRecord6Copy).iterator()));
+
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    when(dataBlock.getEngineRecordIterator(mockReaderContext)).thenReturn(
+        ClosableIterator.wrap(Arrays.asList(testRecord6Update, testRecord4, testRecord1).iterator()));
+    HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("3", ""));
+    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+    fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
+
+    // An update of a duplicate key still replaces only the first base record with the key
+    List<TestRecord> actualRecords = getActualRecordsForSortedKeyBased(fileGroupRecordBuffer);
+    assertEquals(Arrays.asList(testRecord1, testRecord2, testRecord4, testRecord5, testRecord6Update, testRecord6Copy), actualRecords);
+    assertEquals(2, readStats.getNumInserts());
+    assertEquals(1, readStats.getNumUpdates());
+    assertEquals(2, readStats.getNumDeletes());
+  }
+
+  @Test
   void readWithStreamingRecordBufferLoaderAndEventTimeOrdering() throws IOException {
     HoodieReadStats readStats = new HoodieReadStats();
     TypedProperties properties = new TypedProperties();

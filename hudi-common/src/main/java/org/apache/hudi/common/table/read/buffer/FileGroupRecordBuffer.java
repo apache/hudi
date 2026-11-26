@@ -118,7 +118,10 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   }
 
   protected ExternalSpillableMap<Serializable, BufferedRecord<T>> initializeRecordsMap(String spillableMapBasePath) throws IOException {
-    long maxMemorySizeInBytes = props.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());
+    return createSpillableMap(spillableMapBasePath, props.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue()));
+  }
+
+  protected final ExternalSpillableMap<Serializable, BufferedRecord<T>> createSpillableMap(String spillableMapBasePath, long maxMemorySizeInBytes) throws IOException {
     ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.valueOf(props.getString(SPILLABLE_DISK_MAP_TYPE.key(),
         SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT));
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),

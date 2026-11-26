@@ -51,6 +51,13 @@ public interface UpdateProcessor<T> {
    */
   BufferedRecord<T> processUpdate(String recordKey, BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord, boolean isDelete);
 
+  /**
+   * Counts a base record that a delete removes after an earlier base record with the same key was processed. The change
+   * of the key was already processed with that record, so this one is neither returned nor reported to a callback.
+   */
+  default void processDeletedDuplicate() {
+  }
+
   static <T> UpdateProcessor<T> create(HoodieReadStats readStats, HoodieReaderContext<T> readerContext,
                                        boolean emitDeletes, Option<BaseFileUpdateCallback<T>> updateCallback,
                                        TypedProperties properties) {
@@ -103,6 +110,11 @@ public interface UpdateProcessor<T> {
       } else {
         return handleNonDeletes(previousRecord, mergedRecord);
       }
+    }
+
+    @Override
+    public void processDeletedDuplicate() {
+      readStats.incrementNumDeletes();
     }
 
     protected BufferedRecord<T> handleNonDeletes(BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord) {
@@ -179,6 +191,11 @@ public interface UpdateProcessor<T> {
         callback.onInsert(recordKey, mergedRecord);
       }
       return result;
+    }
+
+    @Override
+    public void processDeletedDuplicate() {
+      delegate.processDeletedDuplicate();
     }
   }
 }

@@ -45,6 +45,7 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
   // when sorting is enabled, this will hold the base file record if it was not used in the previous iteration
   private Option<T> queuedBaseFileRecord = Option.empty();
   private Queue<String> logRecordKeysSorted = null;
+  private BufferedRecord<T> lastAppliedDelete;
 
   SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                       RecordMergeMode recordMergeMode,
@@ -85,8 +86,20 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
       // Iterate until the next log record key is greater than or equal to the base record key
     }
     // if last comparison shows the keys are equal, we remove the log record info, otherwise we can just assume there is no log record for this key
-    BufferedRecord<T> logRecordInfo = comparison == 0 ? records.remove(recordKey) : null;
-    return hasNextBaseRecord(baseRecord, logRecordInfo);
+    return mergeBaseRecord(recordKey, baseRecord, comparison == 0 ? records.remove(recordKey) : null);
+  }
+
+  /**
+   * Base records with the same key are adjacent, so only the delete of the last key is kept.
+   */
+  @Override
+  protected void putAppliedDelete(String recordKey, BufferedRecord<T> delete) {
+    lastAppliedDelete = delete;
+  }
+
+  @Override
+  protected BufferedRecord<T> getAppliedDelete(String recordKey) {
+    return lastAppliedDelete != null && lastAppliedDelete.getRecordKey().equals(recordKey) ? lastAppliedDelete : null;
   }
 
   @Override
