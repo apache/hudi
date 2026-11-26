@@ -94,10 +94,25 @@ public class EventTimeDeletesHudiTablesInitializer
         {
             return switch (this) {
                 case LONG -> ts;
-                case DECIMAL -> DECIMAL_CONVERSION.toBytes(BigDecimal.valueOf(ts).setScale(2), schema, schema.getLogicalType());
+                case DECIMAL -> DECIMAL_CONVERSION.toBytes(decimalOrderingValue(ts), schema, schema.getLogicalType());
                 case TIMESTAMP_MILLIS -> TIMESTAMP_ORDERING_EPOCH_MILLIS + ts;
             };
         }
+    }
+
+    /**
+     * The decimal ordering value for {@code ts}, chosen so that comparing the stored bytes instead of the numbers gets
+     * the order wrong: the base value 0.02 is the single byte 0x02, the higher update 2.56 the two bytes 0x01 0x00, which
+     * sort below it as bytes. A merge that skipped the decimal conversion would keep the base row over k1's update.
+     */
+    private static BigDecimal decimalOrderingValue(long ts)
+    {
+        return switch ((int) ts) {
+            case 50 -> new BigDecimal("0.01");
+            case 100 -> new BigDecimal("0.02");
+            case 200 -> new BigDecimal("2.56");
+            default -> throw new IllegalArgumentException("No decimal ordering value for ts " + ts);
+        };
     }
 
     private final OrderingType orderingType;

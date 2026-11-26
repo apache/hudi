@@ -36,7 +36,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import static io.airlift.slice.Slices.utf8Slice;
-import static io.airlift.slice.Slices.wrappedBuffer;
 import static io.trino.plugin.hudi.query.index.HudiRecordLevelIndexSupport.constructRecordKeys;
 import static io.trino.plugin.hudi.query.index.IndexKeyForm.RECORD_KEY;
 import static io.trino.plugin.hudi.query.index.IndexKeyForm.SECONDARY_KEY;
@@ -114,8 +113,6 @@ public class TestIndexKeyForm
         assertRecordKey("f", REAL, (long) floatToRawIntBits(1.5f), "1.5");
         assertRecordKey("dbl", DOUBLE, 2.25, "2.25");
         assertRecordKey("s", VARCHAR, utf8Slice("abc"), "abc");
-        // A ByteBuffer keys as the hex of its bytes (StringUtils.objToString)
-        assertRecordKey("bin", VARBINARY, wrappedBuffer((byte) 0xCA, (byte) 0xFE), "cafe");
         assertRecordKey("u", UuidType.UUID, javaUuidToTrinoUuid(UUID.fromString("123e4567-e89b-12d3-a456-426614174000")), "123e4567-e89b-12d3-a456-426614174000");
         // Decimals key as BigDecimal.toString at the field's scale, scientific notation included
         assertRecordKey("dec", createDecimalType(10, 2), -12_345L, "-123.45");
@@ -125,8 +122,7 @@ public class TestIndexKeyForm
         // A time keys as its stored count of its own unit; Trino holds picoseconds of the day
         assertRecordKey("t_millis", TIME_MILLIS, TIME_OF_DAY_MICROS / 1000 * 1000 * PICOS_PER_MICRO, "3723456");
         assertRecordKey("t_micros", TIME_MICROS, TIME_OF_DAY_MICROS * PICOS_PER_MICRO, "3723456789");
-        // A local timestamp keys as its wall-clock epoch millis or micros; Trino holds a short timestamp as micros
-        assertRecordKey("lts_millis", TIMESTAMP_MILLIS, EPOCH_MILLIS * 1000, "1704103200123");
+        // A local timestamp-micros keys as its wall-clock epoch micros, which Trino holds a short timestamp as too
         assertRecordKey("lts_micros", TIMESTAMP_MICROS, EPOCH_MICROS, "1704103200123456");
     }
 
@@ -135,10 +131,10 @@ public class TestIndexKeyForm
     {
         TupleDomain<String> domains = TupleDomain.withColumnDomains(Map.of(
                 "d", singleValue(DATE, 19_723L),
-                "lts_millis", multipleValues(TIMESTAMP_MILLIS, List.of(EPOCH_MILLIS * 1000, (EPOCH_MILLIS + 1) * 1000))));
-        List<String> keys = constructRecordKeys(domains, List.of("d", "lts_millis"), SCHEMA, RECORD_KEY);
-        assertThat(keys).containsExactly("d:2024-01-01,lts_millis:1704103200123", "d:2024-01-01,lts_millis:1704103200124");
-        assertThat(keys.getFirst()).isEqualTo(KeyGenUtils.getRecordKey(WRITER_RECORD, List.of("d", "lts_millis"), false));
+                "lts_micros", multipleValues(TIMESTAMP_MICROS, List.of(EPOCH_MICROS, EPOCH_MICROS + 1))));
+        List<String> keys = constructRecordKeys(domains, List.of("d", "lts_micros"), SCHEMA, RECORD_KEY);
+        assertThat(keys).containsExactly("d:2024-01-01,lts_micros:1704103200123456", "d:2024-01-01,lts_micros:1704103200123457");
+        assertThat(keys.getFirst()).isEqualTo(KeyGenUtils.getRecordKey(WRITER_RECORD, List.of("d", "lts_micros"), false));
 
         // A UTC timestamp part has no key text, so the composite key is not built and nothing is pruned
         TupleDomain<String> utcPart = TupleDomain.withColumnDomains(Map.of(
@@ -162,6 +158,10 @@ public class TestIndexKeyForm
         // so neither form can be trusted to be the one a table holds
         assertThat(RECORD_KEY.keyText("ts_millis", fieldSchema("ts_millis"), TIMESTAMP_TZ_MILLIS)).isEmpty();
         assertThat(RECORD_KEY.keyText("ts_micros", fieldSchema("ts_micros"), TIMESTAMP_TZ_MICROS)).isEmpty();
+        // A local timestamp-millis keys as millis on the Avro path but as Spark's timestamp_ntz micros on the row writer
+        assertThat(RECORD_KEY.keyText("lts_millis", fieldSchema("lts_millis"), TIMESTAMP_MILLIS)).isEmpty();
+        // Bytes and fixed key as hex or array text on the Avro path but as a byte[]'s identity string on the row writer
+        assertThat(RECORD_KEY.keyText("bin", fieldSchema("bin"), VARBINARY)).isEmpty();
         // A column that does not carry the field's type (a partition column keeps its metastore type) is not keyed
         assertThat(RECORD_KEY.keyText("ts_millis", fieldSchema("ts_millis"), BIGINT)).isEmpty();
         assertThat(RECORD_KEY.keyText("ts_micros", fieldSchema("ts_micros"), TIMESTAMP_TZ_MILLIS)).isEmpty();

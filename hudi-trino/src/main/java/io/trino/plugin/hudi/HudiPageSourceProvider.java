@@ -15,6 +15,7 @@ package io.trino.plugin.hudi;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import io.airlift.log.Logger;
 import io.trino.filesystem.Location;
@@ -415,9 +416,13 @@ public class HudiPageSourceProvider
             // A domain typed by the metastore cannot be matched against the statistics of a column the file stores
             // under the type it had before a schema evolution, so those are dropped before the parquet predicate
             // ever sees them. See ParquetStatisticsDomains.
-            TupleDomain<ColumnDescriptor> parquetTupleDomain = options.isIgnoreStatistics() || !enablePredicatePushDown
-                    ? TupleDomain.all()
-                    : dropIncomparableDomains(getParquetTupleDomain(descriptorsByPath, getPushdownPredicate(hudiSplit, dynamicFilter, physicalIndexMap), fileSchema, useColumnNames), tableSchema);
+            TupleDomain<ColumnDescriptor> parquetTupleDomain = TupleDomain.all();
+            if (!options.isIgnoreStatistics() && enablePredicatePushDown) {
+                TupleDomain<HiveColumnHandle> pushdownPredicate = getPushdownPredicate(hudiSplit, dynamicFilter, physicalIndexMap);
+                parquetTupleDomain = dropIncomparableDomains(
+                        getParquetTupleDomain(descriptorsByPath, pushdownPredicate, fileSchema, useColumnNames),
+                        misstatedTimestampPaths(pushdownPredicate, fileSchema, useColumnNames, tableSchema));
+            }
 
             TupleDomainParquetPredicate parquetPredicate = buildPredicate(requestedSchema, parquetTupleDomain, descriptorsByPath, timeZone);
 
@@ -491,6 +496,30 @@ public class HudiPageSourceProvider
             conversions.add(parquetType.flatMap(type -> ParquetReadConversions.forColumn(column.getType(), type, fieldSchema)));
         }
         return conversions.build();
+    }
+
+    /**
+     * The file paths of the predicate's columns whose file annotation misstates the timestamp unit their field in
+     * {@code tableSchema} declares, resolved from the handles the way {@link #readConversions} resolves them, so the
+     * statistics guard and the read repair agree on the file column whether it is matched by name or by position.
+     */
+    private static Set<List<String>> misstatedTimestampPaths(TupleDomain<HiveColumnHandle> predicate, MessageType fileSchema, boolean useColumnNames, Optional<HoodieSchema> tableSchema)
+    {
+        if (tableSchema.isEmpty() || predicate.getDomains().isEmpty()) {
+            return Set.of();
+        }
+        ImmutableSet.Builder<List<String>> paths = ImmutableSet.builder();
+        for (HiveColumnHandle column : predicate.getDomains().get().keySet()) {
+            if (!column.isBaseColumn() || column.getColumnType() != HiveColumnHandle.ColumnType.REGULAR) {
+                continue;
+            }
+            HoodieSchema fieldSchema = ParquetReadConversions.fieldSchema(tableSchema.get(), column.getBaseColumnName());
+            getColumnType(column, fileSchema, useColumnNames)
+                    .filter(Type::isPrimitive)
+                    .filter(parquetType -> ParquetReadConversions.storedTimestampUnit(fieldSchema, parquetType.asPrimitiveType()).isPresent())
+                    .ifPresent(parquetType -> paths.add(List.of(parquetType.getName())));
+        }
+        return paths.build();
     }
 
     /**

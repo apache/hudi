@@ -27,7 +27,6 @@ import io.trino.spi.type.Type;
 import io.trino.spi.type.UuidType;
 import io.trino.spi.type.VarbinaryType;
 import io.trino.spi.type.VarcharType;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.LogicalTypeAnnotation.DecimalLogicalTypeAnnotation;
@@ -40,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -107,16 +107,18 @@ public final class ParquetStatisticsDomains
      */
     public static TupleDomain<ColumnDescriptor> dropIncomparableDomains(TupleDomain<ColumnDescriptor> parquetTupleDomain)
     {
-        return dropIncomparableDomains(parquetTupleDomain, Optional.empty());
+        return dropIncomparableDomains(parquetTupleDomain, Set.of());
     }
 
     /**
-     * {@link #dropIncomparableDomains(TupleDomain)}, also dropping the domain of a column whose file annotation
-     * misstates the timestamp unit its field in {@code tableSchema} declares
-     * ({@link ParquetReadConversions#storedTimestampUnit}): its statistics read in the wrong unit, a thousand times
-     * off, and would drop row groups holding matching rows.
+     * {@link #dropIncomparableDomains(TupleDomain)}, also dropping the domain of every column in
+     * {@code misstatedTimestampPaths}, the file paths of the columns whose annotation misstates the timestamp unit their
+     * field declares ({@link ParquetReadConversions#storedTimestampUnit}): their statistics read in the wrong unit, a
+     * thousand times off, and would drop row groups holding matching rows. The caller resolves those paths from the same
+     * column handles the read repairs, so the two agree on which file column a field is whether columns are matched by
+     * name or by position.
      */
-    public static TupleDomain<ColumnDescriptor> dropIncomparableDomains(TupleDomain<ColumnDescriptor> parquetTupleDomain, Optional<HoodieSchema> tableSchema)
+    public static TupleDomain<ColumnDescriptor> dropIncomparableDomains(TupleDomain<ColumnDescriptor> parquetTupleDomain, Set<List<String>> misstatedTimestampPaths)
     {
         if (parquetTupleDomain.isAll() || parquetTupleDomain.isNone()) {
             return parquetTupleDomain;
@@ -128,7 +130,7 @@ public final class ParquetStatisticsDomains
         for (Map.Entry<ColumnDescriptor, Domain> entry : domains.entrySet()) {
             Domain domain = entry.getValue();
             PrimitiveType fileType = entry.getKey().getPrimitiveType();
-            if (misstatesTimestampUnit(entry.getKey(), tableSchema)) {
+            if (misstatedTimestampPaths.contains(List.of(entry.getKey().getPath()))) {
                 log.debug("Not pushing down a %s predicate on %s: the file misstates the column's timestamp unit", domain.getType(), entry.getKey());
                 changed = true;
                 continue;
@@ -153,29 +155,16 @@ public final class ParquetStatisticsDomains
         return TupleDomain.withColumnDomains(comparableDomains);
     }
 
-    private static boolean misstatesTimestampUnit(ColumnDescriptor column, Optional<HoodieSchema> tableSchema)
-    {
-        if (tableSchema.isEmpty()) {
-            return false;
-        }
-        HoodieSchema fieldSchema = tableSchema.get();
-        for (String name : column.getPath()) {
-            fieldSchema = ParquetReadConversions.fieldSchema(fieldSchema, name);
-            if (fieldSchema == null) {
-                return false;
-            }
-        }
-        return ParquetReadConversions.storedTimestampUnit(fieldSchema, column.getPrimitiveType()).isPresent();
-    }
-
     /**
      * A {@code timestamp with time zone} domain rewritten as the {@code timestamp} domain of the same UTC instants,
-     * for an INT64 column the file annotates as UTC-adjusted; empty for every other domain or column.
+     * for an INT64 column the file annotates as UTC-adjusted or an INT96 column; empty for every other domain or column.
      * <p>
      * {@code TupleDomainParquetPredicate.getDomain} has no branch for {@code timestamp with time zone}, so such a
      * domain would only ever prune on the null count. Its {@code timestamp} branch decodes a UTC-adjusted column into
      * the predicate's time zone, which {@code HudiPageSourceProvider} fixes at UTC: so a UTC-adjusted column's
-     * statistics read as the wall-clock times of its instants at UTC, which is what each instant maps to here. The map
+     * statistics read as the wall-clock times of its instants at UTC, which is what each instant maps to here. INT96, an
+     * instant too, decodes into the same zone (and has usable statistics only where a row group's minimum equals its
+     * maximum, PARQUET-1065). The map
      * is exact and order-preserving at Hudi's precisions (millis, micros), so every range keeps its bounds and
      * inclusiveness.
      */
@@ -183,10 +172,7 @@ public final class ParquetStatisticsDomains
     {
         if (!(domain.getType() instanceof TimestampWithTimeZoneType withTimeZoneType)
                 || withTimeZoneType.getPrecision() > TimestampType.MAX_SHORT_PRECISION
-                || fileType.getPrimitiveTypeName() != INT64
-                || !(fileType.getLogicalTypeAnnotation() instanceof TimestampLogicalTypeAnnotation annotation)
-                || !annotation.isAdjustedToUTC()
-                || annotation.getUnit() == null) {
+                || !(fileType.getPrimitiveTypeName() == INT96 || isUtcAdjustedInt64Timestamp(fileType))) {
             return Optional.empty();
         }
         TimestampType timestampType = createTimestampType(withTimeZoneType.getPrecision());
@@ -208,6 +194,14 @@ public final class ParquetStatisticsDomains
                 },
                 allOrNone -> allOrNone.isAll() ? ValueSet.all(timestampType) : ValueSet.none(timestampType));
         return Optional.of(Domain.create(values, domain.isNullAllowed()));
+    }
+
+    private static boolean isUtcAdjustedInt64Timestamp(PrimitiveType fileType)
+    {
+        return fileType.getPrimitiveTypeName() == INT64
+                && fileType.getLogicalTypeAnnotation() instanceof TimestampLogicalTypeAnnotation annotation
+                && annotation.isAdjustedToUTC()
+                && annotation.getUnit() != null;
     }
 
     private static Range utcRange(TimestampType type, Optional<Long> low, boolean lowInclusive, Optional<Long> high, boolean highInclusive)

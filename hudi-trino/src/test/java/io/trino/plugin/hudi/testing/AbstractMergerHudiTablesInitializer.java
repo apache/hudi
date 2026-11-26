@@ -285,9 +285,10 @@ public abstract class AbstractMergerHudiTablesInitializer
 
     /**
      * The data columns Hive sync registers for the table as written so far (its HMS path, {@code support_timestamp}
-     * off as by default), passed through {@link #adjustHiveSyncColumns}.
+     * off as by default), passed through {@link #adjustHiveSyncColumns}. A fixture whose schema Hive sync cannot
+     * register at all overrides this with the columns it registers by hand.
      */
-    private List<Column> metastoreDataColumns()
+    protected List<Column> metastoreDataColumns()
     {
         return adjustHiveSyncColumns(HudiTestUtils.metastoreDataColumns(hiveSyncStorageSchema(stagingTablePath.toString(), !includeMetaColumnsInMetastore()), false));
     }

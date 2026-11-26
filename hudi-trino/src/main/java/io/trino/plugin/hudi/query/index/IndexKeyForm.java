@@ -40,15 +40,21 @@ public enum IndexKeyForm
     /**
      * A record key, as the Avro key generators write it ({@code KeyGenUtils#getRecordKey}): the stored value through
      * {@link org.apache.hudi.common.avro.HoodieAvroUtils#convertValueForAvroLogicalTypes}, then its string form. A date
-     * keys as yyyy-MM-dd, a local timestamp as a count of its own unit from the epoch, a time as its stored int or
+     * keys as yyyy-MM-dd, a local timestamp-micros as its count of micros from the epoch, a time as its stored int or
      * long, a decimal as {@link java.math.BigDecimal#toString} at the field's scale.
      * <p>
-     * A UTC-adjusted timestamp has no key text: the writer keys it as a count of its unit from the epoch on the Avro
-     * path, but as {@link java.sql.Timestamp} text on Spark's row-writer path ({@code BuiltinKeyGenerator}, the
-     * default for bulk_insert) and under
-     * {@code hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled}, a writer option the table
-     * config does not record. A table loaded by bulk_insert and then upserted holds both forms, and a lookup that
-     * finds the keys of one form would prune the file groups holding the other.
+     * A type is keyed only where Spark's row-writer path ({@code BuiltinKeyGenerator}, the default for bulk_insert)
+     * writes the same text as the Avro path, since a table loaded by bulk_insert and then upserted holds both, and a
+     * lookup that finds the keys of one form would prune the file groups holding the other. Not keyed:
+     * <ul>
+     * <li>a UTC-adjusted timestamp: a count of its unit on the Avro path, {@link java.sql.Timestamp} text on the row
+     * writer and under {@code hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled}, a writer
+     * option the table config does not record</li>
+     * <li>a local timestamp-millis: millis on the Avro path, while the row writer keys Spark's timestamp_ntz value, a
+     * count of micros</li>
+     * <li>bytes and fixed: hex or array text on the Avro path, a {@code byte[]}'s identity string on the row
+     * writer</li>
+     * </ul>
      */
     RECORD_KEY,
     /**
@@ -101,10 +107,12 @@ public enum IndexKeyForm
     {
         return switch (this) {
             case RECORD_KEY -> switch (schema.getType()) {
-                case BOOLEAN, INT, LONG, FLOAT, DOUBLE, STRING, ENUM, BYTES, FIXED, UUID, DECIMAL, DATE, TIME -> true;
-                case TIMESTAMP -> !((HoodieSchema.Timestamp) schema).isUtcAdjusted();
-                // A nested value's string form is not a key anyone writes
-                case ARRAY, MAP, RECORD, BLOB, VARIANT, VECTOR, UNION, NULL -> false;
+                case BOOLEAN, INT, LONG, FLOAT, DOUBLE, STRING, ENUM, UUID, DECIMAL, DATE, TIME -> true;
+                case TIMESTAMP -> !((HoodieSchema.Timestamp) schema).isUtcAdjusted()
+                        && ((HoodieSchema.Timestamp) schema).getPrecision() == TimePrecision.MICROS;
+                // Bytes and fixed key differently on the row writer (see above); a nested value's string form is
+                // not a key anyone writes
+                case BYTES, FIXED, ARRAY, MAP, RECORD, BLOB, VARIANT, VECTOR, UNION, NULL -> false;
             };
             // The types HoodieIndexUtils.isSecondaryIndexSupportedType allows
             case SECONDARY_KEY -> switch (schema.getType()) {

@@ -36,11 +36,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
  * millis</li>
  * <li>{@code c_local_ts}: local-timestamp-millis in the table schema, but a bare long in the first file</li>
  * </ul>
- * The first commit writes k1 under the mislabeled schema; the second writes k2, in a file group of its own, under the
- * table schema. Both rows hold the same instants a day apart:
+ * The first commit writes k1's base file under the mislabeled schema, and the second updates k1 the same way into a log
+ * file, so the snapshot read merges a mislabeled base row with a mislabeled log record. The third writes k2, in a file
+ * group of its own, under the table schema:
  * <pre>
- * k1: c_ts 2023-11-14 22:13:20.123 UTC, c_local_ts 2023-11-14 22:13:20.123
- * k2: c_ts 2023-11-15 22:13:20.123 UTC, c_local_ts 2023-11-15 22:13:20.123
+ * k1 base: c_ts 2023-11-14 22:13:20.123 UTC, c_local_ts 2023-11-14 22:13:20.123
+ * k1 log:  c_ts 2023-11-14 23:13:20.123 UTC, c_local_ts 2023-11-14 23:13:20.123
+ * k2:      c_ts 2023-11-15 22:13:20.123 UTC, c_local_ts 2023-11-15 22:13:20.123
  * </pre>
  */
 public class MislabeledTimestampHudiTablesInitializer
@@ -51,6 +53,7 @@ public class MislabeledTimestampHudiTablesInitializer
 
     // 1_700_000_000_123 ms is 2023-11-14 22:13:20.123 UTC
     private static final long FIRST_EPOCH_MILLIS = 1_700_000_000_123L;
+    private static final long MILLIS_PER_HOUR = 3_600_000L;
     private static final long MILLIS_PER_DAY = 86_400_000L;
 
     private static final Schema TABLE_SCHEMA = schema(HoodieSchema.createTimestampMillis(), HoodieSchema.createLocalTimestampMillis());
@@ -92,21 +95,23 @@ public class MislabeledTimestampHudiTablesInitializer
     protected void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)
     {
         try (HoodieJavaWriteClient<HoodieAvroPayload> mislabeledClient = createWriteClient(MISLABELED_SCHEMA)) {
-            String firstCommit = mislabeledClient.startCommit();
-            mislabeledClient.commit(firstCommit, mislabeledClient.bulkInsert(ImmutableList.of(record(MISLABELED_SCHEMA, "k1", 0)), firstCommit));
+            String baseCommit = mislabeledClient.startCommit();
+            mislabeledClient.commit(baseCommit, mislabeledClient.bulkInsert(ImmutableList.of(record(MISLABELED_SCHEMA, "k1", 100L, 0)), baseCommit));
+            String logCommit = mislabeledClient.startCommit();
+            mislabeledClient.commit(logCommit, mislabeledClient.upsert(ImmutableList.of(record(MISLABELED_SCHEMA, "k1", 200L, MILLIS_PER_HOUR)), logCommit));
         }
-        String secondCommit = client.startCommit();
-        client.commit(secondCommit, client.bulkInsert(ImmutableList.of(record(TABLE_SCHEMA, "k2", 1)), secondCommit));
+        String repairedCommit = client.startCommit();
+        client.commit(repairedCommit, client.bulkInsert(ImmutableList.of(record(TABLE_SCHEMA, "k2", 100L, MILLIS_PER_DAY)), repairedCommit));
     }
 
-    private static HoodieRecord<HoodieAvroPayload> record(Schema schema, String key, int day)
+    private static HoodieRecord<HoodieAvroPayload> record(Schema schema, String key, long ts, long millisAfterFirst)
     {
         GenericRecord record = new GenericData.Record(schema);
         record.put(RECORD_KEY_FIELD, key);
-        record.put(ORDERING_FIELD, 100L);
+        record.put(ORDERING_FIELD, ts);
         // Millis in both schemas: the mislabeled one calls them micros, or a plain long
-        record.put("c_ts", FIRST_EPOCH_MILLIS + day * MILLIS_PER_DAY);
-        record.put("c_local_ts", FIRST_EPOCH_MILLIS + day * MILLIS_PER_DAY);
+        record.put("c_ts", FIRST_EPOCH_MILLIS + millisAfterFirst);
+        record.put("c_local_ts", FIRST_EPOCH_MILLIS + millisAfterFirst);
         return avroRecord(record, key);
     }
 }

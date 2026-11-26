@@ -27,6 +27,8 @@ import io.trino.metastore.Table;
 import io.trino.plugin.hudi.testing.CommitTimeOrderingHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.HudiTablesInitializer;
+import io.trino.plugin.hudi.testing.NestedNullFieldHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.UntypeableFieldHudiTablesInitializer;
 import io.trino.spi.security.ConnectorIdentity;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.MaterializedResult;
@@ -51,8 +53,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Column listings (information_schema over a schema) type each table from its Hudi table schema, which
- * means reading every listed table's Hudi metadata. A table whose metadata cannot be read must not fail the listing
- * of the others: it is listed with its metastore column types, while queries naming it still fail.
+ * means reading every listed table's Hudi metadata. A table whose metadata cannot be read, or whose schema has a field
+ * Trino has no type for, must not fail the listing of the others: it is listed with its metastore column types, while
+ * queries naming it still fail.
  */
 public class TestHudiListingWithUnreadableTable
         extends AbstractTestQueryFramework
@@ -66,6 +69,8 @@ public class TestHudiListingWithUnreadableTable
         return HudiQueryRunner.builder()
                 .setDataLoader(new CompositeHudiTablesInitializer(
                         new CommitTimeOrderingHudiTablesInitializer(),
+                        new NestedNullFieldHudiTablesInitializer(),
+                        new UntypeableFieldHudiTablesInitializer(),
                         new UnreadableHudiTableInitializer()))
                 .build();
     }
@@ -88,6 +93,13 @@ public class TestHudiListingWithUnreadableTable
                 "key", "varchar",
                 "code", "char(5)",
                 "ts", "bigint"));
+        // So does one whose schema has a field Trino has no type for, here a decimal(40, 2) registered as a string
+        assertThat(columnTypes.get(UntypeableFieldHudiTablesInitializer.TABLE_NAME)).containsExactlyInAnyOrderEntriesOf(ImmutableMap.of(
+                "key", "varchar",
+                "ts", "bigint",
+                "amount", "varchar"));
+        // A null-only field nested in a record has no column, as Hive sync leaves it out; the rest is schema-typed
+        assertThat(columnTypes.get(NestedNullFieldHudiTablesInitializer.TABLE_NAME)).containsEntry("c_record", "row(\"a\" varchar)");
     }
 
     @Test
@@ -102,6 +114,21 @@ public class TestHudiListingWithUnreadableTable
         MaterializedResult filtered = computeActual("SELECT column_name, data_type FROM information_schema.columns"
                 + " WHERE table_schema = '" + schema() + "' AND table_name = '" + UNREADABLE_TABLE + "'");
         assertThat(filtered.getMaterializedRows()).isEmpty();
+    }
+
+    @Test
+    public void testTableWithAFieldWithoutATrinoTypeFailsWhenNamed()
+    {
+        assertQueryFails("DESCRIBE " + UntypeableFieldHudiTablesInitializer.TABLE_NAME, ".*Trino decimals stop at precision 38.*");
+        assertQueryFails("SELECT * FROM " + UntypeableFieldHudiTablesInitializer.TABLE_NAME, ".*Trino decimals stop at precision 38.*");
+    }
+
+    @Test
+    public void testNestedNullFieldIsLeftOutOfBothReads()
+    {
+        // The base file alone, and the merge of k1's base row with its log record
+        assertQuery("SELECT key, c_record.a FROM " + NestedNullFieldHudiTablesInitializer.TABLE_NAME, "VALUES ('k1', 'base')");
+        assertQuery("SELECT key, c_record.a FROM " + NestedNullFieldHudiTablesInitializer.RT_TABLE_NAME, "VALUES ('k1', 'updated')");
     }
 
     private String schema()

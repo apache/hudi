@@ -28,6 +28,7 @@ import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.Type;
 import io.trino.testing.MaterializedResult;
 import io.trino.testing.TestingConnectorSession;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.parquet.conf.PlainParquetConfiguration;
 import org.apache.parquet.example.data.Group;
 import org.apache.parquet.example.data.simple.SimpleGroupFactory;
@@ -80,6 +81,22 @@ final class TestingBaseFilePageSource
             DynamicFilter dynamicFilter)
             throws Exception
     {
+        return read(baseFile, projection, predicate, useParquetColumnNames, dynamicFilter, Optional.empty());
+    }
+
+    /**
+     * {@link #read(Path, List, TupleDomain, boolean, DynamicFilter)} for a table with {@code tableSchema}, which the
+     * page source repairs misstated timestamps against.
+     */
+    static MaterializedResult read(
+            Path baseFile,
+            List<HiveColumnHandle> projection,
+            TupleDomain<HiveColumnHandle> predicate,
+            boolean useParquetColumnNames,
+            DynamicFilter dynamicFilter,
+            Optional<HoodieSchema> tableSchema)
+            throws Exception
+    {
         long fileSize = Files.size(baseFile);
         HudiSplit split = new HudiSplit(
                 new HudiBaseFile(baseFile.toString(), baseFile.getFileName().toString(), fileSize, 0, 0, fileSize),
@@ -110,7 +127,7 @@ final class TestingBaseFilePageSource
                 DateTimeZone.UTC,
                 dynamicFilter,
                 true,
-                Optional.empty())) {
+                tableSchema)) {
             return materializeSourceDataStream(pageSource, types).toTestTypes();
         }
     }

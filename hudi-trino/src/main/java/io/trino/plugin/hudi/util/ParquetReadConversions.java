@@ -78,9 +78,9 @@ import static org.apache.parquet.schema.Type.Repetition.REPEATED;
  * are read as varbinary and converted.</li>
  * <li>VECTOR: written as a bare FIXED_LEN_BYTE_ARRAY of little-endian elements, which the reader cannot decode into an
  * array. Read as varbinary and decoded into an array of the element type.</li>
- * <li>TIMESTAMP whose file column misstates its unit, the two cases {@code HoodieSchemaRepair} repairs for the Avro
- * readers: a field the table schema declares timestamp-millis but the file labels MICROS (written by the releases
- * #14161 repairs, whose values are millis), and a bare INT64 under a local timestamp. Read as bigint and converted from
+ * <li>TIMESTAMP whose file column misstates its unit, the two cases the parquet base-file readers repair: a field the
+ * table schema declares UTC timestamp-millis but the file labels UTC MICROS (written by the releases #14161 repairs,
+ * whose values are millis), and a bare INT64 under a local timestamp. Read as bigint and converted from
  * the table schema's unit; see {@link #storedTimestampUnit}.</li>
  * </ul>
  * UUID and VECTOR are detected from the column type and the file's parquet type alone: a {@code uuid} column is a
@@ -220,13 +220,16 @@ public final class ParquetReadConversions
 
     /**
      * The unit an INT64 timestamp column really stores its values in, when the file's annotation misstates the one the
-     * field's table schema declares, as {@code HoodieSchemaRepair.needsLogicalTypeRepair} decides for the Avro readers
-     * (and the log blocks they read):
+     * field's table schema declares, as {@code org.apache.parquet.schema.SchemaRepair} decides for the parquet base-file
+     * readers Spark and Hive use:
      * <ul>
-     * <li>a MICROS annotation under a field the table declares timestamp-millis holds millis, as the releases #14161
-     * repairs wrote it</li>
+     * <li>a UTC-adjusted MICROS annotation under a field the table declares UTC-adjusted timestamp-millis holds millis,
+     * as the releases #14161 repairs wrote it</li>
      * <li>a bare INT64 under a local timestamp holds the table's unit</li>
      * </ul>
+     * {@code HoodieSchemaRepair}, which the Avro log blocks are read with, also repairs a local MICROS under a local
+     * millis field. A base file can hold real micros there (the row writer annotates a Spark timestamp_ntz as local
+     * MICROS), so the base read follows the parquet readers and leaves it alone.
      * Empty when the annotation can be trusted or the field's schema is unknown. The parquet reader decodes a misstated
      * column by its annotation (a thousand times off) or, for the bare INT64, refuses it, and its statistics are misread
      * the same way, so {@link ParquetStatisticsDomains} drops a predicate on such a column.
@@ -245,7 +248,9 @@ public final class ParquetReadConversions
         }
         if (annotation instanceof TimestampLogicalTypeAnnotation timestampAnnotation
                 && timestampAnnotation.getUnit() == TimeUnit.MICROS
-                && tableUnit == TimeUnit.MILLIS) {
+                && tableUnit == TimeUnit.MILLIS
+                && timestampAnnotation.isAdjustedToUTC()
+                && timestamp.isUtcAdjusted()) {
             return Optional.of(TimeUnit.MILLIS);
         }
         return Optional.empty();

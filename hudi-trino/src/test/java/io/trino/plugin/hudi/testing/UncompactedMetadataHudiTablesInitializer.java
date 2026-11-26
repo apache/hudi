@@ -355,7 +355,6 @@ public class UncompactedMetadataHudiTablesInitializer
         return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
     }
 
-
     private static Table createTableDefinition(String schemaName, String tableName, Location location, List<Column> dataColumns)
     {
         return Table.builder()

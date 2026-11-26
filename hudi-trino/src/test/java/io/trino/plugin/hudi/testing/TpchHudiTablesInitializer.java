@@ -185,7 +185,6 @@ public class TpchHudiTablesInitializer
         return builder.toString();
     }
 
-
     private static Table createTableDefinition(String schemaName, TpchTable<?> table, Location location, List<Column> columns)
     {
         StorageFormat storageFormat = StorageFormat.create(

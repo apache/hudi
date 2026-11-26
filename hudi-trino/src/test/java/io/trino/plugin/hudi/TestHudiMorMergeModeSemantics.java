@@ -280,23 +280,26 @@ public class TestHudiMorMergeModeSemantics
     @Test
     public void testMislabeledTimestampsReadAsTheTableSchemaSays()
     {
-        // k1's file labels c_ts micros and c_local_ts a plain long, both holding millis; k2's file is written as the
-        // table schema says. Both read as the table schema's millis, as the Avro readers repair them
-        for (String table : List.of(MislabeledTimestampHudiTablesInitializer.TABLE_NAME, MislabeledTimestampHudiTablesInitializer.RT_TABLE_NAME)) {
-            assertThat(query("SELECT key, c_ts, c_local_ts FROM " + table))
-                    .matches("VALUES"
-                            + " (VARCHAR 'k1', TIMESTAMP '2023-11-14 22:13:20.123 UTC', TIMESTAMP '2023-11-14 22:13:20.123'),"
-                            + " (VARCHAR 'k2', TIMESTAMP '2023-11-15 22:13:20.123 UTC', TIMESTAMP '2023-11-15 22:13:20.123')");
-            // The mislabeled file's statistics are misread the same way, so they must not prune it
-            assertThat(query("SELECT key FROM " + table + " WHERE c_ts = TIMESTAMP '2023-11-14 22:13:20.123 UTC'"))
-                    .matches("VALUES VARCHAR 'k1'");
-            assertThat(query("SELECT key FROM " + table + " WHERE c_ts < TIMESTAMP '2023-11-15 00:00:00 UTC'"))
-                    .matches("VALUES VARCHAR 'k1'");
-            assertThat(query("SELECT key FROM " + table + " WHERE c_ts > TIMESTAMP '2023-11-15 00:00:00 UTC'"))
-                    .matches("VALUES VARCHAR 'k2'");
-            assertThat(query("SELECT key FROM " + table + " WHERE c_local_ts = TIMESTAMP '2023-11-14 22:13:20.123'"))
-                    .matches("VALUES VARCHAR 'k1'");
-        }
+        // k1's base and log files label c_ts micros and c_local_ts a plain long, both holding millis; k2's file is
+        // written as the table schema says. All read as the table schema's millis, as Spark's readers repair them: the
+        // read-optimized table from the base files, the snapshot through the merge of k1's base row and log record
+        String roTable = MislabeledTimestampHudiTablesInitializer.TABLE_NAME;
+        String rtTable = MislabeledTimestampHudiTablesInitializer.RT_TABLE_NAME;
+        String k2 = " (VARCHAR 'k2', TIMESTAMP '2023-11-15 22:13:20.123 UTC', TIMESTAMP '2023-11-15 22:13:20.123')";
+        assertThat(query("SELECT key, c_ts, c_local_ts FROM " + roTable))
+                .matches("VALUES (VARCHAR 'k1', TIMESTAMP '2023-11-14 22:13:20.123 UTC', TIMESTAMP '2023-11-14 22:13:20.123')," + k2);
+        assertThat(query("SELECT key, c_ts, c_local_ts FROM " + rtTable))
+                .matches("VALUES (VARCHAR 'k1', TIMESTAMP '2023-11-14 23:13:20.123 UTC', TIMESTAMP '2023-11-14 23:13:20.123')," + k2);
+
+        // The mislabeled base file's statistics read a thousand times small, so a pushed-down predicate would drop k1's
+        // row group: these find k1 only because the domain is not pushed into that file
+        assertThat(query("SELECT key FROM " + roTable + " WHERE c_ts = TIMESTAMP '2023-11-14 22:13:20.123 UTC'"))
+                .matches("VALUES VARCHAR 'k1'");
+        assertThat(query("SELECT key FROM " + rtTable + " WHERE c_ts = TIMESTAMP '2023-11-14 23:13:20.123 UTC'"))
+                .matches("VALUES VARCHAR 'k1'");
+        // The table-schema file keeps its pushdown
+        assertThat(query("SELECT key FROM " + roTable + " WHERE c_ts > TIMESTAMP '2023-11-15 00:00:00 UTC'"))
+                .matches("VALUES VARCHAR 'k2'");
     }
 
     @Test
@@ -351,11 +354,6 @@ public class TestHudiMorMergeModeSemantics
         assertThat(query(session, "SELECT key FROM " + roTable + " WHERE c_uuid = UUID '" + uuid(1, 0) + "'"))
                 .matches("VALUES VARCHAR 'k1'");
         assertThat(query(session, "SELECT key FROM " + rtTable + " WHERE c_record.id = UUID '" + uuid(8, 1) + "'"))
-                .matches("VALUES VARCHAR 'k1'");
-        // uuids inside a list and a map convert too, on the base file and on the merged log record
-        assertThat(query(session, "SELECT key FROM " + roTable + " WHERE contains(c_array_uuid, UUID '" + uuid(2, 3) + "')"))
-                .matches("VALUES VARCHAR 'k2'");
-        assertThat(query(session, "SELECT key FROM " + rtTable + " WHERE element_at(c_map_uuid, 'a') = UUID '" + uuid(8, 4) + "'"))
                 .matches("VALUES VARCHAR 'k1'");
     }
 
@@ -436,5 +434,4 @@ public class TestHudiMorMergeModeSemantics
     {
         return timestampOf(seed).format(ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
-
 }

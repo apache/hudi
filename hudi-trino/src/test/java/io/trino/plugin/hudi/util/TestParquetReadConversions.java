@@ -18,6 +18,7 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.ColumnarArray;
 import io.trino.spi.block.MapBlockBuilder;
 import io.trino.spi.block.RowBlockBuilder;
 import io.trino.spi.type.ArrayType;
@@ -281,8 +282,11 @@ final class TestParquetReadConversions
         org.apache.parquet.schema.Type list = Types.optionalGroup().as(listType())
                 .addField(Types.repeatedGroup().addField(microsUtc).named("list"))
                 .named("tss");
-        assertThat(ParquetReadConversions.forColumn(new ArrayType(TIMESTAMP_TZ_MILLIS), list, HoodieSchema.createArray(millisField)).orElseThrow().readType())
-                .isEqualTo(new ArrayType(BIGINT));
+        ReadConversion listConversion = ParquetReadConversions.forColumn(new ArrayType(TIMESTAMP_TZ_MILLIS), list, HoodieSchema.createArray(millisField)).orElseThrow();
+        assertThat(listConversion.readType()).isEqualTo(new ArrayType(BIGINT));
+        Block readList = build(listConversion.readType(), 1, builder -> ((ArrayBlockBuilder) builder).buildEntry(elements -> BIGINT.writeLong(elements, epochMillis)));
+        Block convertedElements = ColumnarArray.toColumnarArray(listConversion.toColumnType().apply(readList)).getElementsBlock();
+        assertThat(TIMESTAMP_TZ_MILLIS.getLong(convertedElements, 0)).isEqualTo(packDateTimeWithZone(epochMillis, UTC_KEY));
         RowType rowType = RowType.from(List.of(RowType.field("ts", TIMESTAMP_TZ_MILLIS)));
         HoodieSchema record = HoodieSchema.createRecord("r", null, null, List.of(HoodieSchemaField.of("TS", millisField, null, HoodieSchema.NULL_VALUE)));
         assertThat(ParquetReadConversions.forColumn(rowType, Types.optionalGroup().addField(microsUtc).named("r"), record).orElseThrow().readType())
@@ -299,8 +303,15 @@ final class TestParquetReadConversions
         assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MICROS, microsUtc, HoodieSchema.createTimestampMicros())).isEmpty();
         // A millis file under a micros field is a lossless widening the reader handles
         assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MICROS, millisUtc, HoodieSchema.createTimestampMicros())).isEmpty();
-        // HoodieSchemaRepair does not repair a bare long under a UTC timestamp, so neither does the read
+        // Neither repair touches a bare long under a UTC timestamp
         assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MILLIS, bareLong, HoodieSchema.createTimestampMillis())).isEmpty();
+        // A local MICROS under a local millis field holds real micros when the row writer annotated a timestamp_ntz,
+        // so the base read follows the parquet readers' SchemaRepair, which leaves it alone
+        org.apache.parquet.schema.Type microsLocal = Types.primitive(INT64, OPTIONAL).as(timestampType(false, TimeUnit.MICROS)).named("ts");
+        assertThat(ParquetReadConversions.forColumn(TIMESTAMP_MILLIS, microsLocal, HoodieSchema.createLocalTimestampMillis())).isEmpty();
+        // Nor a UTC MICROS under a local millis field, or the reverse
+        assertThat(ParquetReadConversions.forColumn(TIMESTAMP_MILLIS, microsUtc, HoodieSchema.createLocalTimestampMillis())).isEmpty();
+        assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MILLIS, microsLocal, HoodieSchema.createTimestampMillis())).isEmpty();
         // Without the field's schema the precision alone says nothing: a timestamp(3) read of a micros file is a
         // rounding the reader does itself, as for a metastore-typed column
         assertThat(ParquetReadConversions.forColumn(TIMESTAMP_MILLIS, microsUtc)).isEmpty();

@@ -21,15 +21,13 @@ import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
 
 import static io.trino.plugin.hudi.testing.LogicalTypeRecordKeyHudiTablesInitializer.TABLE_NAME;
-import static io.trino.plugin.hudi.testing.LogicalTypeRecordKeyHudiTablesInitializer.UTC_TABLE_NAME;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Record-level index pruning on a composite key of a date and a local timestamp column, whose key text Hudi's key
- * generator wrote as yyyy-MM-dd and epoch millis. The columns read as date and timestamp(3), so the lookup keys must be
- * rebuilt from those values the writer's way for the index to find them. A UTC timestamp key is not looked up at all:
- * Spark's row writer keys it as {@code java.sql.Timestamp} text where the Avro path keys it as a number, so a table can
- * hold both forms (see {@code IndexKeyForm.RECORD_KEY}).
+ * Record-level index pruning on a composite key of a date and a local timestamp-micros column, whose key text Hudi's key
+ * generator wrote as yyyy-MM-dd and epoch micros. The columns read as date and timestamp(6), so the lookup keys must be
+ * rebuilt from those values the writer's way for the index to find them. Key types whose text Spark's row writer writes
+ * differently are not looked up at all; {@code TestIndexKeyForm} pins those.
  */
 public class TestHudiRecordIndexLogicalTypeKeys
         extends AbstractTestQueryFramework
@@ -48,7 +46,7 @@ public class TestHudiRecordIndexLogicalTypeKeys
     {
         assertThat(totalSplits(recordIndexOnly(false), "SELECT name FROM " + TABLE_NAME)).isEqualTo(3);
 
-        String query = "SELECT name FROM " + TABLE_NAME + " WHERE event_date = DATE '2024-01-02' AND event_ts = TIMESTAMP '2024-01-02 10:00:00.123'";
+        String query = "SELECT name FROM " + TABLE_NAME + " WHERE event_date = DATE '2024-01-02' AND event_ts = TIMESTAMP '2024-01-02 10:00:00.123456'";
         MaterializedResult pruned = getQueryRunner().execute(recordIndexOnly(true), query);
         assertThat(pruned.getMaterializedRows()).extracting(row -> row.getField(0)).containsExactly("b");
         assertThat(pruned.getStatementStats().get().getTotalSplits()).isEqualTo(1);
@@ -60,18 +58,9 @@ public class TestHudiRecordIndexLogicalTypeKeys
         // Four lookup keys, two of which exist
         MaterializedResult pruned = getQueryRunner().execute(recordIndexOnly(true),
                 "SELECT name FROM " + TABLE_NAME + " WHERE event_date IN (DATE '2024-01-01', DATE '2024-01-03')"
-                        + " AND event_ts IN (TIMESTAMP '2024-01-01 10:00:00.123', TIMESTAMP '2024-01-03 10:00:00.123')");
+                        + " AND event_ts IN (TIMESTAMP '2024-01-01 10:00:00.123456', TIMESTAMP '2024-01-03 10:00:00.123456')");
         assertThat(pruned.getMaterializedRows()).extracting(row -> row.getField(0)).containsExactlyInAnyOrder("a", "c");
         assertThat(pruned.getStatementStats().get().getTotalSplits()).isEqualTo(2);
-    }
-
-    @Test
-    public void testUtcTimestampKeyIsNotLookedUp()
-    {
-        MaterializedResult result = getQueryRunner().execute(recordIndexOnly(true),
-                "SELECT name FROM " + UTC_TABLE_NAME + " WHERE event_date = DATE '2024-01-02' AND event_ts = TIMESTAMP '2024-01-02 10:00:00.123 UTC'");
-        assertThat(result.getMaterializedRows()).extracting(row -> row.getField(0)).containsExactly("b");
-        assertThat(result.getStatementStats().get().getTotalSplits()).isEqualTo(3);
     }
 
     private Session recordIndexOnly(boolean recordIndexEnabled)
