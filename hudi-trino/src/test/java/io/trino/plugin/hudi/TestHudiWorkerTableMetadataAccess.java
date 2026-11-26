@@ -89,7 +89,7 @@ final class TestHudiWorkerTableMetadataAccess
                 .containsKey(HoodieTableConfig.VERSION.key())
                 .doesNotContainKey(HoodieTableConfig.CREATE_SCHEMA.key());
         assertThat(handle.getCommittedInstants().isPresent())
-                .isEqualTo(handle.getFileGroupReaderTableState().getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT));
+                .isEqualTo(handle.getTableState().getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT));
     }
 
     private HudiTableHandle coordinatorTableHandle(String tableName)

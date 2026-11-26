@@ -30,7 +30,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -71,7 +71,7 @@ public class HudiTableHandle
     private final Optional<Lazy<HoodieSchema>> hudiTableSchema;
     private final Lazy<Map<String, String>> lazyTableConfig;
     private final Lazy<Optional<HudiCommittedInstants>> lazyCommittedInstants;
-    private final Lazy<FileGroupReaderTableState> lazyFileGroupReaderTableState;
+    private final Lazy<TableState> lazyTableState;
     // Coordinator-only
     private final transient Optional<Table> table;
     private final transient Optional<Lazy<HoodieTableMetaClient>> lazyMetaClient;
@@ -209,7 +209,7 @@ public class HudiTableHandle
         this.lazyLatestCommitTime = Lazy.lazily(latestCommitTimeSupplier);
         this.lazyTableConfig = requireNonNull(lazyTableConfig, "lazyTableConfig is null");
         this.lazyCommittedInstants = requireNonNull(lazyCommittedInstants, "lazyCommittedInstants is null");
-        this.lazyFileGroupReaderTableState = Lazy.lazily(() -> buildFileGroupReaderTableState(basePath, lazyTableConfig.get(), lazyCommittedInstants.get()));
+        this.lazyTableState = Lazy.lazily(() -> buildTableState(basePath, lazyTableConfig.get(), lazyCommittedInstants.get()));
     }
 
     /**
@@ -236,7 +236,7 @@ public class HudiTableHandle
         return Optional.of(HudiCommittedInstants.capture(metaClient.getCommitsTimeline(), latestCommitTime));
     }
 
-    private static FileGroupReaderTableState buildFileGroupReaderTableState(
+    private static TableState buildTableState(
             String basePath,
             Map<String, String> tableConfigMap,
             Optional<HudiCommittedInstants> committedInstants)
@@ -244,7 +244,7 @@ public class HudiTableHandle
         checkState(!tableConfigMap.isEmpty(), "Table handle for %s carries no table config", basePath);
         HoodieTableConfig tableConfig = new HoodieTableConfig();
         tableConfig.getProps().putAll(tableConfigMap);
-        return FileGroupReaderTableState.of(
+        return TableState.of(
                 new StoragePath(basePath),
                 tableConfig,
                 Option.fromJavaOptional(committedInstants.map(HudiCommittedInstants::toCommittedInstants)),
@@ -363,9 +363,9 @@ public class HudiTableHandle
      * captured, so reading a file group does not load the table metadata from storage.
      */
     @JsonIgnore
-    public FileGroupReaderTableState getFileGroupReaderTableState()
+    public TableState getTableState()
     {
-        return lazyFileGroupReaderTableState.get();
+        return lazyTableState.get();
     }
 
     // do not serialize constraint columns as they are not needed on workers

@@ -61,8 +61,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.parquet.column.ColumnDescriptor;
@@ -217,7 +217,7 @@ public class HudiPageSourceProvider
                     + hudiSplit.getLogFiles().getFirst().getPath());
         }
 
-        FileGroupReaderTableState tableState = hudiTableHandle.getFileGroupReaderTableState();
+        TableState tableState = hudiTableHandle.getTableState();
         HoodieTableConfig tableConfig = tableState.getTableConfig();
         HoodieSchema dataSchema = requireNonNull(hudiTableHandle.getTableSchema(), "table schema is not set on the table handle");
         TypedProperties readerProps = buildReaderProperties(session, tableConfig);

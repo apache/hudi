@@ -19,7 +19,7 @@ import io.airlift.json.JsonCodec;
 import io.trino.spi.predicate.TupleDomain;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.read.FileGroupReaderTableState;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
@@ -55,7 +55,7 @@ final class TestHudiTableHandle
 
         assertThat(handle.getTableConfig()).isEqualTo(TABLE_CONFIG);
         assertThat(handle.getCommittedInstants()).contains(committedInstants);
-        FileGroupReaderTableState tableState = handle.getFileGroupReaderTableState();
+        TableState tableState = handle.getTableState();
         assertThat(tableState.getBasePath()).isEqualTo(new StoragePath("/test/path"));
         assertThat(tableState.getTableConfig().getTableName()).isEqualTo("test_table");
         assertThat(tableState.getTableConfig().getTableVersion()).isEqualTo(HoodieTableVersion.SIX);
@@ -71,7 +71,7 @@ final class TestHudiTableHandle
     {
         HudiTableHandle handle = CODEC.fromJson(CODEC.toJson(createTableHandle(ImmutableMap.of(), Optional.empty())));
 
-        assertThatThrownBy(handle::getFileGroupReaderTableState)
+        assertThatThrownBy(handle::getTableState)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("carries no table config");
     }
