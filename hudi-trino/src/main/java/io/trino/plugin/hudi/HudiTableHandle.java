@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableSet;
 import io.airlift.log.Logger;
 import io.trino.metastore.Table;
 import io.trino.plugin.hive.HiveColumnHandle;
-import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.TupleDomain;
@@ -116,9 +115,7 @@ public class HudiTableHandle
                         .filterCompletedInstants()
                         .lastInstant()
                         .map(HoodieInstant::requestedTime)
-                        .orElseThrow(() -> new TrinoException(
-                                HudiErrorCode.HUDI_NO_VALID_COMMIT,
-                                "Table has no valid commits")));
+                        .orElse(null));
     }
 
     HudiTableHandle(
@@ -191,10 +188,17 @@ public class HudiTableHandle
         return lazyMetaClient.get().get();
     }
 
+    // Null denotes an initialized table with no completed writes. Such a table produces no splits.
     @JsonProperty
     public String getLatestCommitTime()
     {
         return lazyLatestCommitTime.get();
+    }
+
+    @JsonIgnore
+    public boolean hasCompletedCommits()
+    {
+        return getLatestCommitTime() != null;
     }
 
     @JsonProperty
@@ -236,12 +240,17 @@ public class HudiTableHandle
     @JsonProperty
     public String getTableSchemaStr()
     {
+        if (!hasCompletedCommits()) {
+            return "";
+        }
         return hudiTableSchema
                 .map(Lazy::get)
                 .map(HoodieSchema::toString)
                 .orElse("");
     }
 
+    // Unlike getTableSchemaStr(), this does not check for completed commits: resolving the schema of a table
+    // without any throws. HudiSplitSource finishes such a table before anything calls this.
     @JsonIgnore
     public HoodieSchema getTableSchema()
     {
@@ -275,6 +284,9 @@ public class HudiTableHandle
     @JsonProperty
     public List<HiveColumnHandle> getMergeRequiredColumns()
     {
+        if (!hasCompletedCommits()) {
+            return List.of();
+        }
         return lazyMergeRequiredColumns.get();
     }
 

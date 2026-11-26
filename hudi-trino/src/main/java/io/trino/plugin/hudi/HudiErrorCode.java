@@ -32,7 +32,7 @@ public enum HudiErrorCode
     HUDI_FILESYSTEM_ERROR(7, EXTERNAL),
     HUDI_PARTITION_NOT_FOUND(8, EXTERNAL),
     HUDI_UNSUPPORTED_TABLE_TYPE(9, EXTERNAL),
-    HUDI_NO_VALID_COMMIT(10, EXTERNAL),
+    // HUDI_NO_VALID_COMMIT(10, EXTERNAL) is no longer thrown: a table without completed commits reads as empty
     HUDI_META_CLIENT_ERROR(11, EXTERNAL),
     HUDI_SCHEMA_ERROR(12, EXTERNAL)
     /**/;
