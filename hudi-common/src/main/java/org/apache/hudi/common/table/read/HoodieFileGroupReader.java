@@ -53,10 +53,12 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
@@ -234,12 +236,16 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
           rec -> readerContext.getRecordContext().seal(requiredSchema, rec));
     } else {
       this.baseFileIterator = iter;
-      Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferLoader.getRecordBuffer(
-          readerContext, storage, inputSplit, orderingFieldNames, tableState, props, readerParameters, readStats, fileGroupUpdateCallback);
-      recordBuffer = initializationResult.getLeft();
-      validBlockInstants = initializationResult.getRight();
+      initRecordBuffer();
       recordBuffer.setBaseFileIterator(baseFileIterator);
     }
+  }
+
+  private void initRecordBuffer() {
+    Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferLoader.getRecordBuffer(
+        readerContext, storage, inputSplit, orderingFieldNames, tableState, props, readerParameters, readStats, fileGroupUpdateCallback);
+    recordBuffer = initializationResult.getLeft();
+    validBlockInstants = initializationResult.getRight();
   }
 
   private ClosableIterator<T> makeBaseFileIterator() throws IOException {
@@ -411,6 +417,23 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
   public ClosableIterator<BufferedRecord<T>> getLogRecordsOnly() throws IOException {
     initRecordIterators();
     return recordBuffer.getLogRecordIterator();
+  }
+
+  /**
+   * Reads the log files without opening the base file and returns the buffered log records, for engines that merge
+   * them into base file rows themselves. The records are keyed by base file row position when
+   * {@link HoodieReaderContext#getShouldMergeUseRecordPosition()} is true after this call, and by record key
+   * otherwise. After a fallback to key-based merging, deletes read without their record keys stay keyed by position,
+   * and a record keyed by the record key of the same base file row is newer than such a delete.
+   * The map is valid until this reader is closed, and this reader is not iterated after this call.
+   */
+  public Map<Serializable, BufferedRecord<T>> getLogRecordsByPositionOrKey() throws IOException {
+    ValidationUtils.checkState(recordBuffer == null && baseFileIterator == null, "The log records of this reader are already read");
+    ValidationUtils.checkArgument(!readerParameters.isSortOutputs(), "Log records are not returned for sorted output");
+    initRecordBuffer();
+    ValidationUtils.checkState(recordBuffer.getBufferType() != HoodieFileGroupRecordBuffer.BufferType.UNMERGED,
+        "Log records are not returned when merging is skipped");
+    return recordBuffer.getLogRecords();
   }
 
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<BufferedRecord<T>> {

@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -62,7 +63,15 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
   private static final String ROW_INDEX_COLUMN_NAME = "row_index";
   public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
+
+  /**
+   * Reader property: under commit-time ordering, take a delete block's positions from its header without reading
+   * its content. The deletes then carry no record key, so it is ignored when the reader emits deletes or reports
+   * updates to a callback, which need those keys.
+   */
+  public static final String SKIP_DELETE_BLOCK_CONTENT = "hoodie.merge.record.positions.skip.delete.content";
   protected final String baseFileInstantTime;
+  private final boolean skipDeleteBlockContent;
   private long nextRecordPosition = 0L;
   private boolean needToDoHybridStrategy = false;
 
@@ -75,6 +84,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
                                             UpdateProcessor<T> updateProcessor) {
     super(readerContext, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     this.baseFileInstantTime = baseFileInstantTime;
+    this.skipDeleteBlockContent = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
+        && props.getBoolean(SKIP_DELETE_BLOCK_CONTENT, false)
+        && !updateProcessor.readsDeleteKeys();
   }
 
   /**
@@ -204,6 +216,16 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       return;
     }
 
+    if (skipDeleteBlockContent) {
+      // Under commit-time ordering a delete at a position supersedes everything before it, so the positions in the
+      // header are all the merge needs. The deletes carry no record key, so a later fallback to key-based merging
+      // keeps them as position deletes.
+      for (Long recordPosition : recordPositions) {
+        records.put(recordPosition, BufferedRecords.createDelete(null, OrderingValues.getDefault()));
+      }
+      return;
+    }
+
     List<BufferedRecord<T>> deleteRecords = deleteBlock.getRecordsToDelete(readerContext);
     if (deleteRecords.size() != recordPositions.size()) {
       throw new HoodieException(String.format(
@@ -264,12 +286,15 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       //see if there is a delete block with record positions
       nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, readerSchema,
           ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
-      BufferedRecord<T> logRecordInfo  = records.remove(nextRecordPosition++);
-      if (logRecordInfo != null) {
-        //we have a delete that was not to be able to be converted. Since it is the newest version, the record is deleted
-        //remove a key based record if it exists
-        records.remove(readerContext.getRecordContext().getRecordKey(baseRecord, readerSchema));
-        return false;
+      BufferedRecord<T> positionDelete = records.remove(nextRecordPosition++);
+      if (positionDelete != null) {
+        // Deletes stay keyed by position only if buffered before the fallback, so a record buffered under the key
+        // of this row since the fallback is newer
+        BufferedRecord<T> keyRecord = records.remove(readerContext.getRecordContext().getRecordKey(baseRecord, readerSchema));
+        BufferedRecord<T> logRecord = keyRecord == null
+            ? positionDelete
+            : bufferedRecordMerger.deltaMerge(keyRecord, positionDelete).orElse(positionDelete);
+        return hasNextBaseRecord(baseRecord, logRecord);
       }
     }
     return super.hasNextBaseRecord(baseRecord);
