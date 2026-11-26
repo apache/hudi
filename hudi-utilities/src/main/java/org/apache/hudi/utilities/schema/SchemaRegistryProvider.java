@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -148,9 +149,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
     String convert(ParsedSchema schema) throws IOException;
   }
 
-  public Schema parseSchemaFromRegistry(String registryUrl) {
+  public HoodieSchema parseSchemaFromRegistry(String registryUrl) {
     String schema = fetchSchemaFromRegistry(registryUrl);
-    return new Schema.Parser().parse(schema);
+    return new HoodieSchema.Parser().parse(schema);
   }
 
   /**
@@ -309,12 +310,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   }
 
-  /**
-   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
-   */
   @Override
-  @Deprecated
-  public Schema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     try {
       return parseSchemaFromRegistry(registryUrl);
@@ -327,11 +324,16 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   /**
-   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
    */
   @Override
   @Deprecated
-  public Schema getTargetSchema() {
+  public Schema getSourceSchema() {
+    return getSourceHoodieSchema().toAvroSchema();
+  }
+
+  @Override
+  public HoodieSchema getTargetHoodieSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     String targetRegistryUrl =
         getStringWithAltKeys(config, HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL, registryUrl);
@@ -344,5 +346,14 @@ public class SchemaRegistryProvider extends SchemaProvider {
           Config.TARGET_SCHEMA_REGISTRY_URL_PROP,
           StringUtils.truncate(targetRegistryUrl, 10, 10)), e);
     }
+  }
+
+  /**
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   */
+  @Override
+  @Deprecated
+  public Schema getTargetSchema() {
+    return getTargetHoodieSchema().toAvroSchema();
   }
 }

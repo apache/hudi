@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
-import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -46,7 +45,6 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  */
 public class HiveSchemaProvider extends SchemaProvider {
 
-  @Getter
   private final HoodieSchema sourceHoodieSchema;
   // Null when no target table is configured; getTargetHoodieSchema() then falls back to the source schema.
   private HoodieSchema targetHoodieSchema;
@@ -92,6 +90,11 @@ public class HiveSchemaProvider extends SchemaProvider {
         throw new HoodieSchemaFetchException(String.format("Can't find Hive table: %s.%s", targetSchemaDatabaseName, targetSchemaTableName), e);
       }
     }
+  }
+
+  @Override
+  public HoodieSchema getSourceHoodieSchema() {
+    return sourceHoodieSchema;
   }
 
   /**

@@ -38,15 +38,27 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
     this.schemaPostProcessor = schemaPostProcessor;
   }
 
+  @Override
+  public HoodieSchema getSourceHoodieSchema() {
+    HoodieSchema sourceSchema = schemaProvider.getSourceHoodieSchema();
+    return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema))
+        .orElse(sourceSchema);
+  }
+
+  @Override
+  public HoodieSchema getTargetHoodieSchema() {
+    HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
+    return schemaPostProcessor.map(processor -> processor.processSchema(targetSchema))
+        .orElse(targetSchema);
+  }
+
   /**
    * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
    */
   @Override
   @Deprecated
   public Schema getSourceSchema() {
-    HoodieSchema sourceSchema = schemaProvider.getSourceHoodieSchema();
-    return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema).toAvroSchema())
-        .orElse(sourceSchema.toAvroSchema());
+    return getSourceHoodieSchema().toAvroSchema();
   }
 
   /**
@@ -55,9 +67,7 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
   @Override
   @Deprecated
   public Schema getTargetSchema() {
-    HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
-    return schemaPostProcessor.map(processor -> processor.processSchema(targetSchema).toAvroSchema())
-        .orElse(targetSchema.toAvroSchema());
+    return getTargetHoodieSchema().toAvroSchema();
   }
 
   public SchemaProvider getOriginalSchemaProvider() {

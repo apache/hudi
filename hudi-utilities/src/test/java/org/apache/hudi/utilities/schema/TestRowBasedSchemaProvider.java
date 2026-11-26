@@ -18,10 +18,17 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+
 import org.apache.avro.Schema;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -32,6 +39,24 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class TestRowBasedSchemaProvider {
 
   @Test
+  void testGetSourceHoodieSchema() {
+    StructType rowStruct = new StructType()
+        .add("id", DataTypes.StringType, false)
+        .add("name", DataTypes.StringType, true);
+
+    RowBasedSchemaProvider rowBasedSchemaProvider = new RowBasedSchemaProvider(rowStruct);
+    HoodieSchema sourceSchema = rowBasedSchemaProvider.getSourceHoodieSchema();
+
+    List<String> actualFieldNames = sourceSchema.getFields().stream()
+        .map(HoodieSchemaField::name)
+        .collect(Collectors.toList());
+
+    assertEquals(RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME, sourceSchema.getName());
+    assertEquals(Arrays.asList("id", "name"), actualFieldNames);
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
   void testSourceSchemaIsDerivedFromRowStruct() {
     Schema sourceSchema = new RowBasedSchemaProvider(
         new StructType().add("id", DataTypes.LongType, false)).getSourceSchema();
