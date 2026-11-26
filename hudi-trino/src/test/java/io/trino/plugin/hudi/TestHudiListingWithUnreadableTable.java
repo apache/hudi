@@ -98,8 +98,11 @@ public class TestHudiListingWithUnreadableTable
                 "key", "varchar",
                 "ts", "bigint",
                 "amount", "varchar"));
-        // A null-only field nested in a record has no column, as Hive sync leaves it out; the rest is schema-typed
-        assertThat(columnTypes.get(NestedNullFieldHudiTablesInitializer.TABLE_NAME)).containsEntry("c_record", "row(\"a\" varchar)");
+        // A null-only field nested in a record has no column, as Hive sync leaves it out, and the table lists with its
+        // schema types: c_uuid is a uuid where the metastore says binary
+        assertThat(columnTypes.get(NestedNullFieldHudiTablesInitializer.TABLE_NAME))
+                .containsEntry("c_record", "row(\"a\" varchar)")
+                .containsEntry("c_uuid", "uuid");
     }
 
     @Test
@@ -121,14 +124,6 @@ public class TestHudiListingWithUnreadableTable
     {
         assertQueryFails("DESCRIBE " + UntypeableFieldHudiTablesInitializer.TABLE_NAME, ".*Trino decimals stop at precision 38.*");
         assertQueryFails("SELECT * FROM " + UntypeableFieldHudiTablesInitializer.TABLE_NAME, ".*Trino decimals stop at precision 38.*");
-    }
-
-    @Test
-    public void testNestedNullFieldIsLeftOutOfBothReads()
-    {
-        // The base file alone, and the merge of k1's base row with its log record
-        assertQuery("SELECT key, c_record.a FROM " + NestedNullFieldHudiTablesInitializer.TABLE_NAME, "VALUES ('k1', 'base')");
-        assertQuery("SELECT key, c_record.a FROM " + NestedNullFieldHudiTablesInitializer.RT_TABLE_NAME, "VALUES ('k1', 'updated')");
     }
 
     private String schema()

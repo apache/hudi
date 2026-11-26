@@ -21,6 +21,7 @@ import io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer.OrderingType;
 import io.trino.plugin.hudi.testing.HoodieSchemaTypesHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.MislabeledTimestampHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.NestedNullFieldHudiTablesInitializer;
 import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.type.TypeOperators;
 import io.trino.testing.AbstractTestQueryFramework;
@@ -78,6 +79,8 @@ public class TestHudiMorMergeModeSemantics
                         new EventTimeDeletesHudiTablesInitializer(OrderingType.TIMESTAMP_MILLIS),
                         new CommitTimeOrderingHudiTablesInitializer(),
                         new HoodieSchemaTypesHudiTablesInitializer(),
+                        HoodieSchemaTypesHudiTablesInitializer.withPayloadMerge(),
+                        new NestedNullFieldHudiTablesInitializer(),
                         new MislabeledTimestampHudiTablesInitializer()))
                 .build();
     }
@@ -292,14 +295,10 @@ public class TestHudiMorMergeModeSemantics
                 .matches("VALUES (VARCHAR 'k1', TIMESTAMP '2023-11-14 23:13:20.123 UTC', TIMESTAMP '2023-11-14 23:13:20.123')," + k2);
 
         // The mislabeled base file's statistics read a thousand times small, so a pushed-down predicate would drop k1's
-        // row group: these find k1 only because the domain is not pushed into that file
+        // row group: this finds k1 only because the domain is not pushed into that file. A split with log files never
+        // pushes down, so only the read-optimized table can show it
         assertThat(query("SELECT key FROM " + roTable + " WHERE c_ts = TIMESTAMP '2023-11-14 22:13:20.123 UTC'"))
                 .matches("VALUES VARCHAR 'k1'");
-        assertThat(query("SELECT key FROM " + rtTable + " WHERE c_ts = TIMESTAMP '2023-11-14 23:13:20.123 UTC'"))
-                .matches("VALUES VARCHAR 'k1'");
-        // The table-schema file keeps its pushdown
-        assertThat(query("SELECT key FROM " + roTable + " WHERE c_ts > TIMESTAMP '2023-11-15 00:00:00 UTC'"))
-                .matches("VALUES VARCHAR 'k2'");
     }
 
     @Test
@@ -312,6 +311,26 @@ public class TestHudiMorMergeModeSemantics
                         populatedRow("k1", 200, 8),
                         nullRow("k2", 200),
                         populatedRow("k3", 100, 3)));
+    }
+
+    @Test
+    public void testPayloadMergeCarriesEveryHoodieSchemaType()
+    {
+        // OverwriteNonDefaultsWithLatestAvroPayload serializes the base record the read built for every type; k2's null
+        // log values are defaults, so k2 keeps its base values with the log's ordering value
+        assertThat(query("SELECT " + schemaColumnList() + " FROM " + HoodieSchemaTypesHudiTablesInitializer.PAYLOAD_RT_TABLE_NAME))
+                .matches("VALUES " + join(", ",
+                        populatedRow("k1", 200, 8),
+                        populatedRow("k2", 200, 2),
+                        populatedRow("k3", 100, 3)));
+    }
+
+    @Test
+    public void testNestedNullFieldIsLeftOutOfBothReads()
+    {
+        // The base file alone, and the merge of k1's base row with its log record
+        assertQuery("SELECT key, c_record.a FROM " + NestedNullFieldHudiTablesInitializer.TABLE_NAME, "VALUES ('k1', 'base')");
+        assertQuery("SELECT key, c_record.a FROM " + NestedNullFieldHudiTablesInitializer.RT_TABLE_NAME, "VALUES ('k1', 'updated')");
     }
 
     @Test

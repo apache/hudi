@@ -80,7 +80,7 @@ import static org.apache.parquet.schema.Type.Repetition.REPEATED;
  * array. Read as varbinary and decoded into an array of the element type.</li>
  * <li>TIMESTAMP whose file column misstates its unit, the two cases the parquet base-file readers repair: a field the
  * table schema declares UTC timestamp-millis but the file labels UTC MICROS (written by the releases #14161 repairs,
- * whose values are millis), and a bare INT64 under a local timestamp. Read as bigint and converted from
+ * whose values are millis), and a bare INT64 under any timestamp (a local one, or a long promoted to a timestamp). Read as bigint and converted from
  * the table schema's unit; see {@link #storedTimestampUnit}.</li>
  * </ul>
  * UUID and VECTOR are detected from the column type and the file's parquet type alone: a {@code uuid} column is a
@@ -226,6 +226,9 @@ public final class ParquetReadConversions
      * <li>a UTC-adjusted MICROS annotation under a field the table declares UTC-adjusted timestamp-millis holds millis,
      * as the releases #14161 repairs wrote it</li>
      * <li>a bare INT64 under a local timestamp holds the table's unit</li>
+     * <li>a bare INT64 under a UTC timestamp holds the table's unit too: a long column promoted to a timestamp under
+     * {@code hoodie.write.timestamp.logical.type.overrides} (#19384) leaves the files written before as bare INT64,
+     * and the override declares the unit their longs count in</li>
      * </ul>
      * {@code HoodieSchemaRepair}, which the Avro log blocks are read with, also repairs a local MICROS under a local
      * millis field. A base file can hold real micros there (the row writer annotates a Spark timestamp_ntz as local
@@ -244,7 +247,7 @@ public final class ParquetReadConversions
         TimeUnit tableUnit = timestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS ? TimeUnit.MILLIS : TimeUnit.MICROS;
         LogicalTypeAnnotation annotation = fileType.getLogicalTypeAnnotation();
         if (annotation == null) {
-            return timestamp.isUtcAdjusted() ? Optional.empty() : Optional.of(tableUnit);
+            return Optional.of(tableUnit);
         }
         if (annotation instanceof TimestampLogicalTypeAnnotation timestampAnnotation
                 && timestampAnnotation.getUnit() == TimeUnit.MICROS

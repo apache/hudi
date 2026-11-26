@@ -19,9 +19,9 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.HoodieJavaWriteClient;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -55,6 +55,9 @@ public class HoodieSchemaTypesHudiTablesInitializer
 {
     public static final String TABLE_NAME = "hoodie_schema_types_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
+    /** The same rows merged by {@code OverwriteNonDefaultsWithLatestAvroPayload}, see {@link #withPayloadMerge()}. */
+    public static final String PAYLOAD_TABLE_NAME = "hoodie_schema_types_payload_mor";
+    public static final String PAYLOAD_RT_TABLE_NAME = PAYLOAD_TABLE_NAME + "_rt";
 
     public static final List<String> ENUM_SYMBOLS = ImmutableList.of("RED", "GREEN", "BLUE");
 
@@ -103,9 +106,27 @@ public class HoodieSchemaTypesHudiTablesInitializer
     private static final Schema AVRO_SCHEMA = TABLE_SCHEMA.toAvroSchema();
     private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
+    private final boolean payloadMerge;
+
     public HoodieSchemaTypesHudiTablesInitializer()
     {
-        super(TABLE_NAME);
+        this(TABLE_NAME, false);
+    }
+
+    private HoodieSchemaTypesHudiTablesInitializer(String tableName, boolean payloadMerge)
+    {
+        super(tableName);
+        this.payloadMerge = payloadMerge;
+    }
+
+    /**
+     * The table merged by {@code OverwriteNonDefaultsWithLatestAvroPayload} rather than by commit time, so the merge
+     * serializes the base record the read builds through {@code BaseAvroPayload}, which checks every value's Java type.
+     * Its null log values are defaults, so k2 keeps its base values.
+     */
+    public static HoodieSchemaTypesHudiTablesInitializer withPayloadMerge()
+    {
+        return new HoodieSchemaTypesHudiTablesInitializer(PAYLOAD_TABLE_NAME, true);
     }
 
     @Override
@@ -114,16 +135,25 @@ public class HoodieSchemaTypesHudiTablesInitializer
         return AVRO_SCHEMA;
     }
 
+
     @Override
     protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
     {
-        tableBuilder.setRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
+        if (payloadMerge) {
+            tableBuilder.setPayloadClassName(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+            return;
+        }
+        super.configureTableConfig(tableBuilder);
     }
 
     @Override
     protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
     {
-        writeConfigBuilder.withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
+        if (payloadMerge) {
+            writeConfigBuilder.withWritePayLoad(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+            return;
+        }
+        super.configureWriteConfig(writeConfigBuilder);
     }
 
     @Override

@@ -20,8 +20,10 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.ColumnarArray;
 import io.trino.spi.block.MapBlockBuilder;
+import io.trino.spi.block.RowBlock;
 import io.trino.spi.block.RowBlockBuilder;
 import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.LongTimestampWithTimeZone;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
@@ -278,6 +280,14 @@ final class TestParquetReadConversions
                 .toColumnType().apply(bigints(epochMillis * 1000 + 456));
         assertThat(TIMESTAMP_MICROS.getLong(localMicros, 0)).isEqualTo(epochMillis * 1000 + 456);
 
+        // A bare long under a UTC timestamp: a long column promoted under timestamp.logical.type.overrides (#19384)
+        Block promotedMillis = ParquetReadConversions.forColumn(TIMESTAMP_TZ_MILLIS, bareLong, HoodieSchema.createTimestampMillis()).orElseThrow()
+                .toColumnType().apply(bigints(epochMillis));
+        assertThat(TIMESTAMP_TZ_MILLIS.getLong(promotedMillis, 0)).isEqualTo(packDateTimeWithZone(epochMillis, UTC_KEY));
+        Block promotedMicros = ParquetReadConversions.forColumn(TIMESTAMP_TZ_MICROS, bareLong, HoodieSchema.createTimestampMicros()).orElseThrow()
+                .toColumnType().apply(bigints(epochMillis * 1000 + 456));
+        assertThat(TIMESTAMP_TZ_MICROS.getObject(promotedMicros, 0)).isEqualTo(LongTimestampWithTimeZone.fromEpochMillisAndFraction(epochMillis, 456_000_000, UTC_KEY));
+
         // Nested, as a list element and as a row field, the field matched case-insensitively
         org.apache.parquet.schema.Type list = Types.optionalGroup().as(listType())
                 .addField(Types.repeatedGroup().addField(microsUtc).named("list"))
@@ -289,8 +299,11 @@ final class TestParquetReadConversions
         assertThat(TIMESTAMP_TZ_MILLIS.getLong(convertedElements, 0)).isEqualTo(packDateTimeWithZone(epochMillis, UTC_KEY));
         RowType rowType = RowType.from(List.of(RowType.field("ts", TIMESTAMP_TZ_MILLIS)));
         HoodieSchema record = HoodieSchema.createRecord("r", null, null, List.of(HoodieSchemaField.of("TS", millisField, null, HoodieSchema.NULL_VALUE)));
-        assertThat(ParquetReadConversions.forColumn(rowType, Types.optionalGroup().addField(microsUtc).named("r"), record).orElseThrow().readType())
-                .isEqualTo(RowType.from(List.of(RowType.field("ts", BIGINT))));
+        ReadConversion rowConversion = ParquetReadConversions.forColumn(rowType, Types.optionalGroup().addField(microsUtc).named("r"), record).orElseThrow();
+        assertThat(rowConversion.readType()).isEqualTo(RowType.from(List.of(RowType.field("ts", BIGINT))));
+        Block readRow = build(rowConversion.readType(), 1, builder -> ((RowBlockBuilder) builder).buildEntry(fields -> BIGINT.writeLong(fields.getFirst(), epochMillis)));
+        Block convertedField = RowBlock.getRowFieldsFromBlock(rowConversion.toColumnType().apply(readRow)).getFirst();
+        assertThat(TIMESTAMP_TZ_MILLIS.getLong(convertedField, 0)).isEqualTo(packDateTimeWithZone(epochMillis, UTC_KEY));
     }
 
     @Test
@@ -303,8 +316,6 @@ final class TestParquetReadConversions
         assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MICROS, microsUtc, HoodieSchema.createTimestampMicros())).isEmpty();
         // A millis file under a micros field is a lossless widening the reader handles
         assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MICROS, millisUtc, HoodieSchema.createTimestampMicros())).isEmpty();
-        // Neither repair touches a bare long under a UTC timestamp
-        assertThat(ParquetReadConversions.forColumn(TIMESTAMP_TZ_MILLIS, bareLong, HoodieSchema.createTimestampMillis())).isEmpty();
         // A local MICROS under a local millis field holds real micros when the row writer annotated a timestamp_ntz,
         // so the base read follows the parquet readers' SchemaRepair, which leaves it alone
         org.apache.parquet.schema.Type microsLocal = Types.primitive(INT64, OPTIONAL).as(timestampType(false, TimeUnit.MICROS)).named("ts");

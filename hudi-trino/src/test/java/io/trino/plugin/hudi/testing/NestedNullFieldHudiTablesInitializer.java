@@ -18,14 +18,11 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.HoodieJavaWriteClient;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.config.HoodieWriteConfig;
 
 import static org.apache.hudi.common.avro.HoodieAvroUtils.getNonNullTypeFromUnion;
 
@@ -49,7 +46,9 @@ public class NestedNullFieldHudiTablesInitializer
             HoodieSchemaField.of(ORDERING_FIELD, HoodieSchema.create(HoodieSchemaType.LONG)),
             HoodieSchemaField.of("c_record", HoodieSchema.createNullable(HoodieSchema.createRecord("c_record", null, null, ImmutableList.of(
                     HoodieSchemaField.of("a", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING)), null, HoodieSchema.NULL_VALUE),
-                    HoodieSchemaField.of("b", HoodieSchema.create(HoodieSchemaType.NULL), null, HoodieSchema.NULL_VALUE)))), null, HoodieSchema.NULL_VALUE)))
+                    HoodieSchemaField.of("b", HoodieSchema.create(HoodieSchemaType.NULL), null, HoodieSchema.NULL_VALUE)))), null, HoodieSchema.NULL_VALUE),
+            // Typed uuid from the schema, binary in the metastore: tells a schema-typed listing from the fallback
+            HoodieSchemaField.of("c_uuid", HoodieSchema.createNullable(HoodieSchema.createUUID()), null, HoodieSchema.NULL_VALUE)))
             .toAvroSchema();
 
     public NestedNullFieldHudiTablesInitializer()
@@ -63,17 +62,6 @@ public class NestedNullFieldHudiTablesInitializer
         return AVRO_SCHEMA;
     }
 
-    @Override
-    protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
-    {
-        tableBuilder.setRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
-    }
-
-    @Override
-    protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
-    {
-        writeConfigBuilder.withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
-    }
 
     @Override
     protected void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)
@@ -92,6 +80,7 @@ public class NestedNullFieldHudiTablesInitializer
         GenericRecord nested = new GenericData.Record(getNonNullTypeFromUnion(AVRO_SCHEMA.getField("c_record").schema()));
         nested.put("a", value);
         record.put("c_record", nested);
+        record.put("c_uuid", "00000000-0000-4000-8000-000000000001");
         return avroRecord(record, "k1");
     }
 }

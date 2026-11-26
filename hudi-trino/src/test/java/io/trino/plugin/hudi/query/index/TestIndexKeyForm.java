@@ -88,6 +88,7 @@ public class TestIndexKeyForm
             HoodieSchemaField.of("dbl", HoodieSchema.create(HoodieSchemaType.DOUBLE)),
             HoodieSchemaField.of("s", HoodieSchema.create(HoodieSchemaType.STRING)),
             HoodieSchemaField.of("bin", HoodieSchema.create(HoodieSchemaType.BYTES)),
+            HoodieSchemaField.of("fx", HoodieSchema.createFixed("fx", null, null, 2)),
             HoodieSchemaField.of("u", HoodieSchema.createUUID()),
             HoodieSchemaField.of("dec", DECIMAL_BYTES),
             HoodieSchemaField.of("dec_fixed", DECIMAL_FIXED),
@@ -162,6 +163,7 @@ public class TestIndexKeyForm
         assertThat(RECORD_KEY.keyText("lts_millis", fieldSchema("lts_millis"), TIMESTAMP_MILLIS)).isEmpty();
         // Bytes and fixed key as hex or array text on the Avro path but as a byte[]'s identity string on the row writer
         assertThat(RECORD_KEY.keyText("bin", fieldSchema("bin"), VARBINARY)).isEmpty();
+        assertThat(RECORD_KEY.keyText("fx", fieldSchema("fx"), VARBINARY)).isEmpty();
         // A column that does not carry the field's type (a partition column keeps its metastore type) is not keyed
         assertThat(RECORD_KEY.keyText("ts_millis", fieldSchema("ts_millis"), BIGINT)).isEmpty();
         assertThat(RECORD_KEY.keyText("ts_micros", fieldSchema("ts_micros"), TIMESTAMP_TZ_MILLIS)).isEmpty();

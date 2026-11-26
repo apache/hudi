@@ -157,14 +157,18 @@ public final class ParquetStatisticsDomains
 
     /**
      * A {@code timestamp with time zone} domain rewritten as the {@code timestamp} domain of the same UTC instants,
-     * for an INT64 column the file annotates as UTC-adjusted or an INT96 column; empty for every other domain or column.
+     * for an INT64 column the file annotates as UTC-adjusted, or an INT96 column above millisecond precision; empty for
+     * every other domain or column.
      * <p>
      * {@code TupleDomainParquetPredicate.getDomain} has no branch for {@code timestamp with time zone}, so such a
      * domain would only ever prune on the null count. Its {@code timestamp} branch decodes a UTC-adjusted column into
      * the predicate's time zone, which {@code HudiPageSourceProvider} fixes at UTC: so a UTC-adjusted column's
      * statistics read as the wall-clock times of its instants at UTC, which is what each instant maps to here. INT96, an
      * instant too, decodes into the same zone (and has usable statistics only where a row group's minimum equals its
-     * maximum, PARQUET-1065). The map
+     * maximum, PARQUET-1065, or from its dictionary), but only above millisecond precision: the statistics side rounds
+     * sub-millisecond nanos ({@code ShortTimestampEncoder}) while the reader truncates them into a short timestamp
+     * with time zone, so at millisecond precision a stored .000600 would read .000 but prune as .001. Above it both
+     * sides round. The map
      * is exact and order-preserving at Hudi's precisions (millis, micros), so every range keeps its bounds and
      * inclusiveness.
      */
@@ -172,7 +176,7 @@ public final class ParquetStatisticsDomains
     {
         if (!(domain.getType() instanceof TimestampWithTimeZoneType withTimeZoneType)
                 || withTimeZoneType.getPrecision() > TimestampType.MAX_SHORT_PRECISION
-                || !(fileType.getPrimitiveTypeName() == INT96 || isUtcAdjustedInt64Timestamp(fileType))) {
+                || !(isUtcAdjustedInt64Timestamp(fileType) || (fileType.getPrimitiveTypeName() == INT96 && !withTimeZoneType.isShort()))) {
             return Optional.empty();
         }
         TimestampType timestampType = createTimestampType(withTimeZoneType.getPrecision());

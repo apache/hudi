@@ -23,8 +23,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -76,17 +74,6 @@ public class CommitTimeOrderingHudiTablesInitializer
         return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
     }
 
-    @Override
-    protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
-    {
-        tableBuilder.setRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
-    }
-
-    @Override
-    protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
-    {
-        writeConfigBuilder.withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
-    }
 
     @Override
     protected void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)

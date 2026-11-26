@@ -34,6 +34,7 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -160,12 +161,22 @@ public abstract class AbstractMergerHudiTablesInitializer
 
     /**
      * Applies the fixture's merge-related table configuration (merge mode, merge strategy id, payload class).
-     * The table type, record key fields and ordering fields are set by this class.
+     * The table type, record key fields and ordering fields are set by this class. Only a record merge mode, commit-time
+     * ordering, by default, so table creation persists the mode as-is.
      */
-    protected abstract void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder);
+    protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
+    {
+        tableBuilder.setRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
+    }
 
-    /** Applies the fixture's merge-related write configuration (merge mode, merge strategy id, merger impl classes). */
-    protected abstract void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder);
+    /**
+     * Applies the fixture's merge-related write configuration (merge mode, merge strategy id, merger impl classes):
+     * commit-time ordering by default, matching {@link #configureTableConfig}.
+     */
+    protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
+    {
+        writeConfigBuilder.withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
+    }
 
     /** Writes the commits that make up the fixture's initial state. */
     protected abstract void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)

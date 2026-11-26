@@ -385,13 +385,19 @@ class TestParquetStatisticsDomains
         // usable only where min equals max (PARQUET-1065): the epoch here
         PrimitiveType fileType = plain(INT96);
         ColumnDescriptor descriptor = descriptorOf(fileType);
-        Domain statistics = TupleDomainParquetPredicate.getDomain(descriptor, TIMESTAMP_MILLIS, VALUE_COUNT, statisticsOf(fileType), DATA_SOURCE_ID, DateTimeZone.UTC);
+        Domain statistics = TupleDomainParquetPredicate.getDomain(descriptor, TIMESTAMP_MICROS, VALUE_COUNT, statisticsOf(fileType), DATA_SOURCE_ID, DateTimeZone.UTC);
         for (long epochMillis : List.of(0L, 3L)) {
-            Domain predicate = dropIncomparableDomains(TupleDomain.withColumnDomains(Map.of(descriptor, Domain.singleValue(TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(epochMillis, UTC_KEY)))))
+            Domain predicate = dropIncomparableDomains(TupleDomain.withColumnDomains(Map.of(descriptor,
+                    Domain.singleValue(TIMESTAMP_TZ_MICROS, LongTimestampWithTimeZone.fromEpochMillisAndFraction(epochMillis, 0, UTC_KEY)))))
                     .getDomains().orElseThrow().get(descriptor);
-            assertThat(predicate).isEqualTo(Domain.singleValue(TIMESTAMP_MILLIS, epochMillis * 1000));
+            assertThat(predicate).isEqualTo(Domain.singleValue(TIMESTAMP_MICROS, epochMillis * 1000));
             assertThat(predicate.overlaps(statistics)).as("%s ms against INT96 statistics at the epoch", epochMillis).isEqualTo(epochMillis == 0);
         }
+
+        // At millisecond precision the statistics round sub-millisecond nanos while the reader truncates them, so the
+        // domain is dropped rather than rewritten
+        TupleDomain<ColumnDescriptor> millis = TupleDomain.withColumnDomains(Map.of(descriptor, Domain.singleValue(TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(0, UTC_KEY))));
+        assertThat(dropIncomparableDomains(millis).isAll()).isTrue();
     }
 
     private static TypePair kept(String description, Type domainType, PrimitiveType fileType, LibraryOutcome outcome)

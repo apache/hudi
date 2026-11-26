@@ -18,23 +18,20 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.HoodieJavaWriteClient;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
- * Creates a non-partitioned Merge-On-Read table whose first base file stores two timestamp columns under the wrong
- * logical type, as the writers {@code HoodieSchemaRepair} repairs for did (#14161), and whose later commit records the
- * repaired schema:
+ * Creates a non-partitioned Merge-On-Read table whose first base file and first log file store two timestamp columns
+ * under the wrong logical type, as the writers {@code SchemaRepair} repairs for did (#14161), and whose later commit
+ * records the repaired schema:
  * <ul>
- * <li>{@code c_ts}: timestamp-millis in the table schema, but the first file labels it timestamp-micros while holding
- * millis</li>
- * <li>{@code c_local_ts}: local-timestamp-millis in the table schema, but a bare long in the first file</li>
+ * <li>{@code c_ts}: timestamp-millis in the table schema, but the mislabeled files label it timestamp-micros while
+ * holding millis</li>
+ * <li>{@code c_local_ts}: local-timestamp-millis in the table schema, but a bare long in the mislabeled files</li>
  * </ul>
  * The first commit writes k1's base file under the mislabeled schema, and the second updates k1 the same way into a log
  * file, so the snapshot read merges a mislabeled base row with a mislabeled log record. The third writes k2, in a file
@@ -79,17 +76,6 @@ public class MislabeledTimestampHudiTablesInitializer
         return TABLE_SCHEMA;
     }
 
-    @Override
-    protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
-    {
-        tableBuilder.setRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
-    }
-
-    @Override
-    protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
-    {
-        writeConfigBuilder.withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
-    }
 
     @Override
     protected void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)
