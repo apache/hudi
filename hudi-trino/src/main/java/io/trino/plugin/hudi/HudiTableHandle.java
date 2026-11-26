@@ -249,6 +249,8 @@ public class HudiTableHandle
                 .orElse("");
     }
 
+    // Unlike getTableSchemaStr(), this does not check for completed commits: resolving the schema of a table
+    // without any throws. HudiSplitSource finishes such a table before anything calls this.
     @JsonIgnore
     public HoodieSchema getTableSchema()
     {

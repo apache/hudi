@@ -175,7 +175,7 @@ public class ResourceHudiTablesInitializer
         }
     }
 
-    private void createTable(
+    public static void createTable(
             QueryRunner queryRunner,
             String schemaName,
             Location tablePath,

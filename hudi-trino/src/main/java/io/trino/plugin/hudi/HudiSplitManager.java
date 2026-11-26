@@ -88,9 +88,6 @@ public class HudiSplitManager
         if (hudiTableHandle.getPartitionPredicates().isNone() || hudiTableHandle.getRegularPredicates().isNone()) {
             return emptySplitSource();
         }
-        if (!hudiTableHandle.hasCompletedCommits()) {
-            return emptySplitSource();
-        }
 
         HiveMetastore metastore = metastoreProvider.apply(session.getIdentity(), (HiveTransactionHandle) transaction);
         Lazy<Map<String, Partition>> lazyAllPartitions = Lazy.lazily(() -> {
