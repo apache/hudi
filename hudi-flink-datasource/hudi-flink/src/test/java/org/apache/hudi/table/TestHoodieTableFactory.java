@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
@@ -43,6 +45,7 @@ import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.CatalogTable;
@@ -521,6 +524,23 @@ public class TestHoodieTableFactory {
         "createDynamicTableSource won't call sanity check");
     assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext3),
         "f0 is in table config as record key, but missing in input schema");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testStreamingSourceRejectsReadOptimized(boolean useSourceV2) throws IOException {
+    conf.set(FlinkOptions.PATH, new File(tempFile, "mor").getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    StreamerUtil.initTableIfNotExists(conf);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2);
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED);
+
+    HoodieTableSource source = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(MockContext.getInstance(conf));
+    DataStreamScanProviderAdapter provider = (DataStreamScanProviderAdapter) source.getScanRuntimeProvider(null);
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    HoodieException error = assertThrows(HoodieException.class, () -> provider.produceDataStream(env));
+    assertThat(error.getMessage(), containsString("Invalid query type : 'read_optimized'"));
   }
 
   @Test
