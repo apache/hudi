@@ -309,7 +309,11 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
   @Override
+  @Deprecated
   public Schema getSourceSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     try {
@@ -322,7 +326,11 @@ public class SchemaRegistryProvider extends SchemaProvider {
     }
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   */
   @Override
+  @Deprecated
   public Schema getTargetSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     String targetRegistryUrl =

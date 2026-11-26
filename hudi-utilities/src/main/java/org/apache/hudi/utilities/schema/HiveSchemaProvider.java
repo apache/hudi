@@ -85,12 +85,18 @@ public class HiveSchemaProvider extends SchemaProvider {
     }
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
   @Override
   @Deprecated
   public Schema getSourceSchema() {
     return getSourceHoodieSchema().toAvroSchema();
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   */
   @Override
   @Deprecated
   public Schema getTargetSchema() {

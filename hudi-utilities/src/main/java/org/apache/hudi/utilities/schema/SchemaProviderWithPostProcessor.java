@@ -38,6 +38,9 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
     this.schemaPostProcessor = schemaPostProcessor;
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
   @Override
   @Deprecated
   public Schema getSourceSchema() {
@@ -46,6 +49,9 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
         .orElse(sourceSchema.toAvroSchema());
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   */
   @Override
   @Deprecated
   public Schema getTargetSchema() {

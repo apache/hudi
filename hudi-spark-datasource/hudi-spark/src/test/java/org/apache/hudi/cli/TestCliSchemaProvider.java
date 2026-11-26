@@ -26,13 +26,14 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests the CLI bootstrap {@link SchemaProvider} ({@code org.apache.hudi.cli}), which is distinct from the Hudi
  * Streamer one ({@code org.apache.hudi.utilities.schema.SchemaProvider}). Its only in-repo consumer is
- * {@link BootstrapExecutorUtils}, which calls the legacy {@link SchemaProvider#getTargetSchema()}; the
- * {@link HoodieSchema} accessors and the target fallback are public API for out-of-tree providers and are pinned
- * here directly.
+ * {@link BootstrapExecutorUtils}, which calls {@link SchemaProvider#getTargetHoodieSchema()}. Providers are
+ * loaded out of tree, so both the legacy Avro accessors and the {@link HoodieSchema} accessors are pinned here.
  */
 public class TestCliSchemaProvider {
 
@@ -56,14 +57,11 @@ public class TestCliSchemaProvider {
   }
 
   @Test
+  @SuppressWarnings("deprecation")
   void testModernProviderFallsBackToSourceHoodieSchemaForTarget() {
     HoodieSchema schema = HoodieSchema.fromAvroSchema(AVRO_SCHEMA);
+    // A provider implements only the HoodieSchema accessor; the deprecated Avro accessor is not abstract.
     SchemaProvider provider = new SchemaProvider(new TypedProperties()) {
-      @Override
-      public Schema getSourceSchema() {
-        throw new UnsupportedOperationException("legacy accessor not implemented");
-      }
-
       @Override
       public HoodieSchema getSourceHoodieSchema() {
         return schema;
@@ -73,6 +71,8 @@ public class TestCliSchemaProvider {
     // The default getTargetSchema() delegates to the throwing getSourceSchema(), so the target falls back to
     // the overridden source HoodieSchema.
     assertSame(schema, provider.getTargetHoodieSchema());
+    UnsupportedOperationException e = assertThrows(UnsupportedOperationException.class, provider::getSourceSchema);
+    assertTrue(e.getMessage().contains("getSourceHoodieSchema()"), e.getMessage());
   }
 
   @Test
@@ -86,5 +86,14 @@ public class TestCliSchemaProvider {
 
     assertNull(provider.getSourceHoodieSchema());
     assertNull(provider.getTargetHoodieSchema());
+  }
+
+  @Test
+  void testProviderWithoutSchemaGettersThrows() {
+    // Overrides neither getter: the target fallback calls getSourceHoodieSchema(), whose exception escapes.
+    SchemaProvider provider = new SchemaProvider(new TypedProperties()) { };
+
+    assertThrows(UnsupportedOperationException.class, provider::getSourceHoodieSchema);
+    assertThrows(UnsupportedOperationException.class, provider::getTargetHoodieSchema);
   }
 }

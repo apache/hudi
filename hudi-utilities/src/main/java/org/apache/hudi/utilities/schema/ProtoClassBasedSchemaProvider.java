@@ -78,7 +78,11 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
     }
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
   @Override
+  @Deprecated
   public Schema getSourceSchema() {
     if (schema == null) {
       try {
@@ -92,7 +96,11 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
     return schema;
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   */
   @Override
+  @Deprecated
   public Schema getTargetSchema() {
     return getSourceSchema();
   }

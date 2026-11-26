@@ -115,6 +115,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
     return new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
   @Override
   @Deprecated
   public Schema getSourceSchema() {
@@ -133,6 +136,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
     return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   */
   @Override
   @Deprecated
   public Schema getTargetSchema() {

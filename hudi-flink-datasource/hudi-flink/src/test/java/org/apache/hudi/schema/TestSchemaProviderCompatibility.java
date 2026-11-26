@@ -23,6 +23,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
+import static org.apache.hudi.schema.SchemaProviderTestSchemas.SOURCE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -30,8 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TestSchemaProviderCompatibility {
 
-  private static final Schema AVRO_SCHEMA = new Schema.Parser().parse(
-      "{\"type\":\"record\",\"name\":\"record\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}");
+  private static final Schema AVRO_SCHEMA = new Schema.Parser().parse(SOURCE_SCHEMA);
 
   @Test
   @SuppressWarnings("deprecation")
