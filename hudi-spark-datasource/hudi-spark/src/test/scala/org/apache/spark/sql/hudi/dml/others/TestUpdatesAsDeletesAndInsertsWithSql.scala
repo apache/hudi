@@ -81,6 +81,28 @@ class TestUpdatesAsDeletesAndInsertsWithSql extends HoodieSparkSqlTestBase {
     }
   }
 
+  Seq("SIMPLE", "GLOBAL_SIMPLE").foreach { indexType =>
+    test(s"Test MERGE INTO with matched clauses on target fields writing updates as deletes and inserts with $indexType index") {
+      withTable(indexType) { (tableName, tablePath) =>
+        // The matched clauses see the target row, which the write reads before it splits an update
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 5.0 as delta, 'p1' as dt union all select 2, 5.0, 'p1'
+             |  union all select 3, 5.0, 'p1' union all select 4, 5.0, 'p2' union all select 6, 1.0, 'p2') s
+             |on t.id = s.id
+             |when matched and t.price < 30 then update set id = t.id, name = t.name, price = t.price + s.delta, dt = t.dt
+             |when matched and t.price >= 40 then delete
+             |when not matched then insert (id, name, price, dt) values (s.id, 'a6', 60.0, s.dt)
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+          Seq(1, "a1", 15.0, "p1"), Seq(2, "a2", 25.0, "p1"), Seq(3, "a3", 30.0, "p1"),
+          Seq(5, "a5", 50.0, "p2"), Seq(6, "a6", 60.0, "p2"))
+        assertEquals(Seq("1", "2", "4"), positionalDeletes(tablePath))
+      }
+    }
+  }
+
   test("Test MERGE INTO with a partial update assignment writing updates as deletes and inserts") {
     withTable { (tableName, tablePath) =>
       // An insert into a base file must carry every column, which a partial update record does not
