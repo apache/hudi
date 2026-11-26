@@ -64,6 +64,9 @@ public class HudiConfig
     private boolean morVectorizedReadPredicatePushdownEnabled = true;
     private boolean morVectorizedReadLogPrefetchEnabled = true;
     private DataSize morVectorizedReadLogPrefetchMaxSize = DataSize.of(256, MEGABYTE);
+    private boolean morVectorizedReadEarlyBaseOpenEnabled = true;
+    private boolean morVectorizedReadAsyncLoadEnabled = true;
+    private int morVectorizedReadSplitOpenThreads = 2 * Runtime.getRuntime().availableProcessors();
 
     // Internal configuration for debugging and testing
     private boolean isRecordLevelIndexEnabled = true;
@@ -538,6 +541,46 @@ public class HudiConfig
     public HudiConfig setMorVectorizedReadLogPrefetchMaxSize(DataSize morVectorizedReadLogPrefetchMaxSize)
     {
         this.morVectorizedReadLogPrefetchMaxSize = morVectorizedReadLogPrefetchMaxSize;
+        return this;
+    }
+
+    public boolean isMorVectorizedReadEarlyBaseOpenEnabled()
+    {
+        return morVectorizedReadEarlyBaseOpenEnabled;
+    }
+
+    @Config("hudi.mor-vectorized-read.early-base-open.enabled")
+    @ConfigDescription("Open the base file of a vectorized MOR read under commit time ordering while its log records load")
+    public HudiConfig setMorVectorizedReadEarlyBaseOpenEnabled(boolean morVectorizedReadEarlyBaseOpenEnabled)
+    {
+        this.morVectorizedReadEarlyBaseOpenEnabled = morVectorizedReadEarlyBaseOpenEnabled;
+        return this;
+    }
+
+    public boolean isMorVectorizedReadAsyncLoadEnabled()
+    {
+        return morVectorizedReadAsyncLoadEnabled;
+    }
+
+    @Config("hudi.mor-vectorized-read.async-load.enabled")
+    @ConfigDescription("Open merge-on-read splits read as Trino rows off the split's thread when the vectorized MOR read is on")
+    public HudiConfig setMorVectorizedReadAsyncLoadEnabled(boolean morVectorizedReadAsyncLoadEnabled)
+    {
+        this.morVectorizedReadAsyncLoadEnabled = morVectorizedReadAsyncLoadEnabled;
+        return this;
+    }
+
+    @Min(1)
+    public int getMorVectorizedReadSplitOpenThreads()
+    {
+        return morVectorizedReadSplitOpenThreads;
+    }
+
+    @Config("hudi.mor-vectorized-read.split-open-threads")
+    @ConfigDescription("Threads per worker that load log records and open base files of the vectorized MOR read. Their CPU time is not part of the query's CPU time")
+    public HudiConfig setMorVectorizedReadSplitOpenThreads(int morVectorizedReadSplitOpenThreads)
+    {
+        this.morVectorizedReadSplitOpenThreads = morVectorizedReadSplitOpenThreads;
         return this;
     }
 }

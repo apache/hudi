@@ -24,6 +24,7 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.SourcePage;
+import io.trino.spi.metrics.Metric;
 import io.trino.spi.metrics.Metrics;
 import io.trino.spi.type.Type;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -81,6 +82,27 @@ public final class HudiVectorizedMorPageSource
      */
     public static final String POSITION_MERGE_SPLITS = "hudiPositionMergeSplits";
 
+    /**
+     * Connector metric counting the vectorized MOR splits that read the base file opened while their log records loaded.
+     */
+    public static final String EARLY_BASE_OPEN_SPLITS = "hudiEarlyBaseOpenSplits";
+
+    /**
+     * Connector metric counting the vectorized MOR splits that dropped a base file opened while their log records loaded,
+     * because the records matched base rows by key.
+     */
+    public static final String EARLY_BASE_DISCARDED_SPLITS = "hudiEarlyBaseDiscardedSplits";
+
+    /**
+     * Whether a split opened its base file while its log records loaded, and whether it read that page source.
+     */
+    public enum EarlyBaseOpen
+    {
+        NONE,
+        USED,
+        DISCARDED,
+    }
+
     private final ConnectorPageSource basePageSource;
     private final LogRecordMatcher matcher;
     private final int matchChannel;
@@ -112,7 +134,8 @@ public final class HudiVectorizedMorPageSource
             Optional<UnaryOperator<TrinoRow>> outputConverter,
             List<HiveColumnHandle> outputColumns,
             int[] outputToBaseChannel,
-            PrefilledColumnValues prefilledColumnValues)
+            PrefilledColumnValues prefilledColumnValues,
+            EarlyBaseOpen earlyBaseOpen)
     {
         this.basePageSource = requireNonNull(basePageSource, "basePageSource is null");
         this.matcher = requireNonNull(matcher, "matcher is null");
@@ -127,10 +150,18 @@ public final class HudiVectorizedMorPageSource
         this.pageBuilder = new PageBuilder(outputColumns.stream().map(HiveColumnHandle::getType).toList());
         this.appender = new TrinoRowAppender(outputColumns, prefilledColumnValues);
         this.logRecordsRetainedBytes = matcher.retainedSizeInBytes();
+        Map<String, Metric<?>> metrics = new HashMap<>();
+        metrics.put(VECTORIZED_MOR_SPLITS, new LongCount(1));
         // A split without log records takes the positional path, but merges nothing by position
-        this.metrics = new Metrics(matcher instanceof PositionMatcher positionMatcher && positionMatcher.positions.length > 0
-                ? Map.of(VECTORIZED_MOR_SPLITS, new LongCount(1), POSITION_MERGE_SPLITS, new LongCount(1))
-                : Map.of(VECTORIZED_MOR_SPLITS, new LongCount(1)));
+        if (matcher instanceof PositionMatcher positionMatcher && positionMatcher.positions.length > 0) {
+            metrics.put(POSITION_MERGE_SPLITS, new LongCount(1));
+        }
+        switch (earlyBaseOpen) {
+            case USED -> metrics.put(EARLY_BASE_OPEN_SPLITS, new LongCount(1));
+            case DISCARDED -> metrics.put(EARLY_BASE_DISCARDED_SPLITS, new LongCount(1));
+            case NONE -> {}
+        }
+        this.metrics = new Metrics(metrics);
     }
 
     /**
@@ -177,7 +208,8 @@ public final class HudiVectorizedMorPageSource
             Option<UnaryOperator<TrinoRow>> outputConverter,
             List<HiveColumnHandle> outputColumns,
             int[] outputToBaseChannel,
-            PrefilledColumnValues prefilledColumnValues)
+            PrefilledColumnValues prefilledColumnValues,
+            EarlyBaseOpen earlyBaseOpen)
     {
         if (mergeMode != RecordMergeMode.COMMIT_TIME_ORDERING && mergeMode != RecordMergeMode.EVENT_TIME_ORDERING) {
             throw new IllegalArgumentException("The vectorized MOR read merges by commit time or event time, not " + mergeMode);
@@ -195,7 +227,8 @@ public final class HudiVectorizedMorPageSource
                 outputConverter.isPresent() ? Optional.of(outputConverter.get()) : Optional.empty(),
                 outputColumns,
                 outputToBaseChannel,
-                prefilledColumnValues);
+                prefilledColumnValues,
+                earlyBaseOpen);
     }
 
     @Override

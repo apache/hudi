@@ -24,6 +24,8 @@ import static io.trino.plugin.hudi.HudiSessionProperties.COLUMN_STATS_INDEX_ENAB
 import static io.trino.plugin.hudi.HudiSessionProperties.COLUMN_STATS_WAIT_TIMEOUT;
 import static io.trino.plugin.hudi.HudiSessionProperties.DYNAMIC_FILTERING_WAIT_TIMEOUT;
 import static io.trino.plugin.hudi.HudiSessionProperties.METADATA_TABLE_ENABLED;
+import static io.trino.plugin.hudi.HudiSessionProperties.MOR_VECTORIZED_READ_ASYNC_LOAD_ENABLED;
+import static io.trino.plugin.hudi.HudiSessionProperties.MOR_VECTORIZED_READ_EARLY_BASE_OPEN_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.MOR_VECTORIZED_READ_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.MOR_VECTORIZED_READ_LOG_PREFETCH_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.MOR_VECTORIZED_READ_PREDICATE_PUSHDOWN_ENABLED;
@@ -184,5 +186,15 @@ public class SessionBuilder
     public SessionBuilder withMorVectorizedReadLogPrefetchEnabled(boolean enabled)
     {
         return setCatalogProperty(MOR_VECTORIZED_READ_LOG_PREFETCH_ENABLED, String.valueOf(enabled));
+    }
+
+    public SessionBuilder withMorVectorizedReadEarlyBaseOpenEnabled(boolean enabled)
+    {
+        return setCatalogProperty(MOR_VECTORIZED_READ_EARLY_BASE_OPEN_ENABLED, String.valueOf(enabled));
+    }
+
+    public SessionBuilder withMorVectorizedReadAsyncLoadEnabled(boolean enabled)
+    {
+        return setCatalogProperty(MOR_VECTORIZED_READ_ASYNC_LOAD_ENABLED, String.valueOf(enabled));
     }
 }

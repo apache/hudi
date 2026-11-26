@@ -72,6 +72,8 @@ public class HudiSessionProperties
     static final String MOR_VECTORIZED_READ_PREDICATE_PUSHDOWN_ENABLED = "mor_vectorized_read_predicate_pushdown_enabled";
     static final String MOR_VECTORIZED_READ_LOG_PREFETCH_ENABLED = "mor_vectorized_read_log_prefetch_enabled";
     static final String MOR_VECTORIZED_READ_LOG_PREFETCH_MAX_SIZE = "mor_vectorized_read_log_prefetch_max_size";
+    static final String MOR_VECTORIZED_READ_EARLY_BASE_OPEN_ENABLED = "mor_vectorized_read_early_base_open_enabled";
+    static final String MOR_VECTORIZED_READ_ASYNC_LOAD_ENABLED = "mor_vectorized_read_async_load_enabled";
 
     // Internal configuration for debugging and testing
     static final String RECORD_LEVEL_INDEX_ENABLED = "record_level_index_enabled";
@@ -295,6 +297,16 @@ public class HudiSessionProperties
                         MOR_VECTORIZED_READ_LOG_PREFETCH_MAX_SIZE,
                         "Most log file bytes of one split a vectorized MOR read fetches ahead",
                         hudiConfig.getMorVectorizedReadLogPrefetchMaxSize(),
+                        false),
+                booleanProperty(
+                        MOR_VECTORIZED_READ_EARLY_BASE_OPEN_ENABLED,
+                        "Open the base file of a vectorized MOR read under commit time ordering while its log records load",
+                        hudiConfig.isMorVectorizedReadEarlyBaseOpenEnabled(),
+                        false),
+                booleanProperty(
+                        MOR_VECTORIZED_READ_ASYNC_LOAD_ENABLED,
+                        "Open merge-on-read splits read as Trino rows off the split's thread when the vectorized MOR read is on",
+                        hudiConfig.isMorVectorizedReadAsyncLoadEnabled(),
                         false));
     }
 
@@ -464,6 +476,16 @@ public class HudiSessionProperties
     public static DataSize getMorVectorizedReadLogPrefetchMaxSize(ConnectorSession session)
     {
         return session.getProperty(MOR_VECTORIZED_READ_LOG_PREFETCH_MAX_SIZE, DataSize.class);
+    }
+
+    public static boolean isMorVectorizedReadEarlyBaseOpenEnabled(ConnectorSession session)
+    {
+        return session.getProperty(MOR_VECTORIZED_READ_EARLY_BASE_OPEN_ENABLED, Boolean.class);
+    }
+
+    public static boolean isMorVectorizedReadAsyncLoadEnabled(ConnectorSession session)
+    {
+        return session.getProperty(MOR_VECTORIZED_READ_ASYNC_LOAD_ENABLED, Boolean.class);
     }
 
     public static Duration getDynamicFilteringWaitTimeout(ConnectorSession session)

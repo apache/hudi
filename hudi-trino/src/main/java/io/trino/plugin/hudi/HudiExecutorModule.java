@@ -25,12 +25,16 @@ import io.trino.spi.security.ConnectorIdentity;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.function.BiFunction;
 
 import static io.airlift.bootstrap.ClosingBinder.closingBinder;
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static java.util.concurrent.Executors.newCachedThreadPool;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * Executors and the transaction-scoped metastore getter that {@link HudiSplitManager} and
@@ -47,6 +51,7 @@ public class HudiExecutorModule
         closingBinder(binder).registerExecutor(Key.get(ExecutorService.class, ForHudiTableStatistics.class));
         closingBinder(binder).registerExecutor(Key.get(ExecutorService.class, ForHudiSplitManager.class));
         closingBinder(binder).registerExecutor(Key.get(ScheduledExecutorService.class, ForHudiSplitSource.class));
+        closingBinder(binder).registerExecutor(Key.get(ExecutorService.class, ForHudiSplitOpen.class));
     }
 
     @Provides
@@ -75,6 +80,30 @@ public class HudiExecutorModule
         return newScheduledThreadPool(
                 hudiConfig.getSplitLoaderParallelism(),
                 daemonThreadsNamed("hudi-split-loader-%s"));
+    }
+
+    /**
+     * Opens merge-on-read splits off the split's thread. Work is rejected when every thread is busy: there is no queue,
+     * so a caller can always fall back to doing the work itself.
+     */
+    @Provides
+    @Singleton
+    @ForHudiSplitOpen
+    public ExecutorService createSplitOpenExecutor(HudiConfig hudiConfig)
+    {
+        ThreadFactory threadFactory = daemonThreadsNamed("hudi-split-open-%s");
+        ClassLoader classLoader = HudiExecutorModule.class.getClassLoader();
+        return new ThreadPoolExecutor(
+                0,
+                hudiConfig.getMorVectorizedReadSplitOpenThreads(),
+                30,
+                SECONDS,
+                new SynchronousQueue<>(),
+                runnable -> {
+                    Thread thread = threadFactory.newThread(runnable);
+                    thread.setContextClassLoader(classLoader);
+                    return thread;
+                });
     }
 
     @Provides

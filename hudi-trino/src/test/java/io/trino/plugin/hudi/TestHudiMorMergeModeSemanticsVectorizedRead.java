@@ -19,6 +19,7 @@ import io.trino.plugin.hudi.testing.CommitTimeOrderingHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer;
 import io.trino.spi.QueryId;
 import io.trino.spi.metrics.Count;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -42,6 +43,27 @@ public class TestHudiMorMergeModeSemanticsVectorizedRead
         return Map.of("hudi.mor-vectorized-read.enabled", "true");
     }
 
+    @Test
+    public void testSpilledLogRecordsFallBackToTheMergeRead()
+    {
+        // The split's log records spill, so the load hands the split to the merge read, which reads them again
+        Session session = SessionBuilder.from(getSession()).withSchemaColumnTypesEnabled(true).build();
+        String sql = "SELECT key, name, value FROM " + CommitTimeOrderingHudiTablesInitializer.SPILLING_RT_TABLE_NAME;
+        assertThat(metric(session, sql, HudiVectorizedMorPageSource.VECTORIZED_MOR_SPLITS)).isZero();
+        assertThat(metric(session, sql, HudiPageSource.TRINO_ROW_MERGE_SPLITS)).isPositive();
+        assertQuery(session, sql, "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k3', 'k3_base', 30)");
+    }
+
+    private long metric(Session session, String sql, String name)
+    {
+        QueryId queryId = getQueryRunner().executeWithPlan(session, sql).queryId();
+        return getQueryRunner().getCoordinator().getQueryManager().getFullQueryInfo(queryId).getQueryStats().getOperatorSummaries().stream()
+                .map(operator -> operator.getConnectorMetrics().getMetrics().get(name))
+                .filter(Objects::nonNull)
+                .mapToLong(metric -> ((Count<?>) metric).getTotal())
+                .sum();
+    }
+
     @Override
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
@@ -49,12 +71,7 @@ public class TestHudiMorMergeModeSemanticsVectorizedRead
     {
         Session session = SessionBuilder.from(getSession()).withSchemaColumnTypesEnabled(schemaColumnTypes).build();
         for (String table : List.of(EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME, CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME)) {
-            QueryId queryId = getQueryRunner().executeWithPlan(session, "SELECT key, name, value FROM " + table).queryId();
-            long vectorizedSplits = getQueryRunner().getCoordinator().getQueryManager().getFullQueryInfo(queryId).getQueryStats().getOperatorSummaries().stream()
-                    .map(operator -> operator.getConnectorMetrics().getMetrics().get(HudiVectorizedMorPageSource.VECTORIZED_MOR_SPLITS))
-                    .filter(Objects::nonNull)
-                    .mapToLong(metric -> ((Count<?>) metric).getTotal())
-                    .sum();
+            long vectorizedSplits = metric(session, "SELECT key, name, value FROM " + table, HudiVectorizedMorPageSource.VECTORIZED_MOR_SPLITS);
             if (schemaColumnTypes) {
                 assertThat(vectorizedSplits).as(table).isPositive();
             }

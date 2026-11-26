@@ -58,6 +58,8 @@ public class TestHudiVectorizedMorRead
         VECTORIZED,
         VECTORIZED_NO_PUSHDOWN,
         VECTORIZED_NO_PREFETCH,
+        VECTORIZED_NO_EARLY_BASE_OPEN,
+        VECTORIZED_SYNCHRONOUS_LOAD,
     }
 
     @Override
@@ -102,6 +104,25 @@ public class TestHudiVectorizedMorRead
         String keyed = CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME;
         assertThat(metric(session(Mode.VECTORIZED), "SELECT key, value FROM " + keyed, HudiVectorizedMorPageSource.VECTORIZED_MOR_SPLITS)).isPositive();
         assertThat(metric(session(Mode.VECTORIZED), "SELECT key, value FROM " + keyed, HudiVectorizedMorPageSource.POSITION_MERGE_SPLITS)).isZero();
+        assertQuery(session(Mode.VECTORIZED), "SELECT key, name, value FROM " + keyed,
+                "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k3', 'k3_base', 30)");
+    }
+
+    @Test
+    void testEarlyBaseOpenIsReadOnlyWhenLogRecordsMatchByPosition()
+    {
+        String query = "SELECT key, value FROM ";
+        // Commit time ordering with positions: the base file opened while the log records loaded is read
+        assertThat(metric(session(Mode.VECTORIZED), query + COMMIT_TIME_RT, HudiVectorizedMorPageSource.EARLY_BASE_OPEN_SPLITS)).isPositive();
+        assertThat(metric(session(Mode.VECTORIZED), query + COMMIT_TIME_RT, HudiVectorizedMorPageSource.EARLY_BASE_DISCARDED_SPLITS)).isZero();
+        assertThat(metric(session(Mode.VECTORIZED_NO_EARLY_BASE_OPEN), query + COMMIT_TIME_RT, HudiVectorizedMorPageSource.EARLY_BASE_OPEN_SPLITS)).isZero();
+        // Event time ordering reads the ordering fields as well: no early open
+        assertThat(metric(session(Mode.VECTORIZED), query + EVENT_TIME_RT, HudiVectorizedMorPageSource.EARLY_BASE_OPEN_SPLITS)).isZero();
+        assertThat(metric(session(Mode.VECTORIZED), query + EVENT_TIME_RT, HudiVectorizedMorPageSource.EARLY_BASE_DISCARDED_SPLITS)).isZero();
+        // Log blocks without positions match by key: the early open is dropped and the base file opened with the key
+        String keyed = CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME;
+        assertThat(metric(session(Mode.VECTORIZED), query + keyed, HudiVectorizedMorPageSource.EARLY_BASE_DISCARDED_SPLITS)).isPositive();
+        assertThat(metric(session(Mode.VECTORIZED), query + keyed, HudiVectorizedMorPageSource.EARLY_BASE_OPEN_SPLITS)).isZero();
         assertQuery(session(Mode.VECTORIZED), "SELECT key, name, value FROM " + keyed,
                 "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k3', 'k3_base', 30)");
     }
@@ -169,6 +190,8 @@ public class TestHudiVectorizedMorRead
                 .withMorVectorizedReadEnabled(mode != Mode.MERGE_READ)
                 .withMorVectorizedReadPredicatePushdownEnabled(mode != Mode.VECTORIZED_NO_PUSHDOWN)
                 .withMorVectorizedReadLogPrefetchEnabled(mode != Mode.VECTORIZED_NO_PREFETCH)
+                .withMorVectorizedReadEarlyBaseOpenEnabled(mode != Mode.VECTORIZED_NO_EARLY_BASE_OPEN)
+                .withMorVectorizedReadAsyncLoadEnabled(mode != Mode.VECTORIZED_SYNCHRONOUS_LOAD)
                 .build();
     }
 

@@ -68,7 +68,10 @@ public class TestHudiConfig
                 .setMorVectorizedReadEnabled(false)
                 .setMorVectorizedReadPredicatePushdownEnabled(true)
                 .setMorVectorizedReadLogPrefetchEnabled(true)
-                .setMorVectorizedReadLogPrefetchMaxSize(DataSize.of(256, MEGABYTE)));
+                .setMorVectorizedReadLogPrefetchMaxSize(DataSize.of(256, MEGABYTE))
+                .setMorVectorizedReadEarlyBaseOpenEnabled(true)
+                .setMorVectorizedReadAsyncLoadEnabled(true)
+                .setMorVectorizedReadSplitOpenThreads(2 * Runtime.getRuntime().availableProcessors()));
     }
 
     @Test
@@ -109,6 +112,9 @@ public class TestHudiConfig
                 .put("hudi.mor-vectorized-read.predicate-pushdown.enabled", "false")
                 .put("hudi.mor-vectorized-read.log-prefetch.enabled", "false")
                 .put("hudi.mor-vectorized-read.log-prefetch.max-size", "16MB")
+                .put("hudi.mor-vectorized-read.early-base-open.enabled", "false")
+                .put("hudi.mor-vectorized-read.async-load.enabled", "false")
+                .put("hudi.mor-vectorized-read.split-open-threads", "7")
                 .buildOrThrow();
 
         HudiConfig expected = new HudiConfig()
@@ -145,7 +151,10 @@ public class TestHudiConfig
                 .setMorVectorizedReadEnabled(true)
                 .setMorVectorizedReadPredicatePushdownEnabled(false)
                 .setMorVectorizedReadLogPrefetchEnabled(false)
-                .setMorVectorizedReadLogPrefetchMaxSize(DataSize.of(16, MEGABYTE));
+                .setMorVectorizedReadLogPrefetchMaxSize(DataSize.of(16, MEGABYTE))
+                .setMorVectorizedReadEarlyBaseOpenEnabled(false)
+                .setMorVectorizedReadAsyncLoadEnabled(false)
+                .setMorVectorizedReadSplitOpenThreads(7);
 
         assertFullMapping(properties, expected);
     }
