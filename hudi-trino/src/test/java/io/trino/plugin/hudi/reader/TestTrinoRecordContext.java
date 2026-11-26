@@ -31,6 +31,7 @@ import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.EmptyPageSource;
 import io.trino.spi.connector.FixedPageSource;
+import io.trino.spi.connector.MemoryContext;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.Type;
@@ -586,7 +587,7 @@ final class TestTrinoRecordContext
             appender.append(pageBuilder, row);
         }
         HudiTrinoRowReaderContext readerContext = new HudiTrinoRowReaderContext(
-                new TrinoStorageConfiguration(), tableConfig("ts"), new FixedPageSource(List.of(pageBuilder.build())), columns,
+                new TrinoStorageConfiguration(), tableConfig("ts"), new FixedPageSource(List.of(pageBuilder.build()), MemoryContext.NO_LIMIT), columns,
                 (path, start, length, projection) -> {
                     throw new AssertionError("Unexpected log file read");
                 },
