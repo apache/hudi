@@ -20,6 +20,7 @@ package org.apache.hudi.schema;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
@@ -41,6 +42,9 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A simple schema provider, that reads off files on DFS.
+ *
+ * <p>The deprecated Avro getters hold the implementation and the inherited {@link HoodieSchema} getters bridge to
+ * them, so a subclass overriding a deprecated Avro getter is honored by the {@link HoodieSchema} getters too.
  */
 public class FilebasedSchemaProvider extends SchemaProvider {
 
@@ -91,12 +95,18 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     }
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
   @Override
   @Deprecated
   public Schema getSourceSchema() {
     return sourceSchema;
   }
 
+  /**
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   */
   @Override
   @Deprecated
   public Schema getTargetSchema() {

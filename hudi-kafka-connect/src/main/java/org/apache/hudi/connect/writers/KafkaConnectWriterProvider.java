@@ -26,6 +26,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -69,9 +71,7 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
         KafkaConnectUtils.getDefaultStorageConf(connectConfigs);
 
     try {
-      this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null :
-          (SchemaProvider) ReflectionUtils.loadClass(
-              connectConfigs.getSchemaProviderClass(), connectConfigs.getProps());
+      this.schemaProvider = createSchemaProvider(connectConfigs);
 
       this.keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(
           connectConfigs.getProps());
@@ -111,5 +111,17 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
         writeConfig,
         keyGenerator,
         schemaProvider);
+  }
+
+  /**
+   * Loads the configured {@link SchemaProvider} by class name through its (TypedProperties) constructor. The sink
+   * takes its write schema from the provider, so a provider class is required.
+   */
+  @VisibleForTesting
+  static SchemaProvider createSchemaProvider(KafkaConnectConfigs connectConfigs) {
+    String schemaProviderClass = connectConfigs.getSchemaProviderClass();
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(schemaProviderClass),
+        KafkaConnectConfigs.SCHEMA_PROVIDER_CLASS.key() + " must be set: the sink takes its write schema from the schema provider");
+    return (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, connectConfigs.getProps());
   }
 }

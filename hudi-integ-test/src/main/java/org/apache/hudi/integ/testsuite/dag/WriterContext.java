@@ -76,7 +76,7 @@ public class WriterContext {
   public void initContext(JavaSparkContext jsc) throws HoodieException {
     try {
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jsc);
-      String schemaStr = schemaProvider.getSourceSchema().toString();
+      String schemaStr = schemaProvider.getSourceHoodieSchema().toString();
       this.hoodieTestSuiteWriter = (cfg.testContinuousMode && cfg.useDeltaStreamer) ? new HoodieContinuousTestSuiteWriter(jsc, props, cfg, schemaStr)
           : new HoodieInlineTestSuiteWriter(jsc, props, cfg, schemaStr);
       int inputParallelism = cfg.inputParallelism > 0 ? cfg.inputParallelism : jsc.defaultParallelism();

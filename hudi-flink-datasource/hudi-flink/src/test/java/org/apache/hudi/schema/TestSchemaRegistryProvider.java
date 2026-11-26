@@ -30,8 +30,10 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 
+import static org.apache.hudi.schema.SchemaProviderTestSchemas.LEGACY_SCHEMA;
+import static org.apache.hudi.schema.SchemaProviderTestSchemas.SOURCE_SCHEMA;
+import static org.apache.hudi.schema.SchemaProviderTestSchemas.TARGET_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -43,23 +45,21 @@ class TestSchemaRegistryProvider {
 
   private static final String SOURCE_URL_KEY = "hoodie.streamer.schemaprovider.registry.url";
   private static final String TARGET_URL_KEY = "hoodie.streamer.schemaprovider.registry.targetUrl";
-  private static final String SOURCE_SCHEMA =
-      "{\"type\":\"record\",\"name\":\"SourceRecord\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}";
-  private static final String TARGET_SCHEMA =
-      "{\"type\":\"record\",\"name\":\"TargetRecord\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},"
-          + "{\"name\":\"ts\",\"type\":\"long\",\"default\":0}]}";
 
   @Test
+  @SuppressWarnings("deprecation")
   void testReturnsSourceAndTargetSchemasFromRegistryResponses() {
     TypedProperties props = new TypedProperties();
     props.setProperty(SOURCE_URL_KEY, "http://source:secret@localhost/source");
     props.setProperty(TARGET_URL_KEY, "http://localhost/target");
     StubSchemaRegistryProvider provider = new StubSchemaRegistryProvider(props);
 
-    assertEquals("SourceRecord", provider.getSourceSchema().getName());
+    assertEquals("SourceRecord", provider.getSourceHoodieSchema().getName());
     assertEquals("source:secret", provider.authorizationCredentials);
-    assertEquals("TargetRecord", provider.getTargetSchema().getName());
     assertEquals("TargetRecord", provider.getTargetHoodieSchema().getName());
+    // The deprecated Avro accessors bridge to the same schemas.
+    assertEquals("SourceRecord", provider.getSourceSchema().getName());
+    assertEquals("TargetRecord", provider.getTargetSchema().getName());
   }
 
   @Test
@@ -76,24 +76,61 @@ class TestSchemaRegistryProvider {
 
   @Test
   void testTargetDefaultsToSourceRegistry() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty(SOURCE_URL_KEY, "http://localhost/source");
-    StubSchemaRegistryProvider provider = new StubSchemaRegistryProvider(props);
+    // Overriding the source getter tells the two routes apart: the target getter fetches the source url itself
+    // rather than going through getSourceSchema().
+    SchemaRegistryProvider provider = sourceOverridingProvider();
 
-    Schema targetSchema = provider.getTargetSchema();
-
-    assertEquals("SourceRecord", targetSchema.getName());
-    assertNotNull(provider.getTargetHoodieSchema());
+    assertEquals("SourceRecord", provider.getTargetHoodieSchema().getName());
   }
 
   @Test
+  @SuppressWarnings("deprecation")
   void testRegistryReadFailureIsWrapped() {
     TypedProperties props = new TypedProperties();
     props.setProperty(SOURCE_URL_KEY, "http://localhost/failure");
     StubSchemaRegistryProvider provider = new StubSchemaRegistryProvider(props);
 
+    assertThrows(HoodieIOException.class, provider::getSourceHoodieSchema);
+    assertThrows(HoodieIOException.class, provider::getTargetHoodieSchema);
     assertThrows(HoodieIOException.class, provider::getSourceSchema);
     assertThrows(HoodieIOException.class, provider::getTargetSchema);
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  void testLegacySubclassOverridesAreHonoredByHoodieSchemaGetters() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(SOURCE_URL_KEY, "http://localhost/source");
+    Schema legacySchema = new Schema.Parser().parse(LEGACY_SCHEMA);
+
+    // Legacy subclasses that only override the deprecated Avro getters.
+    SchemaRegistryProvider sourceOverride = sourceOverridingProvider();
+    SchemaRegistryProvider targetOverride = new StubSchemaRegistryProvider(props) {
+      @Override
+      public Schema getTargetSchema() {
+        return legacySchema;
+      }
+    };
+
+    assertEquals("LegacyRecord", sourceOverride.getSourceHoodieSchema().getName());
+    assertEquals("LegacyRecord", targetOverride.getTargetHoodieSchema().getName());
+  }
+
+  /**
+   * A legacy subclass, reading the source registry url, that only overrides the deprecated Avro source getter
+   * to return {@code LEGACY_SCHEMA}.
+   */
+  @SuppressWarnings("deprecation")
+  private static SchemaRegistryProvider sourceOverridingProvider() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(SOURCE_URL_KEY, "http://localhost/source");
+    Schema legacySchema = new Schema.Parser().parse(LEGACY_SCHEMA);
+    return new StubSchemaRegistryProvider(props) {
+      @Override
+      public Schema getSourceSchema() {
+        return legacySchema;
+      }
+    };
   }
 
   private static class StubSchemaRegistryProvider extends SchemaRegistryProvider {
