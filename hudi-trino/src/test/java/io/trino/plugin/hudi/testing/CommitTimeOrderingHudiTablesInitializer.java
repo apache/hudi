@@ -74,7 +74,6 @@ public class CommitTimeOrderingHudiTablesInitializer
         return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
     }
 
-
     @Override
     protected void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)
     {

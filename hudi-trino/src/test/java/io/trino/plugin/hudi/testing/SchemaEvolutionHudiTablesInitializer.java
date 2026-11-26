@@ -98,7 +98,6 @@ public class SchemaEvolutionHudiTablesInitializer
         return Schema.createRecord(TABLE_NAME, null, null, false, fields);
     }
 
-
     @Override
     protected void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)
     {

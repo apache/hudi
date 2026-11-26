@@ -62,7 +62,6 @@ public class NestedNullFieldHudiTablesInitializer
         return AVRO_SCHEMA;
     }
 
-
     @Override
     protected void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)
     {

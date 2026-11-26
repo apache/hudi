@@ -70,7 +70,6 @@ public class UntypeableFieldHudiTablesInitializer
                 new Column("amount", HIVE_STRING, Optional.empty(), Map.of()));
     }
 
-
     @Override
     protected void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)
     {

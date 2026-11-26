@@ -78,9 +78,9 @@ import static org.apache.parquet.schema.Type.Repetition.REPEATED;
  * are read as varbinary and converted.</li>
  * <li>VECTOR: written as a bare FIXED_LEN_BYTE_ARRAY of little-endian elements, which the reader cannot decode into an
  * array. Read as varbinary and decoded into an array of the element type.</li>
- * <li>TIMESTAMP whose file column misstates its unit, the two cases the parquet base-file readers repair: a field the
- * table schema declares UTC timestamp-millis but the file labels UTC MICROS (written by the releases #14161 repairs,
- * whose values are millis), and a bare INT64 under any timestamp (a local one, or a long promoted to a timestamp). Read as bigint and converted from
+ * <li>TIMESTAMP whose file column misstates its unit: a field the table schema declares UTC timestamp-millis but the
+ * file labels UTC MICROS (written by the releases #14161 repairs, whose values are millis), and a bare INT64 under any
+ * timestamp (a local one, which the parquet base-file readers repair too, or a long promoted to a timestamp). Read as bigint and converted from
  * the table schema's unit; see {@link #storedTimestampUnit}.</li>
  * </ul>
  * UUID and VECTOR are detected from the column type and the file's parquet type alone: a {@code uuid} column is a
@@ -220,15 +220,18 @@ public final class ParquetReadConversions
 
     /**
      * The unit an INT64 timestamp column really stores its values in, when the file's annotation misstates the one the
-     * field's table schema declares, as {@code org.apache.parquet.schema.SchemaRepair} decides for the parquet base-file
-     * readers Spark and Hive use:
+     * field's table schema declares. The first two cases are the ones {@code org.apache.parquet.schema.SchemaRepair}
+     * repairs for the parquet base-file readers Spark and Hive use:
      * <ul>
      * <li>a UTC-adjusted MICROS annotation under a field the table declares UTC-adjusted timestamp-millis holds millis,
      * as the releases #14161 repairs wrote it</li>
      * <li>a bare INT64 under a local timestamp holds the table's unit</li>
-     * <li>a bare INT64 under a UTC timestamp holds the table's unit too: a long column promoted to a timestamp under
+     * <li>a bare INT64 under a UTC timestamp holds the table's unit too. This one departs from {@code SchemaRepair},
+     * which leaves it alone, so that Spark casts the long as seconds. A long column promoted to a timestamp under
      * {@code hoodie.write.timestamp.logical.type.overrides} (#19384) leaves the files written before as bare INT64,
-     * and the override declares the unit their longs count in</li>
+     * and the override declares the unit their longs count in, which is also how Hudi's Avro merge path reads them
+     * ({@code HoodieAvroUtils.rewritePrimaryType} keeps the long). A column promoted before #19384, when the promotion
+     * needed no override, is read the same way, as its unit is the one its schema declares.</li>
      * </ul>
      * {@code HoodieSchemaRepair}, which the Avro log blocks are read with, also repairs a local MICROS under a local
      * millis field. A base file can hold real micros there (the row writer annotates a Spark timestamp_ntz as local

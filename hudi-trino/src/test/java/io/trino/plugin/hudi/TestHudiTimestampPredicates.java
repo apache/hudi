@@ -105,6 +105,9 @@ class TestHudiTimestampPredicates
             throws Exception
     {
         assertReads(microsFile, TIMESTAMP_TZ_MICROS, Optional.empty(), true);
+        // A file whose annotation agrees with the table schema keeps its pruning once the schema is known, as the files
+        // written after a promotion do
+        assertReads(microsFile, TIMESTAMP_TZ_MICROS, Optional.of(tableSchema(TS_COLUMN, HoodieSchema.createTimestampMicros())), true);
     }
 
     @Test
@@ -128,7 +131,8 @@ class TestHudiTimestampPredicates
     public void testLongPromotedToTimestampIsRepairedAndNotPruned()
             throws Exception
     {
-        // The reader refuses a bare INT64 as a timestamp; the field's unit says what the longs count
+        // The reader refuses a bare INT64 as a timestamp; the field's unit says what the longs count. Nothing prunes, as
+        // a bare INT64 has no unit to read its statistics in (the misstated case is the one that pins the guard)
         assertReads(promotedFile, TIMESTAMP_TZ_MICROS, Optional.of(tableSchema(TS_COLUMN, HoodieSchema.createTimestampMicros())), false);
     }
 

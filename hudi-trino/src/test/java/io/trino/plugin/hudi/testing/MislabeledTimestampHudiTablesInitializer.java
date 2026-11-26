@@ -23,6 +23,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
  * Creates a non-partitioned Merge-On-Read table whose first base file and first log file store two timestamp columns
@@ -33,6 +36,8 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
  * holding millis</li>
  * <li>{@code c_local_ts}: local-timestamp-millis in the table schema, but a bare long in the mislabeled files</li>
  * </ul>
+ * The table is written at version 9, as the tables written before #14161 are, so the log file holds an Avro data block
+ * (version 10 writes native parquet logs), which the file group reader repairs with {@code HoodieSchemaRepair}.
  * The first commit writes k1's base file under the mislabeled schema, and the second updates k1 the same way into a log
  * file, so the snapshot read merges a mislabeled base row with a mislabeled log record. The third writes k2, in a file
  * group of its own, under the table schema:
@@ -48,6 +53,7 @@ public class MislabeledTimestampHudiTablesInitializer
     public static final String TABLE_NAME = "mislabeled_timestamp_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
 
+    private static final HoodieTableVersion TABLE_VERSION = HoodieTableVersion.NINE;
     // 1_700_000_000_123 ms is 2023-11-14 22:13:20.123 UTC
     private static final long FIRST_EPOCH_MILLIS = 1_700_000_000_123L;
     private static final long MILLIS_PER_HOUR = 3_600_000L;
@@ -76,6 +82,22 @@ public class MislabeledTimestampHudiTablesInitializer
         return TABLE_SCHEMA;
     }
 
+    @Override
+    protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
+    {
+        super.configureTableConfig(tableBuilder);
+        tableBuilder.setTableVersion(TABLE_VERSION);
+    }
+
+    @Override
+    protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
+    {
+        super.configureWriteConfig(writeConfigBuilder);
+        writeConfigBuilder
+                .withWriteTableVersion(TABLE_VERSION.versionCode())
+                // Without this the write client silently upgrades the table to the current version on the first commit
+                .withAutoUpgradeVersion(false);
+    }
 
     @Override
     protected void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)

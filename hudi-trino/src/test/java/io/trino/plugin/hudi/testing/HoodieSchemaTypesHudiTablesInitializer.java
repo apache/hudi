@@ -21,7 +21,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -55,7 +54,7 @@ public class HoodieSchemaTypesHudiTablesInitializer
 {
     public static final String TABLE_NAME = "hoodie_schema_types_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
-    /** The same rows merged by {@code OverwriteNonDefaultsWithLatestAvroPayload}, see {@link #withPayloadMerge()}. */
+    /** The same rows merged through a payload, see {@link #withPayloadMerge()}. */
     public static final String PAYLOAD_TABLE_NAME = "hoodie_schema_types_payload_mor";
     public static final String PAYLOAD_RT_TABLE_NAME = PAYLOAD_TABLE_NAME + "_rt";
 
@@ -120,9 +119,9 @@ public class HoodieSchemaTypesHudiTablesInitializer
     }
 
     /**
-     * The table merged by {@code OverwriteNonDefaultsWithLatestAvroPayload} rather than by commit time, so the merge
-     * serializes the base record the read builds through {@code BaseAvroPayload}, which checks every value's Java type.
-     * Its null log values are defaults, so k2 keeps its base values.
+     * The table merged through {@link PassThroughTestPayload}, a payload outside the set Hudi translates into a merge
+     * mode, so the read merges through the payload and serializes the base record it built for every type through
+     * {@code BaseAvroPayload}, which checks each value's Java type. Its rows merge as the commit-time table's do.
      */
     public static HoodieSchemaTypesHudiTablesInitializer withPayloadMerge()
     {
@@ -135,12 +134,11 @@ public class HoodieSchemaTypesHudiTablesInitializer
         return AVRO_SCHEMA;
     }
 
-
     @Override
     protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
     {
         if (payloadMerge) {
-            tableBuilder.setPayloadClassName(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+            tableBuilder.setPayloadClassName(PassThroughTestPayload.class.getName());
             return;
         }
         super.configureTableConfig(tableBuilder);
@@ -150,7 +148,7 @@ public class HoodieSchemaTypesHudiTablesInitializer
     protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
     {
         if (payloadMerge) {
-            writeConfigBuilder.withWritePayLoad(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+            writeConfigBuilder.withWritePayLoad(PassThroughTestPayload.class.getName());
             return;
         }
         super.configureWriteConfig(writeConfigBuilder);

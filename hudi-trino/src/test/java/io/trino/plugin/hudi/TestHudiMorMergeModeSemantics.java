@@ -316,12 +316,12 @@ public class TestHudiMorMergeModeSemantics
     @Test
     public void testPayloadMergeCarriesEveryHoodieSchemaType()
     {
-        // OverwriteNonDefaultsWithLatestAvroPayload serializes the base record the read built for every type; k2's null
-        // log values are defaults, so k2 keeps its base values with the log's ordering value
+        // The payload serializes the base record the read built for every type, and merges as commit time does: k1's
+        // update and k2's nulls win
         assertThat(query("SELECT " + schemaColumnList() + " FROM " + HoodieSchemaTypesHudiTablesInitializer.PAYLOAD_RT_TABLE_NAME))
                 .matches("VALUES " + join(", ",
                         populatedRow("k1", 200, 8),
-                        populatedRow("k2", 200, 2),
+                        nullRow("k2", 200),
                         populatedRow("k3", 100, 3)));
     }
 
