@@ -73,6 +73,7 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
 
   @Override
   public <R> HoodieData<HoodieRecord<R>> tagLocation(HoodieData<HoodieRecord<R>> records, HoodieEngineContext context, HoodieTable hoodieTable) throws HoodieIndexException {
+    context.setJobStatus(this.getClass().getSimpleName(), "Record index lookup: " + hoodieTable.getConfig().getTableName());
     Either<Integer, Map<String, Integer>> fileGroupSize;
     try {
       ValidationUtils.checkState(hoodieTable.getMetaClient().getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
