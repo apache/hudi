@@ -103,6 +103,14 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("Table name to register to Hive metastore");
 
+  public static final ConfigOption<String> UID_SUFFIX = ConfigOptions
+      .key("uid-suffix")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Overrides the automatic counter in operator UIDs for this source or sink. "
+          + "When restoring a savepoint, use an empty string to match an unnumbered UID or the original number "
+          + "to match a numbered UID. Use distinct suffixes for repeated uses of the same table in one job.");
+
   public static final String TABLE_TYPE_COPY_ON_WRITE = HoodieTableType.COPY_ON_WRITE.name();
   public static final String TABLE_TYPE_MERGE_ON_READ = HoodieTableType.MERGE_ON_READ.name();
   public static final ConfigOption<String> TABLE_TYPE = ConfigOptions
