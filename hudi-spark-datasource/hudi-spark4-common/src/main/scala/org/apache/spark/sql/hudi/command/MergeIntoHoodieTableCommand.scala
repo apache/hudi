@@ -286,22 +286,25 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         if (resolvedFromCondition.exists { case (attr, _) => resolver(attr.name, partitionField) }) {
           Seq.empty
         } else {
-          try {
-            resolveFieldAssociationsBetweenSourceAndTarget(
-              resolver,
-              mergeInto.targetTable,
-              mergeInto.sourceTable,
-              Seq(partitionField),
-              "partition fields",
-              Seq.empty)
-          } catch {
-            case _: MergeIntoFieldResolutionException =>
-              throw new MergeIntoFieldResolutionException(
-                s"Failed to resolve partition fields `$partitionField` within the source-table output. " +
-                  s"Project `$partitionField` in the source query, or match on it in the ON condition.")
-          }
+          resolvePartitionFieldFromSource(partitionField)
         }
       }
+    }
+
+  private def resolvePartitionFieldFromSource(partitionField: String): Seq[(Attribute, Expression)] =
+    try {
+      resolveFieldAssociationsBetweenSourceAndTarget(
+        sparkSession.sessionState.conf.resolver,
+        mergeInto.targetTable,
+        mergeInto.sourceTable,
+        Seq(partitionField),
+        "partition fields",
+        Seq.empty)
+    } catch {
+      case _: MergeIntoFieldResolutionException =>
+        throw new MergeIntoFieldResolutionException(
+          s"Failed to resolve partition fields `$partitionField` within the source-table output. " +
+            s"Project `$partitionField` in the source query, or match on it in the ON condition.")
     }
 
   /**
@@ -379,7 +382,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     if (insertingActions.nonEmpty) {
       checkInsertingActions(insertingActions, buildMergeIntoConfig(hoodieCatalogTable))
       // The source has to supply the partition fields, as it does for a merge on the record key
-      partitionFieldsAssociatedExpressions
+      hoodieCatalogTable.partitionFields.foreach(resolvePartitionFieldFromSource)
       // The first clause that accepts a source record decides it, so each condition is evaluated once per record
       val clauseIndex = Alias(CaseWhen(insertingActions.map(_.condition.getOrElse(Literal.TrueLiteral)).zipWithIndex.map {
         case (condition, index) => (condition, Literal(index))
