@@ -66,6 +66,9 @@ object HoodieCreateRecordUtils {
   def createHoodieRecordRdd(args: createHoodieRecordRddArgs) = {
     val df = args.df
     val config = args.config
+    // A global record level index keys an entry by the record key alone, so the insert of a moved record replaces it,
+    // while a partitioned one keys it by the partition too, so the delete of the move removes the old partition's entry
+    val ignoreIndexUpdateOfMoveDelete = !config.isRecordLevelIndexEnabled
     val parameters = args.parameters
     val recordName = args.recordName
     val recordNameSpace = args.recordNameSpace
@@ -175,7 +178,7 @@ object HoodieCreateRecordUtils {
             }
             if (movedTo.isDefined) {
               val deleteRecord = HoodieRecordUtils.generateEmptyAvroRecord(readKey, OrderingValues.getDefault, config.getPayloadClass, null)
-              deleteRecord.setIgnoreIndexUpdate(true)
+              deleteRecord.setIgnoreIndexUpdate(ignoreIndexUpdateOfMoveDelete)
               if (readLocation.isPresent) {
                 deleteRecord.setCurrentLocation(readLocation.get)
               }
@@ -228,7 +231,7 @@ object HoodieCreateRecordUtils {
             }
             if (movedTo.isDefined) {
               val deleteRecord = new HoodieEmptyRecord[InternalRow](readKey, HoodieRecord.HoodieRecordType.SPARK)
-              deleteRecord.setIgnoreIndexUpdate(true)
+              deleteRecord.setIgnoreIndexUpdate(ignoreIndexUpdateOfMoveDelete)
               readLocation.foreach(deleteRecord.setCurrentLocation)
               Iterator[HoodieRecord[_]](deleteRecord, hoodieSparkRecord)
             } else {
