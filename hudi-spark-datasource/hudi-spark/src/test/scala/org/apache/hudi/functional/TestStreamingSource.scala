@@ -35,7 +35,8 @@ import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.spark.sql.{DataFrame, Row, SaveMode}
-import org.apache.spark.sql.streaming.StreamTest
+import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset
+import org.apache.spark.sql.streaming.{StreamTest, Trigger}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 class TestStreamingSource extends StreamTest with SparkAdapterSupport {
@@ -57,6 +58,221 @@ class TestStreamingSource extends StreamTest with SparkAdapterSupport {
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
       .set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+  }
+
+  for (tableType <- Seq(COPY_ON_WRITE, MERGE_ON_READ); version <- Seq(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT)) {
+    test(s"admission control drains pinned AvailableNow backlog for $tableType version $version") {
+      withTempDir { dir =>
+        val tablePath = s"${dir.getCanonicalPath}/source"
+        val checkpoint = s"${dir.getCanonicalPath}/checkpoint"
+        HoodieTableMetaClient.newTableBuilder()
+          .setTableType(tableType).setTableName(getTableName(tablePath)).setTableVersion(version)
+          .setRecordKeyFields("id").setOrderingFields("ts")
+          .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+        (1 to 5).foreach(i => addData(tablePath, Seq((i.toString, s"a$i", "10", "000")), tableVersion = version))
+        val batches = scala.collection.mutable.ArrayBuffer.empty[Seq[String]]
+        val input = spark.readStream.format("hudi")
+          .option(STREAMING_READ_TABLE_VERSION.key, version.versionCode().toString)
+          .option(DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key, "2")
+          .load(tablePath).select("id")
+        def run(addDuringRun: Boolean): Unit = {
+          val query = input.writeStream.option("checkpointLocation", checkpoint)
+            .foreachBatch { (batch: DataFrame, _: Long) =>
+              batches += batch.collect().map(_.getString(0)).sorted.toSeq
+              if (addDuringRun && batches.size == 1) {
+                addData(tablePath, Seq(("6", "late", "10", "000")), tableVersion = version)
+              }
+              ()
+            }.trigger(Trigger.AvailableNow()).start()
+          try {
+            assertTrue(query.awaitTermination(60000))
+          } finally {
+            query.stop()
+          }
+        }
+        run(addDuringRun = true)
+        assertEquals(Seq(Seq("1", "2"), Seq("3", "4"), Seq("5")), batches.toSeq)
+        batches.clear()
+        run(addDuringRun = false)
+        assertEquals(Seq(Seq("6")), batches.toSeq, "Restart must resume and consume only the post-pin commit")
+        batches.clear()
+        run(addDuringRun = false)
+        assertTrue(batches.isEmpty, "Quiescent restart replayed data")
+      }
+    }
+  }
+
+  for (tableType <- Seq(COPY_ON_WRITE, MERGE_ON_READ); readVersion <- Seq("6", "8")) {
+    test(s"capped recovery keeps the recorded end and rejects cleaned snapshots: $tableType v$readVersion") {
+      withTempDir { dir =>
+        val tablePath = s"${dir.getCanonicalPath}/capped_recovery"
+        val options = commonOptions ++ Map(
+          TBL_NAME.key -> "capped_recovery", TABLE_TYPE.key -> tableType.name(), PARTITIONPATH_FIELD.key -> "",
+          "hoodie.clean.commits.retained" -> "2", "hoodie.clean.automatic" -> "true", "hoodie.clean.async" -> "false",
+          HoodieCompactionConfig.INLINE_COMPACT.key -> (tableType == MERGE_ON_READ).toString,
+          HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1")
+        def write(id: String, sequence: Int, operation: String = "upsert"): Unit = {
+          Seq((id, s"value$sequence", "10", f"$sequence%03d")).toDF(columns: _*)
+            .write.format("hudi").options(options).option("hoodie.datasource.write.operation", operation)
+            .mode(SaveMode.Append).save(tablePath)
+        }
+        def source(strategy: String = "FAIL"): org.apache.spark.sql.execution.streaming.Source = {
+          new org.apache.hudi.DefaultSource().createSource(spark.sqlContext,
+            s"${dir.getCanonicalPath}/checkpoint", None, "hudi", Map("path" -> tablePath,
+              STREAMING_READ_TABLE_VERSION.key -> readVersion,
+              DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key -> "1",
+              DataSourceReadOptions.INCREMENTAL_READ_SKIP_COMPACT.key -> "true",
+              DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key -> strategy))
+        }
+        write("1", 1)
+        val reader = source()
+        val saved = reader.getOffset.get
+        write("2", 2, "insert_overwrite_table")
+        write("3", 3)
+        val admission = reader.asInstanceOf[org.apache.spark.sql.connector.read.streaming.SupportsAdmissionControl]
+        val end = HoodieSourceOffset.fromJson(admission.latestOffset(saved, admission.getDefaultReadLimit).json())
+        assert(end.offsetCommitTime < HoodieSourceOffset(reader.getOffset.get).offsetCommitTime)
+        assert(intercept[org.apache.hudi.exception.HoodieException] {
+          batchIds(reader.getBatch(Some(saved), end))
+        }.getMessage.contains("logical reset"))
+        assert(batchIds(source("READ_UPTO_LATEST_COMMIT").getBatch(Some(saved), end)) == Seq("2"))
+        assert(batchIds(source("READ_LATEST").getBatch(Some(saved), end)).isEmpty)
+
+        (4 to 8).foreach(sequence => write("2", sequence))
+        val metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())).setBasePath(tablePath).build()
+        val cleans = metaClient.getActiveTimeline.getCleanerTimeline.filterCompletedInstants()
+        assert(cleans.getInstantsAsStream.anyMatch(i =>
+          org.apache.hudi.common.util.CleanerUtils.getCleanerMetadata(metaClient, i).getTotalFilesDeleted > 0))
+        val plan = source("READ_UPTO_LATEST_COMMIT").getBatch(Some(saved), end)
+        assert(plan.isStreaming, "Spark must be able to discard a previously committed batch plan")
+        assert(intercept[org.apache.hudi.exception.HoodieException] {
+          batchIds(plan)
+        }.getMessage.contains("recorded batch end is outside cleaner retention"))
+        assert(batchIds(source("READ_LATEST").getBatch(Some(saved), end)).isEmpty)
+        val caughtUp = source().getOffset.get
+        write("2", 9)
+        assert(batchIds(source().getBatch(Some(caughtUp), source().getOffset.get)) == Seq("2"))
+      }
+    }
+  }
+
+  test("streaming commit caps capture flow SQLConf and explicit options win") {
+    withTempDir { dir =>
+      val tablePath = s"${dir.getCanonicalPath}/flow_caps"
+      (1 to 3).foreach(i => addData(tablePath, Seq((i.toString, "value", "10", "001"))))
+      val key = DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key
+      for (version <- Seq("6", "8"); prefix <- Seq("", "spark.")) {
+        for (explicit <- Seq(false, true)) {
+          var reader: org.apache.spark.sql.execution.streaming.Source = null
+          withSQLConf(prefix + key -> "1") {
+            reader = new org.apache.hudi.DefaultSource().createSource(spark.sqlContext,
+              s"${dir.getCanonicalPath}/checkpoint-$version-$prefix-$explicit", None, "hudi",
+              Map("path" -> tablePath, STREAMING_READ_TABLE_VERSION.key -> version) ++
+                (if (explicit) Map(key -> "2") else Map.empty[String, String]))
+          }
+          val admission = reader.asInstanceOf[org.apache.spark.sql.connector.read.streaming.SupportsAdmissionControl]
+          val end = HoodieSourceOffset.fromJson(admission.latestOffset(null, admission.getDefaultReadLimit).json())
+          assert(batchIds(reader.getBatch(None, end)) == (if (explicit) Seq("1", "2") else Seq("1")))
+        }
+        withSQLConf(prefix + key -> "0") {
+          intercept[IllegalArgumentException] { spark.readStream.format("hudi").load(tablePath) }
+          assert(spark.readStream.format("hudi").option(key, "2").load(tablePath).isStreaming)
+        }
+      }
+    }
+  }
+
+  for (mode <- Seq("BLOCK", "USE_TRANSITION_TIME"); skipCompact <- Seq(false, true)) {
+    test(s"cap one drains V1 MOR with out-of-order compaction completion in $mode (skipCompact=$skipCompact)") {
+      withTempDir { dir =>
+        val tablePath = s"${dir.getCanonicalPath}/source"
+        val metaClient = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(MERGE_ON_READ).setTableName(getTableName(tablePath))
+          .setTableVersion(HoodieTableVersion.SIX).setRecordKeyFields("id").setOrderingFields("ts")
+          .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+        addData(tablePath, Seq(("1", "seed", "10", "000")), tableVersion = HoodieTableVersion.SIX)
+        val seed = metaClient.reloadActiveTimeline().getCommitsTimeline.lastInstant().get()
+        (1 to 4).foreach(i => addData(tablePath, Seq((i.toString, s"a$i", "10", "001")),
+          enableInlineCompaction = i == 1, tableVersion = HoodieTableVersion.SIX))
+        // V6 stores completion time in the instant file's mtime. Finish the compaction
+        // after the later delta commits, reproducing the review's requested/completion inversion.
+        val compaction = metaClient.reloadActiveTimeline().getCommitTimeline.filterCompletedInstants().lastInstant().get()
+        val instantPath = java.nio.file.Paths.get(metaClient.getTimelinePath.toString,
+          metaClient.getInstantFileNameGenerator.getFileName(compaction))
+        java.nio.file.Files.setLastModifiedTime(instantPath,
+          java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 10000))
+        val timeline = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants()
+        val lastDelta = timeline.lastInstant().get()
+        val reorderedCompaction = timeline.getCommitTimeline.lastInstant().get()
+        assertTrue(reorderedCompaction.requestedTime() < lastDelta.requestedTime())
+        assertTrue(reorderedCompaction.getCompletionTime > lastDelta.getCompletionTime)
+
+        val batches = scala.collection.mutable.ArrayBuffer.empty[Seq[String]]
+        val query = spark.readStream.format("hudi")
+          .option(STREAMING_READ_TABLE_VERSION.key, HoodieTableVersion.SIX.versionCode().toString)
+          .option(DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key, "1")
+          .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key, mode)
+          .option(START_OFFSET.key, if (mode == "BLOCK") seed.requestedTime() else seed.getCompletionTime)
+          .option(DataSourceReadOptions.INCREMENTAL_READ_SKIP_COMPACT.key, skipCompact.toString)
+          .load(tablePath).writeStream.option("checkpointLocation", s"${dir.getCanonicalPath}/checkpoint")
+          .foreachBatch { (batch: DataFrame, _: Long) =>
+            batches += batch.select("id").collect().map(_.getString(0)).sorted.toSeq
+            ()
+          }.trigger(Trigger.ProcessingTime("100 milliseconds")).start()
+        try {
+          query.processAllAvailable()
+          assertEquals(Seq(Seq("1"), Seq("2"), Seq("3"), Seq("4")), batches.filter(_.nonEmpty).toSeq)
+          if (mode == "BLOCK") {
+            val compactionOffset = HoodieSourceOffset(reorderedCompaction.requestedTime()).json
+            assertEquals(!skipCompact, query.recentProgress.exists(_.sources.head.endOffset == compactionOffset))
+          }
+        } finally {
+          query.stop()
+        }
+      }
+    }
+  }
+
+  for ((tableType, version) <- Seq(COPY_ON_WRITE -> HoodieTableVersion.SIX, MERGE_ON_READ -> HoodieTableVersion.EIGHT)) {
+    test(s"CDC streaming drains one $tableType commit per trigger on table version $version") {
+      withTempDir { dir =>
+        val tablePath = s"${dir.getCanonicalPath}/source"
+        HoodieTableMetaClient.newTableBuilder()
+          .setTableType(tableType).setTableName(getTableName(tablePath))
+          .setTableVersion(version).setRecordKeyFields("id").setOrderingFields("ts")
+          .setCDCEnabled(true).setCDCSupplementalLoggingMode("DATA_BEFORE_AFTER")
+          .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+        addData(tablePath, Seq(("1", "a1", "10", "000")), tableVersion = version)
+        addData(tablePath, Seq(("2", "a2", "10", "000")), tableVersion = version)
+        addData(tablePath, Seq(("1", "a1", "11", "001")), tableVersion = version)
+        Seq("0", "-1", "garbage", "2147483648").foreach { value =>
+          intercept[IllegalArgumentException] {
+            spark.readStream.format("hudi")
+              .option(DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key, value).load(tablePath)
+          }
+        }
+        val batches = scala.collection.mutable.ArrayBuffer.empty[Seq[Row]]
+        val query = spark.readStream.format("hudi")
+          .option(STREAMING_READ_TABLE_VERSION.key, version.versionCode().toString)
+          .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+          .option(DataSourceReadOptions.INCREMENTAL_FORMAT.key, DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
+          .option(DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key, "1")
+          .load(tablePath).writeStream.option("checkpointLocation", s"${dir.getCanonicalPath}/checkpoint")
+          .foreachBatch { (batch: DataFrame, _: Long) =>
+            batches += batch.selectExpr("op", "get_json_object(after, '$.id')",
+              "get_json_object(before, '$.price')", "get_json_object(after, '$.price')").collect().toSeq
+            ()
+          }.trigger(Trigger.AvailableNow()).start()
+        try {
+          assertTrue(query.awaitTermination(60000))
+          assertEquals(Seq(Seq(Row("i", "1", null, "10")), Seq(Row("i", "2", null, "10")),
+            Seq(Row("u", "1", "10", "11"))), batches.toSeq)
+        } finally {
+          query.stop()
+        }
+      }
+    }
   }
 
   test("test cow stream source") {
@@ -218,44 +434,53 @@ class TestStreamingSource extends StreamTest with SparkAdapterSupport {
     }
   }
 
-  test("Test mor streaming source with clustering") {
-    withTempDir { inputDir =>
-      val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream_cluster"
-      val metaClient = HoodieTableMetaClient.newTableBuilder()
-        .setTableType(MERGE_ON_READ)
-        .setTableName(getTableName(tablePath))
-        .setRecordKeyFields("id")
-        .setOrderingFields("ts")
-        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+  for (limit <- Seq(None, Some("1"))) {
+    test(s"MOR streaming drains a backlog with clustering (commit cap=$limit)") {
+      withTempDir { dir =>
+        val tablePath = s"${dir.getCanonicalPath}/test_mor_stream_cluster"
+        val metaClient = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(MERGE_ON_READ)
+          .setTableName(getTableName(tablePath))
+          .setRecordKeyFields("id")
+          .setOrderingFields("ts")
+          .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
-      addData(tablePath, Seq(("1", "a1", "10", "000")))
-      addData(tablePath, Seq(("2", "a1", "11", "001")))
-      addData(tablePath, Seq(("3", "a1", "12", "002")))
-      addData(tablePath, Seq(("4", "a1", "13", "003")), enableInlineCluster = true)
-      addData(tablePath, Seq(("5", "a1", "14", "004")))
+        addData(tablePath, Seq(("1", "a1", "10", "000")))
+        addData(tablePath, Seq(("2", "a1", "11", "001")))
+        addData(tablePath, Seq(("3", "a1", "12", "002")))
+        addData(tablePath, Seq(("4", "a1", "13", "003")), enableInlineCluster = true)
+        addData(tablePath, Seq(("5", "a1", "14", "004")))
 
-      val timestamp =
-        metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-          .firstInstant().get().getCompletionTime
-
-      val df = spark.readStream
-        .format("org.apache.hudi")
-        .option(START_OFFSET.key(), timestamp)
-        .load(tablePath)
-        .select("id", "name", "price", "ts")
-
-      testStream(df)(
-        AssertOnQuery { q => q.processAllAvailable(); true },
-        // Start after the first commit
-        CheckAnswerRows(Seq(
-          Row("2", "a1", "11", "001"),
-          Row("3", "a1", "12", "002"),
-          Row("4", "a1", "13", "003"),
-          Row("5", "a1", "14", "004")), lastOnly = true, isSorted = false))
-      assertTrue(metaClient.reloadActiveTimeline
-        .filter(JavaConversions.getPredicate(
-          e => e.isCompleted && HoodieTimeline.REPLACE_COMMIT_ACTION.equals(e.getAction)))
-        .countInstants() > 0)
+        val timeline = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants()
+        val clustering = timeline.getLastClusteringInstant
+        assertTrue(clustering.isPresent, "Expected a completed clustering instant in the backlog")
+        val start = timeline.firstInstant().get().getCompletionTime
+        val batches = scala.collection.mutable.ArrayBuffer.empty[Seq[Row]]
+        val query = spark.readStream.format("hudi")
+          .option(START_OFFSET.key, start)
+          .options(limit.map(DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key -> _).toMap)
+          .load(tablePath).select("id", "name", "price", "ts")
+          .writeStream.option("checkpointLocation", s"${dir.getCanonicalPath}/checkpoint")
+          .foreachBatch { (batch: DataFrame, _: Long) =>
+            batches += batch.collect().sortBy(_.getString(0)).toSeq
+            ()
+          }.trigger(Trigger.AvailableNow()).start()
+        try {
+          assertTrue(query.awaitTermination(60000))
+          val expected = Seq(Row("2", "a1", "11", "001"), Row("3", "a1", "12", "002"),
+            Row("4", "a1", "13", "003"), Row("5", "a1", "14", "004"))
+          if (limit.isDefined) {
+            assertEquals(expected.map(Seq(_)), batches.filter(_.nonEmpty).toSeq)
+            val clusteringOffset = HoodieSourceOffset(clustering.get().getCompletionTime).json
+            assertTrue(query.recentProgress.exists(_.sources.head.endOffset == clusteringOffset),
+              "Clustering should consume an admission slot even though it emits no new rows")
+          } else {
+            assertEquals(Seq(expected), batches.toSeq)
+          }
+        } finally {
+          query.stop()
+        }
+      }
     }
   }
 

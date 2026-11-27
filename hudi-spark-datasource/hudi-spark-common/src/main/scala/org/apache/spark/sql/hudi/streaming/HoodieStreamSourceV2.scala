@@ -30,7 +30,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.streaming.{Offset, Source}
+import org.apache.spark.sql.execution.streaming.Offset
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -49,7 +49,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
                            parameters: Map[String, String],
                            offsetRangeLimit: HoodieOffsetRangeLimit,
                            writeTableVersion: HoodieTableVersion)
-  extends Source with Logging with Serializable with SparkAdapterSupport {
+  extends HoodieSourceAdmissionControl with Logging with Serializable with SparkAdapterSupport {
 
   // Capture flow-scoped SQLConf once; explicit reader options take precedence.
   private val recoveryStrategy = HoodieStreamingSourceSafety.strategy(
@@ -81,6 +81,17 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
       logInfo(s"The initial offset is $offset")
       offset
     }
+  }
+
+  override protected val admissionParameters: Map[String, String] =
+    DataSourceOptionsHelper.collectHoodieAndSparkHoodieConfs(sqlContext, parameters)
+
+  override protected def admissionInitialOffset: HoodieSourceOffset = initialOffsets
+
+  override protected def completedWriteOffsets(start: String): Seq[String] = {
+    metaClient.reloadActiveTimeline()
+    val timeline = HoodieSourceAdmissionControl.readTimeline(metaClient, parameters, start, byCompletionTime = true)
+    HoodieSourceAdmissionControl.commitOffsets(timeline, byCompletionTime = true)
   }
 
   override def schema: StructType = {
