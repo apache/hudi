@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties, DataSkippingFailureMode}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedProperties}
@@ -114,6 +115,35 @@ case class HoodieFileIndex(spark: SparkSession,
   /** True when any partition column is a nested field path (e.g. "nested_record.level"). */
   private val hasNestedPartitionColumns: Boolean =
     getPartitionColumns.exists(_.contains("."))
+
+  /**
+   * The table snapshot this index was built on: the latest completed instant at construction, as
+   * (requested time, completion time). Part of equality, so indexes built before and after a commit
+   * never compare equal.
+   */
+  private val snapshotInstant: Option[(String, String)] =
+    toScalaOption(getLatestCompletedInstant).map(i => (i.requestedTime, i.getCompletionTime))
+
+  /**
+   * Equality deliberately excludes [[fileStatusCache]]: Spark's FileStatusCache.getOrCreate returns a
+   * new client object (identity equality) per call, so including it makes two relations over the same
+   * table snapshot never compare equal, which defeats plan-level dedup such as MergeScalarSubqueries.
+   */
+  override def equals(other: Any): Boolean = other match {
+    case that: HoodieFileIndex =>
+      (this eq that) || (getClass == that.getClass &&
+        snapshotInstant == that.snapshotInstant &&
+        spark == that.spark &&
+        metaClient == that.metaClient &&
+        schemaSpec == that.schemaSpec &&
+        options == that.options &&
+        includeLogFiles == that.includeLogFiles &&
+        shouldEmbedFileSlices == that.shouldEmbedFileSlices)
+    case _ => false
+  }
+
+  override def hashCode(): Int =
+    (getClass, snapshotInstant, spark, metaClient, schemaSpec, options, includeLogFiles, shouldEmbedFileSlices).hashCode()
 
   /**
    * NOTE: [[indicesSupport]] is a transient state, since it's only relevant while logical plan
