@@ -580,8 +580,9 @@ public class InputFormatTestUtil {
     HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, fields);
     Configuration conf = new Configuration();
     if (withInt96Timestamp) {
-      // parquet-avro writes a fixed(12) as INT96 only for the paths named here.
-      conf.set(AvroWriteSupport.WRITE_FIXED_AS_INT96, "ts");
+      // parquet-avro writes a fixed(12) as INT96 only for the paths named here. The property is set
+      // by its key, since AvroWriteSupport has no constant for it before parquet 1.13.
+      conf.set("parquet.avro.writeFixedAsInt96", "ts");
     }
     java.nio.file.Path file = dir.resolve(fileName);
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(new Path(file.toString()))
