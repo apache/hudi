@@ -24,6 +24,8 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.Serializable;
+import java.util.Map;
 
 /**
  * Common readable surface for record readers over a Hudi file group.
@@ -56,6 +58,26 @@ public interface HoodieRecordReader<T> extends Closeable {
    * Returns records that come from log files only.
    */
   ClosableIterator<BufferedRecord<T>> getLogRecordsOnly() throws IOException;
+
+  /**
+   * Returns the same records as {@link #getLogRecordsOnly()}, indexed for random access.
+   *
+   * <p>Keys are record keys, except where the reader merges on record positions, in which case they
+   * are the positions in the base file. A reader that falls back from position based to key based
+   * merging part way through a file group re-keys what it has already read, so a caller that needs
+   * one key type should not merge on positions.
+   *
+   * <p>A reader that already holds the log records in memory returns a read-only view of its own
+   * index, valid until the next call on this reader or until {@link #close()}; one that streams them
+   * materializes a map instead. Prefer {@link #getLogRecordsOnly()} when a single pass is enough,
+   * since it streams within the reader's memory budget while bulk-iterating the map does not.
+   *
+   * @return log records indexed by record key or by record position, empty if the file group has no
+   *         log files to merge
+   * @throws UnsupportedOperationException if the reader does not index log records, for example when
+   *         reading with merging skipped
+   */
+  Map<Serializable, BufferedRecord<T>> getLogRecordsMap() throws IOException;
 
   /**
    * Returns read statistics collected by this reader.
