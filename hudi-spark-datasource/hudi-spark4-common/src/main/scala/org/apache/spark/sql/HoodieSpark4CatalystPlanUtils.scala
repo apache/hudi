@@ -19,9 +19,10 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.analysis.AnalysisErrorAt
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Expression}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, LogicalPlan, MergeIntoTable}
+import org.apache.spark.sql.errors.QueryCompilationErrors.toSQLId
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 
@@ -39,6 +40,26 @@ abstract class HoodieSpark4CatalystPlanUtils extends BaseHoodieCatalystPlanUtils
     }
   }
 
+  override protected def alignRowLevelAssignments(attrs: Seq[Attribute],
+                                                  assignments: Seq[Assignment],
+                                                  isInsert: Boolean): Option[Seq[Assignment]] = {
+    Some(if (isInsert) alignInsertAssignments(attrs, assignments) else alignUpdateAssignments(attrs, assignments))
+  }
+
+  override protected def isStoreAssignmentCast(cast: Cast): Boolean = cast.getTagValue(Cast.BY_TABLE_INSERTION).isDefined
+
+  override protected def alignsRowLevelAssignments: Boolean = true
+
+  /**
+   * Calls Spark's `AssignmentUtils.alignUpdateAssignments`, whose signature changed in Spark 4.1.
+   */
+  protected def alignUpdateAssignments(attrs: Seq[Attribute], assignments: Seq[Assignment]): Seq[Assignment]
+
+  /**
+   * Calls Spark's `AssignmentUtils.alignInsertAssignments`, whose signature changed in Spark 4.1.
+   */
+  protected def alignInsertAssignments(attrs: Seq[Attribute], assignments: Seq[Assignment]): Seq[Assignment]
+
   override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case s@ScanOperation(_, _, _,
@@ -54,7 +75,7 @@ abstract class HoodieSpark4CatalystPlanUtils extends BaseHoodieCatalystPlanUtils
     a.failAnalysis(
       errorClass = "UNRESOLVED_COLUMN.WITH_SUGGESTION",
       messageParameters = Map(
-        "objectName" -> a.sql,
+        "objectName" -> toSQLId(a.name),
         "proposal" -> cols))
   }
 

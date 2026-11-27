@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
+import org.apache.hudi.HoodieSparkUtils.{gteqSpark3_4, gteqSpark3_5}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
@@ -676,6 +676,144 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, payload from $tableName")(
         Seq(1L, Row("OUT_OF_LINE", null, Row("blobs/updated", 10L, 100L, true)))
       )
+    }
+  }
+
+  test("Test Update Table With Nested Field Assignments") {
+    withTempDir { tmp =>
+      Seq(("cow", "primaryKey = 'id',"), ("mor", "primaryKey = 'id',"), ("cow", "")).foreach { case (tableType, keyProp) =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  s struct<c1:int, c2:struct<a:array<int>, m:map<string, string>>>,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, named_struct('c1', 2, 'c2', named_struct('a', array(1, 2), 'm', map('a', 'b'))), 10")
+        spark.sql(s"insert into $tableName select 2, null, 20")
+
+        if (gteqSpark3_5) {
+          spark.sql(s"update $tableName set s.c1 = -2, s.c2.a = array(-1, -2) where id = 1")
+          spark.sql(s"update $tableName set s.c1 = 5 where id = 2")
+          checkAnswer(s"select id, s, v from $tableName order by id")(
+            Seq(1, Row(-2, Row(Seq(-1, -2), Map("a" -> "b"))), 10),
+            Seq(2, Row(5, null), 20))
+
+          spark.sql(s"update $tableName set s.c2.m = map('k', 'v'), v = 11 where id = 1")
+          checkAnswer(s"select id, s, v from $tableName order by id")(
+            Seq(1, Row(-2, Row(Seq(-1, -2), Map("k" -> "v"))), 11),
+            Seq(2, Row(5, null), 20))
+
+          spark.sql(s"update $tableName set s.c1 = null, s.c2 = null where id = 1")
+          checkAnswer(s"select id, s, v from $tableName order by id")(
+            Seq(1, Row(null, null), 11),
+            Seq(2, Row(5, null), 20))
+
+          checkExceptionContain(s"update $tableName set id = 3, s.c1 = 1, id = 4")("Multiple assignments for 'id'")
+          checkExceptionContain(
+            s"update $tableName set s.c1 = 1, s = named_struct('c1', 1, 'c2', null)")("Conflicting assignments for 's'")
+
+          // a struct without the field names of the column is assigned by position
+          spark.sql(s"update $tableName set s = struct(7, named_struct('a', array(7), 'm', map('x', 'y'))) where id = 2")
+          checkAnswer(s"select id, s from $tableName where id = 2")(Seq(2, Row(7, Row(Seq(7), Map("x" -> "y")))))
+        } else {
+          checkExceptionContain(s"update $tableName set s.c1 = 5 where id = 2")(
+            "Assigning a nested field requires Spark 3.5 or later")
+        }
+      }
+
+      if (gteqSpark3_5) {
+        // a record key field nested in the assigned struct cannot change
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  s struct<c1:int, c2:int>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (primaryKey = 's.c1', type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, named_struct('c1', 1, 'c2', 2)")
+        checkExceptionContain(s"update $tableName set s.c1 = 9 where id = 1")(
+          "Detected disallowed assignment clause in UPDATE statement for record key field `s.c1`")
+        checkAnswer(s"select id, s from $tableName")(Seq(1, Row(1, 2)))
+      }
+    }
+  }
+
+  test("Test Update Table Applies Store Assignment Policy") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v int not null,
+           |  s struct<n1:int not null, n2:struct<dn1:int, dn2:int>>
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (primaryKey = 'id', type = 'cow', 'hoodie.table.format' = 'test-format')
+         """.stripMargin)
+      spark.sql(s"insert into $tableName select 1, 10, named_struct('n1', 1, 'n2', named_struct('dn1', 3, 'dn2', 4))")
+
+      if (gteqSpark3_5) {
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "ansi") {
+          checkExceptionContain(s"update $tableName set v = 'str'")("Cannot safely cast `v` \"STRING\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set s.n1 = 'str'")("Cannot safely cast `s`.`n1` \"STRING\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set s = named_struct('n1', 1)")(
+            "Cannot find data for the output column `s`.`n2`")
+          checkExceptionContain(s"update $tableName set s.n2 = named_struct('dn3', 1, 'dn1', 2)")(
+            "Cannot find data for the output column `s`.`n2`.`dn2`")
+          checkExceptionContain(s"update $tableName set s.n1 = null")("value appeared in non-nullable field")
+          spark.sql(s"update $tableName set v = cast(20 as bigint), s.n2 = named_struct('dn2', 6, 'dn1', 5)")
+        }
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "strict") {
+          checkExceptionContain(s"update $tableName set v = cast(30 as bigint)")("Cannot safely cast `v` \"BIGINT\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set v = null")("Cannot safely cast `v` \"VOID\" to \"INT\"")
+          checkExceptionContain(s"update $tableName set s.n1 = null")("Cannot safely cast `s`.`n1` \"VOID\" to \"INT\"")
+        }
+        withSQLConf("spark.sql.storeAssignmentPolicy" -> "legacy") {
+          // the cast of the legacy policy wraps an overflowing value and turns a malformed one into null
+          Seq("v = 'str'", "v = cast(3000000000 as bigint)", "s.n2 = struct(5, 6)").foreach { assignment =>
+            checkExceptionContain(s"update $tableName set $assignment")("LEGACY store assignment policy is disallowed")
+          }
+        }
+        checkAnswer(s"select id, v, s from $tableName")(Seq(1, 20, Row(1, Row(5, 6))))
+      } else {
+        spark.sql(s"update $tableName set v = '20'")
+        checkAnswer(s"select id, v from $tableName")(Seq(1, 20))
+      }
+      // the top-level NOT NULL constraint is not kept by the table
+      spark.sql(s"update $tableName set v = cast(null as int)")
+      checkAnswer(s"select id, v from $tableName")(Seq(1, null))
+
+      // A table of the native format keeps casting the values to the types of the columns, and an
+      // overflowing value fails under any policy. The format name is matched as the table loads it,
+      // so a table configured as NATIVE is native too.
+      Seq("", ", 'hoodie.table.format' = 'NATIVE'").foreach { formatProperty =>
+        val nativeTable = generateTableName
+        spark.sql(
+          s"""
+             |create table $nativeTable (id int, v int, d decimal(5, 2)) using hudi
+             | location '${tmp.getCanonicalPath}/$nativeTable'
+             | tblproperties (primaryKey = 'id', type = 'cow'$formatProperty)
+           """.stripMargin)
+        spark.sql(s"insert into $nativeTable select 1, 10, 1.5")
+        spark.sql(s"update $nativeTable set v = '20'")
+        Seq("ansi", "legacy").foreach { policy =>
+          withSQLConf("spark.sql.storeAssignmentPolicy" -> policy) {
+            Seq("v = cast(3000000000 as bigint)", "d = cast(12345.678 as decimal(10, 3))").foreach { assignment =>
+              intercept[Exception](spark.sql(s"update $nativeTable set $assignment"))
+            }
+          }
+        }
+        checkAnswer(s"select id, v, cast(d as string) from $nativeTable")(Seq(1, 20, "1.50"))
+      }
     }
   }
 }

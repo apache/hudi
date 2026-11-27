@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
+import org.apache.hudi.common.avro.HoodieAvroUtils.getRootLevelFieldName
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
@@ -104,7 +105,7 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
                                                      assignments: Seq[(AttributeReference, Expression)]
                                                     ): Unit = {
     fields.foreach(field => if (assignments.exists {
-      case (attr, _) => resolver(attr.name, field)
+      case (attr, _) => resolver(attr.name, getRootLevelFieldName(field))
     }) {
       throw new HoodieAnalysisException(s"Detected disallowed assignment clause in UPDATE statement for $fieldType " +
         s"`$field` for table `$tableId`. Please remove the assignment clause to avoid the error.")

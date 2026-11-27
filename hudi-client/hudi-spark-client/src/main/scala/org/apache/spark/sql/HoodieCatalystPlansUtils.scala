@@ -80,6 +80,32 @@ trait HoodieCatalystPlansUtils {
   def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
 
   /**
+   * Resolves the assignments of an {@code UPDATE}, or of an action of a {@code MERGE INTO}, against
+   * the target table the way Spark aligns them for a table supporting row-level operations: an
+   * assignment to a nested field becomes an assignment of its rebuilt top-level struct, and
+   * repeated or conflicting assignments of a field fail the analysis. Without the store assignment
+   * policy, assignments that only set top-level attributes are returned as they are.
+   *
+   * @param attrs                      output attributes of the target table
+   * @param assignments                assignments of the statement or the action
+   * @param isInsert                   whether the assignments belong to an insert action
+   * @param applyStoreAssignmentPolicy whether each value is checked and cast under the store
+   *                                   assignment policy, as for a table supporting row-level operations
+   * @return one assignment for each top-level attribute that the assignments set
+   */
+  def resolveRowLevelAssignments(attrs: Seq[Attribute],
+                                 assignments: Seq[Assignment],
+                                 isInsert: Boolean,
+                                 applyStoreAssignmentPolicy: Boolean): Seq[Assignment]
+
+  /**
+   * Lets an assignment resolve whose value Spark cannot cast to the type of its key, such as a struct
+   * with the fields of the key in another order, so that [[resolveRowLevelAssignments]] checks the
+   * value as written.
+   */
+  def deferAssignmentCast(assignment: Assignment): Assignment
+
+  /**
    * Decomposes [[MatchCreateIndex]] into its arguments with accommodation.
    */
   def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])]

@@ -458,12 +458,13 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
                                                             fieldNameTuples: Seq[(String, String, String)]): String = {
     val fieldNames = fieldNameTuples.sortBy(e => (e._1, e._2))
       .map(e => e._3).mkString("[", ", ", "]")
+    val quotedColumnName = columnName.split('.').map(part => s"`$part`").mkString(".")
     if (HoodieSparkUtils.gteqSpark4_0) {
       "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column, variable, or function parameter with name " +
-        s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
+        s"$quotedColumnName cannot be resolved. Did you mean one of the following? $fieldNames."
     } else if (HoodieSparkUtils.gteqSpark3_5) {
       "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
-        s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
+        s"$quotedColumnName cannot be resolved. Did you mean one of the following? $fieldNames."
     } else {
       s"cannot resolve $columnName in MERGE command given columns $fieldNames" +
         (if (HoodieSparkUtils.gteqSpark3_4) "." else "")
