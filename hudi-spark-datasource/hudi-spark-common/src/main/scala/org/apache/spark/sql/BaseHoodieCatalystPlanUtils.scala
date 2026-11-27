@@ -19,6 +19,7 @@ package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
 
+import org.apache.spark.SPARK_VERSION
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, TableOutputResolver}
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
@@ -151,7 +152,8 @@ trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
             .map(assignment => assignment.copy(value = trimAliases(assignment.value)))
         case None =>
           throw new HoodieAnalysisException(
-            s"Assigning a nested field requires Spark 3.5 or later (provided: `${nested.get.sql}`)")
+            s"Assigning a nested field is not supported on Spark $SPARK_VERSION; Spark 3.5 and later support " +
+              s"assignments to fields of struct columns (provided: `${nested.get.sql}`)")
       }
     }
   }

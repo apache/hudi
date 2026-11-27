@@ -713,32 +713,42 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
             Seq(1, Row(null, null), 11),
             Seq(2, Row(5, null), 20))
 
-          checkExceptionContain(s"update $tableName set id = 3, s.c1 = 1, id = 4")("Multiple assignments for 'id'")
-          checkExceptionContain(
-            s"update $tableName set s.c1 = 1, s = named_struct('c1', 1, 'c2', null)")("Conflicting assignments for 's'")
+          // refused at analysis, whatever the table
+          if (tableType == "cow" && keyProp.nonEmpty) {
+            checkExceptionContain(s"update $tableName set id = 3, s.c1 = 1, id = 4")("Multiple assignments for 'id'")
+            checkExceptionContain(
+              s"update $tableName set s.c1 = 1, s = named_struct('c1', 1, 'c2', null)")("Conflicting assignments for 's'")
+          }
         } else {
           checkExceptionContain(s"update $tableName set s.c1 = 5 where id = 2")(
-            "Assigning a nested field requires Spark 3.5 or later")
+            "Assigning a nested field is not supported on Spark")
         }
       }
 
-      if (gteqSpark3_5) {
-        // a record key field nested in the assigned struct cannot change
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  s struct<c1:int, c2:int>
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
-             | tblproperties (primaryKey = 's.c1', type = 'cow')
-           """.stripMargin)
-        spark.sql(s"insert into $tableName select 1, named_struct('c1', 1, 'c2', 2)")
-        checkExceptionContain(s"update $tableName set s.c1 = 9 where id = 1")(
+      // A struct holding a record key field cannot be assigned, nor any field of it. Assigning the whole
+      // struct used to change the key in the data while _hoodie_record_key kept the old key.
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  s struct<c1:int, c2:int>
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (primaryKey = 's.c1', type = 'cow')
+         """.stripMargin)
+      spark.sql(s"insert into $tableName select 1, named_struct('c1', 1, 'c2', 2)")
+      val keyFieldAssignments = Seq(
+        // changes the key
+        s"update $tableName set s = named_struct('c1', 9, 'c2', 4) where id = 1",
+        // keeps the key
+        s"update $tableName set s = named_struct('c1', 1, 'c2', 3) where id = 1") ++
+        (if (gteqSpark3_5) Seq(s"update $tableName set s.c1 = 9 where id = 1") else Seq.empty)
+      keyFieldAssignments.foreach { statement =>
+        checkExceptionContain(statement)(
           "Detected disallowed assignment clause in UPDATE statement for record key field `s.c1`")
-        checkAnswer(s"select id, s from $tableName")(Seq(1, Row(1, 2)))
       }
+      checkAnswer(s"select _hoodie_record_key, id, s from $tableName")(Seq("1", 1, Row(1, 2)))
     }
   }
 }
