@@ -29,9 +29,22 @@ if [ -z "${HIVE_HOME}" ]; then
   error_exit "Please make sure the environment variable HIVE_HOME is setup"
 fi
 
+# Joins the non-empty arguments with ':'. Java reads an empty classpath entry as the
+# current directory, so empty values (an unset HUDI_CLASSPATH, a jar that is not found)
+# must not leave a bare ':' behind.
+function join_classpath {
+  local joined="" entry
+  for entry in "$@"; do
+    if [ -n "${entry}" ]; then
+      joined="${joined:+${joined}:}${entry}"
+    fi
+  done
+  printf '%s\n' "${joined}"
+}
+
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 #Ensure we pick the right jar even for hive11 builds
-HUDI_HIVE_UBER_JAR=`ls -c $DIR/../../packaging/hudi-hive-sync-bundle/target/hudi-hive-sync-*.jar | grep -v source | head -1`
+HUDI_HIVE_UBER_JAR=`ls -c "$DIR"/../../packaging/hudi-hive-sync-bundle/target/hudi-hive-sync-*.jar | grep -v source | head -1`
 
 if [ -z "$HADOOP_CONF_DIR" ]; then
   echo "setting hadoop conf dir"
@@ -39,18 +52,23 @@ if [ -z "$HADOOP_CONF_DIR" ]; then
 fi
 
 ## Include only specific packages from HIVE_HOME/lib to avoid version mismatches
-HIVE_EXEC=`ls ${HIVE_HOME}/lib/hive-exec-*.jar | tr '\n' ':'`
-HIVE_SERVICE=`ls ${HIVE_HOME}/lib/hive-service-*.jar | grep -v rpc | tr '\n' ':'`
-HIVE_METASTORE=`ls ${HIVE_HOME}/lib/hive-metastore-*.jar | tr '\n' ':'`
-HIVE_JDBC=`ls ${HIVE_HOME}/lib/hive-jdbc-*.jar | tr '\n' ':'`
+HIVE_EXEC=`ls "${HIVE_HOME}"/lib/hive-exec-*.jar | paste -sd ':' -`
+HIVE_SERVICE=`ls "${HIVE_HOME}"/lib/hive-service-*.jar | grep -v rpc | paste -sd ':' -`
+HIVE_METASTORE=`ls "${HIVE_HOME}"/lib/hive-metastore-*.jar | paste -sd ':' -`
+HIVE_JDBC=`ls "${HIVE_HOME}"/lib/hive-jdbc-*.jar | paste -sd ':' -`
 if [ -z "${HIVE_JDBC}" ]; then
-  HIVE_JDBC=`ls ${HIVE_HOME}/lib/hive-jdbc-*.jar | grep -v handler | tr '\n' ':'`
+  HIVE_JDBC=`ls "${HIVE_HOME}"/lib/hive-jdbc-*.jar | grep -v handler | paste -sd ':' -`
 fi
-HIVE_JARS=$HIVE_METASTORE:$HIVE_SERVICE:$HIVE_EXEC:$HIVE_JDBC
+HIVE_JARS=$(join_classpath "${HIVE_METASTORE}" "${HIVE_SERVICE}" "${HIVE_EXEC}" "${HIVE_JDBC}")
 
-HADOOP_HIVE_JARS=${HIVE_JARS}:${HADOOP_HOME}/share/hadoop/common/*:${HADOOP_HOME}/share/hadoop/mapreduce/*:${HADOOP_HOME}/share/hadoop/hdfs/*:${HADOOP_HOME}/share/hadoop/common/lib/*:${HADOOP_HOME}/share/hadoop/hdfs/lib/*
+HADOOP_HIVE_JARS=$(join_classpath "${HIVE_JARS}" "${HADOOP_HOME}/share/hadoop/common/*" "${HADOOP_HOME}/share/hadoop/mapreduce/*" "${HADOOP_HOME}/share/hadoop/hdfs/*" "${HADOOP_HOME}/share/hadoop/common/lib/*" "${HADOOP_HOME}/share/hadoop/hdfs/lib/*")
 
 # Build the classpath once so the logged command matches the java command that actually runs.
-HUDI_HIVE_SYNC_CLASSPATH=${HUDI_CLASSPATH}:${HUDI_HIVE_UBER_JAR}:${HADOOP_HIVE_JARS}:${HADOOP_CONF_DIR}
-echo "Running Command : java -cp ${HUDI_HIVE_SYNC_CLASSPATH} org.apache.hudi.hive.HiveSyncTool $@"
-java -cp ${HUDI_HIVE_SYNC_CLASSPATH} org.apache.hudi.hive.HiveSyncTool "$@"
+HUDI_HIVE_SYNC_CLASSPATH=$(join_classpath "${HUDI_CLASSPATH}" "${HUDI_HIVE_UBER_JAR}" "${HADOOP_HIVE_JARS}" "${HADOOP_CONF_DIR}")
+# Shell-quote the logged command so it can be copied and run as is, even with spaces in paths or arguments.
+LOGGED_ARGS=""
+if [ $# -gt 0 ]; then
+  printf -v LOGGED_ARGS ' %q' "$@"
+fi
+echo "Running Command : java -cp $(printf '%q' "${HUDI_HIVE_SYNC_CLASSPATH}") org.apache.hudi.hive.HiveSyncTool${LOGGED_ARGS}"
+java -cp "${HUDI_HIVE_SYNC_CLASSPATH}" org.apache.hudi.hive.HiveSyncTool "$@"
