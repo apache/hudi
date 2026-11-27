@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieLockException;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.test.TestingServer;
@@ -42,6 +43,9 @@ import org.mockito.Mockito;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,6 +97,38 @@ public class TestLockManager extends HoodieCommonTestHarness {
     });
 
     Mockito.verify(mockLockManager).close();
+  }
+
+  @Test
+  void testFailedUnlockClosesProviderAndNextLockUsesFreshOne() {
+    FaultInjectingLockProvider.reset();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(FaultInjectingLockProvider.class)
+            .withClientNumRetries(0)
+            .build())
+        .build();
+    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getStorage());
+    try {
+      lockManager.lock();
+      FaultInjectingLockProvider first = (FaultInjectingLockProvider) lockManager.getLockProvider();
+      FaultInjectingLockProvider.setFailUnlock(true);
+      assertThrows(HoodieLockException.class, lockManager::unlock);
+      assertTrue(first.isClosed(), "provider must be closed after a failed unlock");
+
+      FaultInjectingLockProvider.setFailUnlock(false);
+      lockManager.lock();
+      FaultInjectingLockProvider second = (FaultInjectingLockProvider) lockManager.getLockProvider();
+      assertNotSame(first, second, "next lock() must not reuse the provider whose unlock failed");
+      assertEquals(2, FaultInjectingLockProvider.getInstances().size());
+      lockManager.unlock();
+      assertFalse(second.isHeld());
+      assertTrue(second.isClosed());
+    } finally {
+      lockManager.close();
+      FaultInjectingLockProvider.reset();
+    }
   }
 
   private HoodieWriteConfig getMultiWriterWriteConfig() {
