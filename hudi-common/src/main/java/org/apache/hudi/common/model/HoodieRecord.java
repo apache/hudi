@@ -455,7 +455,9 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * The Java type is required to keep the value engine agnostic.
    *
    * @return the column value
+   * @deprecated Use engine-specific record context conversion instead of record-level Java conversion.
    */
+  @Deprecated
   public abstract Object getColumnValueAsJava(HoodieSchema recordSchema, String column, Properties props);
 
   /**

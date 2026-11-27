@@ -20,6 +20,7 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.client.model.HoodieFlinkRecord;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -58,7 +59,8 @@ import java.util.function.UnaryOperator;
 public class FlinkRecordContext extends RecordContext<RowData> {
   private static final FlinkRecordContext DELETE_CHECKING_INSTANCE = new FlinkRecordContext(true);
 
-  private final boolean utcTimezone;
+  private final boolean readUtcTimezone;
+  private final boolean writeUtcTimezone;
   // the converter is used to create a RowData contains primary key fields only
   // for DELETE cases, it'll not be initialized if primary key semantics is lost.
   // For e.g, if the pk fields are [a, b] but user only select a, then the pk
@@ -69,12 +71,14 @@ public class FlinkRecordContext extends RecordContext<RowData> {
 
   public FlinkRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf) {
     super(tableConfig, new DefaultJavaTypeConverter());
-    this.utcTimezone = storageConf.getBoolean("read.utc-timezone",true);
+    this.readUtcTimezone = storageConf.getBoolean("read.utc-timezone", true);
+    this.writeUtcTimezone = storageConf.getBoolean(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue());
   }
 
   private FlinkRecordContext(boolean utcTimezone) {
     super(new DefaultJavaTypeConverter());
-    this.utcTimezone = utcTimezone;
+    this.readUtcTimezone = utcTimezone;
+    this.writeUtcTimezone = utcTimezone;
   }
 
   public static FlinkRecordContext getDeleteCheckingInstance() {
@@ -84,7 +88,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   @Override
   public Object getValue(RowData record, HoodieSchema schema, String fieldName) {
     RowDataQueryContexts.FieldQueryContext fieldQueryContext =
-        RowDataQueryContexts.fromSchema(schema, utcTimezone).getFieldQueryContext(fieldName);
+        RowDataQueryContexts.fromSchema(schema, readUtcTimezone).getFieldQueryContext(fieldName);
     if (fieldQueryContext == null) {
       return null;
     } else {
@@ -104,7 +108,12 @@ public class FlinkRecordContext extends RecordContext<RowData> {
 
   @Override
   public Comparable convertOrderingValueToEngineType(Comparable value) {
-    return orderingValueConverter.convert(value);
+    return orderingValueConverter.convertToEngineType(value);
+  }
+
+  @Override
+  public Comparable convertOrderingValueToJava(Comparable value) {
+    return orderingValueConverter.convertToJava(value);
   }
 
   @Override
@@ -126,7 +135,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   @Override
   public RowData convertAvroRecord(IndexedRecord avroRecord) {
     Schema recordSchema = avroRecord.getSchema();
-    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataQueryContexts.fromSchema(HoodieAvroSchemaCache.intern(recordSchema), utcTimezone).getAvroToRowDataConverter();
+    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataQueryContexts.fromSchema(HoodieAvroSchemaCache.intern(recordSchema), readUtcTimezone).getAvroToRowDataConverter();
     RowData rowData = (RowData) converter.convert(avroRecord);
     Schema.Field operationField = recordSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD);
     if (operationField != null) {
@@ -212,7 +221,10 @@ public class FlinkRecordContext extends RecordContext<RowData> {
     return rowProjection::project;
   }
 
+  @Override
   public void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
-    this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames, utcTimezone);
+    if (orderingValueConverter == null) {
+      this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames, readUtcTimezone, writeUtcTimezone);
+    }
   }
 }
