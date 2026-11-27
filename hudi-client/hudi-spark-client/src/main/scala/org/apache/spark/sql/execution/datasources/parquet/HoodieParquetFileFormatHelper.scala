@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.util.collection.Pair
@@ -26,19 +27,100 @@ import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{MessageType, PrimitiveType, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
+
+import java.util.Collections
 
 import scala.collection.JavaConverters._
 
 object HoodieParquetFileFormatHelper {
 
+  /**
+   * The conf keys `ParquetToSparkSchemaConverter(Configuration)` reads in the supported Spark versions. The file schema
+   * conversion depends on the parquet schema, these values and [[SCHEMA_CONVERTER_SESSION_CONF_KEYS]] only.
+   */
+  private[parquet] val SCHEMA_CONVERTER_CONF_KEYS: Seq[String] = Seq(
+    "spark.sql.parquet.binaryAsString",
+    "spark.sql.parquet.int96AsTimestamp",
+    "spark.sql.caseSensitive",
+    "spark.sql.parquet.inferTimestampNTZ.enabled",
+    "spark.sql.legacy.parquet.nanosAsLong",
+    "spark.sql.parquet.fieldId.read.enabled",
+    "spark.sql.parquet.ignoreVariantAnnotation",
+    "spark.sql.parquet.reader.respectUnknownTypeAnnotation.enabled")
+
+  /**
+   * The session conf keys the converter reads through `SQLConf.get` in the supported Spark versions: Spark 4.1+ checks
+   * whether shredded variants may be read when it converts a variant group. An unset or unregistered key reads as
+   * null, so the same list serves every Spark version.
+   */
+  private[parquet] val SCHEMA_CONVERTER_SESSION_CONF_KEYS: Seq[String] = Seq(
+    "spark.sql.variant.allowReadingShredded")
+
+  private case class ImplicitSchemaChangeKey(fileSchema: MessageType, requiredSchema: StructType, converterConf: Seq[String])
+
+  /** The implicit type changes by requested field index, and the schema to read the file with. */
+  type ImplicitSchemaChange = (java.util.Map[Integer, Pair[DataType, DataType]], StructType)
+
+  /** Bounds the cache by the parquet columns of the file schemas plus the leaf fields of the requested schemas. */
+  private val MAX_CACHED_SCHEMA_FIELDS = 20000
+
+  /** Bounds the number of entries, whatever their size: each entry weighs at least this much. */
+  private[parquet] val MIN_ENTRY_WEIGHT: Int = MAX_CACHED_SCHEMA_FIELDS / 256
+
+  /**
+   * Reconciliations of file schemas with requested schemas in this JVM. The files of a table share a few schemas, so
+   * the files of a scan mostly hit the same entries. An entry heavier than the whole bound is not kept, so a file schema
+   * with more than 20000 columns is reconciled per file, as before.
+   */
+  private val implicitSchemaChangeCache: Cache[ImplicitSchemaChangeKey, ImplicitSchemaChange] =
+    Caffeine.newBuilder()
+      .maximumWeight(MAX_CACHED_SCHEMA_FIELDS)
+      .weigher[ImplicitSchemaChangeKey, ImplicitSchemaChange]((key, _) => entryWeight(key.fileSchema, key.requiredSchema))
+      .build()
+
+  private[parquet] def entryWeight(fileSchema: MessageType, requiredSchema: StructType): Int =
+    Math.max(MIN_ENTRY_WEIGHT, fileSchema.getColumns.size() + leafCount(requiredSchema))
+
+  /**
+   * Returns the implicit type changes between the file's schema and `requiredSchema`, and the schema to read the file
+   * with. Cached by the parquet file schema, the requested schema and the conf values the schema conversion reads; the
+   * returned map is shared, so it is read-only. A result that relied on a failed adapter check is not cached.
+   */
   def buildImplicitSchemaChangeInfo(hadoopConf: Configuration,
                                     parquetFileMetaData: FileMetaData,
-                                    requiredSchema: StructType): (java.util.Map[Integer, Pair[DataType, DataType]], StructType) = {
-    val originalSchema = parquetFileMetaData.getSchema
+                                    requiredSchema: StructType): ImplicitSchemaChange = {
+    val sessionConf = SQLConf.get
+    val key = ImplicitSchemaChangeKey(parquetFileMetaData.getSchema, requiredSchema,
+      SCHEMA_CONVERTER_CONF_KEYS.map(key => hadoopConf.get(key))
+        ++ SCHEMA_CONVERTER_SESSION_CONF_KEYS.map(key => sessionConf.getConfString(key, null)))
+    val cached = implicitSchemaChangeCache.getIfPresent(key)
+    if (cached != null) {
+      cached
+    } else {
+      val adapterFailures = SparkSchemaTransformUtils.adapterCheckFailureCount
+      val result = computeImplicitSchemaChangeInfo(hadoopConf, key.fileSchema, key.requiredSchema)
+      if (SparkSchemaTransformUtils.adapterCheckFailureCount == adapterFailures) {
+        implicitSchemaChangeCache.put(key, result)
+      }
+      result
+    }
+  }
 
-    val fileStruct = convertParquetSchemaToSparkSchema(hadoopConf, originalSchema)
-    SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileStruct, requiredSchema)
+  private def leafCount(dataType: DataType): Int = dataType match {
+    case struct: StructType => struct.fields.map(field => leafCount(field.dataType)).sum
+    case array: ArrayType => leafCount(array.elementType)
+    case map: MapType => leafCount(map.keyType) + leafCount(map.valueType)
+    case _ => 1
+  }
+
+  private def computeImplicitSchemaChangeInfo(hadoopConf: Configuration,
+                                             fileSchema: MessageType,
+                                             requiredSchema: StructType): ImplicitSchemaChange = {
+    val fileStruct = convertParquetSchemaToSparkSchema(hadoopConf, fileSchema)
+    val (implicitTypeChangeInfo, sparkRequestSchema) = SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileStruct, requiredSchema)
+    (Collections.unmodifiableMap(implicitTypeChangeInfo), sparkRequestSchema)
   }
 
   def convertParquetSchemaToSparkSchema(hadoopConf: Configuration, schema: MessageType): StructType = {
