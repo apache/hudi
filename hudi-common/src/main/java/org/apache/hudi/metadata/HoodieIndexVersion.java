@@ -101,6 +101,9 @@ public enum HoodieIndexVersion {
       case BLOOM_FILTERS:
         return V1;
 
+      case FULL_TEXT_INDEX:
+        return V1;
+
       case SECONDARY_INDEX:
         if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
           return V2;
