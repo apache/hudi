@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -46,6 +46,7 @@ public class HoodieNativeLogDataBlock extends HoodieDataBlock {
 
   private final HoodieStorage storage;
   private final HoodieLogFile logFile;
+  private final StoragePathInfo pathInfo;
   private final HoodieFileFormat fileFormat;
 
   public HoodieNativeLogDataBlock(HoodieStorage storage,
@@ -54,10 +55,21 @@ public class HoodieNativeLogDataBlock extends HoodieDataBlock {
                                   Option<HoodieSchema> readerSchema,
                                   Map<HeaderMetadataType, String> header,
                                   Map<FooterMetadataType, String> footer) {
-    super(Option.empty(), null, true, getContentLocation(storage, logFile), readerSchema,
+    this(storage, logFile, FSUtils.getNativeLogFilePathInfo(storage, logFile), fileFormat, readerSchema, header, footer);
+  }
+
+  private HoodieNativeLogDataBlock(HoodieStorage storage,
+                                   HoodieLogFile logFile,
+                                   StoragePathInfo pathInfo,
+                                   HoodieFileFormat fileFormat,
+                                   Option<HoodieSchema> readerSchema,
+                                   Map<HeaderMetadataType, String> header,
+                                   Map<FooterMetadataType, String> footer) {
+    super(Option.empty(), null, true, getContentLocation(storage, logFile, pathInfo.getLength()), readerSchema,
         header, footer, HoodieRecord.RECORD_KEY_METADATA_FIELD, false);
     this.storage = storage;
     this.logFile = logFile;
+    this.pathInfo = pathInfo;
     this.fileFormat = fileFormat;
   }
 
@@ -76,10 +88,9 @@ public class HoodieNativeLogDataBlock extends HoodieDataBlock {
 
   @Override
   protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecord.HoodieRecordType type) throws IOException {
-    StoragePath path = logFile.getPath();
     return HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(type)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path, fileFormat, Option.empty())
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, pathInfo, fileFormat, Option.empty())
         .getRecordIterator(getSchemaFromHeader(), readerSchema);
   }
 
@@ -91,7 +102,7 @@ public class HoodieNativeLogDataBlock extends HoodieDataBlock {
   @Override
   protected <T> ClosableIterator<T> readRecordsFromBlockPayload(HoodieReaderContext<T> readerContext) throws IOException {
     return readerContext.getFileRecordIterator(
-        logFile.getPath(), 0, FSUtils.getFileSize(storage, logFile),
+        pathInfo, 0, pathInfo.getLength(),
         getSchemaFromHeader(),
         readerSchema,
         storage);
@@ -99,7 +110,7 @@ public class HoodieNativeLogDataBlock extends HoodieDataBlock {
 
   @Override
   protected <T> ClosableIterator<T> lookupEngineRecords(HoodieReaderContext<T> readerContext, List<String> keys, boolean fullKey) throws IOException {
-    return readerContext.lookupRecords(logFile.getPath(), fileFormat, readerSchema, storage, keys, fullKey);
+    return readerContext.lookupRecords(pathInfo, fileFormat, readerSchema, storage, keys, fullKey);
   }
 
   @Override
@@ -126,8 +137,7 @@ public class HoodieNativeLogDataBlock extends HoodieDataBlock {
     throw new UnsupportedOperationException("Native log data blocks read records directly from native files");
   }
 
-  private static Option<HoodieLogBlockContentLocation> getContentLocation(HoodieStorage storage, HoodieLogFile logFile) {
-    long fileSize = FSUtils.getFileSize(storage, logFile);
+  private static Option<HoodieLogBlockContentLocation> getContentLocation(HoodieStorage storage, HoodieLogFile logFile, long fileSize) {
     return Option.of(new HoodieLogBlockContentLocation(storage, logFile, 0, fileSize, fileSize));
   }
 }
