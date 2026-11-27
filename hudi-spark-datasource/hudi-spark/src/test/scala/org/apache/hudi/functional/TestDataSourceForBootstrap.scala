@@ -30,6 +30,7 @@ import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieClusteringConfig, Ho
 import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
 
@@ -38,7 +39,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{col, lit}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
@@ -337,6 +338,64 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecordsUpdate, hoodieROViewDF4.filter(s"timestamp == $updateTimestamp").count())
 
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime3, commitCompletionTime1, isPartitioned = true, isHiveStylePartitioned = true)
+  }
+
+  /**
+   * Data skipping on a metadata-only bootstrapped table must return the same rows as a full scan once column stats and
+   * partition stats cover data columns, which the bootstrap skeleton files do not contain.
+   */
+  @ParameterizedTest
+  @CsvSource(value = Array("COPY_ON_WRITE,true", "COPY_ON_WRITE,false", "MERGE_ON_READ,true", "MERGE_ON_READ,false"))
+  def testMetadataBootstrapDataSkippingWithColumnStats(tableType: String, partitionStats: String): Unit = {
+    val timestamp = Instant.now.toEpochMilli
+    val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
+
+    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
+      spark.sqlContext)
+
+    sourceDF.write.format("parquet")
+      .partitionBy("datestr")
+      .mode(SaveMode.Overwrite)
+      .save(srcPath)
+
+    val writeOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
+    )
+    runBootstrapAndVerifyCommit(tableType, writeOpts, classOf[SimpleKeyGenerator].getName)
+
+    // Enabling column stats (and optionally partition stats) after the bootstrap indexes the skeleton files, which only
+    // carry the meta columns, next to the new file group in a new partition and the rewritten or appended file group
+    // of an updated record
+    val indexOpts = writeOpts ++ Map(
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> partitionStats,
+      DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType
+    )
+    val insertTimestamp = Instant.now.toEpochMilli
+    TestBootstrap.generateTestRawTripDataset(insertTimestamp, numRecords, numRecords + numRecordsUpdate,
+      Collections.singletonList("2020-04-04"), jsc, spark.sqlContext)
+      .write.format("hudi").options(indexOpts).mode(SaveMode.Append).save(basePath)
+    sourceDF.filter(col("_row_key") === "trip_1").withColumn(verificationCol, lit(updatedVerificationVal))
+      .write.format("hudi").options(indexOpts).mode(SaveMode.Append).save(basePath)
+    val metadataPartitions = HoodieTestUtils.createMetaClient(storage, basePath).getTableConfig.getMetadataPartitions
+    assertTrue(metadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS))
+    assertEquals(partitionStats.toBoolean, metadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS))
+
+    def read(dataSkipping: Boolean, filter: String): java.util.List[Row] =
+      sort(spark.read.format("hudi")
+        .option(HoodieMetadataConfig.ENABLE.key, "true")
+        .option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, dataSkipping.toString)
+        .load(basePath).filter(filter)).collectAsList()
+
+    Seq("rider = 'rider_7'", "rider in ('rider_7', 'rider_105')", s"$verificationCol = '$updatedVerificationVal'",
+      "driver >= 'driver_5'", s"timestamp = $timestamp", "_hoodie_record_key = 'trip_7' and rider = 'rider_7'",
+      "_hoodie_commit_time = '00000000000001' and driver >= 'driver_5'").foreach { filter =>
+      val expected = read(dataSkipping = false, filter)
+      assertTrue(expected.size() > 0, filter)
+      assertEquals(expected, read(dataSkipping = true, filter), filter)
+    }
   }
 
   @Test

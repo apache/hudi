@@ -99,11 +99,29 @@ class ColumnStatsIndexSupport(spark: SparkSession,
         getValidIndexedColumns(indexDefinition, schema, metaClient.getTableConfig).asScala.toSeq
       }
       loadTransposed(queryReferencedColumns, readInMemory, Some(prunedPartitions), prunedFileNamesOpt) { transposedColStatsDF =>
-        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames, getValidIndexedColumnsFunc))
+        val candidateFiles = getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames, getValidIndexedColumnsFunc)
+        if (metaClient.getTableConfig.getBootstrapBasePath.isPresent) {
+          Some(candidateFiles ++ getBootstrapSkeletonFileNames(prunedPartitionsAndFileSlices))
+        } else {
+          Some(candidateFiles)
+        }
       }
     } else {
       Option.empty
     }
+  }
+
+  /**
+   * The column stats of a metadata-only bootstrapped file group are those of its skeleton file, which only has the meta
+   * columns, so they cannot rule out a data column value and the skeleton file always stays a candidate.
+   */
+  private def getBootstrapSkeletonFileNames(
+      prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])]): Set[String] = {
+    prunedPartitionsAndFileSlices.flatMap(_._2)
+      .flatMap(fileSlice => Option(fileSlice.getBaseFile.orElse(null)))
+      .filter(_.getBootstrapBaseFile.isPresent)
+      .map(_.getFileName)
+      .toSet
   }
 
   override def invalidateCaches(): Unit = {
