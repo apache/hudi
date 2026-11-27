@@ -20,23 +20,32 @@ package org.apache.hudi.table.action;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.restore.RestoreUtils;
 
+import java.io.IOException;
 import java.io.Serializable;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable {
 
@@ -127,6 +136,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
         dropIndexOnRestore();
+        dropRecordIndexBuiltAfterRestoreTarget();
         metadataWriter.update(metadata, instantTime);
       } catch (Exception e) {
         handleMetadataException(e, "Failed to apply restore to metadata");
@@ -154,6 +164,38 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
         // setting backup to true as this delete is part of restore operation
         HoodieTableMetadataUtil.deleteMetadataTablePartition(table.getMetaClient(), context, partitionPath, true);
       }
+    }
+  }
+
+  /**
+   * Drops the record index of a metadata table that holds only initialization delta commits. Such a table was built
+   * from files that include the commits the restore rolls back, and its restore syncs the files and column stats
+   * partitions only. The drop comes before that sync, so a failed sync leaves no stale record index behind; the next
+   * writer with the record index enabled rebuilds it from the restored data table. The restore plan decides, not the
+   * instants this attempt rolled back: a retried restore whose rollbacks an earlier attempt finished rolls back none.
+   */
+  private void dropRecordIndexBuiltAfterRestoreTarget() throws IOException {
+    HoodieRestorePlan restorePlan = RestoreUtils.getRestorePlan(table.getMetaClient(),
+        instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime));
+    if (restorePlan.getInstantsToRollback().isEmpty()) {
+      return;
+    }
+    HoodieTableMetaClient dataMetaClient = table.getMetaClient();
+    List<String> recordIndexPartitions = dataMetaClient.getTableConfig().getMetadataPartitions().stream()
+        .filter(partitionPath -> MetadataPartitionType.fromPartitionPath(partitionPath) == MetadataPartitionType.RECORD_INDEX)
+        .collect(Collectors.toList());
+    if (recordIndexPartitions.isEmpty()) {
+      return;
+    }
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(table.getStorageConf().newInstance())
+        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePath()))
+        .build();
+    if (!HoodieTableMetadataUtil.hasOnlyInitializationDeltaCommits(metadataMetaClient)) {
+      return;
+    }
+    for (String partitionPath : recordIndexPartitions) {
+      HoodieTableMetadataUtil.deleteMetadataTablePartition(dataMetaClient, context, partitionPath, true);
     }
   }
 }

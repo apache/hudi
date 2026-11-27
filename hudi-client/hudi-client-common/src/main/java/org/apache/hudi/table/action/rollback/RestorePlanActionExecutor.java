@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
@@ -71,7 +72,9 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
     HoodieTableMetaClient metaClient = table.getMetaClient();
     try (CompletionTimeQueryView completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
       List<HoodieInstantInfo> instantsToRollback;
-      if (table.getMetaClient().isMetadataTable() && isMetadataTableRecreatedDuringRestore(metaClient)) {
+      // A metadata table recreated during restore holds only initialization delta commits. Table services such as
+      // compaction may follow them with later instant times.
+      if (table.getMetaClient().isMetadataTable() && HoodieTableMetadataUtil.hasOnlyInitializationDeltaCommits(metaClient)) {
         instantsToRollback = Collections.emptyList();
       } else {
         // Get all the commits on the timeline after the provided commit time
@@ -108,11 +111,6 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
     } catch (Exception e) {
       throw new HoodieException("Unable to restore to instant: " + savepointToRestoreTimestamp, e);
     }
-  }
-
-  private static boolean isMetadataTableRecreatedDuringRestore(HoodieTableMetaClient metaClient) {
-    // If the table is recreated during restore, the last instant will be a bootstrap commit which starts with SOLO_COMMIT_TIMESTAMP.
-    return metaClient.getActiveTimeline().lastInstant().map(instant -> instant.requestedTime().startsWith(SOLO_COMMIT_TIMESTAMP)).orElse(true);
   }
 
   private Predicate<HoodieInstant> constructInstantFilter(String completionTime) {
