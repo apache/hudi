@@ -66,6 +66,7 @@ import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
+import org.apache.hudi.utilities.config.SensitiveConfigUtils;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionService;
@@ -86,7 +87,6 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -114,9 +114,6 @@ import static org.apache.hudi.utilities.UtilHelpers.readConfig;
 public class HoodieStreamer implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final List<String> DEFAULT_SENSITIVE_CONFIG_KEYS = Arrays.asList(
-      HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.defaultValue().split(","));
-  private static final String SENSITIVE_VALUES_MASKED = "SENSITIVE_INFO_MASKED";
 
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = STREAMER_CHECKPOINT_RESET_KEY_V1;
@@ -609,8 +606,7 @@ public class HoodieStreamer implements Serializable {
   }
 
   public static String toSortedTruncatedString(TypedProperties props) {
-    List<String> sensitiveConfigList = props.getStringList(HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.key(),
-        ",", DEFAULT_SENSITIVE_CONFIG_KEYS);
+    List<String> sensitiveConfigList = SensitiveConfigUtils.getSensitiveConfigFilters(props);
 
     List<String> allKeys = new ArrayList<>();
     for (Object k : props.keySet()) {
@@ -619,15 +615,12 @@ public class HoodieStreamer implements Serializable {
     Collections.sort(allKeys);
     StringBuilder propsLog = new StringBuilder("Creating Hudi Streamer with configs:\n");
     for (String key : allKeys) {
-      String value = Option.ofNullable(props.get(key)).orElse("").toString();
+      // Mask sensitive values and URL credentials before truncating, so a cut can't keep part of a secret.
+      String value = SensitiveConfigUtils.maskSensitiveValue(
+          key, Option.ofNullable(props.get(key)).orElse(""), sensitiveConfigList).toString();
       // Truncate too long values.
       if (value.length() > 255 && !log.isDebugEnabled()) {
         value = value.substring(0, 128) + "[...]";
-      }
-
-      // Mask values for security/ credentials and other sensitive configs
-      if (sensitiveConfigList.stream().anyMatch(key::contains)) {
-        value = SENSITIVE_VALUES_MASKED;
       }
 
       propsLog.append(key).append(": ").append(value).append("\n");
