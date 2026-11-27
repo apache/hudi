@@ -189,6 +189,21 @@ public enum MetaFieldsMode {
     return this == ALL;
   }
 
+  /**
+   * @return the {@code hoodie.populate.meta.fields} value to persist in {@code hoodie.properties}
+   * on a table below version 10: {@code false} only for {@link #NONE}. A writer that predates
+   * {@code hoodie.meta.fields.mode} compares this property against its own {@code true} default
+   * and refuses the table on a mismatch, without ever opening a file, so a selective mode that
+   * persists {@code false} locks out a writer that could otherwise proceed.
+   *
+   * <p>For persistence only. {@link #toLegacyPopulateMetaFields()} stays the in-process meaning and
+   * is deliberately narrower: callers skip the key generator and read the record key straight off
+   * {@code _hoodie_record_key} when it is true, which only {@link #ALL} writes.
+   */
+  public boolean toPersistedPopulateMetaFields() {
+    return this != NONE;
+  }
+
   public static MetaFieldsMode fromLegacyPopulateMetaFields(Boolean populateMetaFields) {
     return populateMetaFields == null || populateMetaFields ? MetaFieldsMode.ALL : MetaFieldsMode.NONE;
   }

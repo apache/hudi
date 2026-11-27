@@ -464,9 +464,11 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     HoodieTableConfig persisted = new HoodieTableConfig(storage, versionedMetaPath);
     if (version.lesserThan(HoodieTableVersion.TEN)) {
-      assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+      assertEquals(Boolean.toString(mode.toPersistedPopulateMetaFields()),
           persisted.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
-          "create() must persist the derived boolean below v10 for unpatched readers, " + mode);
+          "create() must persist the wide boolean below v10 for unpatched readers, " + mode);
+      assertEquals(mode.toLegacyPopulateMetaFields(), persisted.populateMetaFields(),
+          "the accessor resolves through the mode, so the wide persisted value cannot leak in, " + mode);
     } else {
       assertFalse(persisted.getProps().containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key()),
           "create() must record the mode alone from v10, " + mode);
