@@ -35,6 +35,7 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.parquet.avro.AvroReadSupport;
+import org.apache.parquet.avro.HoodieAvroReadSupport;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetInputSplit;
@@ -82,7 +83,7 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
         AvroReadSupport.setRequestedProjection(conf, filterSchema.toAvroSchema());
       }
     }
-    parquetRecordReader = new ParquetRecordReader<>(new AvroReadSupport<>(GenericData.get()), getFilter(conf));
+    parquetRecordReader = new ParquetRecordReader<>(new HoodieAvroReadSupport<>(GenericData.get(), Option.empty()), getFilter(conf));
   }
 
   @Override

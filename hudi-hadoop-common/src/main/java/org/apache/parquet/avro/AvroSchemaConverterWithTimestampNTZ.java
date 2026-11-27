@@ -560,6 +560,14 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
               decimalLogicalType.getPrecision(), decimalLogicalType.getScale(), fixedSize));
         } else if (primitiveType == BINARY) {
           return java.util.Optional.of(HoodieSchema.createDecimal(decimalLogicalType.getPrecision(), decimalLogicalType.getScale()));
+        } else if (primitiveType == INT32 || primitiveType == INT64) {
+          // Avro has no integer-backed decimal, so an INT32/INT64 column surfaces as the fixed decimal of
+          // the minimal width for its precision; IntegerDecimalRecordConverter re-encodes the values to match.
+          String name = parquetType.getName();
+          String ns = nextDedupNamespace(name, names);
+          return java.util.Optional.of(HoodieSchema.createDecimal(name, ns, null,
+              decimalLogicalType.getPrecision(), decimalLogicalType.getScale(),
+              HoodieSchema.minBytesForDecimalPrecision(decimalLogicalType.getPrecision())));
         } else {
           return java.util.Optional.empty();
         }
