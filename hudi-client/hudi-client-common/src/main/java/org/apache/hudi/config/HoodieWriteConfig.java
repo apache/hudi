@@ -2032,6 +2032,21 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS);
   }
 
+  public boolean isCompactionIgnoreEmptyCommits() {
+    return getBooleanOrDefault(HoodieCompactionConfig.INLINE_COMPACT_IGNORE_EMPTY_COMMITS);
+  }
+
+  /**
+   * Total delta commits, empty ones included, after which compaction is triggered when empty delta commits are ignored.
+   */
+  public int getInlineCompactMaxTotalDeltaCommits() {
+    int maxTotalDeltaCommits = getIntOrDefault(HoodieCompactionConfig.INLINE_COMPACT_MAX_TOTAL_DELTA_COMMITS);
+    // A cap below max.delta.commits could never trigger earlier than the normal count, so it is raised to it.
+    return maxTotalDeltaCommits > 0
+        ? Math.max(maxTotalDeltaCommits, getInlineCompactDeltaCommitMax())
+        : 5 * getInlineCompactDeltaCommitMax();
+  }
+
   public int getInlineCompactDeltaSecondsMax() {
     return getInt(HoodieCompactionConfig.INLINE_COMPACT_TIME_DELTA_SECONDS);
   }
@@ -2874,6 +2889,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getMetadataCompactionTriggerStrategy() {
     return getString(HoodieMetadataConfig.COMPACT_TRIGGER_STRATEGY);
+  }
+
+  public boolean isMetadataCompactionIgnoreEmptyCommits() {
+    return getBooleanOrDefault(HoodieMetadataConfig.COMPACT_IGNORE_EMPTY_COMMITS);
+  }
+
+  public int getMetadataCompactMaxTotalDeltaCommits() {
+    return getIntOrDefault(HoodieMetadataConfig.COMPACT_MAX_TOTAL_DELTA_COMMITS);
   }
 
   public int getMetadataMaxDeltaSecondsBeforeCompaction() {

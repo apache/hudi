@@ -573,6 +573,75 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     });
   }
 
+  /**
+   * Empty data table commits (no write stats, as a streamer makes when only its checkpoint advances) still create a
+   * metadata table delta commit. With the empty commits ignored, they must not bring the metadata table compaction forward.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testMetadataTableCompactionIgnoresEmptyCommits(boolean ignoreEmptyCommits) throws Exception {
+    init(COPY_ON_WRITE, false);
+    Properties metadataProps = new Properties();
+    metadataProps.setProperty(HoodieMetadataConfig.COMPACT_IGNORE_EMPTY_COMMITS.key(), String.valueOf(ignoreEmptyCommits));
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .fromProperties(metadataProps)
+            .enable(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(3)
+            .withMetadataIndexColumnStats(false)
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    doWriteOperation(testTable, WriteClientTestUtils.createNewInstantTime(), INSERT);
+    for (int i = 0; i < 5; i++) {
+      testTable.doWriteOperation(WriteClientTestUtils.createNewInstantTime(), UPSERT, emptyList(),
+          Collections.singletonMap("p1", emptyList()), false, false);
+    }
+    assertEquals(!ignoreEmptyCommits, metadata(writeConfig, context).getLatestCompactionTime().isPresent(),
+        "Empty commits should trigger the metadata table compaction only when they are counted");
+
+    if (ignoreEmptyCommits) {
+      // The bootstrap and the first insert count as two; the third non-empty delta commit triggers the compaction.
+      doWriteOperation(testTable, WriteClientTestUtils.createNewInstantTime(), INSERT);
+      assertFalse(metadata(writeConfig, context).getLatestCompactionTime().isPresent());
+      doWriteOperation(testTable, WriteClientTestUtils.createNewInstantTime(), INSERT);
+      assertTrue(metadata(writeConfig, context).getLatestCompactionTime().isPresent(),
+          "Compaction of metadata table should kick in once enough delta commits wrote files");
+    }
+  }
+
+  /**
+   * With empty commits ignored, the total delta commit cap still compacts the metadata table once enough delta commits,
+   * empty ones included, accumulate.
+   */
+  @Test
+  public void testMetadataTableCompactionCapOnEmptyCommits() throws Exception {
+    init(COPY_ON_WRITE, false);
+    Properties metadataProps = new Properties();
+    metadataProps.setProperty(HoodieMetadataConfig.COMPACT_IGNORE_EMPTY_COMMITS.key(), "true");
+    metadataProps.setProperty(HoodieMetadataConfig.COMPACT_MAX_TOTAL_DELTA_COMMITS.key(), "5");
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .fromProperties(metadataProps)
+            .enable(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(3)
+            .withMetadataIndexColumnStats(false)
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    doWriteOperation(testTable, WriteClientTestUtils.createNewInstantTime(), INSERT);
+    // The bootstrap and the insert are two delta commits; three empty commits bring the total to the cap of 5.
+    for (int i = 0; i < 3; i++) {
+      testTable.doWriteOperation(WriteClientTestUtils.createNewInstantTime(), UPSERT, emptyList(),
+          Collections.singletonMap("p1", emptyList()), false, false);
+    }
+    assertFalse(metadata(writeConfig, context).getLatestCompactionTime().isPresent());
+    testTable.doWriteOperation(WriteClientTestUtils.createNewInstantTime(), UPSERT, emptyList(),
+        Collections.singletonMap("p1", emptyList()), false, false);
+    assertTrue(metadata(writeConfig, context).getLatestCompactionTime().isPresent(),
+        "Compaction of metadata table should kick in once the total delta commits reach the cap");
+  }
+
   @Test
   public void testMetadataTableCompactionWithPendingInstants() throws Exception {
     init(COPY_ON_WRITE, false);
