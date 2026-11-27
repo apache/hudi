@@ -14,7 +14,6 @@
 package io.trino.plugin.hudi.testing;
 
 import com.google.common.collect.ImmutableList;
-import io.trino.metastore.Column;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -33,12 +32,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
@@ -67,17 +62,6 @@ public class PayloadOnlyMergerHudiTablesInitializer
     public PayloadOnlyMergerHudiTablesInitializer()
     {
         super(TABLE_NAME);
-    }
-
-    @Override
-    protected List<Column> dataColumns()
-    {
-        return ImmutableList.of(
-                new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("name", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("value", HIVE_LONG, Optional.empty(), Map.of()),
-                new Column(RANK_FIELD, HIVE_LONG, Optional.empty(), Map.of()),
-                new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()));
     }
 
     @Override

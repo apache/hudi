@@ -75,10 +75,11 @@ import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
 import static io.trino.hive.formats.HiveClassNames.HUDI_PARQUET_INPUT_FORMAT;
 import static io.trino.hive.formats.HiveClassNames.MAPRED_PARQUET_OUTPUT_FORMAT_CLASS;
 import static io.trino.hive.formats.HiveClassNames.PARQUET_HIVE_SERDE_CLASS;
-import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_STRING;
 import static io.trino.plugin.hive.HivePartitionManager.extractPartitionValues;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
+import static io.trino.plugin.hudi.testing.HudiTestUtils.hiveSyncStorageSchema;
+import static io.trino.plugin.hudi.testing.HudiTestUtils.metastoreDataColumns;
 import static java.nio.file.Files.createTempDirectory;
 
 /**
@@ -126,14 +127,6 @@ public class UncompactedMetadataHudiTablesInitializer
     private static final String ORDERING_FIELD = "ts";
     private static final List<String> PARTITION_PATHS = ImmutableList.of(PARTITION_FIELD + "=p1", PARTITION_FIELD + "=p2");
 
-    private static final List<Column> DATA_COLUMNS = ImmutableList.<Column>builder()
-            .addAll(AbstractMergerHudiTablesInitializer.HUDI_META_COLUMNS)
-            .add(new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()))
-            .add(new Column("name", HIVE_STRING, Optional.empty(), Map.of()))
-            .add(new Column("price", HIVE_LONG, Optional.empty(), Map.of()))
-            .add(new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()))
-            .build();
-
     private static final List<Column> PARTITION_COLUMNS =
             ImmutableList.of(new Column(PARTITION_FIELD, HIVE_STRING, Optional.empty(), Map.of()));
 
@@ -153,6 +146,8 @@ public class UncompactedMetadataHudiTablesInitializer
             for (String tableName : ImmutableList.of(TABLE_NAME, CORRUPTED_TABLE_NAME)) {
                 java.nio.file.Path tempTableDir = tempDir.resolve(tableName);
                 writeTable(new Path(tempTableDir.toUri()), tableName);
+                // Hive sync's columns for the table as written (its HMS path, support_timestamp off as by default)
+                List<Column> dataColumns = metastoreDataColumns(hiveSyncStorageSchema(new Path(tempTableDir.toUri()).toString(), false), false, ImmutableList.of(PARTITION_FIELD));
                 if (tableName.equals(CORRUPTED_TABLE_NAME)) {
                     corruptMetadataLogFiles(tempTableDir);
                     verifyMetadataTableUnreadable(new Path(tempTableDir.toUri()));
@@ -160,8 +155,8 @@ public class UncompactedMetadataHudiTablesInitializer
                 Location tableLocation = externalLocation.appendPath(tableName);
                 ResourceHudiTablesInitializer.copyDir(tempTableDir, fileSystem, tableLocation);
 
-                metastore.createTable(createTableDefinition(schemaName, tableName, tableLocation), PrincipalPrivileges.NO_PRIVILEGES);
-                metastore.addPartitions(schemaName, tableName, createPartitions(schemaName, tableName, tableLocation));
+                metastore.createTable(createTableDefinition(schemaName, tableName, tableLocation, dataColumns), PrincipalPrivileges.NO_PRIVILEGES);
+                metastore.addPartitions(schemaName, tableName, createPartitions(schemaName, tableName, tableLocation, dataColumns));
             }
         }
         finally {
@@ -360,14 +355,14 @@ public class UncompactedMetadataHudiTablesInitializer
         return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
     }
 
-    private static Table createTableDefinition(String schemaName, String tableName, Location location)
+    private static Table createTableDefinition(String schemaName, String tableName, Location location, List<Column> dataColumns)
     {
         return Table.builder()
                 .setDatabaseName(schemaName)
                 .setTableName(tableName)
                 .setTableType(EXTERNAL_TABLE.name())
                 .setOwner(Optional.of("public"))
-                .setDataColumns(DATA_COLUMNS)
+                .setDataColumns(dataColumns)
                 .setPartitionColumns(PARTITION_COLUMNS)
                 .setParameters(ImmutableMap.of("serialization.format", "1", "EXTERNAL", "TRUE"))
                 .withStorage(storageBuilder -> storageBuilder
@@ -376,7 +371,7 @@ public class UncompactedMetadataHudiTablesInitializer
                 .build();
     }
 
-    private static List<PartitionWithStatistics> createPartitions(String schemaName, String tableName, Location tableLocation)
+    private static List<PartitionWithStatistics> createPartitions(String schemaName, String tableName, Location tableLocation, List<Column> dataColumns)
     {
         List<PartitionWithStatistics> partitions = new ArrayList<>();
         for (String partitionName : PARTITION_PATHS) {
@@ -388,7 +383,7 @@ public class UncompactedMetadataHudiTablesInitializer
                     .withStorage(storageBuilder -> storageBuilder
                             .setStorageFormat(storageFormat())
                             .setLocation(tableLocation.appendPath(partitionName).toString()))
-                    .setColumns(DATA_COLUMNS)
+                    .setColumns(dataColumns)
                     .build();
             partitions.add(new PartitionWithStatistics(partition, partitionName, PartitionStatistics.empty()));
         }

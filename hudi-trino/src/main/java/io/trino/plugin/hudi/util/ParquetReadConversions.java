@@ -1,0 +1,527 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.trino.plugin.hudi.util;
+
+import io.airlift.slice.Slice;
+import io.trino.spi.TrinoException;
+import io.trino.spi.block.ArrayBlock;
+import io.trino.spi.block.ArrayBlockBuilder;
+import io.trino.spi.block.Bitmap;
+import io.trino.spi.block.Block;
+import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.ColumnarArray;
+import io.trino.spi.block.ColumnarMap;
+import io.trino.spi.block.MapBlock;
+import io.trino.spi.block.RowBlock;
+import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.LongTimestamp;
+import io.trino.spi.type.LongTimestampWithTimeZone;
+import io.trino.spi.type.MapType;
+import io.trino.spi.type.RowType;
+import io.trino.spi.type.TimestampType;
+import io.trino.spi.type.TimestampWithTimeZoneType;
+import io.trino.spi.type.Type;
+import io.trino.spi.type.TypeOperators;
+import io.trino.spi.type.UuidType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
+import org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit;
+import org.apache.parquet.schema.LogicalTypeAnnotation.TimestampLogicalTypeAnnotation;
+import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+
+import static io.trino.parquet.ParquetTypeUtils.getParquetTypeByName;
+import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
+import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.DateTimeEncoding.packDateTimeWithZone;
+import static io.trino.spi.type.DoubleType.DOUBLE;
+import static io.trino.spi.type.RealType.REAL;
+import static io.trino.spi.type.TimeZoneKey.UTC_KEY;
+import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_MILLISECOND;
+import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_MICROSECOND;
+import static io.trino.spi.type.TinyintType.TINYINT;
+import static io.trino.spi.type.UuidType.javaUuidToTrinoUuid;
+import static io.trino.spi.type.VarbinaryType.VARBINARY;
+import static java.lang.Float.floatToRawIntBits;
+import static java.lang.Math.floorDiv;
+import static java.lang.Math.floorMod;
+import static java.lang.Math.multiplyExact;
+import static java.util.Objects.requireNonNull;
+import static org.apache.parquet.schema.Type.Repetition.REPEATED;
+
+/**
+ * Converts blocks from the type the Trino parquet reader can decode a column as to the column's Trino type, for the
+ * {@link TrinoTypeMapper} types the reader cannot produce from the layouts Hudi writes:
+ * <ul>
+ * <li>UUID: Hudi writes it as a string by default and as a 16-byte FIXED_LEN_BYTE_ARRAY with the UUID annotation only
+ * under {@code parquet.avro.write-parquet-uuid=true}, while the reader decodes {@code uuid} from the latter only. Both
+ * are read as varbinary and converted.</li>
+ * <li>VECTOR: written as a bare FIXED_LEN_BYTE_ARRAY of little-endian elements, which the reader cannot decode into an
+ * array. Read as varbinary and decoded into an array of the element type.</li>
+ * <li>TIMESTAMP whose file column misstates its unit: a field the table schema declares UTC timestamp-millis but the
+ * file labels UTC MICROS (written by the releases #14161 repairs, whose values are millis), and a bare INT64 under any
+ * timestamp (a local one, which the parquet base-file readers repair too, or a long promoted to a timestamp). Read as bigint and converted from
+ * the table schema's unit; see {@link #storedTimestampUnit}.</li>
+ * </ul>
+ * UUID and VECTOR are detected from the column type and the file's parquet type alone: a {@code uuid} column is a
+ * UUID, and an array of real, double or tinyint over a non-repeated FIXED_LEN_BYTE_ARRAY is a VECTOR. A misstated
+ * timestamp needs the field's schema, as the column type does not say which unit the table declares; without one,
+ * nothing is repaired. Rows, arrays and maps are walked alongside their parquet groups so nested UUID and VECTOR values convert too;
+ * subtrees that need no conversion pass through as they are.
+ */
+public final class ParquetReadConversions
+{
+    // Builds the map read types below, whose operators the parquet reader never invokes
+    private static final TypeOperators READ_TYPE_OPERATORS = new TypeOperators();
+
+    private ParquetReadConversions() {}
+
+    /**
+     * @param readType the type the parquet reader decodes the column as
+     * @param toColumnType converts a block of {@code readType} into a block of the column type
+     */
+    public record ReadConversion(Type readType, Function<Block, Block> toColumnType)
+    {
+        public ReadConversion
+        {
+            requireNonNull(readType, "readType is null");
+            requireNonNull(toColumnType, "toColumnType is null");
+        }
+    }
+
+    /**
+     * {@link #forColumn(Type, org.apache.parquet.schema.Type, HoodieSchema)} without the field's schema, which
+     * repairs no timestamp.
+     */
+    public static Optional<ReadConversion> forColumn(Type columnType, org.apache.parquet.schema.Type parquetType)
+    {
+        return forColumn(columnType, parquetType, null);
+    }
+
+    /**
+     * Returns the conversion a column of {@code columnType} stored as {@code parquetType} needs, or empty when the
+     * reader decodes it as the column type directly.
+     *
+     * @param fieldSchema the column's field in the table schema, or null when unknown
+     */
+    public static Optional<ReadConversion> forColumn(Type columnType, org.apache.parquet.schema.Type parquetType, HoodieSchema fieldSchema)
+    {
+        if (columnType instanceof TimestampType || columnType instanceof TimestampWithTimeZoneType) {
+            if (!parquetType.isPrimitive()) {
+                return Optional.empty();
+            }
+            return storedTimestampUnit(fieldSchema, parquetType.asPrimitiveType())
+                    .map(unit -> new ReadConversion(BIGINT, block -> timestampsFromLong(columnType, unit, block)));
+        }
+        if (columnType instanceof UuidType) {
+            if (!isBinary(parquetType)) {
+                return Optional.empty();
+            }
+            return Optional.of(new ReadConversion(VARBINARY, ParquetReadConversions::uuidsFromBinary));
+        }
+        if (columnType instanceof ArrayType arrayType) {
+            if (isVectorLayout(arrayType, parquetType)) {
+                return Optional.of(new ReadConversion(VARBINARY, block -> vectorsFromBinary(arrayType, block)));
+            }
+            return arrayElementType(parquetType)
+                    .flatMap(elementParquetType -> forColumn(arrayType.getElementType(), elementParquetType, childSchema(fieldSchema, HoodieSchemaType.ARRAY)))
+                    .map(element -> new ReadConversion(
+                            new ArrayType(element.readType()),
+                            block -> convertArrayElements(block, element.toColumnType())));
+        }
+        if (columnType instanceof MapType mapType) {
+            // Map keys are always varchar (TrinoTypeMapper maps Avro's string keys), so only values can need a conversion
+            return mapValueType(parquetType)
+                    .flatMap(valueParquetType -> forColumn(mapType.getValueType(), valueParquetType, childSchema(fieldSchema, HoodieSchemaType.MAP)))
+                    .map(value -> new ReadConversion(
+                            new MapType(mapType.getKeyType(), value.readType(), READ_TYPE_OPERATORS),
+                            block -> convertMapValues(block, mapType, value.toColumnType())));
+        }
+        if (columnType instanceof RowType rowType) {
+            if (parquetType.isPrimitive()) {
+                return Optional.empty();
+            }
+            return rowConversion(rowType, parquetType.asGroupType(), fieldSchema);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The field of {@code recordSchema} named {@code name}, matched as the parquet reader matches columns
+     * (case-insensitively), or null when there is no record schema or no such field.
+     */
+    public static HoodieSchema fieldSchema(HoodieSchema recordSchema, String name)
+    {
+        HoodieSchema record = nonNull(recordSchema);
+        if (record == null || record.getType() != HoodieSchemaType.RECORD) {
+            return null;
+        }
+        return record.getFields().stream()
+                .filter(field -> field.name().equalsIgnoreCase(name))
+                .findFirst()
+                .map(HoodieSchemaField::schema)
+                .orElse(null);
+    }
+
+    private static HoodieSchema childSchema(HoodieSchema schema, HoodieSchemaType containerType)
+    {
+        HoodieSchema container = nonNull(schema);
+        if (container == null || container.getType() != containerType) {
+            return null;
+        }
+        return containerType == HoodieSchemaType.ARRAY ? container.getElementType() : container.getValueType();
+    }
+
+    private static HoodieSchema nonNull(HoodieSchema schema)
+    {
+        return schema == null || schema.isComplexUnion() ? null : schema.getNonNullType();
+    }
+
+    private static Optional<ReadConversion> rowConversion(RowType rowType, GroupType groupType, HoodieSchema recordSchema)
+    {
+        List<RowType.Field> fields = rowType.getFields();
+        List<RowType.Field> readFields = new ArrayList<>(fields.size());
+        List<Optional<Function<Block, Block>>> fieldConversions = new ArrayList<>(fields.size());
+        boolean anyConversion = false;
+        for (RowType.Field field : fields) {
+            // Resolved by name, as the parquet reader resolves row fields
+            Optional<ReadConversion> conversion = field.getName()
+                    .flatMap(name -> Optional.ofNullable(getParquetTypeByName(name, groupType))
+                            .flatMap(fieldParquetType -> forColumn(field.getType(), fieldParquetType, fieldSchema(recordSchema, name))));
+            anyConversion |= conversion.isPresent();
+            readFields.add(new RowType.Field(field.getName(), conversion.map(ReadConversion::readType).orElse(field.getType())));
+            fieldConversions.add(conversion.map(ReadConversion::toColumnType));
+        }
+        if (!anyConversion) {
+            return Optional.empty();
+        }
+        return Optional.of(new ReadConversion(RowType.from(readFields), block -> convertRowFields(block, fieldConversions)));
+    }
+
+    /**
+     * The unit an INT64 timestamp column really stores its values in, when the file's annotation misstates the one the
+     * field's table schema declares. The first two cases are the ones {@code org.apache.parquet.schema.SchemaRepair}
+     * repairs for the parquet base-file readers Spark and Hive use:
+     * <ul>
+     * <li>a UTC-adjusted MICROS annotation under a field the table declares UTC-adjusted timestamp-millis holds millis,
+     * as the releases #14161 repairs wrote it</li>
+     * <li>a bare INT64 under a local timestamp holds the table's unit</li>
+     * <li>a bare INT64 under a UTC timestamp holds the table's unit too. This one departs from {@code SchemaRepair},
+     * which leaves it alone, so that Spark casts the long as seconds. A long column promoted to a timestamp under
+     * {@code hoodie.write.timestamp.logical.type.overrides} (#19384) leaves the files written before as bare INT64,
+     * and the override declares the unit their longs count in, which is also how Hudi's Avro merge path reads them
+     * ({@code HoodieAvroUtils.rewritePrimaryType} keeps the long). A column promoted before #19384, when the promotion
+     * needed no override, is read the same way, as its unit is the one its schema declares.</li>
+     * </ul>
+     * {@code HoodieSchemaRepair}, which the Avro log blocks are read with, also repairs a local MICROS under a local
+     * millis field. A base file can hold real micros there (the row writer annotates a Spark timestamp_ntz as local
+     * MICROS), so the base read follows the parquet readers and leaves it alone.
+     * Empty when the annotation can be trusted or the field's schema is unknown. The parquet reader decodes a misstated
+     * column by its annotation (a thousand times off) or, for the bare INT64, refuses it, and its statistics are misread
+     * the same way, so {@link ParquetStatisticsDomains} drops a predicate on such a column.
+     */
+    public static Optional<TimeUnit> storedTimestampUnit(HoodieSchema fieldSchema, PrimitiveType fileType)
+    {
+        HoodieSchema schema = nonNull(fieldSchema);
+        if (schema == null || schema.getType() != HoodieSchemaType.TIMESTAMP || fileType.getPrimitiveTypeName() != PrimitiveTypeName.INT64) {
+            return Optional.empty();
+        }
+        HoodieSchema.Timestamp timestamp = (HoodieSchema.Timestamp) schema;
+        TimeUnit tableUnit = timestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS ? TimeUnit.MILLIS : TimeUnit.MICROS;
+        LogicalTypeAnnotation annotation = fileType.getLogicalTypeAnnotation();
+        if (annotation == null) {
+            return Optional.of(tableUnit);
+        }
+        if (annotation instanceof TimestampLogicalTypeAnnotation timestampAnnotation
+                && timestampAnnotation.getUnit() == TimeUnit.MICROS
+                && tableUnit == TimeUnit.MILLIS
+                && timestampAnnotation.isAdjustedToUTC()
+                && timestamp.isUtcAdjusted()) {
+            return Optional.of(TimeUnit.MILLIS);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * A timestamp read as the bigint the file stores, counted in {@code unit} from the epoch.
+     */
+    private static Block timestampsFromLong(Type columnType, TimeUnit unit, Block block)
+    {
+        int positionCount = block.getPositionCount();
+        BlockBuilder builder = columnType.createBlockBuilder(null, positionCount);
+        for (int position = 0; position < positionCount; position++) {
+            if (block.isNull(position)) {
+                builder.appendNull();
+                continue;
+            }
+            long value = BIGINT.getLong(block, position);
+            long epochMicros = switch (unit) {
+                case MILLIS -> multiplyExact(value, MICROSECONDS_PER_MILLISECOND);
+                case MICROS -> value;
+                case NANOS -> throw new IllegalArgumentException("Hudi stores no nanosecond timestamps");
+            };
+            long epochMillis = floorDiv(epochMicros, MICROSECONDS_PER_MILLISECOND);
+            switch (columnType) {
+                case TimestampWithTimeZoneType withTimeZone when withTimeZone.isShort() -> columnType.writeLong(builder, packDateTimeWithZone(epochMillis, UTC_KEY));
+                case TimestampWithTimeZoneType _ -> columnType.writeObject(builder, LongTimestampWithTimeZone.fromEpochMillisAndFraction(
+                        epochMillis, floorMod(epochMicros, MICROSECONDS_PER_MILLISECOND) * PICOSECONDS_PER_MICROSECOND, UTC_KEY));
+                case TimestampType timestampType when timestampType.isShort() -> columnType.writeLong(builder, epochMicros);
+                default -> columnType.writeObject(builder, new LongTimestamp(epochMicros, 0));
+            }
+        }
+        return builder.build();
+    }
+
+    private static boolean isBinary(org.apache.parquet.schema.Type parquetType)
+    {
+        if (!parquetType.isPrimitive()) {
+            return false;
+        }
+        PrimitiveTypeName primitiveType = parquetType.asPrimitiveType().getPrimitiveTypeName();
+        return primitiveType == PrimitiveTypeName.BINARY || primitiveType == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY;
+    }
+
+    /**
+     * A VECTOR is an array of real, double or tinyint whose file column is a single FIXED_LEN_BYTE_ARRAY rather than a
+     * repeated field, which no parquet list encoding can be.
+     */
+    private static boolean isVectorLayout(ArrayType arrayType, org.apache.parquet.schema.Type parquetType)
+    {
+        Type elementType = arrayType.getElementType();
+        return (REAL.equals(elementType) || DOUBLE.equals(elementType) || TINYINT.equals(elementType))
+                && parquetType.isPrimitive()
+                && !parquetType.isRepetition(REPEATED)
+                && parquetType.asPrimitiveType().getPrimitiveTypeName() == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY;
+    }
+
+    /**
+     * The element type of a parquet list, following the backward-compatibility rules
+     * {@code ParquetTypeUtils.getArrayElementColumn} applies to the same schema.
+     */
+    private static Optional<org.apache.parquet.schema.Type> arrayElementType(org.apache.parquet.schema.Type parquetType)
+    {
+        if (parquetType.isPrimitive()) {
+            // A bare repeated primitive is a required list of required elements of that type
+            return parquetType.isRepetition(REPEATED) ? Optional.of(parquetType) : Optional.empty();
+        }
+        org.apache.parquet.schema.Type parent = parquetType;
+        org.apache.parquet.schema.Type repeated = parquetType;
+        while (!repeated.isPrimitive() && !repeated.isRepetition(REPEATED)) {
+            GroupType group = repeated.asGroupType();
+            if (group.getFieldCount() != 1) {
+                return Optional.empty();
+            }
+            parent = repeated;
+            repeated = group.getType(0);
+        }
+        // Standard three-level list: the repeated group wraps the element
+        if (!repeated.isPrimitive()
+                && repeated.getLogicalTypeAnnotation() == null
+                && repeated.asGroupType().getFieldCount() == 1
+                && !repeated.getName().equals("array")
+                && !repeated.getName().equals(parent.getName() + "_tuple")) {
+            return Optional.of(repeated.asGroupType().getType(0));
+        }
+        // Two-level list: the repeated field is the element
+        return Optional.of(repeated);
+    }
+
+    /**
+     * The value type of a parquet map, found the way {@code ParquetTypeUtils.getMapKeyValueColumn} finds the key-value
+     * group.
+     */
+    private static Optional<org.apache.parquet.schema.Type> mapValueType(org.apache.parquet.schema.Type parquetType)
+    {
+        if (parquetType.isPrimitive()) {
+            return Optional.empty();
+        }
+        GroupType keyValue = parquetType.asGroupType();
+        while (keyValue.getFieldCount() == 1) {
+            org.apache.parquet.schema.Type child = keyValue.getType(0);
+            if (child.isPrimitive()) {
+                return Optional.empty();
+            }
+            keyValue = child.asGroupType();
+        }
+        if (keyValue.getFieldCount() != 2) {
+            return Optional.empty();
+        }
+        return Optional.of(keyValue.getType(1));
+    }
+
+    /**
+     * A UUID read as varbinary: the 16 raw bytes of a FIXED_LEN_BYTE_ARRAY column, or the 36 characters of its
+     * canonical text form in a string column.
+     */
+    private static Block uuidsFromBinary(Block block)
+    {
+        int positionCount = block.getPositionCount();
+        BlockBuilder builder = UuidType.UUID.createBlockBuilder(null, positionCount);
+        for (int position = 0; position < positionCount; position++) {
+            if (block.isNull(position)) {
+                builder.appendNull();
+                continue;
+            }
+            Slice value = VARBINARY.getSlice(block, position);
+            switch (value.length()) {
+                // Trino's uuid value is the UUID's big-endian bytes, the same bytes parquet stores
+                case 16 -> UuidType.UUID.writeSlice(builder, value);
+                case 36 -> UuidType.UUID.writeSlice(builder, javaUuidToTrinoUuid(parseUuid(value)));
+                default -> throw new TrinoException(HUDI_BAD_DATA, "Expected a UUID as 16 bytes or as its 36-character text form, but found %s bytes".formatted(value.length()));
+            }
+        }
+        return builder.build();
+    }
+
+    private static UUID parseUuid(Slice value)
+    {
+        String text = value.toStringUtf8();
+        try {
+            return UUID.fromString(text);
+        }
+        catch (IllegalArgumentException e) {
+            throw new TrinoException(HUDI_BAD_DATA, "Invalid UUID: " + text, e);
+        }
+    }
+
+    /**
+     * A VECTOR read as varbinary, see {@link #writeVector}.
+     */
+    private static Block vectorsFromBinary(ArrayType arrayType, Block block)
+    {
+        int positionCount = block.getPositionCount();
+        ArrayBlockBuilder builder = arrayType.createBlockBuilder(null, positionCount);
+        for (int position = 0; position < positionCount; position++) {
+            if (block.isNull(position)) {
+                builder.appendNull();
+                continue;
+            }
+            writeVector(arrayType, VARBINARY.getSlice(block, position), builder);
+        }
+        return builder.build();
+    }
+
+    /**
+     * Appends a VECTOR's bytes to {@code output} as one array of {@code arrayType}: the elements back to back in
+     * little-endian order (HoodieSchema.VectorLogicalType.VECTOR_BYTE_ORDER), which is also the byte order of
+     * {@link Slice}'s accessors.
+     */
+    static void writeVector(ArrayType arrayType, Slice value, BlockBuilder output)
+    {
+        Type elementType = arrayType.getElementType();
+        int elementSize = vectorElementSize(elementType);
+        if (value.length() % elementSize != 0) {
+            throw new TrinoException(HUDI_BAD_DATA, "A vector of %s needs a multiple of %s bytes, but found %s bytes".formatted(elementType, elementSize, value.length()));
+        }
+        int elementCount = value.length() / elementSize;
+        ((ArrayBlockBuilder) output).buildEntry(elementBuilder -> {
+            for (int element = 0; element < elementCount; element++) {
+                writeVectorElement(elementType, value, element * elementSize, elementBuilder);
+            }
+        });
+    }
+
+    private static int vectorElementSize(Type elementType)
+    {
+        if (REAL.equals(elementType)) {
+            return Float.BYTES;
+        }
+        if (DOUBLE.equals(elementType)) {
+            return Double.BYTES;
+        }
+        if (TINYINT.equals(elementType)) {
+            return Byte.BYTES;
+        }
+        throw new IllegalArgumentException("Not a vector element type: " + elementType);
+    }
+
+    private static void writeVectorElement(Type elementType, Slice value, int offset, BlockBuilder elementBuilder)
+    {
+        if (REAL.equals(elementType)) {
+            REAL.writeLong(elementBuilder, floatToRawIntBits(value.getFloat(offset)));
+        }
+        else if (DOUBLE.equals(elementType)) {
+            DOUBLE.writeDouble(elementBuilder, value.getDouble(offset));
+        }
+        else {
+            TINYINT.writeLong(elementBuilder, value.getByte(offset));
+        }
+    }
+
+    private static Block convertArrayElements(Block block, Function<Block, Block> elementConversion)
+    {
+        ColumnarArray columnarArray = ColumnarArray.toColumnarArray(block);
+        int positionCount = columnarArray.getPositionCount();
+        int[] offsets = new int[positionCount + 1];
+        for (int position = 0; position < positionCount; position++) {
+            offsets[position + 1] = offsets[position] + columnarArray.getLength(position);
+        }
+        return ArrayBlock.fromElementBlock(positionCount, valueIsValid(block), offsets, elementConversion.apply(columnarArray.getElementsBlock()));
+    }
+
+    private static Block convertMapValues(Block block, MapType mapType, Function<Block, Block> valueConversion)
+    {
+        ColumnarMap columnarMap = ColumnarMap.toColumnarMap(block);
+        int positionCount = columnarMap.getPositionCount();
+        int[] offsets = new int[positionCount + 1];
+        for (int position = 0; position < positionCount; position++) {
+            offsets[position + 1] = offsets[position] + columnarMap.getEntryCount(position);
+        }
+        return MapBlock.fromKeyValueBlock(
+                valueIsValid(block),
+                offsets,
+                positionCount,
+                columnarMap.getKeysBlock(),
+                valueConversion.apply(columnarMap.getValuesBlock()),
+                mapType);
+    }
+
+    private static Block convertRowFields(Block block, List<Optional<Function<Block, Block>>> fieldConversions)
+    {
+        // Not null-suppressed: each field block is as long as the row block, and null rows hold null fields
+        List<Block> fields = RowBlock.getRowFieldsFromBlock(block);
+        Block[] convertedFields = new Block[fields.size()];
+        for (int field = 0; field < fields.size(); field++) {
+            Block fieldBlock = fields.get(field);
+            convertedFields[field] = fieldConversions.get(field)
+                    .map(conversion -> conversion.apply(fieldBlock))
+                    .orElse(fieldBlock);
+        }
+        return RowBlock.fromNotNullSuppressedFieldBlocks(block.getPositionCount(), valueIsValid(block), convertedFields);
+    }
+
+    private static Optional<long[]> valueIsValid(Block block)
+    {
+        if (!block.mayHaveNull()) {
+            return Optional.empty();
+        }
+        int positionCount = block.getPositionCount();
+        long[] valueIsValid = Bitmap.allocateWords(positionCount, true);
+        for (int position = 0; position < positionCount; position++) {
+            if (block.isNull(position)) {
+                Bitmap.clear(valueIsValid, 0, position);
+            }
+        }
+        return Optional.of(valueIsValid);
+    }
+}

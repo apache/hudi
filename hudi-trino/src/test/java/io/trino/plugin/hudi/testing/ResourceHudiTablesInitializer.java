@@ -47,55 +47,33 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.hive.formats.HiveClassNames.HUDI_PARQUET_INPUT_FORMAT;
 import static io.trino.hive.formats.HiveClassNames.HUDI_PARQUET_REALTIME_INPUT_FORMAT;
 import static io.trino.hive.formats.HiveClassNames.MAPRED_PARQUET_OUTPUT_FORMAT_CLASS;
 import static io.trino.hive.formats.HiveClassNames.PARQUET_HIVE_SERDE_CLASS;
-import static io.trino.metastore.HiveType.HIVE_BINARY;
 import static io.trino.metastore.HiveType.HIVE_BOOLEAN;
 import static io.trino.metastore.HiveType.HIVE_BYTE;
 import static io.trino.metastore.HiveType.HIVE_DATE;
-import static io.trino.metastore.HiveType.HIVE_DOUBLE;
-import static io.trino.metastore.HiveType.HIVE_FLOAT;
 import static io.trino.metastore.HiveType.HIVE_INT;
 import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_SHORT;
 import static io.trino.metastore.HiveType.HIVE_STRING;
 import static io.trino.metastore.HiveType.HIVE_TIMESTAMP;
-import static io.trino.metastore.type.TypeInfoFactory.getDecimalTypeInfo;
-import static io.trino.metastore.type.TypeInfoFactory.getListTypeInfo;
-import static io.trino.metastore.type.TypeInfoFactory.getStructTypeInfo;
 import static io.trino.plugin.hive.HivePartitionManager.extractPartitionValues;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.ARRAY_BOOLEAN_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.ARRAY_DOUBLE_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.ARRAY_INT_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.ARRAY_STRING_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.BOOLEAN_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.DATE_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.DOUBLE_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.INT_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.MAP_STRING_DATE_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.MAP_STRING_INT_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.MAP_STRING_LONG_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.STRING_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.TIMESTAMP_TYPE_INFO;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.charHiveType;
+import static io.trino.plugin.hudi.testing.HudiTestUtils.hiveSyncStorageSchema;
+import static io.trino.plugin.hudi.testing.HudiTestUtils.metastoreDataColumns;
+import static io.trino.plugin.hudi.testing.HudiTestUtils.withDeclaredTypes;
 import static io.trino.plugin.hudi.testing.TypeInfoHelper.decimalHiveType;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.listHiveType;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.mapHiveType;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.structHiveType;
-import static io.trino.plugin.hudi.testing.TypeInfoHelper.varcharHiveType;
 
 public class ResourceHudiTablesInitializer
         implements HudiTablesInitializer
@@ -142,6 +120,11 @@ public class ResourceHudiTablesInitializer
         for (TestingTable table : TestingTable.values()) {
             String tableName = table.getTableName();
             Location tablePath = baseLocation.appendPath(tableName);
+            HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+                    .setStorage(new HudiTrinoStorage(fileSystem, new TrinoStorageConfiguration()))
+                    .setBasePath(tablePath.toString())
+                    .build();
+            List<Column> dataColumns = table.getDataColumns(metaClient);
 
             // Always create ro table by default
             createTable(
@@ -149,7 +132,7 @@ public class ResourceHudiTablesInitializer
                     schemaName,
                     tablePath,
                     tableName,
-                    table.getDataColumns(),
+                    dataColumns,
                     table.getPartitionColumns(),
                     table.getPartitions(),
                     false);
@@ -160,17 +143,13 @@ public class ResourceHudiTablesInitializer
                         schemaName,
                         tablePath,
                         table.getRtTableName(),
-                        table.getDataColumns(),
+                        dataColumns,
                         table.getPartitionColumns(),
                         table.getPartitions(),
                         true);
             }
 
             // Set table version
-            HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-                    .setStorage(new HudiTrinoStorage(fileSystem, new TrinoStorageConfiguration()))
-                    .setBasePath(tablePath.toString())
-                    .build();
             table.setTableVersion(metaClient.getTableConfig().getTableVersion());
         }
     }
@@ -336,60 +315,69 @@ public class ResourceHudiTablesInitializer
         }
     }
 
+    /** How a resource table was written, which decides the {@code support_timestamp} its Hive sync runs with. */
+    private enum Writer
+    {
+        /** Spark SQL syncs with {@code support_timestamp=true} ({@code ProvidesHoodieConfig}). */
+        SPARK_SQL(true),
+        /** The Spark datasource writer and HoodieStreamer keep the Hive sync default, {@code support_timestamp=false}. */
+        SPARK_DATASOURCE_OR_STREAMER(false);
+
+        private final boolean supportTimestamp;
+
+        Writer(boolean supportTimestamp)
+        {
+            this.supportTimestamp = supportTimestamp;
+        }
+    }
+
     public enum TestingTable
     {
-        HUDI_NON_PART_COW(nonPartitionRegularColumns()),
-        HUDI_NON_PART_MOR(simpleRegularColumns(), ImmutableList.of(), ImmutableMap.of(), true),
-        HUDI_TRIPS_COW_V8(tripsRegularColumns()),
-        HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS(hudiTableWithFieldNamesInCapsRegularColumns()),
-        HUDI_COW_PT_TABLE_WITH_FIELD_NAMES_IN_CAPS(hudiTableWithFieldNamesInCapsRegularColumns(), hudiTableWithFieldNamesInCapsPartitionColumns(), hudiTableWithFieldNamesInCapsPartitions(), false), // delete
-        HUDI_COW_TABLE_WITH_MULTI_KEYS_AND_FIELD_NAMES_IN_CAPS(hudiTableWithFieldNamesInCapsRegularColumns()),
-        HUDI_MOR_TABLE_WITH_FIELD_NAMES_IN_CAPS(hudiTableWithFieldNamesInCapsRegularColumns(), ImmutableList.of(), ImmutableMap.of(), true),
-        HUDI_COW_PT_TBL(multiPartitionRegularColumns(), multiPartitionColumns(), multiPartitions(), false),
-        STOCK_TICKS_COW(stockTicksRegularColumns(), stockTicksPartitionColumns(), stockTicksPartitions(), false),
-        STOCK_TICKS_MOR(stockTicksRegularColumns(), stockTicksPartitionColumns(), stockTicksPartitions(), false),
-        HUDI_STOCK_TICKS_COW(hudiStockTicksRegularColumns(), hudiStockTicksPartitionColumns(), hudiStockTicksPartitions(), false),
-        HUDI_STOCK_TICKS_MOR(hudiStockTicksRegularColumns(), hudiStockTicksPartitionColumns(), hudiStockTicksPartitions(), false),
-        HUDI_MULTI_FG_PT_V6_MOR(hudiMultiFgRegularColumns(), hudiMultiFgPartitionsColumn(), hudiMultiFgPartitions(), false),
-        HUDI_MULTI_FG_PT_V8_MOR(hudiMultiFgRegularColumns(), hudiMultiFgPartitionsColumn(), hudiMultiFgPartitions(), false),
-        HUDI_COMPREHENSIVE_TYPES_V6_MOR(hudiComprehensiveTypesColumns(), hudiComprehensiveTypesPartitionColumns(), hudiComprehensiveTypesPartitions(), true),
-        HUDI_COMPREHENSIVE_TYPES_V8_MOR(hudiComprehensiveTypesColumns(), hudiComprehensiveTypesPartitionColumns(), hudiComprehensiveTypesPartitions(), true),
-        HUDI_MULTI_PT_V8_MOR(hudiMultiPtMorColumns(), hudiMultiPtMorPartitionColumns(), hudiMultiPtMorPartitions(), false),
-        HUDI_TIMESTAMP_KEYGEN_PT_EPOCH_TO_YYYY_MM_DD_HH_V8_MOR(hudiTimestampKeygenColumns(), hudiTimestampKeygenPartitionColumns(), hudiTimestampKeygenPartitions("EPOCHMILLISECONDS"), true),
-        HUDI_TIMESTAMP_KEYGEN_PT_SCALAR_TO_YYYY_MM_DD_HH_V8_MOR(hudiTimestampKeygenColumns(), hudiTimestampKeygenPartitionColumns(), hudiTimestampKeygenPartitions("SCALAR"), true),
-        HUDI_CUSTOM_KEYGEN_PT_V8_MOR(hudiCustomKeyGenColumns(), hudiCustomKeyGenPartitionColumns(), hudiCustomKeyGenPartitions(), false),
-        HUDI_NON_EXTRACTABLE_PARTITION_PATH(multiPartitionRegularColumns(), multiPartitionColumns(), multiPartitionsWithNonExtractablePartitionPaths(), false),
-        HUDI_MOR_ARCHIVED_TIMELINE(hudiMultiFgRegularColumns(), ImmutableList.of(), ImmutableMap.of(), true),
+        HUDI_NON_PART_COW(Writer.SPARK_SQL),
+        HUDI_NON_PART_MOR(Writer.SPARK_DATASOURCE_OR_STREAMER, ImmutableList.of(), ImmutableMap.of(), true),
+        HUDI_TRIPS_COW_V8(Writer.SPARK_DATASOURCE_OR_STREAMER),
+        HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS(Writer.SPARK_DATASOURCE_OR_STREAMER),
+        HUDI_COW_PT_TABLE_WITH_FIELD_NAMES_IN_CAPS(Writer.SPARK_DATASOURCE_OR_STREAMER, hudiTableWithFieldNamesInCapsPartitionColumns(), hudiTableWithFieldNamesInCapsPartitions(), false), // delete
+        HUDI_COW_TABLE_WITH_MULTI_KEYS_AND_FIELD_NAMES_IN_CAPS(Writer.SPARK_DATASOURCE_OR_STREAMER),
+        HUDI_MOR_TABLE_WITH_FIELD_NAMES_IN_CAPS(Writer.SPARK_DATASOURCE_OR_STREAMER, ImmutableList.of(), ImmutableMap.of(), true),
+        HUDI_COW_PT_TBL(Writer.SPARK_SQL, multiPartitionColumns(), multiPartitions(), false),
+        STOCK_TICKS_COW(Writer.SPARK_DATASOURCE_OR_STREAMER, stockTicksPartitionColumns(), stockTicksPartitions(), false),
+        STOCK_TICKS_MOR(Writer.SPARK_DATASOURCE_OR_STREAMER, stockTicksPartitionColumns(), stockTicksPartitions(), false),
+        HUDI_STOCK_TICKS_COW(Writer.SPARK_DATASOURCE_OR_STREAMER, hudiStockTicksPartitionColumns(), hudiStockTicksPartitions(), false),
+        HUDI_STOCK_TICKS_MOR(Writer.SPARK_DATASOURCE_OR_STREAMER, hudiStockTicksPartitionColumns(), hudiStockTicksPartitions(), false),
+        HUDI_MULTI_FG_PT_V6_MOR(Writer.SPARK_SQL, hudiMultiFgPartitionsColumn(), hudiMultiFgPartitions(), false),
+        HUDI_MULTI_FG_PT_V8_MOR(Writer.SPARK_SQL, hudiMultiFgPartitionsColumn(), hudiMultiFgPartitions(), false),
+        HUDI_COMPREHENSIVE_TYPES_V6_MOR(Writer.SPARK_SQL, hudiComprehensiveTypesPartitionColumns(), hudiComprehensiveTypesPartitions(), true),
+        HUDI_COMPREHENSIVE_TYPES_V8_MOR(Writer.SPARK_SQL, hudiComprehensiveTypesPartitionColumns(), hudiComprehensiveTypesPartitions(), true),
+        HUDI_MULTI_PT_V8_MOR(Writer.SPARK_SQL, hudiMultiPtMorPartitionColumns(), hudiMultiPtMorPartitions(), false),
+        HUDI_TIMESTAMP_KEYGEN_PT_EPOCH_TO_YYYY_MM_DD_HH_V8_MOR(Writer.SPARK_SQL, hudiTimestampKeygenPartitionColumns(), hudiTimestampKeygenPartitions("EPOCHMILLISECONDS"), true),
+        HUDI_TIMESTAMP_KEYGEN_PT_SCALAR_TO_YYYY_MM_DD_HH_V8_MOR(Writer.SPARK_SQL, hudiTimestampKeygenPartitionColumns(), hudiTimestampKeygenPartitions("SCALAR"), true),
+        HUDI_CUSTOM_KEYGEN_PT_V8_MOR(Writer.SPARK_SQL, hudiCustomKeyGenPartitionColumns(), hudiCustomKeyGenPartitions(), false),
+        HUDI_NON_EXTRACTABLE_PARTITION_PATH(Writer.SPARK_DATASOURCE_OR_STREAMER, multiPartitionColumns(), multiPartitionsWithNonExtractablePartitionPaths(), false),
+        HUDI_MOR_ARCHIVED_TIMELINE(Writer.SPARK_SQL, ImmutableList.of(), ImmutableMap.of(), true),
         /**/;
 
-        private static final List<Column> HUDI_META_COLUMNS = ImmutableList.of(
-                new Column("_hoodie_commit_time", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("_hoodie_commit_seqno", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("_hoodie_record_key", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("_hoodie_partition_path", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("_hoodie_file_name", HIVE_STRING, Optional.empty(), Map.of()));
-
-        private final List<Column> regularColumns;
+        private final Writer writer;
         private final List<Column> partitionColumns;
         private final Map<String, String> partitions;
         private final boolean isCreateRtTable;
         private HoodieTableVersion tableVersion;
 
         TestingTable(
-                List<Column> regularColumns,
+                Writer writer,
                 List<Column> partitionColumns,
                 Map<String, String> partitions,
                 boolean isCreateRtTable)
         {
-            this.regularColumns = regularColumns;
+            this.writer = writer;
             this.partitionColumns = partitionColumns;
             this.partitions = partitions;
             this.isCreateRtTable = isCreateRtTable;
         }
 
-        TestingTable(List<Column> regularColumns)
+        TestingTable(Writer writer)
         {
-            this(regularColumns, ImmutableList.of(), ImmutableMap.of(), false);
+            this(writer, ImmutableList.of(), ImmutableMap.of(), false);
         }
 
         public String getTableName()
@@ -418,11 +406,23 @@ public class ResourceHudiTablesInitializer
             return this.tableVersion;
         }
 
-        public List<Column> getDataColumns()
+        /**
+         * The data columns Hive sync registers for the table: derived from its Hudi table schema, meta fields included,
+         * with the {@code support_timestamp} its writer syncs with and the partition columns left out.
+         */
+        public List<Column> getDataColumns(HoodieTableMetaClient metaClient)
         {
-            return Stream.of(HUDI_META_COLUMNS, regularColumns)
-                    .flatMap(Collection::stream)
-                    .collect(Collectors.toUnmodifiableList());
+            List<String> partitionKeys = partitionColumns.stream().map(Column::getName).collect(toImmutableList());
+            List<Column> columns = metastoreDataColumns(hiveSyncStorageSchema(metaClient, false), writer.supportTimestamp, partitionKeys);
+            if (this == HUDI_COMPREHENSIVE_TYPES_V6_MOR || this == HUDI_COMPREHENSIVE_TYPES_V8_MOR) {
+                // The types the tables' Spark SQL DDL declared, which the Hudi schema holds as int and string
+                return withDeclaredTypes(columns, ImmutableMap.of(
+                        "col_tinyint", HIVE_BYTE,
+                        "col_smallint", HIVE_SHORT,
+                        "col_varchar", HiveType.valueOf("varchar(50)"),
+                        "col_char", HiveType.valueOf("char(10)")));
+            }
+            return columns;
         }
 
         public List<Column> getPartitionColumns()
@@ -438,26 +438,6 @@ public class ResourceHudiTablesInitializer
         public boolean isCreateRtTable()
         {
             return isCreateRtTable;
-        }
-
-        private static List<Column> nonPartitionRegularColumns()
-        {
-            return ImmutableList.of(
-                    column("id", HIVE_LONG),
-                    column("name", HIVE_STRING),
-                    column("ts", HIVE_LONG),
-                    column("dt", HIVE_STRING),
-                    column("hh", HIVE_STRING));
-        }
-
-        // Table schema has capitalized column names, but the catalog returns them in lowercase.
-        // Using lowercase here to match the catalog for testing.
-        private static List<Column> hudiTableWithFieldNamesInCapsRegularColumns()
-        {
-            return ImmutableList.of(
-                    column("id", HIVE_STRING),
-                    column("name", HIVE_STRING),
-                    column("age", HIVE_INT));
         }
 
         // The actual Hudi table has "Country" as the partition field name, but the catalog provides it in lowercase.
@@ -476,46 +456,6 @@ public class ResourceHudiTablesInitializer
             return ImmutableList.of(column("country", HIVE_STRING));
         }
 
-        private static List<Column> simpleRegularColumns()
-        {
-            return ImmutableList.of(
-                    column("id", HIVE_STRING),
-                    column("name", HIVE_STRING),
-                    column("age", HIVE_INT));
-        }
-
-        private static List<Column> tripsRegularColumns()
-        {
-            return ImmutableList.of(
-                    column("begin_lat", HIVE_DOUBLE),
-                    column("begin_lon", HIVE_DOUBLE),
-                    column("driver", HIVE_STRING),
-                    column("end_lat", HIVE_DOUBLE),
-                    column("end_lon", HIVE_DOUBLE),
-                    column("fare", HIVE_DOUBLE),
-                    column("partitionpath", HIVE_STRING),
-                    column("rider", HIVE_STRING),
-                    column("ts", HIVE_LONG),
-                    column("uuid", HIVE_STRING));
-        }
-
-        private static List<Column> stockTicksRegularColumns()
-        {
-            return ImmutableList.of(
-                    column("volume", HIVE_LONG),
-                    column("ts", HIVE_STRING),
-                    column("symbol", HIVE_STRING),
-                    column("year", HIVE_INT),
-                    column("month", HIVE_STRING),
-                    column("high", HIVE_DOUBLE),
-                    column("low", HIVE_DOUBLE),
-                    column("key", HIVE_STRING),
-                    column("date", HIVE_STRING),
-                    column("close", HIVE_DOUBLE),
-                    column("open", HIVE_DOUBLE),
-                    column("day", HIVE_STRING));
-        }
-
         private static List<Column> stockTicksPartitionColumns()
         {
             return ImmutableList.of(column("dt", HIVE_STRING));
@@ -526,22 +466,6 @@ public class ResourceHudiTablesInitializer
             return ImmutableMap.of("dt=2018-08-31", "2018/08/31");
         }
 
-        private static List<Column> hudiStockTicksRegularColumns()
-        {
-            return ImmutableList.of(
-                    column("volume", HIVE_LONG),
-                    column("ts", HIVE_STRING),
-                    column("symbol", HIVE_STRING),
-                    column("year", HIVE_INT),
-                    column("month", HIVE_STRING),
-                    column("high", HIVE_DOUBLE),
-                    column("low", HIVE_DOUBLE),
-                    column("key", HIVE_STRING),
-                    column("close", HIVE_DOUBLE),
-                    column("open", HIVE_DOUBLE),
-                    column("day", HIVE_STRING));
-        }
-
         private static List<Column> hudiStockTicksPartitionColumns()
         {
             return ImmutableList.of(column("date", HIVE_STRING));
@@ -550,14 +474,6 @@ public class ResourceHudiTablesInitializer
         private static Map<String, String> hudiStockTicksPartitions()
         {
             return ImmutableMap.of("date=2018-08-31", "2018/08/31");
-        }
-
-        private static List<Column> multiPartitionRegularColumns()
-        {
-            return ImmutableList.of(
-                    column("id", HIVE_LONG),
-                    column("name", HIVE_STRING),
-                    column("ts", HIVE_LONG));
         }
 
         private static List<Column> multiPartitionColumns()
@@ -595,15 +511,6 @@ public class ResourceHudiTablesInitializer
                     "dt=2018-10-06/hh=5", "2018/10/06/5");
         }
 
-        private static List<Column> hudiMultiFgRegularColumns()
-        {
-            return ImmutableList.of(
-                    column("id", HIVE_INT),
-                    column("name", HIVE_STRING),
-                    column("price", HIVE_DOUBLE),
-                    column("ts", HIVE_LONG));
-        }
-
         private static List<Column> hudiMultiFgPartitionsColumn()
         {
             return ImmutableList.of(
@@ -617,96 +524,6 @@ public class ResourceHudiTablesInitializer
                     "country=US", "country=US");
         }
 
-        private static List<Column> hudiComprehensiveTypesColumns()
-        {
-            return ImmutableList.of(
-                    // ----- Primary Key & Precombine -----
-                    column("uuid", HIVE_STRING),
-                    column("precombine_field", HIVE_LONG),
-
-                    // ----- Numeric Types -----
-                    column("col_boolean", HIVE_BOOLEAN),
-                    column("col_tinyint", HIVE_BYTE),
-                    column("col_smallint", HIVE_SHORT),
-                    column("col_int", HIVE_INT),
-                    column("col_bigint", HIVE_LONG),
-                    column("col_float", HIVE_FLOAT),
-                    column("col_double", HIVE_DOUBLE),
-                    column("col_decimal", decimalHiveType(10, 2)),
-
-                    // ----- String Types -----
-                    column("col_string", HIVE_STRING),
-                    column("col_varchar", varcharHiveType(50)),
-                    column("col_char", charHiveType(10)),
-
-                    // ----- Binary Type -----
-                    column("col_binary", HIVE_BINARY),
-
-                    // ----- Datetime Types -----
-                    column("col_date", HIVE_DATE),
-                    column("col_timestamp", HIVE_TIMESTAMP),
-
-                    // ----- Complex Types -----
-                    // ARRAY<INT>
-                    column("col_array_int", listHiveType(INT_TYPE_INFO)),
-                    // ARRAY<STRING>
-                    column("col_array_string", listHiveType(STRING_TYPE_INFO)),
-                    // MAP<STRING, INT>
-                    column("col_map_string_int", mapHiveType(STRING_TYPE_INFO, INT_TYPE_INFO)),
-                    // STRUCT<f1: STRING, f2: INT, f3: BOOLEAN>
-                    column("col_struct", structHiveType(
-                            ImmutableList.of("f1", "f2", "f3"),
-                            ImmutableList.of(STRING_TYPE_INFO, INT_TYPE_INFO, BOOLEAN_TYPE_INFO))),
-                    // ARRAY<STRUCT<nested_f1: DOUBLE, nested_f2: ARRAY<STRING>>>
-                    column("col_array_struct", listHiveType(
-                            getStructTypeInfo(
-                                    ImmutableList.of("nested_f1", "nested_f2"),
-                                    ImmutableList.of(DOUBLE_TYPE_INFO, ARRAY_STRING_TYPE_INFO)))),
-                    // MAP<STRING, STRUCT<nested_f3: DATE, nested_f4: DECIMAL(5,2)>>
-                    column("col_map_string_struct", mapHiveType(
-                            STRING_TYPE_INFO,
-                            getStructTypeInfo(
-                                    ImmutableList.of("nested_f3", "nested_f4"),
-                                    ImmutableList.of(DATE_TYPE_INFO, getDecimalTypeInfo(5, 2))))),
-                    // ARRAY<STRUCT<f_arr_struct_str: STRING, f_arr_struct_map: MAP<STRING, INT>>>
-                    column("col_array_struct_with_map", listHiveType(
-                            getStructTypeInfo(
-                                    ImmutableList.of("f_arr_struct_str", "f_arr_struct_map"),
-                                    ImmutableList.of(STRING_TYPE_INFO, MAP_STRING_INT_TYPE_INFO)))),
-                    // MAP<STRING, STRUCT<f_map_struct_arr: ARRAY<BOOLEAN>, f_map_struct_ts: TIMESTAMP>>
-                    column("col_map_struct_with_array", mapHiveType(
-                            STRING_TYPE_INFO,
-                            getStructTypeInfo(
-                                    ImmutableList.of("f_map_struct_arr", "f_map_struct_ts"),
-                                    ImmutableList.of(ARRAY_BOOLEAN_TYPE_INFO, TIMESTAMP_TYPE_INFO)))),
-                    // STRUCT<outer_f1: INT, nested_struct: STRUCT<inner_f1: STRING, inner_f2: BOOLEAN>>
-                    column("col_struct_nested_struct", structHiveType(
-                            ImmutableList.of("outer_f1", "nested_struct"),
-                            ImmutableList.of(
-                                    INT_TYPE_INFO,
-                                    getStructTypeInfo(
-                                            ImmutableList.of("inner_f1", "inner_f2"),
-                                            ImmutableList.of(STRING_TYPE_INFO, BOOLEAN_TYPE_INFO))))),
-                    // ARRAY<ARRAY<INT>>
-                    column("col_array_array_int", listHiveType(ARRAY_INT_TYPE_INFO)),
-                    // MAP<STRING, ARRAY<DOUBLE>>
-                    column("col_map_string_array_double", mapHiveType(STRING_TYPE_INFO, ARRAY_DOUBLE_TYPE_INFO)),
-                    // MAP<STRING, MAP<STRING, DATE>>
-                    column("col_map_string_map_string_date", mapHiveType(STRING_TYPE_INFO, MAP_STRING_DATE_TYPE_INFO)),
-                    // STRUCT<outer_f2: STRING, struct_array: ARRAY<STRUCT<inner_f3: TIMESTAMP, inner_f4: STRING>>>
-                    column("col_struct_array_struct", structHiveType(
-                            ImmutableList.of("outer_f2", "struct_array"),
-                            ImmutableList.of(
-                                    STRING_TYPE_INFO,
-                                    getListTypeInfo(getStructTypeInfo(
-                                            ImmutableList.of("inner_f3", "inner_f4"),
-                                            ImmutableList.of(TIMESTAMP_TYPE_INFO, STRING_TYPE_INFO)))))),
-                    // STRUCT<outer_f3: BOOLEAN, struct_map: MAP<STRING, BIGINT>>
-                    column("col_struct_map", structHiveType(
-                            ImmutableList.of("outer_f3", "struct_map"),
-                            ImmutableList.of(BOOLEAN_TYPE_INFO, MAP_STRING_LONG_TYPE_INFO))));
-        }
-
         private static List<Column> hudiComprehensiveTypesPartitionColumns()
         {
             return ImmutableList.of(column("part_col", HIVE_STRING));
@@ -717,15 +534,6 @@ public class ResourceHudiTablesInitializer
             return ImmutableMap.of(
                     "part_col=A", "part_col=A",
                     "part_col=B", "part_col=B");
-        }
-
-        private static List<Column> hudiMultiPtMorColumns()
-        {
-            return ImmutableList.of(
-                    column("id", HIVE_INT),
-                    column("name", HIVE_STRING),
-                    column("price", HIVE_DOUBLE),
-                    column("ts", HIVE_LONG));
         }
 
         private static List<Column> hudiMultiPtMorPartitionColumns()
@@ -748,15 +556,6 @@ public class ResourceHudiTablesInitializer
                     "part_str=electronics/part_int=2023/part_date=2023-03-10/part_bigint=10000000002/part_decimal=50.00/part_timestamp=2023-03-10 12%3A30%3A00/part_bool=false", "part_str=electronics/part_int=2023/part_date=2023-03-10/part_bigint=10000000002/part_decimal=50.00/part_timestamp=2023-03-10 12%3A30%3A00/part_bool=false",
                     "part_str=books/part_int=2023/part_date=2023-01-15/part_bigint=10000000001/part_decimal=123.00/part_timestamp=2023-01-15 10%3A00%3A00/part_bool=true", "part_str=books/part_int=2023/part_date=2023-01-15/part_bigint=10000000001/part_decimal=123.00/part_timestamp=2023-01-15 10%3A00%3A00/part_bool=true",
                     "part_str=books/part_int=2024/part_date=2024-02-20/part_bigint=10000000003/part_decimal=75.00/part_timestamp=2024-02-20 08%3A45%3A10/part_bool=true", "part_str=books/part_int=2024/part_date=2024-02-20/part_bigint=10000000003/part_decimal=75.00/part_timestamp=2024-02-20 08%3A45%3A10/part_bool=true");
-        }
-
-        private static List<Column> hudiTimestampKeygenColumns()
-        {
-            return ImmutableList.of(
-                    column("id", HIVE_INT),
-                    column("name", HIVE_STRING),
-                    column("price", HIVE_DOUBLE),
-                    column("ts", HIVE_LONG));
         }
 
         private static List<Column> hudiTimestampKeygenPartitionColumns()
@@ -784,15 +583,13 @@ public class ResourceHudiTablesInitializer
             };
         }
 
-        private static List<Column> hudiCustomKeyGenColumns()
-        {
-            return hudiMultiFgRegularColumns();
-        }
-
         private static List<Column> hudiCustomKeyGenPartitionColumns()
         {
             return ImmutableList.of(
                     column("partition_field_country", HIVE_STRING),
+                    // Hive sync would register the field's schema type, bigint, but the custom key generator writes it
+                    // into the path formatted as yyyy-MM-dd, which a bigint partition key cannot hold. The connector
+                    // reads the path value; apache/hudi#20783 tracks reading the raw value as Spark does.
                     column("partition_field_date", HIVE_STRING));
         }
 

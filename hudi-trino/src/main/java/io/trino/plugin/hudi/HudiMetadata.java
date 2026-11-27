@@ -28,6 +28,7 @@ import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hudi.stats.HudiTableStatistics;
 import io.trino.plugin.hudi.stats.TableStatisticsReader;
 import io.trino.plugin.hudi.util.HudiTableTypeUtils;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
@@ -87,7 +88,6 @@ import static io.trino.plugin.hive.util.HiveUtil.isHudiTable;
 import static io.trino.plugin.hudi.HudiSessionProperties.getColumnsToHide;
 import static io.trino.plugin.hudi.HudiSessionProperties.isHudiMetadataTableEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.isQueryPartitionFilterRequired;
-import static io.trino.plugin.hudi.HudiSessionProperties.isResolveColumnNameCasingEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.isTableStatisticsEnabled;
 import static io.trino.plugin.hudi.HudiTableProperties.LOCATION_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PARTITIONED_BY_PROPERTY;
@@ -95,6 +95,7 @@ import static io.trino.plugin.hudi.HudiUtil.buildTableMetaClient;
 import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
 import static io.trino.plugin.hudi.HudiSessionProperties.getRecordMergerImpls;
 import static io.trino.plugin.hudi.HudiUtil.getMergeRequiredColumnHandles;
+import static io.trino.plugin.hudi.HudiUtil.withSchemaColumnTypes;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.StandardErrorCode.QUERY_REJECTED;
 import static io.trino.spi.StandardErrorCode.UNSUPPORTED_TABLE_TYPE;
@@ -119,6 +120,7 @@ public class HudiMetadata
     private final HiveMetastore metastore;
     private final TrinoFileSystemFactory fileSystemFactory;
     private final TypeManager typeManager;
+    private final TrinoTypeMapper typeMapper;
     private final ExecutorService tableStatisticsExecutor;
 
     public HudiMetadata(
@@ -130,6 +132,7 @@ public class HudiMetadata
         this.metastore = requireNonNull(metastore, "metastore is null");
         this.fileSystemFactory = requireNonNull(fileSystemFactory, "fileSystemFactory is null");
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
+        this.typeMapper = new TrinoTypeMapper(typeManager.getTypeOperators());
         this.tableStatisticsExecutor = requireNonNull(tableStatisticsExecutor, "tableStatisticsExecutor is null");
     }
 
@@ -166,8 +169,13 @@ public class HudiMetadata
         String inputFormat = table.getStorage().getStorageFormat().getInputFormat();
         HoodieTableType hoodieTableType = HudiTableTypeUtils.fromInputFormat(inputFormat);
         Lazy<HoodieTableMetaClient> lazyMetaClient = Lazy.lazily(() -> buildTableMetaClient(fileSystem, tableName.toString(), basePath));
-        Optional<Lazy<HoodieSchema>> hudiTableSchema = isResolveColumnNameCasingEnabled(session) ?
-                Optional.of(Lazy.lazily(() -> getLatestTableSchema(lazyMetaClient.get(), tableName.getTableName()))) : Optional.empty();
+        // Carried in the handle (tableSchemaStr) so workers merge with the same schema the planner typed columns from
+        Lazy<HoodieSchema> hudiTableSchema = Lazy.lazily(() -> getLatestTableSchema(lazyMetaClient.get(), tableName.getTableName()));
+        Lazy<List<HiveColumnHandle>> lazyMergeRequiredColumns = Lazy.lazily(() -> {
+            List<HiveColumnHandle> mergeRequiredColumns = getMergeRequiredColumnHandles(table, typeManager, lazyMetaClient, getRecordMergerImpls(session), NANOSECONDS);
+            // Typed like the planner's handles, so a merge-required column the query also projects reads the same way
+            return withSchemaColumnTypes(mergeRequiredColumns, hudiTableSchema.get(), typeMapper);
+        });
 
         return new HudiTableHandle(
                 table,
@@ -177,12 +185,12 @@ public class HudiMetadata
                 table.getStorage().getLocation(),
                 hoodieTableType,
                 getPartitionKeyColumnHandles(table, typeManager),
-                Lazy.lazily(() -> getMergeRequiredColumnHandles(table, typeManager, lazyMetaClient, getRecordMergerImpls(session), NANOSECONDS)),
+                lazyMergeRequiredColumns,
                 ImmutableSet.of(),
                 TupleDomain.all(),
                 TupleDomain.all(),
                 OptionalLong.empty(),
-                hudiTableSchema);
+                Optional.of(hudiTableSchema));
     }
 
     @Override
@@ -223,7 +231,7 @@ public class HudiMetadata
     public ConnectorTableMetadata getTableMetadata(ConnectorSession session, ConnectorTableHandle table)
     {
         HudiTableHandle hudiTableHandle = (HudiTableHandle) table;
-        return getTableMetadata(hudiTableHandle.getSchemaTableName(), getColumnsToHide(session));
+        return getTableMetadata(hudiTableHandle.getSchemaTableName(), getColumnsToHide(session), metastoreTable -> getColumnHandles(metastoreTable, _ -> resolveTableSchema(hudiTableHandle)));
     }
 
     @Override
@@ -287,8 +295,44 @@ public class HudiMetadata
         HudiTableHandle hudiTableHandle = (HudiTableHandle) tableHandle;
         Table table = metastore.getTable(hudiTableHandle.getSchemaName(), hudiTableHandle.getTableName())
                 .orElseThrow(() -> new TableNotFoundException(schemaTableName(hudiTableHandle.getSchemaName(), hudiTableHandle.getTableName())));
-        return hiveColumnHandles(table, typeManager, NANOSECONDS).stream()
+        return getColumnHandles(table, _ -> resolveTableSchema(hudiTableHandle)).stream()
                 .collect(toImmutableMap(HiveColumnHandle::getName, identity()));
+    }
+
+    /**
+     * The table's column handles: from the metastore, with the data columns retyped from the Hudi table schema.
+     * Partition columns keep their metastore types. getTableStatistics keys its statistics on these same
+     * handles, so they must stay equal to the planner's.
+     */
+    private List<HiveColumnHandle> getColumnHandles(Table table, Function<Table, HoodieSchema> tableSchemaResolver)
+    {
+        return withSchemaColumnTypes(hiveColumnHandles(table, typeManager, NANOSECONDS), tableSchemaResolver.apply(table), typeMapper);
+    }
+
+    private static HoodieSchema resolveTableSchema(HudiTableHandle tableHandle)
+    {
+        return Optional.ofNullable(tableHandle.getTableSchema())
+                .orElseGet(() -> getLatestTableSchema(tableHandle.getMetaClient(), tableHandle.getTableName()));
+    }
+
+    /**
+     * The column handles a column listing (information_schema over a schema) reports for a table known only by its metastore
+     * entry. Listings have no table handle, so each table listed pays a meta client build and a schema resolution.
+     * A table whose Hudi schema cannot be resolved (missing or corrupt {@code .hoodie}, unreadable commit metadata),
+     * or that has a field with no Trino type, is listed with its metastore column types rather than failing the
+     * listing of every other table; reading or describing that table through its handle still fails.
+     */
+    private List<HiveColumnHandle> getListingColumnHandles(ConnectorSession session, SchemaTableName tableName, Table table)
+    {
+        try {
+            HoodieTableMetaClient metaClient = buildTableMetaClient(fileSystemFactory.create(session), tableName.toString(), table.getStorage().getLocation());
+            HoodieSchema tableSchema = getLatestTableSchema(metaClient, tableName.getTableName());
+            return getColumnHandles(table, _ -> tableSchema);
+        }
+        catch (TrinoException e) {
+            log.warn(e, "Listing columns of %s with metastore column types: its Hudi table schema cannot be resolved or has no Trino type", tableName);
+            return hiveColumnHandles(table, typeManager, NANOSECONDS);
+        }
     }
 
     @Override
@@ -328,12 +372,14 @@ public class HudiMetadata
                 .map(_ -> singletonList(prefix.toSchemaTableName()))
                 .orElseGet(() -> listTables(session, prefix.getSchema()));
 
-        Map<SchemaTableName, RelationColumnsMetadata> relationColumns = tables.stream()
+        // Filter before resolving: every table listed costs a meta client and a schema resolution, which a table the
+        // access filter hides must not pay
+        Set<SchemaTableName> visibleTables = relationFilter.apply(ImmutableSet.copyOf(tables));
+        return tables.stream()
+                .filter(visibleTables::contains)
                 .map(table -> getTableColumnMetadata(session, table))
                 .flatMap(Optional::stream)
-                .collect(toImmutableMap(RelationColumnsMetadata::name, Function.identity()));
-        return relationFilter.apply(relationColumns.keySet()).stream()
-                .map(relationColumns::get)
+                .toList()
                 .iterator();
     }
 
@@ -389,7 +435,7 @@ public class HudiMetadata
     private Optional<RelationColumnsMetadata> getTableColumnMetadata(ConnectorSession session, SchemaTableName table)
     {
         try {
-            List<ColumnMetadata> columns = getTableMetadata(table, getColumnsToHide(session)).getColumns();
+            List<ColumnMetadata> columns = getTableMetadata(table, getColumnsToHide(session), metastoreTable -> getListingColumnHandles(session, table, metastoreTable)).getColumns();
             return Optional.of(RelationColumnsMetadata.forTable(table, columns));
         }
         catch (TableNotFoundException _) {
@@ -397,12 +443,15 @@ public class HudiMetadata
         }
     }
 
-    private ConnectorTableMetadata getTableMetadata(SchemaTableName tableName, Collection<String> columnsToHide)
+    private ConnectorTableMetadata getTableMetadata(
+            SchemaTableName tableName,
+            Collection<String> columnsToHide,
+            Function<Table, List<HiveColumnHandle>> columnHandlesGetter)
     {
         Table table = metastore.getTable(tableName.getSchemaName(), tableName.getTableName())
                 .orElseThrow(() -> new TableNotFoundException(tableName));
         Function<HiveColumnHandle, ColumnMetadata> metadataGetter = columnMetadataGetter(table);
-        List<ColumnMetadata> columns = hiveColumnHandles(table, typeManager, NANOSECONDS).stream()
+        List<ColumnMetadata> columns = columnHandlesGetter.apply(table).stream()
                 .filter(column -> !columnsToHide.contains(column.getName()))
                 .map(metadataGetter)
                 .collect(toImmutableList());

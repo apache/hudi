@@ -16,6 +16,8 @@ package io.trino.plugin.hudi;
 import io.trino.metastore.HiveType;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hudi.testing.MaxRankRecordMerger;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
+import io.trino.spi.type.TypeOperators;
 import org.apache.avro.SchemaBuilder;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -48,6 +50,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class TestHudiMergeRequiredColumns
 {
+    private static final TrinoTypeMapper TYPE_MAPPER = new TrinoTypeMapper(new TypeOperators());
+
     @Test
     public void testOrderingFieldsFollowMergeMode()
     {
@@ -135,11 +139,11 @@ class TestHudiMergeRequiredColumns
         List<HiveColumnHandle> projection = List.of(
                 createBaseColumn("id", 0, HiveType.HIVE_STRING, VARCHAR, REGULAR, Optional.empty()));
 
-        List<HiveColumnHandle> extended = appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts"), new TypedProperties());
+        List<HiveColumnHandle> extended = appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts"), new TypedProperties(), TYPE_MAPPER);
 
         assertThat(extended).extracting(HiveColumnHandle::getName)
                 .containsExactly("id", "ts", OPERATION_METADATA_FIELD);
-        // The recovered handles are typed from their Avro fields
+        // The recovered handles are typed from their schema fields
         assertThat(extended.get(1).getType()).isEqualTo(BIGINT);
         assertThat(extended.getLast().getType()).isEqualTo(VARCHAR);
     }
@@ -151,7 +155,7 @@ class TestHudiMergeRequiredColumns
         // leaves it out of the projection, and the merge path must recover it by asking the same resolved
         // merger the file-group reader will use
         assertThat(appendMissingMergeRequiredColumns(
-                rankTableSchema(), idOnlyProjection(), customMergeOrderedOn("ts", MaxRankRecordMerger.MERGE_STRATEGY_ID), maxRankMergerProps()))
+                rankTableSchema(), idOnlyProjection(), customMergeOrderedOn("ts", MaxRankRecordMerger.MERGE_STRATEGY_ID), maxRankMergerProps(), TYPE_MAPPER))
                 .extracting(HiveColumnHandle::getName)
                 .containsExactly("id", "ts", MaxRankRecordMerger.RANK_COLUMN);
     }
@@ -163,7 +167,7 @@ class TestHudiMergeRequiredColumns
         // back to the table-config-derived names without dereferencing the null id -- the read then fails
         // actionably in getRecordMerger, not with an NPE here
         assertThat(appendMissingMergeRequiredColumns(
-                rankTableSchema(), idOnlyProjection(), customMergeOrderedOn("ts", null), maxRankMergerProps()))
+                rankTableSchema(), idOnlyProjection(), customMergeOrderedOn("ts", null), maxRankMergerProps(), TYPE_MAPPER))
                 .extracting(HiveColumnHandle::getName)
                 .containsExactly("id", "ts");
     }
@@ -175,7 +179,7 @@ class TestHudiMergeRequiredColumns
         // the table-config-derived names and must not dereference the empty resolution. (The all-zeros
         // uuid would NOT do here: it is PAYLOAD_BASED_MERGE_STRATEGY_UUID, which always resolves.)
         assertThat(appendMissingMergeRequiredColumns(
-                rankTableSchema(), idOnlyProjection(), customMergeOrderedOn("ts", "e2a5b7c9-1d3f-4a68-9c0b-5e7d9f1a3b6c"), maxRankMergerProps()))
+                rankTableSchema(), idOnlyProjection(), customMergeOrderedOn("ts", "e2a5b7c9-1d3f-4a68-9c0b-5e7d9f1a3b6c"), maxRankMergerProps(), TYPE_MAPPER))
                 .extracting(HiveColumnHandle::getName)
                 .containsExactly("id", "ts");
     }
@@ -192,7 +196,7 @@ class TestHudiMergeRequiredColumns
         List<HiveColumnHandle> projection = List.of(
                 createBaseColumn("TS", 1, HiveType.HIVE_LONG, BIGINT, REGULAR, Optional.empty()));
 
-        assertThat(appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts"), new TypedProperties()))
+        assertThat(appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts"), new TypedProperties(), TYPE_MAPPER))
                 .extracting(HiveColumnHandle::getName)
                 .containsExactly("TS");
     }

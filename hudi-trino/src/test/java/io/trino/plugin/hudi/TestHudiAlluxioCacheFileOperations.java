@@ -39,9 +39,11 @@ import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
 import static io.trino.filesystem.tracing.CacheFileSystemTraceUtils.getCacheOperationSpans;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_MULTI_FG_PT_V8_MOR;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.INDEX_DEFINITION;
+import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.LOG;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.METADATA_TABLE;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.METADATA_TABLE_PROPERTIES;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.TABLE_PROPERTIES;
+import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.TIMELINE;
 import static io.trino.testing.MultisetAssertions.assertMultisetsEqual;
 import static io.trino.testing.assertions.Assert.assertEventually;
 import static java.util.stream.Collectors.toCollection;
@@ -95,6 +97,8 @@ public class TestHudiAlluxioCacheFileOperations
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
                         .add(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
+                        .add(new FileOperation("InputFile.length", LOG))
+                        .add(new FileOperation("InputFile.length", TIMELINE))
                         .build());
 
         assertFileSystemAccesses(
@@ -103,6 +107,8 @@ public class TestHudiAlluxioCacheFileOperations
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
                         .add(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
+                        .add(new FileOperation("InputFile.length", LOG))
+                        .add(new FileOperation("InputFile.length", TIMELINE))
                         .build());
     }
 
@@ -119,6 +125,8 @@ public class TestHudiAlluxioCacheFileOperations
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 4)
                         .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 4)
+                        .addCopies(new FileOperation("InputFile.length", LOG), 2)
+                        .addCopies(new FileOperation("InputFile.length", TIMELINE), 2)
                         .build());
 
         assertFileSystemAccesses(query,
@@ -126,6 +134,8 @@ public class TestHudiAlluxioCacheFileOperations
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 4)
                         .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 4)
+                        .addCopies(new FileOperation("InputFile.length", LOG), 2)
+                        .addCopies(new FileOperation("InputFile.length", TIMELINE), 2)
                         .build());
     }
 

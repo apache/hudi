@@ -23,6 +23,7 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -52,7 +53,7 @@ public class HudiSecondaryIndexSupport
     private final Duration secondaryIndexWaitTimeout;
     private final long futureStartTimeMs;
 
-    public HudiSecondaryIndexSupport(ConnectorSession session, SchemaTableName schemaTableName, Lazy<HoodieTableMetaClient> lazyMetaClient, Lazy<HoodieTableMetadata> lazyTableMetadata, TupleDomain<String> regularColumnPredicates)
+    public HudiSecondaryIndexSupport(ConnectorSession session, SchemaTableName schemaTableName, Lazy<HoodieTableMetaClient> lazyMetaClient, Lazy<HoodieTableMetadata> lazyTableMetadata, TupleDomain<String> regularColumnPredicates, HoodieSchema tableSchema)
     {
         super(log, schemaTableName, lazyMetaClient);
         this.secondaryIndexWaitTimeout = getSecondaryIndexWaitTimeout(session);
@@ -77,7 +78,7 @@ public class HudiSecondaryIndexSupport
             log.debug(String.format("Using secondary index '%s' on columns %s for pruning.", indexName, indexedColumns));
             TupleDomain<String> indexPredicates = extractPredicatesForColumns(regularColumnPredicates, indexedColumns);
 
-            List<String> secondaryKeys = constructRecordKeys(indexPredicates, indexedColumns);
+            List<String> secondaryKeys = constructRecordKeys(indexPredicates, indexedColumns, tableSchema, IndexKeyForm.SECONDARY_KEY);
             if (secondaryKeys.isEmpty()) {
                 log.warn("Took %s ms, but could not construct secondary keys for index '%s' from predicates. Skipping pruning for table %s",
                         timer.endTimer(), indexName, schemaTableName);

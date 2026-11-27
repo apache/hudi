@@ -13,7 +13,6 @@
  */
 package io.trino.plugin.hudi.testing;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
@@ -35,6 +34,7 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -51,7 +51,6 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static com.google.common.io.MoreFiles.deleteRecursively;
@@ -60,8 +59,8 @@ import static io.trino.hive.formats.HiveClassNames.HUDI_PARQUET_INPUT_FORMAT;
 import static io.trino.hive.formats.HiveClassNames.HUDI_PARQUET_REALTIME_INPUT_FORMAT;
 import static io.trino.hive.formats.HiveClassNames.MAPRED_PARQUET_OUTPUT_FORMAT_CLASS;
 import static io.trino.hive.formats.HiveClassNames.PARQUET_HIVE_SERDE_CLASS;
-import static io.trino.metastore.HiveType.HIVE_STRING;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
+import static io.trino.plugin.hudi.testing.HudiTestUtils.hiveSyncStorageSchema;
 import static java.nio.file.Files.createTempDirectory;
 import static java.util.Objects.requireNonNull;
 
@@ -87,14 +86,6 @@ public abstract class AbstractMergerHudiTablesInitializer
     protected static final String ORDERING_FIELD = "ts";
 
     private static final String PARTITION_PATH = "";
-
-    /** Hudi metadata columns, prepended to every table's data columns in the metastore definition. */
-    static final List<Column> HUDI_META_COLUMNS = ImmutableList.of(
-            new Column("_hoodie_commit_time", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_commit_seqno", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_record_key", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_partition_path", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_file_name", HIVE_STRING, Optional.empty(), Map.of()));
 
     private final String tableName;
 
@@ -128,12 +119,13 @@ public abstract class AbstractMergerHudiTablesInitializer
         try {
             initTable();
             afterTableInit();
-            writeClient = createWriteClient();
+            writeClient = createWriteClient(avroSchema());
             writeInitialCommits(writeClient);
             syncToTrino();
 
-            metastore.createTable(createTableDefinition(schemaName, tableName, false), PrincipalPrivileges.NO_PRIVILEGES);
-            metastore.createTable(createTableDefinition(schemaName, tableName + "_rt", true), PrincipalPrivileges.NO_PRIVILEGES);
+            List<Column> dataColumns = metastoreDataColumns();
+            metastore.createTable(createTableDefinition(schemaName, tableName, false, dataColumns), PrincipalPrivileges.NO_PRIVILEGES);
+            metastore.createTable(createTableDefinition(schemaName, tableName + "_rt", true, dataColumns), PrincipalPrivileges.NO_PRIVILEGES);
             initialized = true;
         }
         finally {
@@ -145,11 +137,8 @@ public abstract class AbstractMergerHudiTablesInitializer
         }
     }
 
-    /** The table's data columns, in schema order; the Hudi metadata columns are prepended by this class. */
-    protected abstract List<Column> dataColumns();
-
     /**
-     * Whether the metastore definition prepends {@link #HUDI_META_COLUMNS}. The base file always carries them, so
+     * Whether the metastore columns include the {@code _hoodie_*} meta columns. The base file always carries them, so
      * returning {@code false} models hive sync with {@code hoodie.datasource.hive_sync.omit_metadata_fields=true}:
      * every data column's metastore ordinal then sits five below its physical position in the file.
      */
@@ -158,17 +147,36 @@ public abstract class AbstractMergerHudiTablesInitializer
         return true;
     }
 
-    /** The Avro schema the write client writes, matching {@link #dataColumns()}. */
+    /**
+     * The data columns to register given the ones Hive sync would register, for a fixture whose test needs the
+     * metastore to disagree with the table schema; such an override says why. Unchanged by default.
+     */
+    protected List<Column> adjustHiveSyncColumns(List<Column> hiveSyncColumns)
+    {
+        return hiveSyncColumns;
+    }
+
+    /** The Avro schema the write client writes. */
     protected abstract Schema avroSchema();
 
     /**
      * Applies the fixture's merge-related table configuration (merge mode, merge strategy id, payload class).
-     * The table type, record key fields and ordering fields are set by this class.
+     * The table type, record key fields and ordering fields are set by this class. Only a record merge mode, commit-time
+     * ordering, by default, so table creation persists the mode as-is.
      */
-    protected abstract void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder);
+    protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
+    {
+        tableBuilder.setRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
+    }
 
-    /** Applies the fixture's merge-related write configuration (merge mode, merge strategy id, merger impl classes). */
-    protected abstract void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder);
+    /**
+     * Applies the fixture's merge-related write configuration (merge mode, merge strategy id, merger impl classes):
+     * commit-time ordering by default, matching {@link #configureTableConfig}.
+     */
+    protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
+    {
+        writeConfigBuilder.withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
+    }
 
     /** Writes the commits that make up the fixture's initial state. */
     protected abstract void writeInitialCommits(HoodieJavaWriteClient<HoodieAvroPayload> client)
@@ -257,12 +265,16 @@ public abstract class AbstractMergerHudiTablesInitializer
         }
     }
 
-    private HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient()
+    /**
+     * A write client over the staged table whose commits record {@code writerSchema} as the table schema. The caller
+     * owns any client other than {@link #writeClient()} and must close it.
+     */
+    protected HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient(Schema writerSchema)
     {
         Configuration conf = new Configuration();
         HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder()
                 .withPath(stagingTablePath.toString())
-                .withSchema(avroSchema().toString())
+                .withSchema(writerSchema.toString())
                 .withParallelism(2, 2)
                 .withDeleteParallelism(2)
                 .forTable(tableName)
@@ -282,7 +294,17 @@ public abstract class AbstractMergerHudiTablesInitializer
         return new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(new HadoopStorageConfiguration(conf)), writeConfigBuilder.build());
     }
 
-    private Table createTableDefinition(String schemaName, String metastoreTableName, boolean isRtTable)
+    /**
+     * The data columns Hive sync registers for the table as written so far (its HMS path, {@code support_timestamp}
+     * off as by default), passed through {@link #adjustHiveSyncColumns}. A fixture whose schema Hive sync cannot
+     * register at all overrides this with the columns it registers by hand.
+     */
+    protected List<Column> metastoreDataColumns()
+    {
+        return adjustHiveSyncColumns(HudiTestUtils.metastoreDataColumns(hiveSyncStorageSchema(stagingTablePath.toString(), !includeMetaColumnsInMetastore()), false));
+    }
+
+    private Table createTableDefinition(String schemaName, String metastoreTableName, boolean isRtTable, List<Column> dataColumns)
     {
         StorageFormat storageFormat = StorageFormat.create(
                 PARQUET_HIVE_SERDE_CLASS,
@@ -294,10 +316,7 @@ public abstract class AbstractMergerHudiTablesInitializer
                 .setTableName(metastoreTableName)
                 .setTableType(EXTERNAL_TABLE.name())
                 .setOwner(Optional.of("public"))
-                .setDataColumns(ImmutableList.<Column>builder()
-                        .addAll(includeMetaColumnsInMetastore() ? HUDI_META_COLUMNS : ImmutableList.<Column>of())
-                        .addAll(dataColumns())
-                        .build())
+                .setDataColumns(dataColumns)
                 .setParameters(ImmutableMap.of("serialization.format", "1", "EXTERNAL", "TRUE"))
                 .withStorage(storageBuilder -> storageBuilder
                         .setStorageFormat(storageFormat)

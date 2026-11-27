@@ -14,8 +14,6 @@
 package io.trino.plugin.hudi.testing;
 
 import com.google.common.collect.ImmutableList;
-import io.trino.metastore.Column;
-import io.trino.metastore.HiveType;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -32,14 +30,8 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static io.trino.metastore.HiveType.HIVE_BOOLEAN;
-import static io.trino.metastore.HiveType.HIVE_DOUBLE;
-import static io.trino.metastore.HiveType.HIVE_INT;
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
 import static java.lang.String.format;
 
 /**
@@ -82,7 +74,6 @@ public class IncrementalCustomMergerHudiTablesInitializer
     /** The 30 data columns, in the order they appear in the schema and in query projections. */
     private static final List<ColumnSpec> COLUMN_SPECS = buildColumnSpecs();
 
-    private static final List<Column> DATA_COLUMNS = buildDataColumns();
     private static final Schema AVRO_SCHEMA = buildAvroSchema();
 
     /** Winning commit per record index under the max-rank merge policy (-1 = not yet inserted). */
@@ -96,12 +87,6 @@ public class IncrementalCustomMergerHudiTablesInitializer
         super(TABLE_NAME);
         Arrays.fill(winningCommit, -1);
         Arrays.fill(latestCommit, -1);
-    }
-
-    @Override
-    protected List<Column> dataColumns()
-    {
-        return DATA_COLUMNS;
     }
 
     @Override
@@ -322,15 +307,6 @@ public class IncrementalCustomMergerHudiTablesInitializer
         return built;
     }
 
-    private static List<Column> buildDataColumns()
-    {
-        ImmutableList.Builder<Column> columns = ImmutableList.builder();
-        for (ColumnSpec spec : COLUMN_SPECS) {
-            columns.add(new Column(spec.name(), hiveType(spec.kind()), Optional.empty(), Map.of()));
-        }
-        return columns.build();
-    }
-
     private static Schema buildAvroSchema()
     {
         List<Schema.Field> fields = new ArrayList<>();
@@ -338,17 +314,6 @@ public class IncrementalCustomMergerHudiTablesInitializer
             fields.add(new Schema.Field(spec.name(), Schema.create(avroType(spec.kind()))));
         }
         return Schema.createRecord(TABLE_NAME, null, null, false, fields);
-    }
-
-    private static HiveType hiveType(Kind kind)
-    {
-        return switch (kind) {
-            case STRING -> HIVE_STRING;
-            case LONG -> HIVE_LONG;
-            case INT -> HIVE_INT;
-            case DOUBLE -> HIVE_DOUBLE;
-            case BOOLEAN -> HIVE_BOOLEAN;
-        };
     }
 
     private static Schema.Type avroType(Kind kind)

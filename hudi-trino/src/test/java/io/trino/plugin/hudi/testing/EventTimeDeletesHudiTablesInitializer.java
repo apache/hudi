@@ -14,7 +14,7 @@
 package io.trino.plugin.hudi.testing;
 
 import com.google.common.collect.ImmutableList;
-import io.trino.metastore.Column;
+import org.apache.avro.Conversions;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -24,17 +24,14 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
-import static io.trino.metastore.HiveType.HIVE_BOOLEAN;
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 
 /**
@@ -52,27 +49,83 @@ import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
  * Records are wrapped in {@link HoodieAvroPayload}, which implements {@code HoodieRecordPayload} directly
  * (NOT {@code BaseAvroPayload}), so rows with {@code _hoodie_is_deleted=true} are written as DATA records
  * and delete semantics are evaluated at READ time. See {@code TestHudiMorMergeModeSemantics}.
+ * <p>
+ * The ordering field is a long by default. {@link OrderingType} also writes it as a decimal or a timestamp-millis
+ * holding the same order, so the merge compares ordering values the base file's read converts (a decimal's bytes, a
+ * timestamp's long) against the ones decoded from the log and delete blocks.
  */
 public class EventTimeDeletesHudiTablesInitializer
         extends AbstractMergerHudiTablesInitializer
 {
-    public static final String TABLE_NAME = "deletes_mor";
-    public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
+    public static final String TABLE_NAME = OrderingType.LONG.tableName();
+    public static final String RT_TABLE_NAME = OrderingType.LONG.rtTableName();
+
+    // 1_700_000_000_000 ms is 2023-11-14 22:13:20 UTC
+    private static final long TIMESTAMP_ORDERING_EPOCH_MILLIS = 1_700_000_000_000L;
+    private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
+
+    public enum OrderingType
+    {
+        LONG("deletes_mor", Schema.create(Schema.Type.LONG)),
+        DECIMAL("deletes_decimal_ordering_mor", HoodieSchema.createDecimal(12, 2).toAvroSchema()),
+        TIMESTAMP_MILLIS("deletes_timestamp_ordering_mor", HoodieSchema.createTimestampMillis().toAvroSchema());
+
+        private final String tableName;
+        private final Schema schema;
+
+        OrderingType(String tableName, Schema schema)
+        {
+            this.tableName = tableName;
+            this.schema = schema;
+        }
+
+        public String tableName()
+        {
+            return tableName;
+        }
+
+        public String rtTableName()
+        {
+            return tableName + "_rt";
+        }
+
+        /** The ordering value of this type that sorts where {@code ts} does among the longs. */
+        private Object orderingValue(long ts)
+        {
+            return switch (this) {
+                case LONG -> ts;
+                case DECIMAL -> DECIMAL_CONVERSION.toBytes(decimalOrderingValue(ts), schema, schema.getLogicalType());
+                case TIMESTAMP_MILLIS -> TIMESTAMP_ORDERING_EPOCH_MILLIS + ts;
+            };
+        }
+    }
+
+    /**
+     * The decimal ordering value for {@code ts}, chosen so that comparing the stored bytes instead of the numbers gets
+     * the order wrong: the base value 0.02 is the single byte 0x02, the higher update 2.56 the two bytes 0x01 0x00, which
+     * sort below it as bytes. A merge that skipped the decimal conversion would keep the base row over k1's update.
+     */
+    private static BigDecimal decimalOrderingValue(long ts)
+    {
+        return switch ((int) ts) {
+            case 50 -> new BigDecimal("0.01");
+            case 100 -> new BigDecimal("0.02");
+            case 200 -> new BigDecimal("2.56");
+            default -> throw new IllegalArgumentException("No decimal ordering value for ts " + ts);
+        };
+    }
+
+    private final OrderingType orderingType;
 
     public EventTimeDeletesHudiTablesInitializer()
     {
-        super(TABLE_NAME);
+        this(OrderingType.LONG);
     }
 
-    @Override
-    protected List<Column> dataColumns()
+    public EventTimeDeletesHudiTablesInitializer(OrderingType orderingType)
     {
-        return ImmutableList.of(
-                new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("name", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("value", HIVE_LONG, Optional.empty(), Map.of()),
-                new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()),
-                new Column(HOODIE_IS_DELETED_FIELD, HIVE_BOOLEAN, Optional.empty(), Map.of()));
+        super(orderingType.tableName());
+        this.orderingType = orderingType;
     }
 
     @Override
@@ -82,13 +135,13 @@ public class EventTimeDeletesHudiTablesInitializer
                 new Schema.Field(RECORD_KEY_FIELD, Schema.create(Schema.Type.STRING)),
                 new Schema.Field("name", Schema.create(Schema.Type.STRING)),
                 new Schema.Field("value", Schema.create(Schema.Type.LONG)),
-                new Schema.Field(ORDERING_FIELD, Schema.create(Schema.Type.LONG)),
+                new Schema.Field(ORDERING_FIELD, orderingType.schema),
                 new Schema.Field(
                         HOODIE_IS_DELETED_FIELD,
                         Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.BOOLEAN)),
                         null,
                         JsonProperties.NULL_VALUE));
-        return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
+        return Schema.createRecord(orderingType.tableName(), null, null, false, new ArrayList<>(fields));
     }
 
     @Override
@@ -141,13 +194,13 @@ public class EventTimeDeletesHudiTablesInitializer
         client.commit(deleteCommit, deleteStatuses);
     }
 
-    private static HoodieRecord<HoodieAvroPayload> record(Schema schema, String key, String name, long value, long ts, boolean deleted)
+    private HoodieRecord<HoodieAvroPayload> record(Schema schema, String key, String name, long value, long ts, boolean deleted)
     {
         GenericRecord record = new GenericData.Record(schema);
         record.put(RECORD_KEY_FIELD, key);
         record.put("name", name);
         record.put("value", value);
-        record.put(ORDERING_FIELD, ts);
+        record.put(ORDERING_FIELD, orderingType.orderingValue(ts));
         record.put(HOODIE_IS_DELETED_FIELD, deleted);
         // HoodieAvroPayload passes the record through untouched (it is not a BaseAvroPayload), so a row
         // with _hoodie_is_deleted=true is WRITTEN as a data record and only deleted at merge/read time.

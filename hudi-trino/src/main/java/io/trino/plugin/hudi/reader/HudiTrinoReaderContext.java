@@ -16,8 +16,8 @@ package io.trino.plugin.hudi.reader;
 import com.google.common.collect.ImmutableSet;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hudi.HudiUtil;
-import io.trino.plugin.hudi.util.HudiAvroSerializer;
-import io.trino.plugin.hudi.util.PrefilledColumnValues;
+import io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorPageSource;
@@ -58,6 +58,7 @@ import java.util.Set;
 
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
 import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 
 public class HudiTrinoReaderContext
@@ -65,10 +66,11 @@ public class HudiTrinoReaderContext
 {
     private final ConnectorPageSource pageSource;
     private final List<HiveColumnHandle> columnHandles;
-    private final PrefilledColumnValues prefilledColumnValues;
     private final LogFileParquetPageSourceFactory logPageSourceFactory;
     private final Map<String, HiveColumnHandle> colNameToHandle;
     private final Set<String> baseProjectionNames;
+    // Types the handles synthesized from schema fields the way the planner typed the projection
+    private final TrinoTypeMapper typeMapper;
 
     /**
      * Factory for building a Trino parquet page source over a native (RFC-103) delta-log file on demand.
@@ -85,16 +87,16 @@ public class HudiTrinoReaderContext
             HoodieTableConfig tableConfig,
             ConnectorPageSource pageSource,
             List<HiveColumnHandle> columnHandles,
-            PrefilledColumnValues prefilledColumnValues,
             LogFileParquetPageSourceFactory logPageSourceFactory,
-            TypedProperties props)
+            TypedProperties props,
+            TrinoTypeMapper typeMapper)
     {
         super(storageConfiguration, tableConfig, Option.empty(), Option.empty(),
                 new AvroRecordContext(tableConfig, tableConfig.getPayloadClass(), ConfigUtils.getMergeProps(props, tableConfig)));
         this.pageSource = pageSource;
-        this.prefilledColumnValues = prefilledColumnValues;
         this.columnHandles = columnHandles;
         this.logPageSourceFactory = logPageSourceFactory;
+        this.typeMapper = requireNonNull(typeMapper, "typeMapper is null");
         this.colNameToHandle = new HashMap<>();
         for (HiveColumnHandle handle : columnHandles) {
             colNameToHandle.put(handle.getBaseColumnName().toLowerCase(Locale.ROOT), handle);
@@ -161,14 +163,15 @@ public class HudiTrinoReaderContext
             }
             List<HiveColumnHandle> logProjection = buildRequiredColumnHandles(requiredSchema);
             ConnectorPageSource logSource = logPageSourceFactory.create(path.toString(), start, length, logProjection);
-            HudiAvroSerializer logSerializer = new HudiAvroSerializer(logProjection, prefilledColumnValues, requiredSchema.toAvroSchema());
-            return createRecordIterator(logSource, logSerializer);
+            return createRecordIterator(logSource, recordSerializer(logProjection, requiredSchema));
         }
         // The base read reuses the pre-built page source, so it can only satisfy requiredSchema fields the
         // read projection carries. The connector predicts the file-group reader's demands up front
         // (HudiUtil.getMergeRequiredColumnHandles, HudiPageSourceProvider.requiresFullSchemaRead); if the
-        // two ever drift, fail loudly here instead of silently merging with null column values.
+        // two ever drift, fail loudly here instead of silently merging with null column values. A field that can only
+        // hold null has no column to read; the serializer leaves it null, which is its only value.
         List<String> missingColumns = requiredSchema.getFields().stream()
+                .filter(field -> !HudiUtil.isNullOnly(field))
                 .map(HoodieSchemaField::name)
                 .filter(name -> !baseProjectionNames.contains(name.toLowerCase(Locale.ROOT)))
                 .toList();
@@ -179,10 +182,15 @@ public class HudiTrinoReaderContext
                             + "FileGroupReaderSchemaHandler.generateRequiredSchema.",
                     missingColumns));
         }
-        // Every requiredSchema field is in the base projection (checked above) and every projected column is
+        // Every requiredSchema field but the null-only ones is in the base projection (checked above) and every projected column is
         // a requiredSchema field (the file-group reader's required schema always contains the full requested
         // schema), so the by-name channel mapping resolves in both directions.
-        return createRecordIterator(pageSource, new HudiAvroSerializer(columnHandles, prefilledColumnValues, requiredSchema.toAvroSchema()));
+        return createRecordIterator(pageSource, recordSerializer(columnHandles, requiredSchema));
+    }
+
+    private HoodieSchemaAvroSerializer recordSerializer(List<HiveColumnHandle> projection, HoodieSchema requiredSchema)
+    {
+        return new HoodieSchemaAvroSerializer(projection, requiredSchema.toAvroSchema());
     }
 
     /**
@@ -197,6 +205,10 @@ public class HudiTrinoReaderContext
     {
         List<HiveColumnHandle> handles = new ArrayList<>();
         for (HoodieSchemaField field : requiredSchema.getFields()) {
+            if (HudiUtil.isNullOnly(field)) {
+                // No column to read and no Trino type; the serializer leaves the field null
+                continue;
+            }
             // A projection handle may carry the lowercased metastore column name (e.g. 'op' for the
             // DMS delete key 'Op'); that is fine on this path: parquet columns resolve
             // case-insensitively, the serializer maps channels into requiredSchema positions
@@ -204,12 +216,12 @@ public class HudiTrinoReaderContext
             // which serialize() stamps with the table casing.
             handles.add(colNameToHandle.computeIfAbsent(
                     field.name().toLowerCase(Locale.ROOT),
-                    _ -> HudiUtil.toColumnHandle(field)));
+                    _ -> HudiUtil.toSchemaTypedColumnHandle(field, typeMapper)));
         }
         return handles;
     }
 
-    private ClosableIterator<IndexedRecord> createRecordIterator(ConnectorPageSource source, HudiAvroSerializer serializer)
+    private ClosableIterator<IndexedRecord> createRecordIterator(ConnectorPageSource source, HoodieSchemaAvroSerializer serializer)
     {
         return new ClosableIterator<>()
         {

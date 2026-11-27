@@ -14,25 +14,16 @@
 package io.trino.plugin.hudi.testing;
 
 import com.google.common.collect.ImmutableList;
-import io.trino.metastore.Column;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
 
 /**
  * Creates a non-partitioned table whose METASTORE column list omits the five {@code _hoodie_*} meta columns the
@@ -40,8 +31,8 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
  * {@code hoodie.datasource.hive_sync.omit_metadata_fields=true}. Every data column's metastore ordinal is therefore
  * five below its physical position, which is the shape {@code hudi.parquet.use-column-names=false} resolves
  * positionally and the one apache/hudi#19387 was about. Every other fixture in this module registers the meta
- * columns ({@code ResourceHudiTablesInitializer.TestingTable.getDataColumns} prepends them unconditionally), so
- * metastore ordinal equals physical ordinal there and the bug cannot appear.
+ * columns (their metastore columns are derived from the table schema with the meta fields included), so metastore
+ * ordinal equals physical ordinal there and the bug cannot appear.
  * <p>
  * The column list looks padded on purpose. Physical fields 0..4 are always the meta columns, so a data column at
  * metastore ordinal {@code i} is read positionally at physical field {@code i}, which is a meta column for any
@@ -85,18 +76,6 @@ public class OmittedMetaColumnsHudiTablesInitializer
     }
 
     @Override
-    protected List<Column> dataColumns()
-    {
-        ImmutableList.Builder<Column> columns = ImmutableList.builder();
-        columns.add(new Column(SHADOWED_COLUMN, HIVE_LONG, Optional.empty(), Map.of()));
-        FILLER_COLUMNS.forEach(name -> columns.add(new Column(name, HIVE_LONG, Optional.empty(), Map.of())));
-        columns.add(new Column(LATE_COLUMN, HIVE_LONG, Optional.empty(), Map.of()));
-        columns.add(new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()));
-        columns.add(new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()));
-        return columns.build();
-    }
-
-    @Override
     protected Schema avroSchema()
     {
         List<Schema.Field> fields = new ArrayList<>();
@@ -106,18 +85,6 @@ public class OmittedMetaColumnsHudiTablesInitializer
         fields.add(new Schema.Field(RECORD_KEY_FIELD, Schema.create(Schema.Type.STRING)));
         fields.add(new Schema.Field(ORDERING_FIELD, Schema.create(Schema.Type.LONG)));
         return Schema.createRecord(TABLE_NAME, null, null, false, fields);
-    }
-
-    @Override
-    protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
-    {
-        tableBuilder.setRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
-    }
-
-    @Override
-    protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
-    {
-        writeConfigBuilder.withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
     }
 
     @Override

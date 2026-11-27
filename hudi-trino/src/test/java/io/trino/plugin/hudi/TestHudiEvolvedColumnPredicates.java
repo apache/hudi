@@ -18,9 +18,7 @@ import io.trino.metastore.HiveType;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.predicate.Domain;
-import io.trino.spi.predicate.Range;
 import io.trino.spi.predicate.TupleDomain;
-import io.trino.spi.predicate.ValueSet;
 import io.trino.spi.type.Type;
 import io.trino.testing.MaterializedResult;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
@@ -38,11 +36,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
-import static io.trino.plugin.hive.HiveColumnHandle.createBaseColumn;
 import static io.trino.plugin.hudi.TestingBaseFilePageSource.dynamicFilterOn;
+import static io.trino.plugin.hudi.TestingBaseFilePageSource.greaterThan;
 import static io.trino.plugin.hudi.TestingBaseFilePageSource.read;
+import static io.trino.plugin.hudi.TestingBaseFilePageSource.regularColumn;
 import static io.trino.plugin.hudi.TestingBaseFilePageSource.writeBaseFile;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.DoubleType.DOUBLE;
@@ -147,7 +145,7 @@ class TestHudiEvolvedColumnPredicates
         HiveColumnHandle evolved = column(FLOAT_TO_DOUBLE_COLUMN, HiveType.HIVE_DOUBLE, DOUBLE);
         List<HiveColumnHandle> projection = List.of(column(STABLE_COLUMN, HiveType.HIVE_INT, INTEGER), evolved);
 
-        MaterializedResult result = read(preEvolutionFile, projection, greaterThanThreshold(evolved, DOUBLE, (double) THRESHOLD),
+        MaterializedResult result = read(preEvolutionFile, projection, greaterThan(evolved, (double) THRESHOLD),
                 useParquetColumnNames, DynamicFilter.EMPTY);
 
         // The domain cannot be matched against FLOAT statistics, so it is dropped and nothing is pruned. Before the
@@ -166,7 +164,7 @@ class TestHudiEvolvedColumnPredicates
         List<HiveColumnHandle> projection = List.of(column(STABLE_COLUMN, HiveType.HIVE_INT, INTEGER), evolved);
 
         MaterializedResult result = read(preEvolutionFile, projection,
-                greaterThanThreshold(evolved, VARCHAR, Slices.utf8Slice("900")), false, DynamicFilter.EMPTY);
+                greaterThan(evolved, Slices.utf8Slice("900")), false, DynamicFilter.EMPTY);
 
         // A varchar domain over an INT32 column would cast an Integer to a Slice
         assertThat(result.getRowCount()).as("rows read").isEqualTo(ROW_COUNT);
@@ -188,7 +186,7 @@ class TestHudiEvolvedColumnPredicates
         HiveColumnHandle evolved = column(INT_TO_BIGINT_COLUMN, HiveType.HIVE_LONG, BIGINT);
         List<HiveColumnHandle> projection = List.of(column(STABLE_COLUMN, HiveType.HIVE_INT, INTEGER), evolved);
 
-        MaterializedResult result = read(preEvolutionFile, projection, greaterThanThreshold(evolved, BIGINT, THRESHOLD),
+        MaterializedResult result = read(preEvolutionFile, projection, greaterThan(evolved, THRESHOLD),
                 false, DynamicFilter.EMPTY);
 
         assertThat(result.getRowCount()).as("rows read").isEqualTo(ROW_COUNT);
@@ -242,7 +240,7 @@ class TestHudiEvolvedColumnPredicates
 
         // ... and the range predicate the pre-evolution file could not prune on at all
         MaterializedResult rangeResult = read(postEvolutionFile, projection,
-                greaterThanThreshold(evolved, BIGINT, THRESHOLD), false, DynamicFilter.EMPTY);
+                greaterThan(evolved, THRESHOLD), false, DynamicFilter.EMPTY);
         assertThat(rangeResult.getRowCount()).as("rows read out of %s", ROW_COUNT).isLessThan(ROW_COUNT);
         assertThat(valuesOver(rangeResult, 1)).as("rows matching %s > %s after pruning", INT_TO_BIGINT_COLUMN, THRESHOLD)
                 .isEqualTo(MATCHING_ROW_COUNT);
@@ -257,8 +255,8 @@ class TestHudiEvolvedColumnPredicates
         List<HiveColumnHandle> projection = List.of(stable, evolved);
 
         MaterializedResult result = read(preEvolutionFile, projection,
-                greaterThanThreshold(stable, INTEGER, THRESHOLD)
-                        .intersect(greaterThanThreshold(evolved, DOUBLE, (double) THRESHOLD)),
+                greaterThan(stable, THRESHOLD)
+                        .intersect(greaterThan(evolved, (double) THRESHOLD)),
                 false, DynamicFilter.EMPTY);
 
         // One unusable domain must not cost the whole predicate its pushdown: the stable column's domain still
@@ -277,7 +275,7 @@ class TestHudiEvolvedColumnPredicates
         // A dynamic filter reaches getCombinedPredicate by its own route and its handles carry the metastore type
         // just the same, so it has to be guarded on the same path
         MaterializedResult result = read(preEvolutionFile, projection, TupleDomain.all(), false,
-                dynamicFilterOn(greaterThanThreshold(evolved, DOUBLE, (double) THRESHOLD)));
+                dynamicFilterOn(greaterThan(evolved, (double) THRESHOLD)));
 
         assertThat(result.getRowCount()).as("rows read").isEqualTo(ROW_COUNT);
     }
@@ -295,7 +293,7 @@ class TestHudiEvolvedColumnPredicates
         List<HiveColumnHandle> projection = List.of(stable);
 
         MaterializedResult result = read(preEvolutionFile, projection, TupleDomain.all(), false,
-                dynamicFilterOn(greaterThanThreshold(stable, INTEGER, THRESHOLD)));
+                dynamicFilterOn(greaterThan(stable, THRESHOLD)));
 
         assertThat(result.getRowCount()).as("rows read out of %s", ROW_COUNT).isLessThan(ROW_COUNT);
         assertThat(valuesOver(result, 0)).as("rows matching %s > %s after pruning", STABLE_COLUMN, THRESHOLD).isEqualTo(MATCHING_ROW_COUNT);
@@ -347,8 +345,7 @@ class TestHudiEvolvedColumnPredicates
      */
     private static HiveColumnHandle column(String columnName, HiveType hiveType, Type trinoType)
     {
-        return createBaseColumn(columnName, physicalIndexOf(columnName), hiveType, trinoType,
-                HiveColumnHandle.ColumnType.REGULAR, Optional.empty());
+        return regularColumn(columnName, physicalIndexOf(columnName), hiveType, trinoType);
     }
 
     private static int physicalIndexOf(String columnName)
@@ -360,12 +357,6 @@ class TestHudiEvolvedColumnPredicates
             }
         }
         throw new IllegalArgumentException("No such column in the fixture: " + columnName);
-    }
-
-    private static TupleDomain<HiveColumnHandle> greaterThanThreshold(HiveColumnHandle handle, Type type, Object threshold)
-    {
-        return TupleDomain.withColumnDomains(Map.of(handle,
-                Domain.create(ValueSet.ofRanges(Range.greaterThan(type, threshold)), false)));
     }
 
     /** Counts the rows whose {@code fieldIndex}-th field is over {@link #THRESHOLD}, whatever numeric type it read as. */

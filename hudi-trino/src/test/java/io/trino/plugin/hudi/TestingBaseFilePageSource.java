@@ -14,6 +14,7 @@
 package io.trino.plugin.hudi;
 
 import io.trino.filesystem.local.LocalInputFile;
+import io.trino.metastore.HiveType;
 import io.trino.parquet.ParquetReaderOptions;
 import io.trino.plugin.base.metrics.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveColumnHandle;
@@ -24,10 +25,14 @@ import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.DynamicFilter;
+import io.trino.spi.predicate.Domain;
+import io.trino.spi.predicate.Range;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.predicate.ValueSet;
 import io.trino.spi.type.Type;
 import io.trino.testing.MaterializedResult;
 import io.trino.testing.TestingConnectorSession;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.parquet.conf.PlainParquetConfiguration;
 import org.apache.parquet.example.data.Group;
 import org.apache.parquet.example.data.simple.SimpleGroupFactory;
@@ -42,11 +47,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.ObjIntConsumer;
 
+import static io.trino.plugin.hive.HiveColumnHandle.createBaseColumn;
 import static io.trino.plugin.hudi.HudiPageSourceProvider.createPageSource;
 import static io.trino.testing.MaterializedResult.materializeSourceDataStream;
 
@@ -79,6 +87,22 @@ final class TestingBaseFilePageSource
             DynamicFilter dynamicFilter)
             throws Exception
     {
+        return read(baseFile, projection, predicate, useParquetColumnNames, dynamicFilter, Optional.empty());
+    }
+
+    /**
+     * {@link #read(Path, List, TupleDomain, boolean, DynamicFilter)} for a table with {@code tableSchema}, which the
+     * page source repairs misstated timestamps against.
+     */
+    static MaterializedResult read(
+            Path baseFile,
+            List<HiveColumnHandle> projection,
+            TupleDomain<HiveColumnHandle> predicate,
+            boolean useParquetColumnNames,
+            DynamicFilter dynamicFilter,
+            Optional<HoodieSchema> tableSchema)
+            throws Exception
+    {
         long fileSize = Files.size(baseFile);
         HudiSplit split = new HudiSplit(
                 new HudiBaseFile(baseFile.toString(), baseFile.getFileName().toString(), fileSize, 0, 0, fileSize),
@@ -108,7 +132,8 @@ final class TestingBaseFilePageSource
                 ParquetReaderOptions.builder().build(),
                 DateTimeZone.UTC,
                 dynamicFilter,
-                true)) {
+                true,
+                tableSchema)) {
             return materializeSourceDataStream(pageSource, types).toTestTypes();
         }
     }
@@ -160,6 +185,19 @@ final class TestingBaseFilePageSource
         try (ParquetFileReader reader = ParquetFileReader.open(new org.apache.parquet.io.LocalInputFile(path))) {
             return reader.getRowGroups().size();
         }
+    }
+
+    /** A regular base column handle on its physical ordinal, as the metastore reports it. */
+    static HiveColumnHandle regularColumn(String name, int physicalIndex, HiveType hiveType, Type type)
+    {
+        return createBaseColumn(name, physicalIndex, hiveType, type, HiveColumnHandle.ColumnType.REGULAR, Optional.empty());
+    }
+
+    /** A predicate keeping the values of {@code handle} above {@code threshold}, a value of the handle's type. */
+    static TupleDomain<HiveColumnHandle> greaterThan(HiveColumnHandle handle, Object threshold)
+    {
+        return TupleDomain.withColumnDomains(Map.of(handle,
+                Domain.create(ValueSet.ofRanges(Range.greaterThan(handle.getType(), threshold)), false)));
     }
 
     /** A completed dynamic filter carrying {@code predicate}, the shape {@code getCombinedPredicate} intersects in. */

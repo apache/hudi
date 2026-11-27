@@ -76,10 +76,10 @@ public class IndexSupportFactory
         List<StrategyProvider> strategyProviders = List.of(
                 new StrategyProvider(
                         () -> isRecordLevelIndexEnabled(session),
-                        () -> new HudiRecordLevelIndexSupport(session, schemaTableName, lazyMetaClient, lazyTableMetadata, transformedTupleDomain)),
+                        () -> new HudiRecordLevelIndexSupport(session, schemaTableName, lazyMetaClient, lazyTableMetadata, transformedTupleDomain, hudiTableHandle.getTableSchema())),
                 new StrategyProvider(
                         () -> isSecondaryIndexEnabled(session),
-                        () -> new HudiSecondaryIndexSupport(session, schemaTableName, lazyMetaClient, lazyTableMetadata, transformedTupleDomain)),
+                        () -> new HudiSecondaryIndexSupport(session, schemaTableName, lazyMetaClient, lazyTableMetadata, transformedTupleDomain, hudiTableHandle.getTableSchema())),
                 new StrategyProvider(
                         () -> isColumnStatsIndexEnabled(session),
                         () -> new HudiColumnStatsIndexSupport(session, schemaTableName, lazyMetaClient, lazyTableMetadata, transformedTupleDomain)),

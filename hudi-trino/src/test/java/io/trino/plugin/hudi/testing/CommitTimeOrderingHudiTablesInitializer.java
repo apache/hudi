@@ -23,16 +23,11 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.plugin.hudi.testing.TypeInfoHelper.charHiveType;
 
 /**
@@ -59,14 +54,12 @@ public class CommitTimeOrderingHudiTablesInitializer
     }
 
     @Override
-    protected List<Column> dataColumns()
+    protected List<Column> adjustHiveSyncColumns(List<Column> hiveSyncColumns)
     {
-        return ImmutableList.of(
-                new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("name", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("code", charHiveType(5), Optional.empty(), Map.of()),
-                new Column("value", HIVE_LONG, Optional.empty(), Map.of()),
-                new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()));
+        // code is declared char(5) against the schema's string so a test can show the schema type wins over the metastore's
+        return hiveSyncColumns.stream()
+                .map(column -> column.getName().equals("code") ? new Column(column.getName(), charHiveType(5), column.getComment(), column.getProperties()) : column)
+                .collect(toImmutableList());
     }
 
     @Override
@@ -79,18 +72,6 @@ public class CommitTimeOrderingHudiTablesInitializer
                 new Schema.Field("value", Schema.create(Schema.Type.LONG)),
                 new Schema.Field(ORDERING_FIELD, Schema.create(Schema.Type.LONG)));
         return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
-    }
-
-    @Override
-    protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
-    {
-        tableBuilder.setRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
-    }
-
-    @Override
-    protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
-    {
-        writeConfigBuilder.withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING);
     }
 
     @Override
