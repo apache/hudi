@@ -43,6 +43,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 @Slf4j
 public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
+  private final HoodieBaseFile baseFile;
   private final BloomFilter bloomFilter;
   private final Set<String> candidateRecordKeys;
   private long totalKeysChecked;
@@ -52,6 +53,7 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
     super(config, hoodieTable, partitionPathFileIDPair);
     this.candidateRecordKeys = new HashSet<>();
     this.totalKeysChecked = 0;
+    this.baseFile = getLatestBaseFile();
     this.bloomFilter = getBloomFilter();
   }
 
@@ -62,10 +64,11 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
       if (config.getBloomIndexUseMetadata()
           && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
           .contains(BLOOM_FILTERS.getPartitionPath())) {
-        bloomFilter = hoodieTable.getTableMetadata().getBloomFilter(partitionPathFileIDPair.getLeft(), partitionPathFileIDPair.getRight())
-            .orElseThrow(() -> new HoodieIndexException("BloomFilter missing for " + partitionPathFileIDPair.getRight()));
+        // The bloom filter partition is keyed by base file name, not by file id.
+        bloomFilter = hoodieTable.getTableMetadata().getBloomFilter(partitionPathFileIDPair.getLeft(), baseFile.getFileName())
+            .orElseThrow(() -> new HoodieIndexException("BloomFilter missing for " + baseFile.getFileName()));
       } else {
-        try (HoodieFileReader reader = createNewFileReader()) {
+        try (HoodieFileReader reader = createNewFileReader(baseFile)) {
           bloomFilter = reader.readBloomFilter();
         }
       }
@@ -94,7 +97,6 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
   public HoodieKeyLookupResult getLookupResult() {
     log.debug("#The candidate row keys for {} => {}", partitionPathFileIDPair, candidateRecordKeys);
 
-    HoodieBaseFile baseFile = getLatestBaseFile();
     Collection<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
         baseFile.getStoragePath(), candidateRecordKeys, hoodieTable.getStorage());
     log.info("Total records ({}), bloom filter candidates ({})/fp({}), actual matches ({})", totalKeysChecked,
