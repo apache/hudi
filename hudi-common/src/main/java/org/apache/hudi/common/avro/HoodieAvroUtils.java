@@ -158,6 +158,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class HoodieAvroUtils {
 
   public static final String AVRO_VERSION = resolveAvroVersion();
+  private static final boolean GTEQ_AVRO_1_9 = isAvroVersionAtLeast("1.9");
+  private static final boolean GTEQ_AVRO_1_10 = isAvroVersionAtLeast("1.10");
+  private static final boolean GTEQ_AVRO_1_12 = isAvroVersionAtLeast("1.12");
 
   private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
   private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
@@ -1718,16 +1721,21 @@ public class HoodieAvroUtils {
 
   @VisibleForTesting
   public static boolean gteqAvro1_9() {
-    return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.9") >= 0;
+    return GTEQ_AVRO_1_9;
   }
 
   @VisibleForTesting
   static boolean gteqAvro1_10() {
-    return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.10") >= 0;
+    return GTEQ_AVRO_1_10;
   }
 
-  private static boolean gteqAvro1_12() {
-    return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.12") >= 0;
+  @VisibleForTesting
+  static boolean gteqAvro1_12() {
+    return GTEQ_AVRO_1_12;
+  }
+
+  private static boolean isAvroVersionAtLeast(String version) {
+    return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, version) >= 0;
   }
 
   private static Object convertDefaultValueForAvroCompatibility(Object defaultValue) {
