@@ -144,7 +144,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                        HoodieReaderContext<T> readerContext,
                                        String[] orderingFieldNames);
 
-  protected static <T> HoodieRecord<T> reduceRecords(TypedProperties props, BufferedRecordMerger<T> recordMerger, String[] orderingFieldNames,
+  public static <T> HoodieRecord<T> reduceRecords(TypedProperties props, BufferedRecordMerger<T> recordMerger, String[] orderingFieldNames,
                                                      HoodieRecord<T> previous, HoodieRecord<T> next, HoodieSchema schema, RecordContext<T> recordContext, DeleteContext deleteContext) {
     try {
       // NOTE: The order of previous and next is uncertain within a batch in "reduceByKey".

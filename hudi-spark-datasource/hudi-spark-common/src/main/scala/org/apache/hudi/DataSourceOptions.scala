@@ -580,6 +580,15 @@ object DataSourceWriteOptions {
     .withDocumentation("PartitionValueExtractor implementation used by Spark datasource write/read paths " +
       "to parse partition values from partition paths.")
 
+  val DATAFRAME_WRITE_PATH_ENABLE: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.write.dataframe.path.enable")
+    .defaultValue(true)
+    .markAdvanced()
+    .withDocumentation("When enabled, datasource writes run as DataFrame transformations on Spark's "
+      + "internal rows end to end: key generation, index tagging, routing and file sizing stay in the "
+      + "query plan instead of going through RDDs of Hudi records. Writes the path does not support "
+      + "yet fall back to the RDD write path.")
+
   val ENABLE_ROW_WRITER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.row.writer.enable")
     .defaultValue("true")

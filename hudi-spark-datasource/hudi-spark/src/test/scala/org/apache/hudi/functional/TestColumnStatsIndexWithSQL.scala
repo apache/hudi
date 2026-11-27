@@ -490,9 +490,11 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     // unpartitioned table - get all file slices
     val fileSlices = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq())
     var files = cis.getPrunedPartitionsAndFileNames(fileIndex, fileSlices._2)._2
-    // Number of files obtained if file index has include log files as true is double of number of parquet files
+    // Two inserts of four files each and one file for the new keys of the upsert, whose updates
+    // add a log file to seven of the earlier file groups
     val numberOfParquetFiles = 9
-    assertEquals(numberOfParquetFiles * 2, files.size)
+    val numberOfLogFiles = 7
+    assertEquals(numberOfParquetFiles + numberOfLogFiles, files.size)
     assertEquals(numberOfParquetFiles, files.count(f => FSUtils.isBaseFile(f)))
 
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = false)

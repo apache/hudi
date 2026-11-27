@@ -212,10 +212,12 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              |location '$tablePath'
          """.stripMargin
         )
-        // set small file limit to 0 and parquet max file size to 1 so that each insert creates a new file
+        // set small file limit to 0 and parquet max file size to 1 so that each insert creates a new file,
+        // and spread the rows of an insert over two files of a partition
         withSQLConf(
           "hoodie.parquet.small.file.limit" -> "0",
-          "hoodie.parquet.max.file.size" -> "1"
+          "hoodie.parquet.max.file.size" -> "1",
+          "hoodie.datasource.write.dataframe.insert.buckets" -> "2"
         ) {
           // insert data in below pattern so that multiple records for 'texas' and 'california' partition are in same file
           spark.sql(

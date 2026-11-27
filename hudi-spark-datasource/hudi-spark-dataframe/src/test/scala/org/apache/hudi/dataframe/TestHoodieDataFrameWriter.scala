@@ -1,0 +1,1158 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.dataframe
+
+import org.apache.hudi.{DataSourceWriteOptions, HoodieDataFrameWritePath}
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
+import org.apache.spark.sql.{functions, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
+import org.junit.jupiter.api.{AfterAll, Assertions, BeforeAll, Test, TestInstance}
+import org.junit.jupiter.api.io.TempDir
+
+import java.nio.file.Path
+
+import scala.collection.JavaConverters._
+
+/**
+ * End-to-end tests of the DataFrame write path through the Spark datasource:
+ * insert then multiple upsert commits, read back with the regular Hudi datasource.
+ */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class TestHoodieDataFrameWriter {
+
+  @TempDir
+  var tempDir: Path = _
+
+  private var spark: SparkSession = _
+
+  private val schema = StructType(Seq(
+    StructField("key", StringType, nullable = false),
+    StructField("partition", StringType, nullable = false),
+    StructField("ts", LongType, nullable = false),
+    StructField("value", StringType, nullable = false)))
+
+  @BeforeAll
+  def setUp(): Unit = {
+    // A stale hudi-spark-common on the classpath (e.g. reinstalled from another branch) cannot
+    // reach this module, and every write below would silently exercise the RDD write path.
+    Assertions.assertTrue(HoodieDataFrameWritePath.isAvailable,
+      "hudi-spark-common on the test classpath does not resolve the DataFrame write path; "
+        + "rebuild it from this branch")
+    spark = SparkSession.builder()
+      .master("local[2]")
+      .appName("hoodie-dataframe-write-path-test")
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.sql.shuffle.partitions", "2")
+      .config("spark.ui.enabled", "false")
+      .getOrCreate()
+  }
+
+  @AfterAll
+  def tearDown(): Unit = {
+    if (spark != null) {
+      spark.stop()
+    }
+  }
+
+  private def writeOptions(operation: String,
+                           extraOpts: Map[String, String] = Map.empty): Map[String, String] = Map(
+    "hoodie.table.name" -> "test_dataframe_table",
+    DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> "true",
+    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "key",
+    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+    "hoodie.datasource.write.precombine.field" -> "ts",
+    "hoodie.embed.timeline.server" -> "false",
+    DataSourceWriteOptions.OPERATION.key -> operation) ++ extraOpts
+
+  private def makeDf(rows: Seq[(String, String, Long, String)]) = {
+    spark.createDataFrame(
+      rows.map(r => Row(r._1, r._2, r._3, r._4)).asJava, schema)
+  }
+
+  private def writeHudi(rows: Seq[(String, String, Long, String)],
+                        operation: String,
+                        path: String,
+                        extraOpts: Map[String, String] = Map.empty): Unit = {
+    val options = writeOptions(operation, extraOpts)
+    val expectedWrites = HoodieDataFrameWriter.writeCount.get() +
+      (if (options(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key).toBoolean) 1 else 0)
+    makeDf(rows).write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(path)
+    Assertions.assertEquals(expectedWrites, HoodieDataFrameWriter.writeCount.get(),
+      "the write did not take the expected write path")
+  }
+
+  /**
+   * Runs the same writes through the DataFrame write path and the RDD write path, asserts both
+   * tables read back the same rows, and returns them.
+   */
+  private def writeOnBothPaths(name: String,
+                               extraOpts: Map[String, String],
+                               writes: Seq[(String, Seq[(String, String, Long, String)])]): Seq[(String, String, Long, String)] = {
+    val snapshots = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"${name}_$enabled").toString
+      val opts = extraOpts + (DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writes.foreach { case (operation, rows) => writeHudi(rows, operation, path, opts) }
+      spark.read.format("hudi").load(path).select("key", "partition", "ts", "value").collect()
+        .map(r => (r.getString(0), r.getString(1), r.getLong(2), r.getString(3))).sorted.toSeq
+    }
+    Assertions.assertEquals(snapshots(1), snapshots.head)
+    snapshots.head
+  }
+
+  private def readAsMap(path: String): Map[String, (Long, String, String)] = {
+    spark.read.format("hudi").load(path)
+      .select("key", "ts", "value", "_hoodie_record_key")
+      .collect()
+      .map(r => r.getString(0) -> (r.getLong(1), r.getString(2), r.getString(3)))
+      .toMap
+  }
+
+  private def completedCommits(path: String): Int = {
+    HoodieTableMetaClient.builder()
+      .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+      .setBasePath(path)
+      .build()
+      .getActiveTimeline.getCommitsTimeline.filterCompletedInstants.countInstants()
+  }
+
+  @Test
+  def testInsertAndMultipleUpsertsEndToEnd(): Unit = {
+    val path = tempDir.resolve("test_table").toString
+
+    // Commit 1: insert into two partitions.
+    writeHudi(Seq(
+      ("k1", "p1", 1L, "v1"),
+      ("k2", "p1", 1L, "v2"),
+      ("k3", "p2", 1L, "v3"),
+      ("k4", "p2", 1L, "v4")), "insert", path)
+
+    var result = readAsMap(path)
+    Assertions.assertEquals(4, result.size)
+    Assertions.assertEquals((1L, "v1", "k1"), result("k1"))
+    Assertions.assertEquals((1L, "v3", "k3"), result("k3"))
+    Assertions.assertEquals(1, completedCommits(path))
+
+    // Commit 2: upsert updating existing keys, deduping within the batch by ordering value,
+    // and inserting a new key.
+    writeHudi(Seq(
+      ("k2", "p1", 2L, "v2-updated"),
+      ("k3", "p2", 5L, "v3-stale"),
+      ("k3", "p2", 10L, "v3-updated"),
+      ("k5", "p2", 2L, "v5")), "upsert", path)
+
+    result = readAsMap(path)
+    Assertions.assertEquals(5, result.size)
+    Assertions.assertEquals((1L, "v1", "k1"), result("k1"))
+    Assertions.assertEquals((2L, "v2-updated", "k2"), result("k2"))
+    Assertions.assertEquals((10L, "v3-updated", "k3"), result("k3"))
+    Assertions.assertEquals((1L, "v4", "k4"), result("k4"))
+    Assertions.assertEquals((2L, "v5", "k5"), result("k5"))
+    Assertions.assertEquals(2, completedCommits(path))
+
+    // Commit 3: another upsert on top, updating the previously inserted key.
+    writeHudi(Seq(
+      ("k5", "p2", 3L, "v5-updated"),
+      ("k1", "p1", 4L, "v1-updated")), "upsert", path)
+
+    result = readAsMap(path)
+    Assertions.assertEquals(5, result.size)
+    Assertions.assertEquals((4L, "v1-updated", "k1"), result("k1"))
+    Assertions.assertEquals((3L, "v5-updated", "k5"), result("k5"))
+    Assertions.assertEquals((10L, "v3-updated", "k3"), result("k3"))
+    Assertions.assertEquals(3, completedCommits(path))
+
+    // Commit 4: read-modify-write round trip; the input carries Hudi meta columns which the
+    // writer must drop and regenerate.
+    spark.read.format("hudi").load(path)
+      .filter(functions.col("key") === "k1")
+      .withColumn("ts", functions.lit(100L))
+      .withColumn("value", functions.lit("v1-roundtrip"))
+      .write.format("hudi")
+      .options(writeOptions("upsert"))
+      .mode(SaveMode.Append)
+      .save(path)
+
+    result = readAsMap(path)
+    Assertions.assertEquals(5, result.size)
+    Assertions.assertEquals((100L, "v1-roundtrip", "k1"), result("k1"))
+    Assertions.assertEquals((3L, "v5-updated", "k5"), result("k5"))
+    Assertions.assertEquals(4, completedCommits(path))
+
+    // No duplicate record keys across the table after the merges.
+    val keys = spark.read.format("hudi").load(path).select("_hoodie_record_key").collect().map(_.getString(0))
+    Assertions.assertEquals(keys.length, keys.distinct.length)
+  }
+
+  @Test
+  def testInsertPaddingKeepsDuplicateKeysLikeLegacyPath(): Unit = {
+    val snapshots = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_insert_dups_$enabled").toString
+      val opts = Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writeHudi(Seq(("d1", "p1", 1L, "x1"), ("d2", "p1", 1L, "x2")), "insert", path, opts)
+      writeHudi(Seq(("d1", "p1", 2L, "y1"), ("d3", "p1", 2L, "y3")), "insert", path, opts)
+      spark.read.format("hudi").load(path).select("key", "ts", "value").collect()
+        .map(r => (r.getString(0), r.getLong(1), r.getString(2))).sorted.toSeq
+    }
+    // Inserts allow duplicate keys by default, so the second d1 lands next to the first one
+    // even when it pads the same small file group.
+    Assertions.assertEquals(
+      Seq(("d1", 1L, "x1"), ("d1", 2L, "y1"), ("d2", 1L, "x2"), ("d3", 2L, "y3")), snapshots.head)
+    Assertions.assertEquals(snapshots(1), snapshots.head)
+  }
+
+  @Test
+  def testInsertsPadExistingSmallFiles(): Unit = {
+    val path = tempDir.resolve("test_table_padding").toString
+
+    writeHudi(Seq(("s1", "p1", 1L, "x1"), ("s2", "p1", 1L, "x2")), "insert", path)
+    writeHudi(Seq(("s3", "p1", 1L, "x3"), ("s4", "p1", 1L, "x4")), "insert", path)
+
+    val snapshot = spark.read.format("hudi").load(path)
+    Assertions.assertEquals(4, snapshot.count())
+    // The second insert pads the small file group from the first commit instead of opening a
+    // new one.
+    val fileIds = snapshot.select("_hoodie_file_name").collect()
+      .map(r => org.apache.hudi.common.fs.FSUtils.getFileId(r.getString(0))).distinct
+    Assertions.assertEquals(1, fileIds.length)
+    Assertions.assertEquals(2, completedCommits(path))
+  }
+
+  @Test
+  def testUpsertWithRecordLevelIndexTagging(): Unit = {
+    val path = tempDir.resolve("test_table_rli").toString
+    val rliOpts = Map(
+      "hoodie.metadata.record.index.enable" -> "true",
+      "hoodie.index.type" -> "RECORD_INDEX")
+
+    writeHudi(Seq(
+      ("r1", "p1", 1L, "w1"),
+      ("r2", "p1", 1L, "w2"),
+      ("r3", "p2", 1L, "w3")), "insert", path, rliOpts)
+
+    // The record index partition exists after the first commit, so the second write tags
+    // through the point-lookup strategy.
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+      .setBasePath(path)
+      .build()
+    Assertions.assertTrue(metaClient.getTableConfig.isMetadataPartitionAvailable(
+      org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX))
+
+    writeHudi(Seq(
+      ("r2", "p1", 5L, "w2-updated"),
+      ("r4", "p2", 2L, "w4")), "upsert", path, rliOpts)
+
+    val result = readAsMap(path)
+    Assertions.assertEquals(4, result.size)
+    Assertions.assertEquals((1L, "w1", "r1"), result("r1"))
+    Assertions.assertEquals((5L, "w2-updated", "r2"), result("r2"))
+    Assertions.assertEquals((1L, "w3", "r3"), result("r3"))
+    Assertions.assertEquals((2L, "w4", "r4"), result("r4"))
+    Assertions.assertEquals(2, completedCommits(path))
+
+    val keys = spark.read.format("hudi").load(path).select("_hoodie_record_key").collect().map(_.getString(0))
+    Assertions.assertEquals(keys.length, keys.distinct.length)
+  }
+
+  @Test
+  def testShuffleStatsProfilerEndToEnd(): Unit = {
+    val path = tempDir.resolve("test_table_shuffle_stats").toString
+    val extra = Map(
+      HoodieDataFrameWriter.PROFILER -> HoodieDataFrameWriter.PROFILER_SHUFFLE_STATS,
+      HoodieDataFrameWriter.SHUFFLE_UPDATE_REDUCERS -> "4",
+      HoodieDataFrameWriter.SHUFFLE_INSERT_REDUCERS -> "4")
+
+    writeHudi(Seq(
+      ("h1", "p1", 1L, "y1"),
+      ("h2", "p1", 1L, "y2"),
+      ("h3", "p2", 1L, "y3"),
+      ("h4", "p2", 1L, "y4")), "insert", path, extra)
+    writeHudi(Seq(
+      ("h2", "p1", 3L, "y2-updated"),
+      ("h4", "p2", 3L, "y4-updated"),
+      ("h5", "p2", 2L, "y5")), "upsert", path, extra)
+
+    val result = readAsMap(path)
+    Assertions.assertEquals(5, result.size)
+    Assertions.assertEquals((1L, "y1", "h1"), result("h1"))
+    Assertions.assertEquals((3L, "y2-updated", "h2"), result("h2"))
+    Assertions.assertEquals((1L, "y3", "h3"), result("h3"))
+    Assertions.assertEquals((3L, "y4-updated", "h4"), result("h4"))
+    Assertions.assertEquals((2L, "y5", "h5"), result("h5"))
+    Assertions.assertEquals(2, completedCommits(path))
+
+    // The shuffle bytes land in commit metadata so later writes can calibrate bin sizes.
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+      .setBasePath(path)
+      .build()
+    val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
+    val commitMetadata = metaClient.getActiveTimeline.readCommitMetadata(lastInstant)
+    Assertions.assertTrue(
+      commitMetadata.getExtraMetadata.containsKey(HoodieDataFrameWriter.SHUFFLE_BYTES_METADATA_KEY))
+    Assertions.assertTrue(
+      commitMetadata.getExtraMetadata.get(HoodieDataFrameWriter.SHUFFLE_BYTES_METADATA_KEY).toLong > 0)
+
+    val keys = spark.read.format("hudi").load(path).select("_hoodie_record_key").collect().map(_.getString(0))
+    Assertions.assertEquals(keys.length, keys.distinct.length)
+  }
+
+  @Test
+  def testComplexKeysWithHiveStylePartitioning(): Unit = {
+    val path = tempDir.resolve("test_table_complex").toString
+    val opts = writeOptions("insert", Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "key,partition",
+      "hoodie.datasource.write.hive_style_partitioning" -> "true"))
+    makeDf(Seq(("c1", "p1", 1L, "z1"), ("c2", "p2", 1L, "z2"))).write.format("hudi")
+      .options(opts).mode(SaveMode.Append).save(path)
+    makeDf(Seq(("c1", "p1", 5L, "z1-updated"))).write.format("hudi")
+      .options(opts + (DataSourceWriteOptions.OPERATION.key -> "upsert")).mode(SaveMode.Append).save(path)
+
+    val rows = spark.read.format("hudi").load(path)
+      .select("_hoodie_record_key", "_hoodie_partition_path", "value").collect()
+      .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    Assertions.assertEquals(Set(
+      ("key:c1,partition:p1", "partition=p1", "z1-updated"),
+      ("key:c2,partition:p2", "partition=p2", "z2")), rows)
+  }
+
+  @Test
+  def testTimestampKeyGeneratorPartitioning(): Unit = {
+    val snapshots = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_timestamp_$enabled").toString
+      val opts = writeOptions("insert", Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "ts",
+        "hoodie.keygen.timebased.timestamp.type" -> "UNIX_TIMESTAMP",
+        "hoodie.keygen.timebased.output.dateformat" -> "yyyyMMdd",
+        "hoodie.keygen.timebased.timezone" -> "UTC"))
+      makeDf(Seq(("t1", "unused", 0L, "a"), ("t2", "unused", 86400L, "b"))).write.format("hudi")
+        .options(opts).mode(SaveMode.Append).save(path)
+      makeDf(Seq(("t1", "unused", 3600L, "a-updated"))).write.format("hudi")
+        .options(opts + (DataSourceWriteOptions.OPERATION.key -> "upsert")).mode(SaveMode.Append).save(path)
+      spark.read.format("hudi").load(path)
+        .select("key", "_hoodie_partition_path", "value").collect()
+        .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    }
+    Assertions.assertEquals(Set(
+      ("t1", "19700101", "a-updated"),
+      ("t2", "19700102", "b")), snapshots.head)
+    Assertions.assertEquals(snapshots(1), snapshots.head)
+  }
+
+  @Test
+  def testUpsertWithoutPrecombineUsesCommitTimeOrdering(): Unit = {
+    val snapshots = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_no_precombine_$enabled").toString
+      val opts = writeOptions("insert") - "hoodie.datasource.write.precombine.field" +
+        (DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      makeDf(Seq(("n1", "p1", 9L, "before"))).write.format("hudi")
+        .options(opts).mode(SaveMode.Append).save(path)
+      makeDf(Seq(("n1", "p1", 5L, "mid"), ("n2", "p1", 5L, "dup-a"), ("n2", "p1", 1L, "dup-b"), ("n1", "p1", 1L, "after")))
+        .write.format("hudi")
+        .options(opts + (DataSourceWriteOptions.OPERATION.key -> "upsert")).mode(SaveMode.Append).save(path)
+      Assertions.assertEquals(2, completedCommits(path))
+      readAsMap(path).map { case (key, (_, value, _)) => key -> value }
+    }
+    // With no ordering field, the row that comes last in the batch wins.
+    Assertions.assertEquals(Map("n1" -> "after", "n2" -> "dup-b"), snapshots.head)
+    Assertions.assertEquals(snapshots(1), snapshots.head)
+  }
+
+  @Test
+  def testSecondWriteBackfillsOptionsFromTableConfig(): Unit = {
+    val path = tempDir.resolve("test_table_backfill").toString
+    writeHudi(Seq(("b1", "p1", 1L, "one"), ("b2", "p2", 1L, "two")), "insert", path)
+
+    // Only the path, the flag, and the operation: everything else comes from the table config.
+    makeDf(Seq(("b1", "p1", 9L, "one-updated"))).write.format("hudi")
+      .option(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key, "true")
+      .option(DataSourceWriteOptions.OPERATION.key, "upsert")
+      .option("hoodie.embed.timeline.server", "false")
+      .mode(SaveMode.Append)
+      .save(path)
+
+    val result = readAsMap(path)
+    Assertions.assertEquals(2, result.size)
+    Assertions.assertEquals((9L, "one-updated", "b1"), result("b1"))
+    Assertions.assertEquals(2, completedCommits(path))
+  }
+
+  @Test
+  def testGlobalSimpleIndexMovesRecordAcrossPartitions(): Unit = {
+    val path = tempDir.resolve("test_table_global_move").toString
+    writeHudi(Seq(("g1", "pA", 1L, "orig"), ("g2", "pA", 1L, "keep")), "insert", path,
+      Map("hoodie.index.type" -> "GLOBAL_SIMPLE"))
+    // Default update-partition-path for the global simple index is true: the key moves to pB.
+    writeHudi(Seq(("g1", "pB", 5L, "moved")), "upsert", path, Map("hoodie.index.type" -> "GLOBAL_SIMPLE"))
+
+    val rows = spark.read.format("hudi").load(path)
+      .select("key", "_hoodie_partition_path", "value").collect()
+      .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    Assertions.assertEquals(Set(("g1", "pB", "moved"), ("g2", "pA", "keep")), rows)
+  }
+
+  @Test
+  def testGlobalSimpleIndexUpdatesOldPartitionWhenMigrationDisabled(): Unit = {
+    val path = tempDir.resolve("test_table_global_stay").toString
+    val extra = Map(
+      "hoodie.index.type" -> "GLOBAL_SIMPLE",
+      "hoodie.simple.index.update.partition.path" -> "false")
+    writeHudi(Seq(("s1", "pA", 1L, "orig")), "insert", path, extra)
+    writeHudi(Seq(("s1", "pB", 5L, "updated")), "upsert", path, extra)
+
+    val rows = spark.read.format("hudi").load(path)
+      .select("key", "_hoodie_partition_path", "value").collect()
+      .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    Assertions.assertEquals(Set(("s1", "pA", "updated")), rows)
+  }
+
+  @Test
+  def testDeleteMarkerColumnDeletesRows(): Unit = {
+    val path = tempDir.resolve("test_table_delete_marker").toString
+    val deleteSchema = StructType(schema.fields :+ StructField("_hoodie_is_deleted", org.apache.spark.sql.types.BooleanType, nullable = false))
+    def df(rows: Seq[(String, String, Long, String, Boolean)]) = spark.createDataFrame(
+      rows.map(r => Row(r._1, r._2, r._3, r._4, r._5)).asJava, deleteSchema)
+
+    df(Seq(("d1", "p1", 1L, "one", false), ("d2", "p1", 1L, "two", false)))
+      .write.format("hudi").options(writeOptions("insert")).mode(SaveMode.Append).save(path)
+    // d1 flagged for delete, d9 is a no-op delete of a missing key, d3 is a live insert.
+    df(Seq(("d1", "p1", 2L, "gone", true), ("d9", "p1", 2L, "ghost", true), ("d3", "p1", 2L, "three", false)))
+      .write.format("hudi").options(writeOptions("upsert")).mode(SaveMode.Append).save(path)
+
+    val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+    Assertions.assertEquals(Set("d2", "d3"), keys)
+    Assertions.assertEquals(2, completedCommits(path))
+  }
+
+  @Test
+  def testDeleteBehindTheStoredRowLeavesItsRecordIndexEntry(): Unit = {
+    val deleteSchema = StructType(schema.fields :+ StructField("_hoodie_is_deleted", org.apache.spark.sql.types.BooleanType, nullable = false))
+    def df(rows: Seq[(String, String, Long, String, Boolean)]) = spark.createDataFrame(
+      rows.map(r => Row(r._1, r._2, r._3, r._4, r._5)).asJava, deleteSchema)
+    val indexOpts = Seq(
+      Map("hoodie.index.type" -> "RECORD_LEVEL_INDEX",
+        "hoodie.metadata.global.record.level.index.enable" -> "false",
+        "hoodie.metadata.record.level.index.enable" -> "true"),
+      Map("hoodie.index.type" -> "RECORD_INDEX",
+        "hoodie.metadata.record.index.enable" -> "true"))
+    for (opts <- indexOpts; enabled <- Seq("true", "false")) {
+      val path = tempDir.resolve(s"test_table_delete_behind_${opts("hoodie.index.type")}_$enabled").toString
+      val options = opts ++ Map(
+        "hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+        "hoodie.compact.inline" -> "false",
+        "hoodie.embed.timeline.server" -> "true",
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      df(Seq(("e1", "p1", 5L, "one", false), ("e2", "p1", 5L, "two", false), ("e3", "p1", 5L, "three", false)))
+        .write.format("hudi").options(writeOptions("insert", options)).mode(SaveMode.Append).save(path)
+      // The delete of e1 is behind the stored row, the one of e2 is ahead of it.
+      df(Seq(("e1", "p1", 1L, "behind", true), ("e2", "p1", 9L, "ahead", true)))
+        .write.format("hudi").options(writeOptions("upsert", options)).mode(SaveMode.Append).save(path)
+
+      val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+      Assertions.assertEquals(Set("e1", "e3"), keys, s"rows with $options")
+      def indexed: Long = spark.read.format("hudi").load(path + "/.hoodie/metadata")
+        .where("recordIndexMetadata is not null").count()
+      Assertions.assertEquals(2L, indexed, s"record index entries with $options")
+
+      // A key that was deleted is written again, and gets its index entry back.
+      df(Seq(("e2", "p1", 20L, "again", false)))
+        .write.format("hudi").options(writeOptions("upsert", options)).mode(SaveMode.Append).save(path)
+      Assertions.assertEquals(Set("e1", "e2", "e3"),
+        spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet, s"rows with $options")
+      Assertions.assertEquals(3L, indexed, s"record index entries with $options")
+    }
+  }
+
+  @Test
+  def testInsertsIntoNewFilesGetSecondaryIndexEntries(): Unit = {
+    val entries = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_secondary_index_$enabled").toString
+      val options = Map(
+        "hoodie.metadata.record.index.enable" -> "true",
+        "hoodie.metadata.index.secondary.column" -> "value",
+        "hoodie.parquet.small.file.limit" -> "0",
+        "hoodie.embed.timeline.server" -> "true",
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writeHudi(Seq(("s1", "p1", 1L, "a1"), ("s2", "p1", 1L, "a2")), "insert", path, options)
+      // The index exists by now, so the entries of these rows come with the write.
+      writeHudi(Seq(("s3", "p1", 2L, "a3")), "insert", path, options)
+      writeHudi(Seq(("s4", "p2", 3L, "a4")), "upsert", path, options)
+
+      spark.read.format("hudi").load(path + "/.hoodie/metadata")
+        .where("SecondaryIndexMetadata is not null").select("key").collect().map(_.getString(0)).toSet
+    }
+    Assertions.assertEquals(entries(1), entries.head)
+    Assertions.assertTrue(Set("a3$s3", "a4$s4").subsetOf(entries.head), s"secondary index entries: ${entries.head}")
+  }
+
+  @Test
+  def testInsertedBaseFilesHaveTheParquetSchemaOfTheOtherWritePath(): Unit = {
+    val fileInfos = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_parquet_schema_$enabled").toString
+      writeHudi(Seq(("q1", "p1", 1L, "a1"), ("q2", "p1", 1L, "a2")), "insert", path,
+        Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled))
+      val baseFile = java.nio.file.Files.walk(java.nio.file.Paths.get(path, "p1")).iterator().asScala
+        .map(_.toString).filter(_.endsWith(".parquet")).toSeq.head
+      org.apache.hudi.parquet.io.ParquetBinaryCopyChecker.collectFileInfo(spark.sparkContext.hadoopConfiguration, baseFile)
+    }
+    // Same bloom filter type, and every field as optional or required in one file as in the other.
+    Assertions.assertTrue(org.apache.hudi.parquet.io.ParquetBinaryCopyChecker.verifyFiles(fileInfos.asJava),
+      s"parquet schemas differ: ${fileInfos.map(_.getSchema)}")
+  }
+
+  @Test
+  def testDroppedPartitionColumnsStayOutOfTheDataFiles(): Unit = {
+    val tables = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_drop_partition_columns_$enabled").toString
+      val opts = Map(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key -> "true",
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writeHudi(Seq(("d1", "p1", 1L, "a1"), ("d2", "p2", 1L, "a2")), "insert", path, opts)
+      writeHudi(Seq(("d1", "p1", 2L, "b1"), ("d3", "p1", 2L, "a3")), "upsert", path, opts)
+      val rows = spark.read.format("hudi").load(path).select("key", "partition", "ts", "value").collect()
+        .map(r => (r.getString(0), r.getString(1), r.getLong(2), r.getString(3))).sorted.toSeq
+      val fileColumns = java.nio.file.Files.walk(java.nio.file.Paths.get(path)).iterator().asScala
+        .map(_.toString).filter(file => file.endsWith(".parquet") && !file.contains("/.hoodie/"))
+        .map(file => spark.read.parquet(file).columns.toSeq).toSet
+      (rows, fileColumns)
+    }
+    Assertions.assertEquals(tables(1), tables.head)
+    Assertions.assertEquals(Seq(("d1", "p1", 2L, "b1"), ("d2", "p2", 1L, "a2"), ("d3", "p1", 2L, "a3")), tables.head._1)
+    Assertions.assertTrue(tables.head._2.nonEmpty && tables.head._2.forall(!_.contains("partition")),
+      s"data file columns: ${tables.head._2}")
+  }
+
+  @Test
+  def testChangeDataOfACdcTableIsTheOneOfTheOtherWritePath(): Unit = {
+    for (tableType <- Seq("COPY_ON_WRITE", "MERGE_ON_READ"); loggingMode <- Seq("OP_KEY_ONLY", "DATA_BEFORE_AFTER")) {
+      val changes = Seq("true", "false").map { enabled =>
+        val path = tempDir.resolve(s"test_table_cdc_${tableType}_${loggingMode}_$enabled").toString
+        val opts = Map(
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.table.cdc.enabled" -> "true",
+          "hoodie.table.cdc.supplemental.logging.mode" -> loggingMode,
+          "hoodie.compact.inline" -> "false",
+          DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+        writeHudi(Seq(("c1", "p1", 1L, "a1"), ("c2", "p1", 1L, "a2"), ("c3", "p2", 1L, "a3")), "insert", path, opts)
+        writeHudi(Seq(("c1", "p1", 2L, "b1"), ("c4", "p1", 2L, "a4")), "upsert", path, opts)
+        writeHudi(Seq(("c2", "p1", 3L, "x")), "delete", path, opts)
+        spark.read.format("hudi")
+          .option("hoodie.datasource.query.type", "incremental")
+          .option("hoodie.datasource.query.incremental.format", "cdc")
+          .option("hoodie.datasource.read.begin.instanttime", "0")
+          .load(path).select("op", "before", "after").collect()
+          .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSeq
+      }
+      def normalized(rows: Seq[(String, String, String)]): Seq[(String, String, String)] = {
+        // The images carry the commit time and file name of the write that made them.
+        def image(json: String): String = if (json == null) "" else {
+          json.replaceAll("\"_hoodie_(commit_time|commit_seqno|file_name)\":\"[^\"]*\",?", "")
+        }
+        rows.map(r => (r._1, image(r._2), image(r._3))).sorted
+      }
+      Assertions.assertEquals(normalized(changes(1)), normalized(changes.head), s"$tableType, $loggingMode")
+      Assertions.assertEquals(Seq("d", "i", "i", "i", "i", "u"), changes.head.map(_._1).sorted, s"$tableType, $loggingMode")
+    }
+  }
+
+  @Test
+  def testCustomDeleteMarkerDeletesWithASparkRecordMerger(): Unit = {
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val rows = writeOnBothPaths(s"test_table_custom_delete_marker_$tableType", Map(
+        "hoodie.datasource.write.table.type" -> tableType,
+        "hoodie.compact.inline" -> "false",
+        "hoodie.write.record.merge.custom.implementation.classes" -> "org.apache.hudi.DefaultSparkRecordMerger",
+        "hoodie.logfile.data.block.format" -> "parquet",
+        "hoodie.payload.delete.field" -> "value",
+        "hoodie.payload.delete.marker" -> "gone"),
+        Seq(
+          "insert" -> Seq(("m1", "p1", 1L, "a1"), ("m2", "p1", 1L, "a2")),
+          // m1 is deleted, m9 has no record to delete, and m3 is new.
+          "upsert" -> Seq(("m1", "p1", 2L, "gone"), ("m9", "p2", 2L, "gone"), ("m3", "p1", 2L, "a3"))))
+      Assertions.assertEquals(Seq(("m2", "p1", 1L, "a2"), ("m3", "p1", 2L, "a3")), rows, tableType)
+    }
+  }
+
+  @Test
+  def testDeleteRowOfAPayloadWithItsOwnMarkerIsNotInserted(): Unit = {
+    val dmsSchema = StructType(schema.fields :+ StructField("Op", StringType, nullable = false))
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val keys = Seq("true", "false").map { enabled =>
+        val path = tempDir.resolve(s"test_table_dms_first_write_${tableType}_$enabled").toString
+        val options = writeOptions("upsert", Map(
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.AWSDmsAvroPayload",
+          DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled))
+        val expectedWrites = HoodieDataFrameWriter.writeCount.get() + (if (enabled.toBoolean) 1 else 0)
+        // The latest row of w2 deletes it, and the table has no record of w2 to delete.
+        spark.createDataFrame(Seq(
+          Row("w1", "p1", 1L, "a1", "I"), Row("w2", "p1", 1L, "a2", "I"), Row("w2", "p1", 2L, "a2", "D")).asJava, dmsSchema)
+          .write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+        Assertions.assertEquals(expectedWrites, HoodieDataFrameWriter.writeCount.get(), "the write did not take the expected write path")
+        spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSeq
+      }
+      Assertions.assertEquals(keys(1), keys.head, tableType)
+      Assertions.assertEquals(Seq("w1"), keys.head, tableType)
+    }
+  }
+
+  @Test
+  def testUpsertIntoABootstrappedTableWritesWhatTheOtherWritePathDoes(): Unit = {
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val snapshots = Seq("true", "false").map { enabled =>
+        val source = tempDir.resolve(s"test_bootstrap_source_${tableType}_$enabled").toString
+        val path = tempDir.resolve(s"test_table_bootstrap_${tableType}_$enabled").toString
+        makeDf(Seq(("t1", "p1", 1L, "a1"), ("t2", "p1", 1L, "a2"), ("t3", "p2", 1L, "a3")))
+          .write.partitionBy("partition").parquet(source)
+        val opts = Map(
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.compact.inline" -> "false",
+          "hoodie.datasource.write.hive_style_partitioning" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "false",
+          DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+        spark.emptyDataFrame.write.format("hudi")
+          .options(writeOptions("bootstrap", opts + ("hoodie.bootstrap.base.path" -> source)))
+          .mode(SaveMode.Overwrite).save(path)
+        // t1 is updated in its bootstrapped file group, and t4 is new.
+        writeHudi(Seq(("t1", "p1", 2L, "b1"), ("t4", "p2", 2L, "a4")), "upsert", path, opts)
+        spark.read.format("hudi").load(path).select("key", "partition", "ts", "value").collect()
+          .map(r => (r.getString(0), r.getString(1), r.getLong(2), r.getString(3))).sorted.toSeq
+      }
+      Assertions.assertEquals(snapshots(1), snapshots.head, tableType)
+      Assertions.assertEquals(
+        Seq(("t1", "p1", 2L, "b1"), ("t2", "p1", 1L, "a2"), ("t3", "p2", 1L, "a3"), ("t4", "p2", 2L, "a4")), snapshots.head, tableType)
+    }
+  }
+
+  @Test
+  def testEachInsertBucketGetsAFile(): Unit = {
+    val path = tempDir.resolve("test_table_insert_buckets").toString
+    val rows = (1 to 40).map(i => (s"b$i", "p1", 1L, s"v$i"))
+    // One write task takes every bucket, and each bucket still gets a file of its own.
+    writeHudi(rows, "insert", path, Map(
+      "hoodie.datasource.write.dataframe.insert.buckets" -> "4",
+      "hoodie.datasource.write.dataframe.write.tasks" -> "1"))
+    val baseFiles = java.nio.file.Files.list(java.nio.file.Paths.get(path, "p1")).iterator().asScala
+      .map(_.getFileName.toString).filter(_.endsWith(".parquet")).toSeq
+    Assertions.assertEquals(4, baseFiles.size, s"base files: $baseFiles")
+    Assertions.assertEquals(40L, spark.read.format("hudi").load(path).count())
+  }
+
+  @Test
+  def testInsertMergedByKeyAppliesDeleteMarkers(): Unit = {
+    val deleteSchema = StructType(schema.fields :+ StructField("_hoodie_is_deleted", org.apache.spark.sql.types.BooleanType, nullable = false))
+    def df(rows: Seq[(String, String, Long, String, Boolean)]) = spark.createDataFrame(
+      rows.map(r => Row(r._1, r._2, r._3, r._4, r._5)).asJava, deleteSchema)
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_insert_delete_marker_$enabled").toString
+      val options = writeOptions("insert", Map(
+        "hoodie.merge.allow.duplicate.on.inserts" -> "false",
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled))
+      df(Seq(("g1", "p1", 1L, "one", false), ("g2", "p1", 1L, "two", false)))
+        .write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+      // The insert pads the small file of p1, where g1 is; in p2 the marker row has nothing to remove.
+      df(Seq(("g1", "p1", 2L, "gone", true), ("g3", "p1", 2L, "three", false), ("g9", "p2", 2L, "ghost", true)))
+        .write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+      val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+      Assertions.assertEquals(Set("g2", "g3"), keys, s"path enabled = $enabled")
+    }
+  }
+
+  @Test
+  def testUpdateOfAFileGroupUnderPendingClusteringFailsTheWrite(): Unit = {
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_pending_clustering_$enabled").toString
+      val options = Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writeHudi(Seq(("h1", "p1", 1L, "a1"), ("h2", "p1", 1L, "a2")), "upsert", path, options)
+      val metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+        .setBasePath(path)
+        .build()
+      val client = org.apache.hudi.DataSourceUtils.createHoodieClient(
+        new org.apache.spark.api.java.JavaSparkContext(spark.sparkContext),
+        new org.apache.hudi.common.table.TableSchemaResolver(metaClient).getTableSchema(false).toString,
+        path, "test_dataframe_table", Map(
+          "hoodie.embed.timeline.server" -> "false",
+          DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE").asJava)
+      try {
+        Assertions.assertTrue(client.scheduleClustering(org.apache.hudi.common.util.Option.empty()).isPresent,
+          "no clustering was scheduled")
+      } finally {
+        client.close()
+      }
+      val failure = Assertions.assertThrows(classOf[Exception], () =>
+        makeDf(Seq(("h1", "p1", 2L, "a2"))).write.format("hudi")
+          .options(writeOptions("upsert", options)).mode(SaveMode.Append).save(path))
+      // The write itself fails, with the clustering conflict as the cause of the upsert failure.
+      val chain = Iterator.iterate[Throwable](failure)(_.getCause).takeWhile(_ != null).toSeq
+      Assertions.assertTrue(chain.exists(t => t.isInstanceOf[org.apache.hudi.exception.HoodieUpsertException]
+        && t.getCause.isInstanceOf[org.apache.hudi.exception.HoodieClusteringUpdateException]),
+        s"path enabled = $enabled, unexpected failure: ${chain.map(_.getClass.getSimpleName)}")
+
+      // A strategy that leaves the overlap to conflict resolution lets the update through, and the plan stays pending.
+      writeHudi(Seq(("h1", "p1", 2L, "a2")), "upsert", path, options + (
+        "hoodie.clustering.updates.strategy" -> "org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy"))
+      Assertions.assertEquals(1, HoodieTableMetaClient.reload(metaClient).getActiveTimeline.filterPendingClusteringTimeline().countInstants(),
+        s"path enabled = $enabled")
+    }
+  }
+
+  @Test
+  def testRecordIndexConfigFallsBackToGlobalTaggingWhenNotReady(): Unit = {
+    val path = tempDir.resolve("test_table_rli_not_ready").toString
+    writeHudi(Seq(("f1", "pA", 1L, "orig")), "insert", path)
+    // The record index is configured but its metadata partition was never built; tagging keeps
+    // global semantics (default update-partition-path for the record index is false).
+    writeHudi(Seq(("f1", "pB", 5L, "updated")), "upsert", path, Map("hoodie.index.type" -> "RECORD_INDEX"))
+
+    val rows = spark.read.format("hudi").load(path)
+      .select("key", "_hoodie_partition_path", "value").collect()
+      .map(r => (r.getString(0), r.getString(1), r.getString(2))).toSet
+    Assertions.assertEquals(Set(("f1", "pA", "updated")), rows)
+  }
+
+  @Test
+  def testMergeOnReadInsertAndUpserts(): Unit = {
+    val path = tempDir.resolve("test_table_mor").toString
+    val mor = Map("hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+      "hoodie.logfile.data.block.format" -> "parquet")
+
+    writeHudi(Seq(("m1", "p1", 1L, "one"), ("m2", "p1", 1L, "two"), ("m3", "p2", 1L, "three")),
+      "insert", path, mor)
+    writeHudi(Seq(("m2", "p1", 5L, "two-updated"), ("m4", "p2", 2L, "four")), "upsert", path, mor)
+    writeHudi(Seq(("m2", "p1", 9L, "two-final")), "upsert", path, mor)
+
+    val result = readAsMap(path)
+    Assertions.assertEquals(4, result.size)
+    Assertions.assertEquals((1L, "one", "m1"), result("m1"))
+    Assertions.assertEquals((9L, "two-final", "m2"), result("m2"))
+    Assertions.assertEquals((1L, "three", "m3"), result("m3"))
+    Assertions.assertEquals((2L, "four", "m4"), result("m4"))
+
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+      .setBasePath(path)
+      .build()
+    Assertions.assertEquals("MERGE_ON_READ", metaClient.getTableConfig.getTableType.name())
+    Assertions.assertEquals(3,
+      metaClient.getActiveTimeline.getDeltaCommitTimeline.filterCompletedInstants().countInstants())
+
+    val keys = spark.read.format("hudi").load(path).select("_hoodie_record_key").collect().map(_.getString(0))
+    Assertions.assertEquals(keys.length, keys.distinct.length)
+  }
+
+  @Test
+  def testMergeOnReadInsertsPadSmallBaseFiles(): Unit = {
+    val path = tempDir.resolve("test_table_mor_padding").toString
+    val mor = Map("hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+      "hoodie.logfile.data.block.format" -> "parquet")
+
+    writeHudi(Seq(("mp1", "p1", 1L, "a"), ("mp2", "p1", 1L, "b")), "insert", path, mor)
+    writeHudi(Seq(("mp3", "p1", 1L, "c"), ("mp4", "p1", 1L, "d")), "insert", path, mor)
+
+    val snapshot = spark.read.format("hudi").load(path)
+    Assertions.assertEquals(4, snapshot.count())
+    val fileIds = snapshot.select("_hoodie_file_name").collect()
+      .map(r => org.apache.hudi.common.fs.FSUtils.getFileId(r.getString(0))).distinct
+    Assertions.assertEquals(1, fileIds.length)
+  }
+
+  @Test
+  def testMergeOnReadWithAvroLogBlocks(): Unit = {
+    val rows = writeOnBothPaths("test_table_mor_avro_logs",
+      Map("hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+        "hoodie.logfile.data.block.format" -> "avro",
+        "hoodie.compact.inline" -> "false"),
+      Seq(
+        "insert" -> Seq(("m1", "p1", 1L, "a1"), ("m2", "p1", 1L, "a2"), ("m3", "p2", 1L, "a3")),
+        "upsert" -> Seq(("m1", "p1", 2L, "b1"), ("m4", "p2", 2L, "b4")),
+        "upsert" -> Seq(("m1", "p1", 1L, "stale"), ("m3", "p2", 3L, "c3"))))
+    Assertions.assertEquals(
+      Seq(("m1", "p1", 2L, "b1"), ("m2", "p1", 1L, "a2"), ("m3", "p2", 3L, "c3"), ("m4", "p2", 2L, "b4")), rows)
+  }
+
+  @Test
+  def testCustomPayloadMergesThroughThePayload(): Unit = {
+    // The payload keeps the stored row when the incoming one is older, on the ordering field
+    // it reads from the record, whichever write path builds the record.
+    val rows = writeOnBothPaths("test_table_custom_payload",
+      Map("hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.EventTimeAvroPayload",
+        "hoodie.combine.before.upsert" -> "false",
+        "hoodie.combine.before.insert" -> "false"),
+      Seq(
+        "insert" -> Seq(("c1", "p1", 5L, "a1"), ("c2", "p1", 5L, "a2")),
+        "upsert" -> Seq(("c1", "p1", 9L, "newer"), ("c2", "p1", 1L, "older"), ("c3", "p1", 1L, "a3"))))
+    Assertions.assertEquals(
+      Seq(("c1", "p1", 9L, "newer"), ("c2", "p1", 5L, "a2"), ("c3", "p1", 1L, "a3")), rows)
+  }
+
+  @Test
+  def testDeleteOperation(): Unit = {
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val rows = writeOnBothPaths(s"test_table_delete_$tableType",
+        Map("hoodie.datasource.write.table.type" -> tableType, "hoodie.compact.inline" -> "false"),
+        Seq(
+          "insert" -> Seq(("k1", "p1", 1L, "a1"), ("k2", "p1", 1L, "a2"), ("k3", "p2", 1L, "a3")),
+          // k9 does not exist, and k3 is deleted twice in the same batch.
+          "delete" -> Seq(("k1", "p1", 2L, "x"), ("k3", "p2", 2L, "x"), ("k3", "p2", 3L, "x"), ("k9", "p1", 2L, "x")),
+          "upsert" -> Seq(("k1", "p1", 5L, "back"))))
+      Assertions.assertEquals(Seq(("k1", "p1", 5L, "back"), ("k2", "p1", 1L, "a2")), rows)
+    }
+  }
+
+  @Test
+  def testDeletePartitionDeletesThePartitionsOfTheRows(): Unit = {
+    val rows = writeOnBothPaths("test_table_delete_partition", Map.empty, Seq(
+      "insert" -> Seq(("k1", "p1", 1L, "a1"), ("k2", "p2", 1L, "a2"), ("k3", "p3", 1L, "a3")),
+      // The rows only name partitions: their keys need not be in the table.
+      "delete_partition" -> Seq(("x1", "p1", 2L, "x"), ("x2", "p3", 2L, "x"), ("x3", "p3", 2L, "x"))))
+    Assertions.assertEquals(Seq(("k2", "p2", 1L, "a2")), rows)
+  }
+
+  @Test
+  def testInsertOverwriteReplacesTouchedPartitions(): Unit = {
+    val rows = writeOnBothPaths("test_table_insert_overwrite", Map.empty,
+      Seq(
+        "insert" -> Seq(("o1", "p1", 1L, "a1"), ("o2", "p1", 1L, "a2"), ("o3", "p2", 1L, "a3")),
+        "insert_overwrite" -> Seq(("o4", "p1", 2L, "b4")),
+        "upsert" -> Seq(("o3", "p2", 3L, "c3"))))
+    Assertions.assertEquals(Seq(("o3", "p2", 3L, "c3"), ("o4", "p1", 2L, "b4")), rows)
+  }
+
+  @Test
+  def testInsertOverwriteTableReplacesEveryPartition(): Unit = {
+    val rows = writeOnBothPaths("test_table_insert_overwrite_table", Map.empty,
+      Seq(
+        "insert" -> Seq(("w1", "p1", 1L, "a1"), ("w2", "p2", 1L, "a2")),
+        "insert_overwrite_table" -> Seq(("w3", "p3", 2L, "b3"))))
+    Assertions.assertEquals(Seq(("w3", "p3", 2L, "b3")), rows)
+  }
+
+  @Test
+  def testInsertDropsKeysTheTableAlreadyHas(): Unit = {
+    val rows = writeOnBothPaths("test_table_insert_drop_dups",
+      Map(DataSourceWriteOptions.INSERT_DUP_POLICY.key -> DataSourceWriteOptions.DROP_INSERT_DUP_POLICY),
+      Seq(
+        "insert" -> Seq(("n1", "p1", 1L, "a1"), ("n2", "p1", 1L, "a2")),
+        "insert" -> Seq(("n1", "p1", 2L, "dropped"), ("n3", "p1", 2L, "b3"))))
+    Assertions.assertEquals(Seq(("n1", "p1", 1L, "a1"), ("n2", "p1", 1L, "a2"), ("n3", "p1", 2L, "b3")), rows)
+  }
+
+  @Test
+  def testInsertFailsOnKeysTheTableAlreadyHas(): Unit = {
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_insert_fail_dups_$enabled").toString
+      val opts = Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        DataSourceWriteOptions.INSERT_DUP_POLICY.key -> DataSourceWriteOptions.FAIL_INSERT_DUP_POLICY)
+      writeHudi(Seq(("f1", "p1", 1L, "a1")), "insert", path, opts)
+      val failure = Assertions.assertThrows(classOf[Exception], () =>
+        makeDf(Seq(("f1", "p1", 2L, "dup"), ("f2", "p1", 2L, "b2"))).write.format("hudi")
+          .options(writeOptions("insert", opts)).mode(SaveMode.Append).save(path))
+      var cause: Throwable = failure
+      while (cause != null && !cause.isInstanceOf[org.apache.hudi.exception.HoodieDuplicateKeyException]) {
+        cause = cause.getCause
+      }
+      Assertions.assertNotNull(cause, s"expected a duplicate key failure, got $failure")
+      Assertions.assertTrue(failure.isInstanceOf[org.apache.hudi.exception.HoodieUpsertException], failure.toString)
+      Assertions.assertEquals(1L, spark.read.format("hudi").load(path).count())
+    }
+  }
+
+  @Test
+  def testUpsertCombinesOnStringOrderingField(): Unit = {
+    // Two rows of a new key and two of an existing key in one batch: the row with the greater
+    // ordering value wins, and it pads the small file group of the first commit.
+    val rows = writeOnBothPaths("test_table_string_ordering",
+      Map("hoodie.datasource.write.precombine.field" -> "value"),
+      Seq(
+        "insert" -> Seq(("s1", "p1", 1L, "a1")),
+        "upsert" -> Seq(("s1", "p1", 1L, "a1_1"), ("s2", "p1", 1L, "a2"), ("s2", "p1", 1L, "a2_2"), ("s1", "p1", 1L, "a0"))))
+    Assertions.assertEquals(Seq(("s1", "p1", 1L, "a1_1"), ("s2", "p1", 1L, "a2_2")), rows)
+  }
+
+  @Test
+  def testPayloadClassCombinesRecordsOfAKey(): Unit = {
+    // The payload class merges on its own terms, so the rows of a key are combined with the
+    // table's record merger, for an existing key and for a new one.
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val rows = writeOnBothPaths(s"test_table_payload_combine_$tableType",
+        Map("hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.PartialUpdateAvroPayload",
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.compact.inline" -> "false"),
+        Seq(
+          "insert" -> Seq(("q1", "p1", 5L, "a1")),
+          "upsert" -> Seq(("q1", "p1", 9L, "newer"), ("q1", "p1", 7L, "older"), ("q2", "p1", 3L, "x"), ("q2", "p1", 4L, "y"))))
+      Assertions.assertEquals(Seq(("q1", "p1", 9L, "newer"), ("q2", "p1", 4L, "y")), rows)
+    }
+  }
+
+  @Test
+  def testNullOrderingValueFailsTheWrite(): Unit = {
+    val nullableSchema = StructType(schema.map(_.copy(nullable = true)))
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_null_ordering_$enabled").toString
+      val df = spark.createDataFrame(Seq(Row("u1", "p1", null, "a1")).asJava, nullableSchema)
+      val failure = Assertions.assertThrows(classOf[Exception], () =>
+        df.write.format("hudi")
+          .options(writeOptions("upsert", Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)))
+          .mode(SaveMode.Append).save(path))
+      var cause: Throwable = failure
+      while (cause.getCause != null) {
+        cause = cause.getCause
+      }
+      Assertions.assertTrue(cause.isInstanceOf[IllegalArgumentException], s"unexpected failure: $cause")
+      Assertions.assertTrue(cause.getMessage.contains("Ordering field 'ts' has null value for record key 'u1'"),
+        cause.getMessage)
+    }
+  }
+
+  @Test
+  def testNullOrderingValueIsWrittenWithASparkRecordMerger(): Unit = {
+    val nullableSchema = StructType(schema.map(_.copy(nullable = true)))
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_null_ordering_spark_$enabled").toString
+      val options = writeOptions("upsert", Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        "hoodie.write.record.merge.custom.implementation.classes" -> "org.apache.hudi.DefaultSparkRecordMerger",
+        "hoodie.logfile.data.block.format" -> "parquet"))
+      spark.createDataFrame(Seq(Row("n1", "p1", null, "a1"), Row("n2", "p1", 2L, "a2")).asJava, nullableSchema)
+        .write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+      val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+      Assertions.assertEquals(Set("n1", "n2"), keys)
+    }
+  }
+
+  @Test
+  def testVectorOfAnotherDimensionFailsTheWrite(): Unit = {
+    val vectorSchema = StructType(Seq(
+      StructField("key", StringType, nullable = false),
+      StructField("embedding", org.apache.spark.sql.types.ArrayType(org.apache.spark.sql.types.FloatType, containsNull = false),
+        nullable = false, new org.apache.spark.sql.types.MetadataBuilder().putString("hudi_type", "VECTOR(4)").build())))
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_vector_dimension_$enabled").toString
+      val df = spark.createDataFrame(Seq(Row("x1", Seq(1.0f, 2.0f))).asJava, vectorSchema)
+      val failure = Assertions.assertThrows(classOf[Exception], () =>
+        df.write.format("hudi")
+          .option("hoodie.table.name", "test_vector_table")
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "key")
+          .option("hoodie.datasource.write.precombine.field", "key")
+          .option(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key, enabled)
+          .mode(SaveMode.Append).save(path))
+      val messages = Iterator.iterate[Throwable](failure)(_.getCause).takeWhile(_ != null).map(t => String.valueOf(t.getMessage)).toSeq
+      Assertions.assertTrue(messages.exists(_.contains("dimension mismatch")), s"unexpected failure: $messages")
+    }
+  }
+
+  @Test
+  def testNullVectorIsWritten(): Unit = {
+    val vectorSchema = StructType(Seq(
+      StructField("key", StringType, nullable = false),
+      StructField("embedding", org.apache.spark.sql.types.ArrayType(org.apache.spark.sql.types.FloatType, containsNull = false),
+        nullable = true, new org.apache.spark.sql.types.MetadataBuilder().putString("hudi_type", "VECTOR(2)").build())))
+    // The size of a null array is null, as it is by default with ANSI mode on.
+    spark.conf.set("spark.sql.legacy.sizeOfNull", "false")
+    try {
+      Seq("true", "false").foreach { enabled =>
+        val path = tempDir.resolve(s"test_table_null_vector_$enabled").toString
+        spark.createDataFrame(Seq(Row("y1", Seq(1.0f, 2.0f)), Row("y2", null)).asJava, vectorSchema)
+          .write.format("hudi")
+          .option("hoodie.table.name", "test_vector_table")
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "key")
+          .option("hoodie.datasource.write.precombine.field", "key")
+          .option(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key, enabled)
+          .mode(SaveMode.Append).save(path)
+        val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+        Assertions.assertEquals(Set("y1", "y2"), keys, s"path enabled = $enabled")
+      }
+    } finally {
+      spark.conf.unset("spark.sql.legacy.sizeOfNull")
+    }
+  }
+
+  @Test
+  def testDatesBeforeTheCalendarSwitchAreWritten(): Unit = {
+    val datedSchema = StructType(schema.fields ++ Seq(
+      StructField("day", org.apache.spark.sql.types.DateType, nullable = true),
+      StructField("moment", org.apache.spark.sql.types.TimestampType, nullable = true)))
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_ancient_dates_$enabled").toString
+      val rows = Seq(
+        Row("c1", "p1", 1L, "old", java.sql.Date.valueOf("1500-01-01"), java.sql.Timestamp.valueOf("1000-01-01 00:00:00")),
+        Row("c2", "p1", 1L, "new", java.sql.Date.valueOf("2020-01-01"), java.sql.Timestamp.valueOf("2020-01-01 00:00:00")))
+      val options = writeOptions("upsert", Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled))
+      spark.createDataFrame(rows.asJava, datedSchema).write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+      // The second write merges into the file that holds the old dates.
+      spark.createDataFrame(rows.take(1).asJava, datedSchema).write.format("hudi").options(options).mode(SaveMode.Append).save(path)
+      val keys = spark.read.format("hudi").load(path).select("key").collect().map(_.getString(0)).toSet
+      Assertions.assertEquals(Set("c1", "c2"), keys, s"path enabled = $enabled")
+    }
+  }
+
+  @Test
+  def testInputWithoutARequiredColumnFailsAsRecordsDo(): Unit = {
+    val withoutValue = StructType(schema.fields.filterNot(_.name == "value"))
+    val failures = Seq("true", "false").map { enabled =>
+      val path = tempDir.resolve(s"test_table_missing_required_$enabled").toString
+      val options = Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        "hoodie.datasource.write.reconcile.schema" -> "true")
+      writeHudi(Seq(("m1", "p1", 1L, "a1")), "upsert", path, options)
+      val failure = Assertions.assertThrows(classOf[Exception], () =>
+        spark.createDataFrame(Seq(Row("m1", "p1", 2L)).asJava, withoutValue)
+          .write.format("hudi").options(writeOptions("upsert", options)).mode(SaveMode.Append).save(path))
+      Iterator.iterate[Throwable](failure)(_.getCause).takeWhile(_ != null).map(t => String.valueOf(t.getMessage)).toSeq
+    }
+    Assertions.assertTrue(failures.head.exists(_.contains("non-nullable")), s"unexpected failure: ${failures.head}")
+    Assertions.assertTrue(failures(1).exists(_.contains("non-nullable")), s"unexpected failure of the other path: ${failures(1)}")
+  }
+
+  @Test
+  def testMissingRecordKeyFieldFailsWithTheSameError(): Unit = {
+    Seq("missing", "key,missing").foreach { recordKeyFields =>
+      val messages = Seq("true", "false").map { enabled =>
+        val path = tempDir.resolve(s"test_table_missing_key_${recordKeyFields.hashCode}_$enabled").toString
+        val failure = Assertions.assertThrows(classOf[Exception], () =>
+          makeDf(Seq(("e1", "p1", 1L, "a1"))).write.format("hudi")
+            .options(writeOptions("insert", Map(
+              DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+              DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyFields)))
+            .mode(SaveMode.Append).save(path))
+        var cause: Throwable = failure
+        while (cause.getCause != null) {
+          cause = cause.getCause
+        }
+        cause.getMessage
+      }
+      Assertions.assertTrue(messages.head.contains("missing"), messages.head)
+      Assertions.assertEquals(messages(1), messages.head)
+    }
+  }
+
+  @Test
+  def testInputWithoutColumnsCommitsNothing(): Unit = {
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_no_columns_$enabled").toString
+      val opts = Map(DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled)
+      writeHudi(Seq(("g1", "p1", 1L, "a1")), "insert", path, opts)
+      // A second commit, so the table has stored keys the upsert below could be checked against.
+      writeHudi(Seq(("g1", "p1", 2L, "a1b")), "upsert", path, opts)
+      spark.emptyDataFrame.write.format("hudi")
+        .options(writeOptions("upsert", opts)).mode(SaveMode.Append).save(path)
+      Assertions.assertEquals(3, completedCommits(path))
+      Assertions.assertEquals(1L, spark.read.format("hudi").load(path).count())
+    }
+  }
+
+  @Test
+  def testGlobalIndexMovesAKeyOnlyWhenItsOrderingValueIsNotBehind(): Unit = {
+    for (tableType <- Seq("COPY_ON_WRITE", "MERGE_ON_READ");
+         (indexType, moveKey) <- Seq("GLOBAL_SIMPLE" -> "hoodie.simple.index.update.partition.path",
+           "GLOBAL_BLOOM" -> "hoodie.bloom.index.update.partition.path")) {
+      val rows = writeOnBothPaths(s"test_table_global_move_ordering_${tableType}_$indexType",
+        Map("hoodie.index.type" -> indexType,
+          moveKey -> "true",
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.compact.inline" -> "false"),
+        Seq(
+          "insert" -> Seq(("v1", "p1", 5L, "a1"), ("v2", "p1", 5L, "a2"), ("v3", "p1", 5L, "a3")),
+          // v1 moves with a newer value, v2 would move with an older one, v3 moves on a tie.
+          "upsert" -> Seq(("v1", "p2", 9L, "moved"), ("v2", "p2", 1L, "behind"), ("v3", "p2", 5L, "tie"))))
+      Assertions.assertEquals(
+        Seq(("v1", "p2", 9L, "moved"), ("v2", "p1", 5L, "a2"), ("v3", "p2", 5L, "tie")), rows)
+    }
+  }
+
+  @Test
+  def testMergeOnReadUpdatesOfASmallFileGroupAppendUnlessInsertsPadIt(): Unit = {
+    Seq("true", "false").foreach { enabled =>
+      val path = tempDir.resolve(s"test_table_mor_small_file_updates_$enabled").toString
+      val opts = Map(
+        DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+        "hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
+        "hoodie.compact.inline" -> "false")
+      def lastCommitFiles(): Seq[String] = {
+        val metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+          .setBasePath(path).build()
+        val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
+        timeline.readCommitMetadata(timeline.lastInstant().get()).getFileIdAndRelativePaths.values().asScala.toSeq
+      }
+
+      writeHudi(Seq(("y1", "p1", 1L, "a1"), ("y2", "p1", 1L, "a2")), "insert", path, opts)
+      // Updates alone go to a log file of the small file group.
+      writeHudi(Seq(("y1", "p1", 2L, "b1")), "upsert", path, opts)
+      Assertions.assertTrue(lastCommitFiles().forall(_.contains(".log")), lastCommitFiles().mkString(","))
+      // With an insert in the batch, the small file group is rewritten with both.
+      writeHudi(Seq(("y2", "p1", 3L, "c2"), ("y3", "p1", 3L, "c3")), "upsert", path, opts)
+      Assertions.assertTrue(lastCommitFiles().forall(_.endsWith(".parquet")), lastCommitFiles().mkString(","))
+      Assertions.assertEquals(
+        Seq(("y1", 2L, "b1"), ("y2", 3L, "c2"), ("y3", 3L, "c3")),
+        spark.read.format("hudi").load(path).select("key", "ts", "value").collect()
+          .map(r => (r.getString(0), r.getLong(1), r.getString(2))).sorted.toSeq)
+    }
+  }
+
+  @Test
+  def testPartialUpdatePayloadMergesFieldsAcrossTheRowsOfABatch(): Unit = {
+    val partialSchema = StructType(Seq(
+      StructField("key", StringType), StructField("partition", StringType), StructField("ts", LongType),
+      StructField("rider", StringType), StructField("driver", StringType)))
+    def frame(rows: Row*) = spark.createDataFrame(rows.asJava, partialSchema)
+    for (tableType <- Seq("COPY_ON_WRITE", "MERGE_ON_READ")) {
+      val snapshots = Seq("true", "false").map { enabled =>
+        val path = tempDir.resolve(s"test_table_partial_fields_${tableType}_$enabled").toString
+        val opts = writeOptions("insert", Map(
+          DataSourceWriteOptions.DATAFRAME_WRITE_PATH_ENABLE.key -> enabled,
+          "hoodie.datasource.write.table.type" -> tableType,
+          "hoodie.compact.inline" -> "false"))
+        // The payload class and merge mode are given when the table is created and come from
+        // the table afterwards.
+        frame(Row("r1", "p1", 1L, "rider-0", "driver-0")).write.format("hudi")
+          .options(opts ++ Map(
+            "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.PartialUpdateAvroPayload",
+            "hoodie.write.record.merge.mode" -> "CUSTOM"))
+          .mode(SaveMode.Append).save(path)
+        frame(Row("r1", "p1", 4L, "rider-4", null), Row("r1", "p1", 6L, null, "driver-6"), Row("r1", "p1", 3L, null, null))
+          .write.format("hudi")
+          .options(opts + (DataSourceWriteOptions.OPERATION.key -> "upsert")).mode(SaveMode.Append).save(path)
+        spark.read.format("hudi").load(path).select("key", "ts", "rider", "driver").collect()
+          .map(r => (r.getString(0), r.getLong(1), r.getString(2), r.getString(3))).toSeq
+      }
+      Assertions.assertEquals(Seq(("r1", 6L, "rider-4", "driver-6")), snapshots.head)
+      Assertions.assertEquals(snapshots(1), snapshots.head)
+    }
+  }
+
+  @Test
+  def testUpsertIntoNewTableBehavesAsInsert(): Unit = {
+    val path = tempDir.resolve("test_table_upsert_first").toString
+    writeHudi(Seq(("a1", "p1", 1L, "x1"), ("a2", "p2", 1L, "x2")), "upsert", path)
+
+    val result = readAsMap(path)
+    Assertions.assertEquals(2, result.size)
+    Assertions.assertEquals((1L, "x1", "a1"), result("a1"))
+    Assertions.assertEquals(1, completedCommits(path))
+  }
+}

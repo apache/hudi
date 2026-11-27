@@ -290,7 +290,7 @@ object HoodieCreateRecordUtils {
    * null values are allowed and a default ordering value is used.
    * Otherwise, throws IllegalArgumentException if any ordering field has a null value.
    */
-  private def getOrderingValue(orderingFields: java.util.List[String],
+  private[hudi] def getOrderingValue(orderingFields: java.util.List[String],
                                avroRec: GenericRecord,
                                recordKey: String,
                                consistentLogicalTimestampEnabled: Boolean,
