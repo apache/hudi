@@ -152,12 +152,13 @@ public class GCSStorageLockClient implements StorageLockClient {
         logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
         return Pair.of(LockUpsertResult.THROTTLED, Option.empty());
       } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
+        // A 5xx is retriable: the generationMatch precondition means a retry cannot clobber
+        // another writer. It does not prove the write was rejected; the caller reconciles that.
         logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}",
             ownerId, lockFilePath, e);
-      } else {
-        throw e;
+        return Pair.of(LockUpsertResult.TRANSIENT_ERROR, Option.empty());
       }
-      return Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty());
+      throw e;
     }
   }
 
