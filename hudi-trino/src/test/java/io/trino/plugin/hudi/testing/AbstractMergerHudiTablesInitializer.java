@@ -40,6 +40,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.Option;
@@ -50,9 +51,11 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 
 import static com.google.common.io.MoreFiles.deleteRecursively;
 import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
@@ -64,6 +67,8 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static java.nio.file.Files.createTempDirectory;
 import static java.util.Objects.requireNonNull;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 
 /**
  * Shared machinery for the non-partitioned Merge-On-Read fixtures that exist to exercise record merging at
@@ -86,7 +91,11 @@ public abstract class AbstractMergerHudiTablesInitializer
     protected static final String RECORD_KEY_FIELD = "key";
     protected static final String ORDERING_FIELD = "ts";
 
+    /** Suffix of a fixture's spilling twin: the same commits, read through a merge buffer that keeps nothing in memory. */
+    protected static final String SPILLING_SUFFIX = "_spilling";
+
     private static final String PARTITION_PATH = "";
+    private static final java.nio.file.Path SPILL_ROOT = createSpillRoot();
 
     /** Hudi metadata columns, prepended to every table's data columns in the metastore definition. */
     static final List<Column> HUDI_META_COLUMNS = ImmutableList.of(
@@ -97,6 +106,7 @@ public abstract class AbstractMergerHudiTablesInitializer
             new Column("_hoodie_file_name", HIVE_STRING, Optional.empty(), Map.of()));
 
     private final String tableName;
+    private final Map<String, String> extraTableProperties;
 
     private TrinoFileSystem fileSystem;
     private Location tableLocation;
@@ -106,7 +116,49 @@ public abstract class AbstractMergerHudiTablesInitializer
 
     protected AbstractMergerHudiTablesInitializer(String tableName)
     {
+        this(tableName, Map.of());
+    }
+
+    /**
+     * @param extraTableProperties written into {@code hoodie.properties} after the initial commits. The connector builds
+     * the file-group reader's properties from the table config, so this sets reader-side configs such as
+     * {@code hoodie.memory.merge.max.size} for the fixture's reads.
+     */
+    protected AbstractMergerHudiTablesInitializer(String tableName, Map<String, String> extraTableProperties)
+    {
         this.tableName = requireNonNull(tableName, "tableName is null");
+        this.extraTableProperties = ImmutableMap.copyOf(extraTableProperties);
+    }
+
+    /**
+     * Table properties for the spilling twin {@code tableName}. The one-byte merge budget rounds down to zero once the
+     * spillable map applies its sizing factor, so every log record and delete is spilled to disk. Spills go under
+     * {@link #spillDirectory}, which the disk map creates on its first spill, so a test can tell the reads spilled.
+     */
+    protected static Map<String, String> spillEveryLogRecord(String tableName)
+    {
+        java.nio.file.Path directory = spillDirectory(tableName);
+        // Registered before the disk map folders created inside it, so it is deleted after them on exit
+        directory.toFile().deleteOnExit();
+        return Map.of(MAX_MEMORY_FOR_MERGE.key(), "1", SPILLABLE_MAP_BASE_PATH.key(), directory.toString());
+    }
+
+    /** Where reads of the spilling twin {@code tableName} spill to; it exists once one of them has spilled. */
+    public static java.nio.file.Path spillDirectory(String tableName)
+    {
+        return SPILL_ROOT.resolve(tableName);
+    }
+
+    private static java.nio.file.Path createSpillRoot()
+    {
+        try {
+            java.nio.file.Path root = createTempDirectory("hudi-merge-spill");
+            root.toFile().deleteOnExit();
+            return root;
+        }
+        catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     @Override
@@ -130,6 +182,7 @@ public abstract class AbstractMergerHudiTablesInitializer
             afterTableInit();
             writeClient = createWriteClient();
             writeInitialCommits(writeClient);
+            writeExtraTableProperties();
             syncToTrino();
 
             metastore.createTable(createTableDefinition(schemaName, tableName, false), PrincipalPrivileges.NO_PRIVILEGES);
@@ -255,6 +308,20 @@ public abstract class AbstractMergerHudiTablesInitializer
         catch (IOException e) {
             throw new RuntimeException("Could not init table " + tableName, e);
         }
+    }
+
+    private void writeExtraTableProperties()
+    {
+        if (extraTableProperties.isEmpty()) {
+            return;
+        }
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+                .setConf(new HadoopStorageConfiguration(new Configuration()))
+                .setBasePath(stagingTablePath.toString())
+                .build();
+        Properties properties = new Properties();
+        properties.putAll(extraTableProperties);
+        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), properties);
     }
 
     private HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient()
