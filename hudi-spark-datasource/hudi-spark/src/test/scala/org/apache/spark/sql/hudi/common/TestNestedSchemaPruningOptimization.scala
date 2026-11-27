@@ -114,12 +114,10 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-      // NOTE: Meta fields stay enabled here since the SQL UPDATE on MOR needs them to locate the file group
       createTableWithNestedStructSchema("mor", tableName, tablePath,
         extraColumns = ", array(named_struct('k', 'k0', 'v', 'v0')) AS tags," +
           " map('m0', named_struct('a', 1, 'b', 2)) AS props",
-        partitionCol = "part",
-        populateMetaFields = true)
+        partitionCol = "part")
 
       // The update writes a log file, so the pruned reads below merge base and log records
       // (the historically fragile path of HUDI-5443)
@@ -307,7 +305,6 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-        // NOTE: Meta fields stay enabled since the SQL UPDATE on MOR needs them to locate the file group
         createTableWithNestedStructSchema(tableType, tableName, tablePath, populateMetaFields = true)
         // Move id 1 off the filtered value and add id 2 on it; for MOR the update lands in a log
         // file, so the read has to merge a base record that matches with a log record that does not.

@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_WRITES_PREPPED_KEY
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
@@ -54,13 +54,13 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
     val tableId = catalogTable.table.qualifiedName
 
     logInfo(s"Executing 'UPDATE' command for $tableId")
-    val config = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val config = if (ProvidesHoodieConfig.shouldUsePreppedSqlWrites(sparkSession, catalogTable)) {
       // Set config to show that this is a prepped write.
       buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
     } else {
       buildHoodieConfig(catalogTable)
     }
+    ProvidesHoodieConfig.validateSqlWriteMatchesStoredKeys(catalogTable, config, "UPDATE")
 
     val enrichedSchema = HoodieSchemaConversionUtils.alignSchemaWithCatalog(
       plan.schema,
@@ -147,8 +147,7 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
       assignedAttributes
     )
 
-    val filteredOutput = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val filteredOutput = if (ProvidesHoodieConfig.shouldUsePreppedSqlWrites(sparkSession, hoodieCatalogTable)) {
       ut.table.output
     } else {
       removeMetaFields(ut.table.output)
