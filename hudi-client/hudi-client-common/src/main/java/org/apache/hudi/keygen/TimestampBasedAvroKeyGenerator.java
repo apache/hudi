@@ -38,6 +38,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -103,7 +104,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       case SCALAR:
         String timeUnitStr = getStringWithAltKeys(
             config, INPUT_TIME_UNIT, TimeUnit.SECONDS.toString());
-        timeUnit = TimeUnit.valueOf(timeUnitStr.toUpperCase());
+        timeUnit = TimeUnit.valueOf(timeUnitStr.toUpperCase(Locale.ROOT));
         break;
       default:
         timeUnit = null;
