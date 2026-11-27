@@ -2067,7 +2067,7 @@
   </dependencyManagement>
   <repositories>
     <repository>
-      <id>Maven Central</id>
+      <id>central</id>
       <name>Maven Repository</name>
       <url>https://repo.maven.apache.org/maven2</url>
       <releases>
