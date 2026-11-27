@@ -108,6 +108,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
    */
   @Getter
   private volatile String currentOwnerLockInfo = "";
+  // What this instance wrote when it acquired the lock; null when it holds none. unlock() and close()
+  // delete the lock file only while it still has this content, so a caller that never acquired the
+  // lock, or whose lock expired and was taken over, cannot delete another writer's lock.
+  private transient volatile String ownLockContent;
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
     checkRequiredProps(lockConfiguration);
@@ -134,7 +138,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public void close() {
     synchronized (LOCK_FILE_MONITOR) {
       try {
-        storage.deleteFile(this.lockFile);
+        deleteOwnLockFile();
       } catch (IOException e) {
         throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE), e);
       } finally {
@@ -179,13 +183,33 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public void unlock() {
     synchronized (LOCK_FILE_MONITOR) {
       try {
-        if (storage.exists(this.lockFile)) {
-          storage.deleteFile(this.lockFile);
-        }
+        deleteOwnLockFile();
       } catch (IOException io) {
         throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_RELEASE), io);
       }
     }
+  }
+
+  private void deleteOwnLockFile() throws IOException {
+    String ownContent = ownLockContent;
+    if (ownContent == null) {
+      return;
+    }
+    String currentContent;
+    try (InputStream is = storage.open(this.lockFile)) {
+      currentContent = FileIOUtils.readAsUTFString(is);
+    } catch (FileNotFoundException e) {
+      ownLockContent = null;
+      return;
+    }
+    // A write interrupted after the exclusive create leaves a prefix of the content this instance meant to write.
+    if (ownContent.startsWith(currentContent)) {
+      storage.deleteFile(this.lockFile);
+    } else {
+      log.warn("Not deleting lock file {}: it is held by another owner", this.lockFile);
+    }
+    // Cleared only once the file is gone or held by another owner, so close() retries a failed release.
+    ownLockContent = null;
   }
 
   @Override
@@ -223,7 +247,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   void acquireLock() {
     try (OutputStream os = storage.create(this.lockFile, false)) {
       initLockInfo();
-      os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
+      String content = lockInfo.toString();
+      ownLockContent = content;
+      os.write(StringUtils.getUTF8Bytes(content));
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
     }
