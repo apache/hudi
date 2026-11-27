@@ -19,7 +19,6 @@
 package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.table.HoodieTableConfig;
 
 import org.apache.flink.annotation.Internal;
 
@@ -36,7 +35,5 @@ public interface HoodieContinuousSplitDiscover {
    * Returns the timeline timezone of the table this discoverer reads, once discovery has found it.
    * A streaming read can start before the table exists, so the default is returned until then.
    */
-  default HoodieTimelineTimeZone getTimelineTimeZone() {
-    return HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue();
-  }
+  HoodieTimelineTimeZone getTimelineTimeZone();
 }

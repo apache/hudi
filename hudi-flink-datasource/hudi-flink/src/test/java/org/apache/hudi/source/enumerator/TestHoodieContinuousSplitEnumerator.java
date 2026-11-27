@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.enumerator;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
@@ -484,6 +485,11 @@ public class TestHoodieContinuousSplitEnumerator {
     private HoodieContinuousSplitBatch nextBatch = HoodieContinuousSplitBatch.EMPTY;
     private boolean throwException = false;
     private String lastDiscoveredInstant;
+
+    @Override
+    public HoodieTimelineTimeZone getTimelineTimeZone() {
+      return HoodieTimelineTimeZone.LOCAL;
+    }
 
     public void setNextBatch(HoodieContinuousSplitBatch batch) {
       this.nextBatch = batch;

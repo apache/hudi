@@ -20,7 +20,9 @@ package org.apache.hudi.source.reader.function;
 
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase;
@@ -465,6 +467,9 @@ public class TestHoodieCdcSplitReaderFunction {
     when(recordReader.getClosableIterator()).thenReturn(
         ClosableIterator.wrap(Collections.<RowData>emptyList().iterator()));
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getTimelineTimezone()).thenReturn(HoodieTimelineTimeZone.UTC);
     HoodieWriteConfig writeConfig = mockWriteConfig();
     HoodieSourceSplit split = new HoodieSourceSplit(
         1, null, Option.of(Collections.emptyList()), tempDir.getAbsolutePath(), "",
@@ -478,9 +483,12 @@ public class TestHoodieCdcSplitReaderFunction {
           .thenReturn(metaClient);
       mockedWriteClients.when(() -> FlinkWriteClients.getHoodieClientConfig(any()))
           .thenReturn(writeConfig);
-      try (ClosableIterator<RowData> iterator = createFunction().createRecordIterator(split)) {
+      HoodieCdcSplitReaderFunction function = createFunction();
+      assertEquals(HoodieTimelineTimeZone.UTC, function.getTimelineTimeZone(split));
+      try (ClosableIterator<RowData> iterator = function.createRecordIterator(split)) {
         assertFalse(iterator.hasNext());
       }
+      mockedStreamerUtil.verify(() -> StreamerUtil.metaClientForReader(any(), any()));
     }
   }
 

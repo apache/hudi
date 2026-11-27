@@ -18,6 +18,8 @@
 
 package org.apache.hudi.source.reader.function;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -27,11 +29,14 @@ import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.logical.RowType;
+
+import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -59,6 +64,7 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
   protected final InternalSchemaManager internalSchemaManager;
   protected final List<ExpressionPredicates.Predicate> predicates;
   protected final boolean emitDelete;
+  protected transient HoodieTableMetaClient metaClient;
   private transient HoodieWriteConfig writeConfig;
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
   private transient RowDataSerializer copySerializer;
@@ -155,6 +161,21 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
       copySerializer = new RowDataSerializer(producedRowType());
     }
     return copySerializer;
+  }
+
+  @Override
+  @Nullable
+  public HoodieTimelineTimeZone getTimelineTimeZone(HoodieSourceSplit split) {
+    HoodieTableMetaClient client = getMetaClient();
+    return client == null ? null : client.getTableConfig().getTimelineTimezone();
+  }
+
+  @Nullable
+  protected HoodieTableMetaClient getMetaClient() {
+    if (metaClient == null) {
+      metaClient = StreamerUtil.metaClientForReader(conf, getHadoopConf());
+    }
+    return metaClient;
   }
 
   protected HoodieWriteConfig getWriteConfig() {

@@ -59,6 +59,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.configuration.FlinkOptions.READ_AS_STREAMING;
 import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE;
 import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE_MERGE_ON_READ;
 import static org.hamcrest.CoreMatchers.is;
@@ -231,6 +232,7 @@ public class TestStreamReadOperator {
   @Test
   void testTimelineTimeZoneIsReadOnceTheTableExists(@TempDir File lateTableDir) throws Exception {
     Configuration lateConf = TestConfigurations.getDefaultConf(lateTableDir.getAbsolutePath());
+    lateConf.set(READ_AS_STREAMING, true);
     HoodieSchema schema = HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE);
     MergeOnReadInputFormat format = MergeOnReadInputFormat.builder()
         .config(lateConf)

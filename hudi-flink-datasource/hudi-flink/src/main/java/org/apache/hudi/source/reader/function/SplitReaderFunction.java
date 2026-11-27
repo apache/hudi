@@ -18,8 +18,11 @@
 
 package org.apache.hudi.source.reader.function;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+
+import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.function.BooleanSupplier;
@@ -37,6 +40,10 @@ import java.util.function.BooleanSupplier;
  * @param <T> record type
  */
 public interface SplitReaderFunction<T> extends Serializable {
+
+  /** Returns the timeline timezone for this split, or null while the table is unavailable. */
+  @Nullable
+  HoodieTimelineTimeZone getTimelineTimeZone(HoodieSourceSplit split);
 
   /**
    * Opens {@code split} for reading: creates the record iterator and its underlying I/O resources,

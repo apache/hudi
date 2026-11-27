@@ -20,13 +20,10 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.enumerator.HoodieContinuousSplitEnumerator;
 import org.apache.hudi.source.enumerator.HoodieEnumeratorStateSerializer;
@@ -47,7 +44,6 @@ import org.apache.hudi.source.split.SerializableComparator;
 import org.apache.hudi.source.split.assign.HoodieSplitAssigner;
 import org.apache.hudi.source.split.assign.HoodieSplitAssigners;
 import org.apache.hudi.util.FileIndexReader;
-import org.apache.hudi.util.StreamerUtil;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -84,11 +80,6 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
   private final HoodieTableMetaClient metaClient;
   private final HoodieRecordEmitter<T> recordEmitter;
   private final String tableName;
-  private final HoodieTimelineTimeZone timelineTimeZone;
-  // Lazily resolved once metaClient is null (a streaming read planned before the table exists);
-  // null until a reader created after the table appears first resolves it. Transient: each
-  // deserialized copy of this source (one per reader subtask) resolves its own.
-  private transient HoodieTableMetaClient lazyMetaClient;
 
   public HoodieSource(
       HoodieScanContext scanContext,
@@ -110,30 +101,6 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
     this.tableName = metaClient == null
         ? scanContext.getConf().get(FlinkOptions.TABLE_NAME)
         : metaClient.getTableConfig().getTableName();
-    this.timelineTimeZone = metaClient == null
-        ? HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue()
-        : metaClient.getTableConfig().getTimelineTimezone();
-  }
-
-  /**
-   * Returns the table's real timeline timezone once it can be resolved, instead of the
-   * construction-time {@link #timelineTimeZone} that stays frozen at the pre-table-exists default
-   * for a streaming read planned before the table exists. Reused for every split a reader opens,
-   * not re-checked once resolved, since a table's declared timezone does not change afterwards.
-   */
-  private HoodieTimelineTimeZone resolveTimelineTimeZone() {
-    if (metaClient != null) {
-      return metaClient.getTableConfig().getTimelineTimezone();
-    }
-    if (lazyMetaClient == null) {
-      org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(scanContext.getConf());
-      if (StreamerUtil.tableExists(scanContext.getPath().toString(), hadoopConf)) {
-        lazyMetaClient = StreamerUtil.createMetaClient(scanContext.getPath().toString(), hadoopConf);
-      }
-    }
-    return lazyMetaClient == null
-        ? HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue()
-        : lazyMetaClient.getTableConfig().getTimelineTimezone();
   }
 
   @Override
@@ -164,8 +131,9 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
 
   @Override
   public SourceReader<T, HoodieSourceSplit> createReader(SourceReaderContext readerContext) throws Exception {
-    return new HoodieSourceReader<T>(
-        tableName, this::resolveTimelineTimeZone, recordEmitter, scanContext, readerContext, readerFunctionSupplier, splitComparator);
+    return HoodieSourceReader.create(
+        tableName, metaClient == null ? null : metaClient.getTableConfig().getTimelineTimezone(),
+        recordEmitter, scanContext, readerContext, readerFunctionSupplier, splitComparator);
   }
 
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(
@@ -209,7 +177,8 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
         List<HoodieSourceSplit> splits = createBatchHoodieSplits();
         splitProvider.onDiscoveredSplits(splits);
       }
-      return new HoodieStaticSplitEnumerator(tableName, timelineTimeZone, enumContext, splitProvider);
+      return new HoodieStaticSplitEnumerator(
+          tableName, metaClient.getTableConfig().getTimelineTimezone(), enumContext, splitProvider);
     }
   }
 

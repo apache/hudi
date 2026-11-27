@@ -33,7 +33,6 @@ import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.HoodieSchemaConverter;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
@@ -73,13 +72,15 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
 
   @Override
   protected ClosableIterator<RowData> createRecordIterator(HoodieSourceSplit split) {
-    HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(conf, getHadoopConf());
     // Closing the returned iterator cascade-closes the whole HoodieFileGroupReader, so the base
     // class only has to close the iterator in closeCurrentSplit(). But getClosableIterator() runs
     // initRecordIterators(), which opens the reader's base-file iterator / record buffer before the
     // wrapping iterator is returned; if it throws, the reader is only a local here and nothing else
     // would close it. Keep it in a local and close it in the failure path.
-    HoodieRecordReader<RowData> fileGroupReader = createRecordReader(split, metaClient);
+    HoodieTableMetaClient splitMetaClient = getMetaClient();
+    // The next split must open against fresh table metadata, including after a failed open.
+    metaClient = null;
+    HoodieRecordReader<RowData> fileGroupReader = createRecordReader(split, splitMetaClient);
     try {
       return fileGroupReader.getClosableIterator();
     } catch (IOException e) {

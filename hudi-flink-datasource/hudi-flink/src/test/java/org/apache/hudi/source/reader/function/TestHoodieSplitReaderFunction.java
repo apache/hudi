@@ -20,8 +20,10 @@ package org.apache.hudi.source.reader.function;
 
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
@@ -517,6 +519,29 @@ public class TestHoodieSplitReaderFunction {
       assertSame(initFailure, thrown.getCause());
       assertEquals(1, initFailure.getSuppressed().length, "close failure must be suppressed, not lost");
       assertSame(closeFailure, initFailure.getSuppressed()[0]);
+    }
+  }
+
+  @Test
+  public void testFirstSplitReusesMetaClientForTimelineTimeZone() throws Exception {
+    HoodieTableConfig config = mock(HoodieTableConfig.class);
+    when(mockMetaClient.getTableConfig()).thenReturn(config);
+    when(config.getTimelineTimezone()).thenReturn(HoodieTimelineTimeZone.UTC);
+    HoodieFileGroupReader<RowData> reader = mockReader();
+    when(reader.getClosableIterator()).thenAnswer(invocation -> ClosableIterator.wrap(Collections.<RowData>emptyIterator()));
+    HoodieSplitReaderFunction function = readerFunctionReturning(reader);
+    HoodieSourceSplit split = createSplit();
+
+    try (MockedStatic<StreamerUtil> streamer = mockStatic(StreamerUtil.class)) {
+      streamer.when(() -> StreamerUtil.metaClientForReader(any(), any())).thenReturn(mockMetaClient);
+      assertEquals(HoodieTimelineTimeZone.UTC, function.getTimelineTimeZone(split));
+      function.open(split);
+      streamer.verify(() -> StreamerUtil.metaClientForReader(any(), any()), times(1));
+      function.closeCurrentSplit();
+
+      function.open(createSplit());
+      streamer.verify(() -> StreamerUtil.metaClientForReader(any(), any()), times(2));
+      function.closeCurrentSplit();
     }
   }
 

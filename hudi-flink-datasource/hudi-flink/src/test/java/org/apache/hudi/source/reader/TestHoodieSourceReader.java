@@ -35,6 +35,7 @@ import org.mockito.Mockito;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -57,6 +58,7 @@ public class TestHoodieSourceReader {
         .build();
     HoodieSourceReader<String> reader = new HoodieSourceReader<>(
         metrics,
+        new AtomicReference<>(),
         Mockito.mock(RecordEmitter.class),
         scanContext,
         context,
