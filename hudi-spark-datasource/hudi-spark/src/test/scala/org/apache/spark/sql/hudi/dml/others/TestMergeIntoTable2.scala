@@ -1424,6 +1424,39 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test MergeInto With A Merge Condition That Is Always False Resolves Partition Fields And Evaluates Clause Conditions Once") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, dt string) using hudi
+           | tblproperties (primaryKey = 'id', type = 'cow')
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 'p1')")
+
+      // The source has to supply the partition field, as in a merge on the record key
+      checkExceptionContain(s"merge into $tableName t using (select 2 as id, 'a2' as name) s on false " +
+        "when not matched then insert (id, name) values (s.id, s.name)")("Failed to resolve partition fields `dt`")
+      checkAnswer(s"select id, name, dt from $tableName")(Seq(1, "a1", "p1"))
+
+      // A clause condition that is not deterministic decides each source record once
+      spark.sql(s"merge into $tableName t using (select cast(id as int) as id, concat('a', id) as name, 'p2' as dt " +
+        "from range(2, 42)) s on false when not matched and rand(7) < 0.5 then insert *")
+      val inserted = spark.sql(s"select id, name, dt from $tableName where id > 1").collect()
+      assert(inserted.nonEmpty && inserted.length < 40, s"inserted ${inserted.length} of 40 source records")
+      assert(inserted.forall(row => row.getString(1) == s"a${row.getInt(0)}" && row.getString(2) == "p2"))
+
+      // The clause is refused before the statement runs
+      if (HoodieSparkUtils.gteqSpark3_4) {
+        checkExceptionContain(s"merge into $tableName t using (select 50 as id, 'a50' as name, 'p1' as dt) s on false " +
+          "when not matched then insert * when not matched by source then delete")(
+          "WHEN NOT MATCHED BY SOURCE clause is not supported in MERGE INTO statement on a Hudi table")
+      }
+    }
+  }
+
   test("Test MergeInto With A Merge Condition That Is Always False Checks Inserted Records By The Key They Are Written With") {
     withTempDir { tmp =>
       // Two records of which the key generator makes one record key, from null and from empty key fields

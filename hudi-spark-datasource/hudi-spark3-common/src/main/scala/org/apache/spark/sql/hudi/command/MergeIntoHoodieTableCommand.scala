@@ -42,7 +42,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, Matc
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, CaseWhen, EqualTo, Expression, Literal, NamedExpression, Or, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, CaseWhen, EqualTo, Expression, IsNotNull, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -378,15 +378,23 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private def insertSourceRecords(): Unit = {
     if (insertingActions.nonEmpty) {
       checkInsertingActions(insertingActions, buildMergeIntoConfig(hoodieCatalogTable))
-      val conditions = insertingActions.map(_.condition.getOrElse(Literal.TrueLiteral))
+      // The source has to supply the partition fields, as it does for a merge on the record key
+      partitionFieldsAssociatedExpressions
+      // The first clause that accepts a source record decides it, so each condition is evaluated once per record
+      val clauseIndex = Alias(CaseWhen(insertingActions.map(_.condition.getOrElse(Literal.TrueLiteral)).zipWithIndex.map {
+        case (condition, index) => (condition, Literal(index))
+      }), "_hoodie_merge_into_insert_clause")()
+      val sourceWithClause = Project(mergeInto.sourceTable.output :+ clauseIndex, mergeInto.sourceTable)
       val values = insertingActions.map(action =>
         alignAssignments(action.assignments, Some(PartialAssignmentMode.NULL_VALUE), keepUpdatedFieldsOnly = false).map(_.value))
       val output = mergeInto.targetTable.output.filterNot(attr => isMetaField(attr.name)).zip(values.transpose).map {
         case (attr, clauseValues) =>
-          Alias(CaseWhen(conditions.zip(clauseValues.map(castIfNeeded(_, attr.dataType)))), attr.name)()
+          Alias(CaseWhen(clauseValues.zipWithIndex.map { case (value, index) =>
+            (EqualTo(clauseIndex.toAttribute, Literal(index)), castIfNeeded(value, attr.dataType))
+          }), attr.name)()
       }
       val query = InsertIntoHoodieTableCommand.alignQueryOutput(
-        Project(output, Filter(conditions.reduce(Or), mergeInto.sourceTable)),
+        Project(output, Filter(IsNotNull(clauseIndex.toAttribute), sourceWithClause)),
         hoodieCatalogTable, Map.empty, sparkSession.sessionState.conf)
       InsertIntoHoodieTableCommand.run(sparkSession, hoodieCatalogTable.table,
         sparkAdapter.getUnsafeUtils.createDataFrameFrom(sparkSession, query).queryExecution.executedPlan,
