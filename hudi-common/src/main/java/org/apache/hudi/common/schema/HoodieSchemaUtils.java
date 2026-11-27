@@ -821,7 +821,7 @@ public final class HoodieSchemaUtils {
             .map(field -> createNewSchemaField(
                 field.name(), HoodieSchema.createNullable(field.schema()), field.doc().orElse(null), HoodieSchema.NULL_VALUE))
             .orElseThrow(() ->
-                new IllegalArgumentException("Ordering field " + orderingFieldName + " not found in table schema"))))
+                new IllegalArgumentException("Native delete log ordering field " + orderingFieldName + " must be a top-level table field"))))
         .collect(Collectors.toList());
     return HoodieSchema.createRecord("hudi_delete_log_record", null, null, fields);
   }

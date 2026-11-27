@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -207,6 +208,67 @@ public class TestHoodieNativeLogFormatWriter {
   public void testConvertsOrderingValueForDeleteLog() throws Exception {
     assertArrayEquals(new Object[] {"stored-key-1", "stored-110"},
         writeDeleteLogFieldValues(Collections.singletonList("ts"), "110"));
+  }
+
+  @Test
+  public void testNestedOrderingFieldFailsBeforeCreatingDeleteFile() throws Exception {
+    HoodieSchema schema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":["
+        + "{\"name\":\"attributes\",\"type\":{\"type\":\"record\",\"name\":\"attrs\","
+        + "\"fields\":[{\"name\":\"ts\",\"type\":\"long\"}]}}]}");
+    LogFileCreationCallback callback = mock(LogFileCreationCallback.class);
+    try (HoodieNativeLogFormatWriter writer = newNativeWriter(schema, Collections.singletonList("attributes.ts"), callback)) {
+      HoodieAppendException failure = assertThrows(HoodieAppendException.class,
+          () -> writer.appendDeleteRecord(mock(HoodieRecord.class), schema));
+      assertTrue(failure.getCause().getMessage().contains("attributes.ts"));
+      verify(callback, never()).preFileCreation(any());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testFileWriterCreationFailureAbortsAppend(boolean delete) throws Exception {
+    HoodieSchema schema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":[]}");
+    IOException failure = new IOException("cannot open log file");
+    try (MockedStatic<HoodieFileWriterFactory> factory = mockStatic(HoodieFileWriterFactory.class);
+         HoodieNativeLogFormatWriter writer = newNativeWriter(schema, Collections.emptyList(), mock(LogFileCreationCallback.class))) {
+      factory.when(() -> HoodieFileWriterFactory.getFileWriter(
+          eq("100"), any(), any(), any(), any(), any(), any())).thenThrow(failure);
+      assertAppendSetupFailure(writer, schema, delete, failure);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testMarkerCreationFailureAbortsAppend(boolean delete) throws Exception {
+    HoodieSchema schema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":[]}");
+    LogFileCreationCallback callback = mock(LogFileCreationCallback.class);
+    RuntimeException failure = new IllegalStateException("cannot create marker");
+    when(callback.preFileCreation(any())).thenThrow(failure);
+    try (HoodieNativeLogFormatWriter writer = newNativeWriter(schema, Collections.emptyList(), callback)) {
+      assertAppendSetupFailure(writer, schema, delete, failure);
+    }
+  }
+
+  private static void assertAppendSetupFailure(HoodieNativeLogFormatWriter writer, HoodieSchema schema,
+                                               boolean delete, Exception failure) {
+    HoodieRecord record = mock(HoodieRecord.class);
+    HoodieAppendException exception = assertThrows(HoodieAppendException.class, () -> {
+      if (delete) {
+        writer.appendDeleteRecord(record, schema);
+      } else {
+        writer.appendRecord(record, schema);
+      }
+    });
+    assertSame(failure, exception.getCause());
+    assertFalse(writer.hasPendingWrites());
+  }
+
+  private static HoodieNativeLogFormatWriter newNativeWriter(HoodieSchema schema, List<String> orderingFields,
+                                                              LogFileCreationCallback callback) throws IOException {
+    return new HoodieNativeLogFormatWriter(4096, mock(HoodieStorage.class), new StoragePath("/tmp/partition"),
+        "file-1", "100", 1, "1-0-1", 1024L, callback, HoodieTableVersion.TEN,
+        HoodieWriteConfig.newBuilder().withPath("/tmp").build(), HoodieFileFormat.PARQUET, schema,
+        mock(TaskContextSupplier.class), new AvroRecordContext(), orderingFields, Option.empty());
   }
 
   @Test

@@ -2505,7 +2505,8 @@ public class TestHoodieSchemaUtils {
     HoodieSchema tableSchema = deleteLogTableSchema();
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
         () -> HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.singletonList("not_a_field")));
-    assertEquals("Ordering field not_a_field not found in table schema", exception.getMessage());
+    assertEquals("Native delete log ordering field not_a_field must be a top-level table field",
+        exception.getMessage());
   }
 
   @Test

@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -161,7 +162,11 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   }
 
   public void appendRecord(HoodieRecord record, HoodieSchema recordSchema) throws IOException {
-    ensureDataFileWriter(recordSchema);
+    try {
+      ensureDataFileWriter(recordSchema);
+    } catch (Exception e) {
+      throw new HoodieAppendException("Failed to initialize native data log for file group " + logFileId, e);
+    }
     dataFileWriter.write(record.getRecordKey(),
         record, recordSchema, recordProperties);
     if (baseFileInstantTimeOfPositions.isPresent()) {
@@ -170,7 +175,11 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   }
 
   public void appendDeleteRecord(HoodieRecord record, HoodieSchema recordSchema) throws IOException {
-    ensureDeleteFileWriter();
+    try {
+      ensureDeleteFileWriter();
+    } catch (Exception e) {
+      throw new HoodieAppendException("Failed to initialize native delete log for file group " + logFileId, e);
+    }
     String recordKey = record.getRecordKey();
     Comparable orderingValue = getDeleteOrderingValue(record, recordSchema);
     Object deleteEngineRecord = recordContext.constructEngineRecord(
@@ -265,8 +274,8 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   private void ensureDeleteFileWriter() throws IOException {
     ensureAppendVersion();
     if (deleteFileWriter == null) {
-      deleteLogFile = createNativeLogFile(currentAppendVersion, DELETE_LOG_EXTENSION);
       deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, orderingFieldNames);
+      deleteLogFile = createNativeLogFile(currentAppendVersion, DELETE_LOG_EXTENSION);
       // The delete records are built through recordContext#constructEngineRecord (see #appendDeleteRecord), so the
       // writer must match the record context's engine type rather than the merger's record type: on Spark executors
       // the reader context for write degrades to Avro (no engine context available), and using the merger record

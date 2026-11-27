@@ -31,7 +31,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.{HoodieException, HoodieUpgradeDowngradeException}
+import org.apache.hudi.exception.{ExceptionUtil, HoodieAppendException, HoodieException, HoodieUpgradeDowngradeException}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
@@ -2695,7 +2695,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array("AVRO;bigint;8", "SPARK;bigint;9", "SPARK;string;8", "SPARK;decimal(10,2);9"), delimiter = ';')
+  @CsvSource(value = Array("AVRO;bigint;8", "SPARK;bigint;9", "SPARK;string;8", "SPARK;decimal(10,2);9", "SPARK;bigint;10"), delimiter = ';')
   def testDeleteWithNestedOrderingFieldRespectsEventTimeOrdering(recordType: HoodieRecordType, orderingType: String, tableVersion: Int): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
     val opts = writeOpts ++ Map(
@@ -2719,11 +2719,17 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     write(Seq(("id1", "100", false), ("id2", "100", false)), SaveMode.Overwrite)
     // The delete of id1 is older than the stored row and must not remove it; the delete of id2 is newer.
     // "050" has a leading zero so that it also sorts before "100" as a string.
-    write(Seq(("id1", "050", true), ("id2", "150", true)), SaveMode.Append)
-
-    val rows = spark.read.format("hudi").options(readOpts).load(basePath).select("id", "meta.ts").collect()
-    assertEquals(Seq("id1"), rows.map(_.getString(0)).toSeq)
-    assertEquals(100, BigDecimal(rows.head.get(1).toString).toInt)
+    val deletes = Seq(("id1", "050", true), ("id2", "150", true))
+    if (tableVersion == HoodieTableVersion.TEN.versionCode()) {
+      val error = assertThrows(classOf[Exception]) { write(deletes, SaveMode.Append) }
+      assertTrue(ExceptionUtil.isCausedBy(error, classOf[HoodieAppendException]), error.toString)
+      assertTrue(ExceptionUtil.validateErrorMsg(error, "Native delete log ordering field meta.ts must be a top-level table field"))
+    } else {
+      write(deletes, SaveMode.Append)
+      val rows = spark.read.format("hudi").options(readOpts).load(basePath).select("id", "meta.ts").collect()
+      assertEquals(Seq("id1"), rows.map(_.getString(0)).toSeq)
+      assertEquals(100, BigDecimal(rows.head.get(1).toString).toInt)
+    }
   }
 }
 

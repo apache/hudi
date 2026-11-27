@@ -22,6 +22,7 @@ package org.apache.spark.sql.hudi.dml.others
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -76,6 +77,39 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
             )
           }
         }
+      }
+    }
+  }
+
+  Seq(true, false).foreach { hasPrimaryKey =>
+    test(s"Native log delete fails for a nested ordering field (hasPrimaryKey=$hasPrimaryKey)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        val primaryKey = if (hasPrimaryKey) "primaryKey = 'id'," else ""
+        spark.sql(
+          s"""
+             |CREATE TABLE $tableName (id INT, attributes STRUCT<ts: BIGINT, src: STRING>)
+             |USING hudi LOCATION '$tablePath'
+             |TBLPROPERTIES (
+             |  type = 'mor', $primaryKey
+             |  orderingFields = 'attributes.ts', recordMergeMode = 'EVENT_TIME_ORDERING',
+             |  hoodie.write.table.version = '10', hoodie.write.ignore.failed = 'true'
+             |)
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |INSERT INTO $tableName SELECT 1, named_struct('ts', 100L, 'src', 's1')
+             |UNION ALL SELECT 2, named_struct('ts', 100L, 'src', 's1')
+             |""".stripMargin)
+
+        val metaClient = createMetaClient(spark, tablePath)
+        def lastCompletedCommit = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants().lastInstant().get()
+        val insertCommit = lastCompletedCommit
+        checkNestedExceptionContains(s"DELETE FROM $tableName WHERE id = 1")(
+          "Native delete log ordering field attributes.ts must be a top-level table field")
+        assert(lastCompletedCommit == insertCommit)
+        checkAnswer(s"SELECT id FROM $tableName")(Seq(1), Seq(2))
       }
     }
   }
