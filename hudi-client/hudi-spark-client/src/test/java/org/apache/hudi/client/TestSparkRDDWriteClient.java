@@ -51,7 +51,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -99,7 +98,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
   public void testWriteClientAndTableServiceClientWithTimelineServer(
       boolean enableEmbeddedTimelineServer, boolean passInTimelineServer) throws IOException {
     HoodieTableMetaClient metaClient =
-        getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+        getHoodieMetaClient(storageConf(), basePath(), new Properties());
     HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineServer)
@@ -137,7 +136,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
   @MethodSource
   void testWriteClientReleaseResourcesShouldOnlyUnpersistRelevantRdds(
       HoodieTableType tableType, boolean shouldReleaseResource, boolean metadataTableEnable) throws IOException {
-    final HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), tableType, new Properties());
+    final HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), tableType, new Properties());
     final HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withReleaseResourceEnabled(shouldReleaseResource)
@@ -217,11 +216,11 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
   @Test
   public void testCompletionTimeGreaterThanRequestedTime() throws IOException {
-    String basePath = URI.create(basePath()).getPath();
+    String basePath = basePath();
     testAndAssertCompletionIsEarlierThanRequested(basePath, new Properties());
 
     // retry w/ explicitly setting timezone to UTC
-    basePath = basePath + "_UTC";
+    basePath = basePath + "/_UTC";
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.TIMELINE_TIMEZONE.key(), "UTC");
     testAndAssertCompletionIsEarlierThanRequested(basePath, props);
@@ -252,7 +251,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
    */
   @Test
   public void testInitializeMetadataTableReloadsConfigWhenPartitionsStateChanged() throws Exception {
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
 
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
@@ -296,7 +295,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     // Set spark.speculation based on the test parameter
     jsc().sc().conf().set("spark.speculation", String.valueOf(speculationEnabled));
 
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
     HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePath().toString())
         .withBlockWritesOnSpeculativeExecution(blockOnSpeculativeExecution)
@@ -324,7 +323,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
   @Test
   public void testPostCommitFailureHandlingWithMetrics() throws IOException {
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
 
     // Create a custom write client that throws exception during post commit operations
     class PostCommitFailingWriteClient extends SparkRDDWriteClient {
