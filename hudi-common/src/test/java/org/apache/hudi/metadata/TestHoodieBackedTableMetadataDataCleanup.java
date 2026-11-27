@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.schema.internal.Types;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -43,6 +44,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -50,6 +52,8 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
@@ -63,6 +67,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -71,6 +77,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -400,6 +407,95 @@ public class TestHoodieBackedTableMetadataDataCleanup {
             slices,
             Option.empty()));
     assertTrue(exception.getCause() instanceof IllegalArgumentException);
+  }
+
+  @Test
+  public void testPartitionedRecordIndexEmptyLookups() throws Exception {
+    prepareRecordIndexLookup();
+    assertTrue(mockMetadata.readRecordIndexLocationsWithKeys(
+        HoodieListData.eager(Collections.emptyList()), Option.of("p1")).collectAsList().isEmpty());
+    assertTrue(mockMetadata.readRecordIndexLocationsWithKeys(
+        HoodieListData.eager(Collections.singletonList("key")), Option.of("p2")).collectAsList().isEmpty());
+    assertTrue(mockMetadata.readRecordIndexLocationsWithKeys(
+        HoodieListData.lazy(Collections.emptyList()), Option.of("p2")).collectAsList().isEmpty());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testUnavailableMetadataIndexStillFails(boolean emptyKeys) throws Exception {
+    Map<String, List<FileSlice>> fileSlices = prepareRecordIndexLookup();
+    HoodieData<String> keys = HoodieListData.eager(emptyKeys
+        ? Collections.emptyList() : Collections.singletonList("key"));
+    fileSlices.put(RECORD_INDEX.getPartitionPath(), Collections.emptyList());
+    IllegalStateException missingIndex = assertThrows(IllegalStateException.class,
+        () -> mockMetadata.readRecordIndexLocationsWithKeys(keys, Option.of("p2")).collectAsList());
+    assertEquals("No file slices found for partition: " + RECORD_INDEX.getPartitionPath(), missingIndex.getMessage());
+
+    when(mockTableConfig.isMetadataPartitionAvailable(RECORD_INDEX)).thenReturn(false);
+    IllegalStateException uninitializedIndex = assertThrows(IllegalStateException.class,
+        () -> mockMetadata.readRecordIndexLocationsWithKeys(keys, Option.of("p2")).collectAsList());
+    assertEquals("Record index is not initialized in MDT", uninitializedIndex.getMessage());
+
+    fileSlices.put(FILES.getPartitionPath(), Collections.emptyList());
+    when(mockMetadata.readIndexRecordsWithKeys(any(), anyString())).thenCallRealMethod();
+    IllegalStateException missingFiles = assertThrows(IllegalStateException.class,
+        () -> mockMetadata.readIndexRecordsWithKeys(keys.map(FilesIndexRawKey::new), FILES.getPartitionPath()).collectAsList());
+    assertEquals("No file slices found for partition: " + FILES.getPartitionPath(), missingFiles.getMessage());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testPartitionedRecordIndexShardRead() throws Exception {
+    Map<String, List<FileSlice>> fileSlices = prepareRecordIndexLookup();
+    FileSlice shard0 = recordIndexSlice("year=2026/month=10", 0);
+    FileSlice shard1 = recordIndexSlice("year=2026/month=10", 1);
+    fileSlices.put(RECORD_INDEX.getPartitionPath(), Arrays.asList(recordIndexSlice("p1", 0), shard0, shard1));
+    String key = "key";
+    FileSlice expectedSlice = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, 2) == 0 ? shard0 : shard1;
+    HoodieBaseFile baseFile = mock(HoodieBaseFile.class);
+    expectedSlice.setBaseFile(baseFile);
+    HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createRecordIndexUpdate(
+        key, "year=2026/month=10", "data-file-id", "20261024010101000", 1);
+    IndexedRecord avroRecord = record.getData().getInsertValue(null).get();
+
+    prepareFileSliceRead(false);
+    HoodieFileGroupReader.HoodieFileGroupReaderBuilder<IndexedRecord> builder =
+        mock(HoodieFileGroupReader.HoodieFileGroupReaderBuilder.class, RETURNS_SELF);
+    HoodieFileGroupReader<IndexedRecord> reader = mock(HoodieFileGroupReader.class);
+    when(builder.build()).thenReturn(reader);
+    when(reader.getClosableIterator()).thenReturn(ClosableIterator.wrap(Collections.singletonList(avroRecord).iterator()));
+    try (MockedStatic<HoodieFileGroupReader> readerStatic = mockStatic(HoodieFileGroupReader.class)) {
+      readerStatic.when(HoodieFileGroupReader::builder).thenReturn(builder);
+      List<Pair<String, HoodieRecordGlobalLocation>> locations = mockMetadata.readRecordIndexLocationsWithKeys(
+          HoodieListData.eager(Arrays.asList(key, key)), Option.of("year=2026/month=10")).collectAsList();
+      assertEquals(Collections.singletonList(Pair.of(key, record.getData().getRecordGlobalLocation())), locations);
+      verify(builder).withBaseFileOption(Option.of(baseFile));
+
+      IOException readFailure = new IOException("corrupt record-index shard");
+      when(reader.getClosableIterator()).thenThrow(readFailure);
+      HoodieIOException error = assertThrows(HoodieIOException.class,
+          () -> mockMetadata.readRecordIndexLocationsWithKeys(
+              HoodieListData.eager(Collections.singletonList(key)), Option.of("year=2026/month=10")).collectAsList());
+      assertEquals(readFailure, error.getCause());
+    }
+  }
+
+  private Map<String, List<FileSlice>> prepareRecordIndexLookup() throws Exception {
+    when(mockMetadata.readRecordIndexLocationsWithKeys(any(), any())).thenCallRealMethod();
+    when(mockMetadata.readIndexRecordsWithKeys(any(), anyString(), any())).thenCallRealMethod();
+    when(mockMetadata.readIndexRecords(any(), anyString(), any())).thenCallRealMethod();
+    Map<String, List<FileSlice>> fileSlices = new HashMap<>();
+    fileSlices.put(RECORD_INDEX.getPartitionPath(), Collections.singletonList(recordIndexSlice("p1", 0)));
+    Field field = HoodieBackedTableMetadata.class.getDeclaredField("partitionFileSliceMap");
+    field.setAccessible(true);
+    field.set(mockMetadata, fileSlices);
+    return fileSlices;
+  }
+
+  private static FileSlice recordIndexSlice(String dataPartition, int shard) {
+    String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, shard,
+        RECORD_INDEX.getPartitionPath(), Option.of(dataPartition));
+    return new FileSlice(RECORD_INDEX.getPartitionPath(), "20261024010101000", fileId);
   }
 
   @Test
