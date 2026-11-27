@@ -198,7 +198,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       fileWriter = HoodieFileWriterFactory.getFileWriter(
           instantTime, newFilePath, hoodieTable.getStorage(),
 
-          config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
+          getFileWriterConfig(), writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
     } catch (IOException io) {
       log.error("Error in update task at commit {}", instantTime, io);
       writeStatus.setGlobalError(io);

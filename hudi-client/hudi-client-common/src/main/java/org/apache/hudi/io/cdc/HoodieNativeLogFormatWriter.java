@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.cdc;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -63,6 +64,8 @@ import static org.apache.hudi.common.model.LogExtensions.DELETE_LOG_EXTENSION;
 public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
 
   private final HoodieWriteConfig writeConfig;
+  // The config of the file writers, which may name the table format of the table where the write config does not
+  private final HoodieConfig fileWriterConfig;
   private final HoodieFileFormat nativeFileFormat;
   private final HoodieSchema tableSchema;
   private final TaskContextSupplier taskContextSupplier;
@@ -98,9 +101,33 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
                                      RecordContext recordContext,
                                      List<String> orderingFieldNames,
                                      Option<String> baseFileInstantTimeOfPositions) throws IOException {
+    this(bufferSize, storage, parentPath, logFileId, instantTime, logVersion, logWriteToken, sizeThreshold,
+        fileCreationCallback, tableVersion, writeConfig, writeConfig, nativeFileFormat, tableSchema, taskContextSupplier,
+        recordContext, orderingFieldNames, baseFileInstantTimeOfPositions);
+  }
+
+  public HoodieNativeLogFormatWriter(Integer bufferSize,
+                                     HoodieStorage storage,
+                                     StoragePath parentPath,
+                                     String logFileId,
+                                     String instantTime,
+                                     Integer logVersion,
+                                     String logWriteToken,
+                                     Long sizeThreshold,
+                                     LogFileCreationCallback fileCreationCallback,
+                                     HoodieTableVersion tableVersion,
+                                     HoodieWriteConfig writeConfig,
+                                     HoodieConfig fileWriterConfig,
+                                     HoodieFileFormat nativeFileFormat,
+                                     HoodieSchema tableSchema,
+                                     TaskContextSupplier taskContextSupplier,
+                                     RecordContext recordContext,
+                                     List<String> orderingFieldNames,
+                                     Option<String> baseFileInstantTimeOfPositions) throws IOException {
     super(bufferSize, storage, parentPath, logFileId, DATA_LOG_EXTENSION, instantTime, logVersion, logWriteToken,
         null, 0L, sizeThreshold, fileCreationCallback, tableVersion);
     this.writeConfig = writeConfig;
+    this.fileWriterConfig = fileWriterConfig;
     this.nativeFileFormat = nativeFileFormat;
     this.tableSchema = tableSchema;
     this.taskContextSupplier = taskContextSupplier;
@@ -266,7 +293,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     if (dataFileWriter == null) {
       dataLogFile = createNativeLogFile(currentAppendVersion, DATA_LOG_EXTENSION);
       dataFileWriter = HoodieFileWriterFactory.getFileWriter(
-          instantTime, dataLogFile.getPath(), storage, writeConfig, recordSchema, taskContextSupplier,
+          instantTime, dataLogFile.getPath(), storage, fileWriterConfig, recordSchema, taskContextSupplier,
           writeConfig.getRecordMerger().getRecordType());
     }
   }
@@ -281,7 +308,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
       // the reader context for write degrades to Avro (no engine context available), and using the merger record
       // type here (e.g. SPARK) would create an engine-native writer that fails on the Avro delete records.
       deleteFileWriter = HoodieFileWriterFactory.getFileWriter(
-          instantTime, deleteLogFile.getPath(), storage, writeConfig, deleteLogSchema, taskContextSupplier,
+          instantTime, deleteLogFile.getPath(), storage, fileWriterConfig, deleteLogSchema, taskContextSupplier,
           recordContext.getEngineRecordType());
     }
   }

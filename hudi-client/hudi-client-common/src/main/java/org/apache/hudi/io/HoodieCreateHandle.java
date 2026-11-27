@@ -74,7 +74,7 @@ public class HoodieCreateHandle<T, I, K, O> extends BaseCreateHandle<T, I, K, O>
 
   @VisibleForTesting
   HoodieFileWriter initializeFileWriter() throws IOException {
-    return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getStorage(), config,
+    return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getStorage(), getFileWriterConfig(),
         writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
   }
 
