@@ -63,7 +63,8 @@ public class TestHudiConfig
                 .setSecondaryIndexWaitTimeout(Duration.valueOf("2s"))
                 .setMetadataPartitionListingEnabled(true)
                 .setMetadataCacheEnabled(true)
-                .setResolveColumnNameCasingEnabled(false));
+                .setResolveColumnNameCasingEnabled(false)
+                .setSchemaColumnTypesEnabled(false));
     }
 
     @Test
@@ -99,6 +100,7 @@ public class TestHudiConfig
                 .put("hudi.metadata.cache.enabled", "false")
                 .put("hudi.metadata.partition-listing.enabled", "false")
                 .put("hudi.table.resolve-column-name-casing.enabled", "true")
+                .put("hudi.schema-column-types.enabled", "true")
                 .buildOrThrow();
 
         HudiConfig expected = new HudiConfig()
@@ -130,7 +132,8 @@ public class TestHudiConfig
                 .setSecondaryIndexWaitTimeout(Duration.valueOf("1s"))
                 .setMetadataPartitionListingEnabled(false)
                 .setMetadataCacheEnabled(false)
-                .setResolveColumnNameCasingEnabled(true);
+                .setResolveColumnNameCasingEnabled(true)
+                .setSchemaColumnTypesEnabled(true);
 
         assertFullMapping(properties, expected);
     }
