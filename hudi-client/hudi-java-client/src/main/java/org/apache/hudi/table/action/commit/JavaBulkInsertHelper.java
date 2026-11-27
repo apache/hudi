@@ -111,17 +111,31 @@ public class JavaBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, List<Hoo
     final List<HoodieRecord<T>> repartitionedRecords =
         (List<HoodieRecord<T>>) partitioner.repartitionRecords(dedupedRecords, targetParallelism);
 
-    String fileIdPrefix;
+    List<WriteStatus> writeStatuses = new ArrayList<>();
     if (partitioner instanceof JavaHoodieMetadataBulkInsertPartitioner) {
-      fileIdPrefix = partitioner.getFileIdPfx(0);
-    } else {
-      FileIdPrefixProvider fileIdPrefixProvider = (FileIdPrefixProvider) ReflectionUtils.loadClass(
-          config.getFileIdPrefixProviderClassName(),
-          config.getProps());
-      fileIdPrefix = fileIdPrefixProvider.createFilePrefix("");
+      // Metadata table records are tagged with the file group they hash to, and the partitioner sorts them by file
+      // group. Each file group's run of records is written with its own file id prefix and handle factory, so readers
+      // that look a key up in the file group it hashes to find it.
+      int runStart = 0;
+      int runIndex = 0;
+      for (int i = 1; i <= repartitionedRecords.size(); i++) {
+        String fileIdPrefix = JavaHoodieMetadataBulkInsertPartitioner.getFileIdPrefix(repartitionedRecords.get(runStart));
+        if (i == repartitionedRecords.size()
+            || !fileIdPrefix.equals(JavaHoodieMetadataBulkInsertPartitioner.getFileIdPrefix(repartitionedRecords.get(i)))) {
+          new JavaLazyInsertIterable<>(repartitionedRecords.subList(runStart, i).iterator(), true,
+              config, instantTime, table, fileIdPrefix, table.getTaskContextSupplier(),
+              (WriteHandleFactory) partitioner.getWriteHandleFactory(runIndex++).orElse(writeHandleFactory))
+              .forEachRemaining(writeStatuses::addAll);
+          runStart = i;
+        }
+      }
+      return writeStatuses;
     }
 
-    List<WriteStatus> writeStatuses = new ArrayList<>();
+    FileIdPrefixProvider fileIdPrefixProvider = (FileIdPrefixProvider) ReflectionUtils.loadClass(
+        config.getFileIdPrefixProviderClassName(),
+        config.getProps());
+    String fileIdPrefix = fileIdPrefixProvider.createFilePrefix("");
 
     new JavaLazyInsertIterable<>(repartitionedRecords.iterator(), true,
         config, instantTime, table,
