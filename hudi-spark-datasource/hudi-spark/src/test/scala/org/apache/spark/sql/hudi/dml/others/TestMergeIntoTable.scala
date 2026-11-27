@@ -1834,6 +1834,43 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
+  test("Test MergeInto with not matched by source clause") {
+    // Spark parses the clause since 3.4
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts int
+             | ) using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000), (2, 'a2', 20.0, 1000)")
+
+        Seq("delete", "update set price = 0.0").foreach { action =>
+          checkExceptionContain(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'a1n' as name, 11.0 as price, 1001 as ts) s
+               | on t.id = s.id
+               | when matched then update set *
+               | when not matched by source then $action
+             """.stripMargin)("WHEN NOT MATCHED BY SOURCE clause is not supported in MERGE INTO statement on a Hudi table")
+        }
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000), Seq(2, "a2", 20.0, 1000))
+      }
+    }
+  }
+
   test("Test MergeInto with non existent target table") {
     withTempDir { tmp =>
       val sourceTable = generateTableName
