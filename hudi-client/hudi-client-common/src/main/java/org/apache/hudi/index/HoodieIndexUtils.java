@@ -623,14 +623,16 @@ public class HoodieIndexUtils {
 
   /**
    * Keeps one incoming record per record key of the ones that wait for a merged lookup, as
-   * {@link HoodieData#distinctWithKey} does, and fails with a {@link HoodieMultipleMatchesException} when more than one
-   * incoming record matches one row. The index pairs every incoming record with each row it locates the key at, and
-   * the rows of a key differ in file group or position, so more than one incoming record shows as more than one pair
-   * for a row, while one record located at several rows does not fail. The incoming records the index already tagged
-   * count as well, as one of them and one that waits for the merged lookup can match the same row. See
-   * {@link HoodieWriteConfig#UPSERT_FAIL_ON_MULTIPLE_MATCHES}.
+   * {@link HoodieData#distinctWithKey} does, with the file groups of the rows that more than one incoming record
+   * matches. The index pairs every incoming record with each row it locates the key at, and the rows of a key differ
+   * in file group or position, so more than one incoming record shows as more than one pair for a row, while one
+   * record located at several rows does not. A row the merged lookup reads may no longer be live (a merge-on-read
+   * log can delete it), so those file groups are checked against the existing record after the lookup. The incoming
+   * records the index already tagged count as well, as one of them and one that waits for the merged lookup can match
+   * the same row, and fail with a {@link HoodieMultipleMatchesException} right away when they are all the matches of
+   * the row. See {@link HoodieWriteConfig#UPSERT_FAIL_ON_MULTIPLE_MATCHES}.
    */
-  private static <R> HoodieData<HoodieRecord<R>> distinctLocatedRecordsFailingOnMultipleMatches(
+  private static <R> HoodieData<Pair<HoodieRecord<R>, Set<Pair<String, String>>>> distinctLocatedRecordsWithMultipleMatches(
       HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations, int parallelism) {
     return incomingRecordsAndLocations
         .filter(p -> p.getRight().isPresent() || p.getLeft().isCurrentLocationKnown())
@@ -639,23 +641,29 @@ public class HoodieIndexUtils {
           boolean forMergedLookup = p.getRight().isPresent();
           HoodieRecordLocation location = forMergedLookup ? p.getRight().get() : record.getCurrentLocation();
           String partitionPath = forMergedLookup ? p.getRight().get().getPartitionPath() : record.getPartitionPath();
-          Map<Pair<Pair<String, String>, Long>, Long> rowMatches = new HashMap<>();
-          rowMatches.put(Pair.of(Pair.of(partitionPath, location.getFileId()), location.getPosition()), 1L);
+          // per row: the number of matches, and whether one of them waits for the merged lookup
+          Map<Pair<Pair<String, String>, Long>, Pair<Long, Boolean>> rowMatches = new HashMap<>();
+          rowMatches.put(Pair.of(Pair.of(partitionPath, location.getFileId()), location.getPosition()), Pair.of(1L, forMergedLookup));
           return Pair.of(record.getRecordKey(), Pair.of(forMergedLookup ? Option.of(record) : Option.<HoodieRecord<R>>empty(), rowMatches));
         })
         .reduceByKey((left, right) -> {
-          Map<Pair<Pair<String, String>, Long>, Long> rowMatches = new HashMap<>(left.getRight());
-          right.getRight().forEach((row, matches) -> rowMatches.merge(row, matches, Long::sum));
+          Map<Pair<Pair<String, String>, Long>, Pair<Long, Boolean>> rowMatches = new HashMap<>(left.getRight());
+          right.getRight().forEach((row, matches) -> rowMatches.merge(row, matches,
+              (a, b) -> Pair.of(a.getLeft() + b.getLeft(), a.getRight() || b.getRight())));
           return Pair.of(left.getLeft().isPresent() ? left.getLeft() : right.getLeft(), rowMatches);
         }, parallelism)
         .map(p -> {
-          for (Map.Entry<Pair<Pair<String, String>, Long>, Long> rowMatches : p.getRight().getRight().entrySet()) {
-            if (rowMatches.getValue() > 1) {
+          Set<Pair<String, String>> fileGroupsMatchedMoreThanOnce = new HashSet<>();
+          for (Map.Entry<Pair<Pair<String, String>, Long>, Pair<Long, Boolean>> rowMatches : p.getRight().getRight().entrySet()) {
+            if (rowMatches.getValue().getLeft() > 1) {
               Pair<String, String> fileGroup = rowMatches.getKey().getLeft();
-              throw BaseWriteHelper.multipleMatchesException(p.getLeft(), fileGroup.getLeft(), fileGroup.getRight());
+              if (!rowMatches.getValue().getRight()) {
+                throw BaseWriteHelper.multipleMatchesException(p.getLeft(), fileGroup.getLeft(), fileGroup.getRight());
+              }
+              fileGroupsMatchedMoreThanOnce.add(fileGroup);
             }
           }
-          return p.getRight().getLeft();
+          return p.getRight().getLeft().map(record -> Pair.of(record, fileGroupsMatchedMoreThanOnce));
         })
         .filter(Option::isPresent)
         .map(Option::get);
@@ -677,10 +685,11 @@ public class HoodieIndexUtils {
     HoodieData<HoodieRecord<R>> taggedNewRecords = incomingRecordsAndLocations.filter(p -> !p.getRight().isPresent()).map(Pair::getLeft);
     // the records found in existing base files
     boolean failOnMultipleMatches = updatedConfig.shouldFailUpsertOnMultipleMatches() && hoodieTable.getIndex().locatesOnlyMatchingRecords();
-    HoodieData<HoodieRecord<R>> untaggedUpdatingRecords = failOnMultipleMatches
-        ? distinctLocatedRecordsFailingOnMultipleMatches(incomingRecordsAndLocations, updatedConfig.getGlobalIndexReconcileParallelism())
+    HoodieData<Pair<HoodieRecord<R>, Set<Pair<String, String>>>> untaggedUpdatingRecords = failOnMultipleMatches
+        ? distinctLocatedRecordsWithMultipleMatches(incomingRecordsAndLocations, updatedConfig.getGlobalIndexReconcileParallelism())
         : incomingRecordsAndLocations.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
-            .distinctWithKey(HoodieRecord::getRecordKey, updatedConfig.getGlobalIndexReconcileParallelism());
+            .distinctWithKey(HoodieRecord::getRecordKey, updatedConfig.getGlobalIndexReconcileParallelism())
+            .map(record -> Pair.of(record, Collections.<Pair<String, String>>emptySet()));
     // the tagging partitions and locations
     // NOTE: The incoming records may only differ in record position, however, for the purpose of
     //       merging in case of partition updates, it is safe to ignore the record positions.
@@ -691,16 +700,20 @@ public class HoodieIndexUtils {
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords =
         merger.getExistingRecords(globalLocations.map(location -> Pair.of(location, Option.empty())), hoodieTable);
-    HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
+    HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getLeft().getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
-          HoodieRecord<R> incoming = entry.getLeft();
+          HoodieRecord<R> incoming = entry.getLeft().getLeft();
           Option<HoodieRecord<R>> existingOpt = entry.getRight();
           if (!existingOpt.isPresent()) {
             // existing record not found (e.g., due to delete log not merged to base file): tag as a new record
             return Collections.singletonList(incoming).iterator();
           }
           HoodieRecord<R> existing = existingOpt.get();
+          Pair<String, String> existingFileGroup = Pair.of(existing.getPartitionPath(), existing.getCurrentLocation().getFileId());
+          if (entry.getLeft().getRight().contains(existingFileGroup)) {
+            throw BaseWriteHelper.multipleMatchesException(incoming.getRecordKey(), existingFileGroup.getLeft(), existingFileGroup.getRight());
+          }
 
           Option<HoodieRecord<R>> mergedOpt = merger.merge(incoming, existing);
           if (!mergedOpt.isPresent()) {

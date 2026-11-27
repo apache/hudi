@@ -360,6 +360,29 @@ class TestMergeIntoCardinalityCheck extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test MERGE INTO cardinality check with two source rows for a key deleted in a log file and a global index on a mor table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE", MERGE_INTO_CARDINALITY_CHECK.key -> "true") {
+        createTable(tableName, tmp.getCanonicalPath, "mor", "primaryKey = 'id'", "'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'")
+        spark.sql(s"insert into $tableName values (1, 'a1', 1000), (2, 'a2', 1000)")
+        // The delete goes to a log file, while the base file still holds id 1, which the index locates
+        spark.sql(s"delete from $tableName where id = 1")
+        // No live row of id 1 is left for the two source rows to match, so they are not a violation
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'b1' as name, 1001 as ts union all select 1, 'c1', 1001
+             |  union all select 3, 'b3', 1001) s on t.id = s.id
+             |when matched and s.name = 'del' then delete
+             |when not matched then insert *
+           """.stripMargin)
+        assertResult(1)(spark.sql(s"select id from $tableName where id = 1").count())
+        checkAnswer(s"select id, name, ts from $tableName where id <> 1 order by id")(Seq(2, "a2", 1000), Seq(3, "b3", 1001))
+      }
+    }
+  }
+
   // (table type, index type). The record level index is not built, so it falls back to the simple index.
   Seq(("cow", "BUCKET"), ("cow", "RECORD_LEVEL_INDEX"), ("mor", "BUCKET")).foreach { case (tableType, indexType) =>
     test(s"Test MERGE INTO with the default check and an index that does not support it ($tableType, $indexType index)") {
