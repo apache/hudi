@@ -42,7 +42,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, Matc
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Coalesce, EqualTo, Expression, Literal, NamedExpression, Or, PredicateHelper, TryEval}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -407,7 +407,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       Project(tableMetaCols ++ incomingDataCols, joinData)
     } else {
       // For a target table with record key(s) configure, the source table is used
-      mergeInto.sourceTable
+      sourceTableWithoutIgnoredRecords
     }
 
     val inputPlanAttributes = inputPlan.output
@@ -462,6 +462,27 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, inputPlan)
 
     sparkAdapter.getUnsafeUtils.createDataFrameFrom(sparkSession, amendedPlan)
+  }
+
+  /**
+   * The source table of a statement with not-matched clauses only, without the records none of the
+   * clauses accepts. Such a record writes nothing, but the upsert can keep a single record per record
+   * key before the payload evaluates the clause conditions, where it could take the place of a record
+   * with the same key that a clause accepts.
+   *
+   * A record on which the conditions fail to evaluate (e.g. a cast error under ANSI mode) stays, and the
+   * write evaluates them after the lookup as before: a record that matches a record of the table takes no
+   * clause, so its conditions are never evaluated, and only a record that matches none can fail the write.
+   */
+  private def sourceTableWithoutIgnoredRecords: LogicalPlan = {
+    val insertConditions = insertingActions.map(_.condition)
+    if (mergeInto.matchedActions.isEmpty && insertConditions.nonEmpty
+      && insertConditions.forall(_.exists(_.deterministic))) {
+      val accepted = Coalesce(Seq(insertConditions.flatten.reduce(Or), Literal.FalseLiteral))
+      Filter(Coalesce(Seq(TryEval(accepted), Literal.TrueLiteral)), mergeInto.sourceTable)
+    } else {
+      mergeInto.sourceTable
+    }
   }
 
   /**

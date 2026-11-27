@@ -847,6 +847,25 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
               Seq(1, "a1_new", 10.1, 1003, "2021-03-21"),
               Seq(3, "a3", 10.3, 1003, "2021-03-21")
             )
+
+            // Insert data with insert condition: the source record of id 4 with the larger ts fails the condition
+            spark.sql(
+              s"""
+                 | merge into $tableName as t0
+                 | using (
+                 |  select 4 as id, 'a4' as name, 10.4 as price, 1004 as ts, '2021-03-21' as dt
+                 |  union all
+                 |  select 4 as id, 'a4_skip' as name, 1.4 as price, 1005 as ts, '2021-03-21' as dt
+                 | ) as s0
+                 | on t0.id = s0.id
+                 | when not matched and s0.price > 5 then insert *
+         """.stripMargin
+            )
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a1_new", 10.1, 1003, "2021-03-21"),
+              Seq(3, "a3", 10.3, 1003, "2021-03-21"),
+              Seq(4, "a4", 10.4, 1004, "2021-03-21")
+            )
           }
         }
       }
@@ -1319,6 +1338,41 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             Seq(2, "Jane Doe", 24, 1598972400L),
             Seq(3, "Bob Smith", 14, 1599058800L),
             Seq(4, "Alice Johnson", 49, 2L))
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto With Only Insert Clauses Leaves A Matched Record Out Of The Insert Condition") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        withSQLConf("spark.sql.ansi.enabled" -> "true") {
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (id int, value string, ts long) using hudi
+               | tblproperties (primaryKey = 'id', preCombineField = 'ts', type = '$tableType')
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'bad', 1)")
+          def mergeFrom(rows: (Int, String)*): Unit = spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (${rows.map { case (id, value) => s"select $id as id, '$value' as value, 2L as ts" }.mkString(" union all ")}) s
+               | on t.id = s.id
+               | when not matched and cast(s.value as int) > 0 then insert *
+             """.stripMargin)
+
+          // The insert condition cannot be evaluated on the source record of id 1, which matches a record of the
+          // table and so writes nothing, as no clause applies to a matched record. The ordering field makes the
+          // statement an upsert, which looks the records up before it evaluates the insert condition
+          mergeFrom((1, "bad"), (2, "5"), (3, "0"))
+          checkAnswer(s"select id, value from $tableName order by id")(Seq(1, "bad"), Seq(2, "5"))
+          // A source record that matches no record still has its insert condition evaluated
+          checkNestedExceptionContains(new Runnable {
+            override def run(): Unit = mergeFrom((4, "bad"))
+          })("CAST_INVALID_INPUT")
+          checkAnswer(s"select id, value from $tableName order by id")(Seq(1, "bad"), Seq(2, "5"))
         }
       }
     }
