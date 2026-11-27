@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
-import org.apache.hudi.{DataSourceOptionsHelper, HoodieSchemaConversionUtils}
+import org.apache.hudi.{DataSourceOptionsHelper, DataSourceReadOptions, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieConfig, TypedProperties}
@@ -74,7 +74,8 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * properties defined in catalog.
    */
-  val catalogProperties: Map[String, String] = HoodieOptionConfig.makeOptionsCaseInsensitive(table.storage.properties ++ table.properties)
+  val catalogProperties: Map[String, String] = HoodieOptionConfig.makeOptionsCaseInsensitive(
+    (table.storage.properties -- DataSourceReadOptions.CATALOG_IDENTITY_KEYS) ++ table.properties)
 
   /**
    * hoodie table's location.
@@ -110,11 +111,6 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
    * the name of table
    */
   lazy val tableName: String = tableConfig.getTableName
-
-  /**
-   * the name of database
-   */
-  lazy val databaseName: String = tableConfig.getDatabaseName
 
   /**
    * The name of type of table

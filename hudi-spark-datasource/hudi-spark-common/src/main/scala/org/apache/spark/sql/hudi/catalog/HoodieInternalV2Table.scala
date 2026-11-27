@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.catalog
 
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
@@ -77,7 +78,17 @@ case class HoodieInternalV2Table(spark: SparkSession,
 
   override def v1Table: CatalogTable = hoodieCatalogTable.table
 
-  def v1TableWrapper: V1Table = V1Table(v1Table)
+  /**
+   * Read options naming the catalog entry this table was loaded from, so the file index can use that entry
+   * instead of guessing an identifier.
+   */
+  def catalogIdentityOptions: Map[String, String] = catalogTable.flatMap(t => t.identifier.database.map(db => Map(
+    DataSourceReadOptions.CATALOG_TABLE_DATABASE.key -> db,
+    DataSourceReadOptions.CATALOG_TABLE_NAME.key -> t.identifier.table))).getOrElse(Map.empty)
+
+  // Spark passes the storage properties of a V1 table to the data source as read options.
+  def v1TableWrapper: V1Table = V1Table(v1Table.copy(
+    storage = v1Table.storage.copy(properties = v1Table.storage.properties ++ catalogIdentityOptions)))
 
   override def partitioning(): Array[Transform] = {
     hoodieCatalogTable.partitionFields.map { col =>
