@@ -28,8 +28,11 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
@@ -44,10 +47,12 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.parquet.avro.AvroSchemaConverterWithTimestampNTZ;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
@@ -62,6 +67,9 @@ import static org.apache.hudi.common.avro.HoodieAvroUtils.toJavaDate;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class HoodieArrayWritableSchemaUtils {
+
+  private static final Cache<Pair<HoodieSchema, HoodieSchema>, HoodieSchema> UNION_MEMBER_SCHEMAS =
+      Caffeine.newBuilder().maximumSize(1024).build();
 
   public static ArrayWritable rewriteRecordWithNewSchema(ArrayWritable writable, HoodieSchema oldSchema, HoodieSchema newSchema, Map<String, String> renameCols) {
     return rewriteRecordWithNewSchema(writable, oldSchema, newSchema, renameCols, HoodieProjectionMask.all());
@@ -82,8 +90,8 @@ public class HoodieArrayWritableSchemaUtils {
 
   private static Writable rewriteRecordWithNewSchema(Writable writable, HoodieSchema oldSchema, HoodieSchema newSchema,
                                                      Map<String, String> renameCols, Deque<String> fieldNames, HoodieProjectionMask physicalMask) {
-    if (writable == null) {
-      return null;
+    if (writable == null || writable instanceof NullWritable) {
+      return writable;
     }
     HoodieSchema oldSchemaNonNull = oldSchema.getNonNullType();
     HoodieSchema newSchemaNonNull = newSchema.getNonNullType();
@@ -147,11 +155,66 @@ public class HoodieArrayWritableSchemaUtils {
         return map;
 
       case UNION:
+        // Avro/Parquet stores a union column on disk as a record of optional member0..memberN
+        // fields, one per non-null branch, which is also the shape Hive expects for the column.
+        // The member group still needs a recursive rewrite: a record-valued branch may itself
+        // have evolved (e.g. its fields were reordered), and passing it through would surface
+        // values at the old positions.
+        if (oldSchema.getType() == HoodieSchemaType.RECORD && writable instanceof ArrayWritable) {
+          HoodieSchema memberSchema = UNION_MEMBER_SCHEMAS.get(Pair.of(oldSchema, newSchema),
+              schemas -> unionMemberSchema(schemas.getLeft(), schemas.getRight()));
+          return rewriteRecordWithNewSchema(writable, oldSchema, memberSchema, renameCols, fieldNames, physicalMask);
+        }
         throw new IllegalArgumentException("should not be here?");
 
       default:
         return rewritePrimaryType(writable, oldSchema, newSchema);
     }
+  }
+
+  /**
+   * Derives the target member record once per schema pair. Keep logical branch types in the
+   * rewrite schema (e.g. ENUM), but validate against their Parquet representations: physical
+   * STRING/RECORD fields can represent enums/nested unions without any schema evolution.
+   *
+   * <p>The footer's physical schema loses named branch identities. Prefer a matching physical type; reject
+   * competing matches of that type. A type promotion is allowed only when there is a unique
+   * compatible target. In particular, unchanged INT/LONG branches are unambiguous, whereas
+   * promoting both to FLOAT/DOUBLE cannot establish which member represents which branch.
+   */
+  private static HoodieSchema unionMemberSchema(HoodieSchema oldSchema, HoodieSchema newSchema) {
+    List<HoodieSchemaField> members = new ArrayList<>();
+    for (HoodieSchema branch : newSchema.getTypes()) {
+      if (branch.getType() != HoodieSchemaType.NULL) {
+        members.add(HoodieSchemaField.of("member" + members.size(), HoodieSchema.createNullable(branch), null, HoodieSchema.NULL_VALUE));
+      }
+    }
+    HoodieSchema target = HoodieSchema.createRecord(oldSchema.getName(), oldSchema.getNamespace().orElse(null), null, members);
+    AvroSchemaConverterWithTimestampNTZ converter = new AvroSchemaConverterWithTimestampNTZ();
+    HoodieSchema physicalTarget = converter.convert(converter.convert(target));
+    List<HoodieSchemaField> oldMembers = oldSchema.getFields();
+    if (oldMembers.size() != members.size()) {
+      throw new SchemaCompatibilityException("Cannot rewrite union member group: non-null branch count changed");
+    }
+    for (int i = 0; i < members.size(); i++) {
+      HoodieSchemaField oldMember = oldMembers.get(i);
+      if (!members.get(i).name().equals(oldMember.name())) {
+        throw new SchemaCompatibilityException("Cannot rewrite union member group: unexpected member " + oldMember.name());
+      }
+      HoodieSchema oldBranch = oldMember.schema().getNonNullType();
+      HoodieSchema targetBranch = physicalTarget.getFields().get(i).schema().getNonNullType();
+      if (!HoodieSchemaCompatibility.isSchemaCompatible(oldBranch, targetBranch, false, true)) {
+        throw new SchemaCompatibilityException("Cannot rewrite union member group: incompatible branch " + oldMember.name());
+      }
+      for (int j = 0; j < members.size(); j++) {
+        HoodieSchema otherBranch = physicalTarget.getFields().get(j).schema().getNonNullType();
+        if (i != j && (oldBranch.getType() != targetBranch.getType() || oldBranch.getType() == otherBranch.getType())
+            && HoodieSchemaCompatibility.isSchemaCompatible(oldBranch, otherBranch, false, true)) {
+          throw new SchemaCompatibilityException("Cannot determine union branch identity from physical schema for " + oldMember.name());
+        }
+      }
+    }
+    return target;
   }
 
   /**
