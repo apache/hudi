@@ -21,7 +21,10 @@ import io.trino.plugin.hudi.testing.SummingTestPayload;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import static io.trino.plugin.hudi.testing.AbstractMergerHudiTablesInitializer.spillDirectory;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -54,7 +57,8 @@ public class TestHudiMorPayloadSemantics
                 .setDataLoader(new CompositeHudiTablesInitializer(
                         new DmsPayloadHudiTablesInitializer(),
                         new OverwriteNonDefaultsPayloadHudiTablesInitializer(),
-                        new SummingPayloadHudiTablesInitializer()))
+                        new SummingPayloadHudiTablesInitializer(),
+                        SummingPayloadHudiTablesInitializer.spillingEveryLogRecord()))
                 .build();
     }
 
@@ -99,8 +103,9 @@ public class TestHudiMorPayloadSemantics
                 "VALUES ('k1', 'new_a', 'base_b')");
     }
 
-    @Test
-    public void testSummingPayloadRunsCombineAndGetUpdateValueOnRead()
+    @ParameterizedTest
+    @ValueSource(strings = {SummingPayloadHudiTablesInitializer.RT_TABLE_NAME, SummingPayloadHudiTablesInitializer.SPILLING_RT_TABLE_NAME})
+    public void testSummingPayloadRunsCombineAndGetUpdateValueOnRead(String rtTable)
     {
         // Read-optimized: the base values
         assertQuery(
@@ -108,20 +113,30 @@ public class TestHudiMorPayloadSemantics
                 "VALUES ('k1', CAST(10 AS BIGINT)), ('k2', 20)");
         // Snapshot: 10 + 99 = 109 -- only the payload's combineAndGetUpdateValue can produce this
         // (newest-wins would yield 99, base-only 10), proving the CUSTOM payload-strategy branch ran;
-        // k2 is hard-deleted
+        // k2 is hard-deleted. On the spilling twin the payload combines a log record read back from disk.
         assertQuery(
-                "SELECT key, value FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
+                "SELECT key, value FROM " + rtTable + " ORDER BY key",
                 "VALUES ('k1', CAST(109 AS BIGINT))");
     }
 
     @Test
-    public void testSummingPayloadHardDeleteRemovesRowOnSnapshotRead()
+    public void testSpilledSummingPayloadMergeMatchesInMemoryMerge()
+    {
+        assertThat(query("SELECT key, value, ts FROM " + SummingPayloadHudiTablesInitializer.SPILLING_RT_TABLE_NAME))
+                .matches("SELECT key, value, ts FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME);
+        // Only a spill creates the spill directory, so the spilling twin is not merged in memory as well
+        assertThat(spillDirectory(SummingPayloadHudiTablesInitializer.SPILLING_TABLE_NAME)).isDirectory();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {SummingPayloadHudiTablesInitializer.RT_TABLE_NAME, SummingPayloadHudiTablesInitializer.SPILLING_RT_TABLE_NAME})
+    public void testSummingPayloadHardDeleteRemovesRowOnSnapshotRead(String rtTable)
     {
         // The hard delete is a native delete log record routed to the payload-based CUSTOM merge arm,
         // where it wins on HoodieAvroRecordMerger's isCommitTimeOrderingDelete short-circuit (the
         // delete carries the sentinel ordering value) -- the delete path of the user-merger dispatch,
         // which both ordering arms already cover
-        assertThat(computeScalar("SELECT count(*) FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k2'"))
+        assertThat(computeScalar("SELECT count(*) FROM " + rtTable + " WHERE key = 'k2'"))
                 .isEqualTo(0L);
         assertThat(computeScalar("SELECT count(*) FROM " + SummingPayloadHudiTablesInitializer.TABLE_NAME + " WHERE key = 'k2'"))
                 .isEqualTo(1L);

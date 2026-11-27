@@ -54,12 +54,28 @@ public class SummingPayloadHudiTablesInitializer
 {
     public static final String TABLE_NAME = "summing_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
+    public static final String SPILLING_TABLE_NAME = TABLE_NAME + SPILLING_SUFFIX;
+    public static final String SPILLING_RT_TABLE_NAME = SPILLING_TABLE_NAME + "_rt";
 
     private static final String SUM_FIELD = SummingTestPayload.SUM_COLUMN;
 
     public SummingPayloadHudiTablesInitializer()
     {
         super(TABLE_NAME);
+    }
+
+    private SummingPayloadHudiTablesInitializer(String tableName, Map<String, String> extraTableProperties)
+    {
+        super(tableName, extraTableProperties);
+    }
+
+    /**
+     * The same commits under {@link #SPILLING_TABLE_NAME}, read with {@link #spillEveryLogRecord}: the payload combines
+     * the base row with a log record read back from disk.
+     */
+    public static SummingPayloadHudiTablesInitializer spillingEveryLogRecord()
+    {
+        return new SummingPayloadHudiTablesInitializer(SPILLING_TABLE_NAME, spillEveryLogRecord(SPILLING_TABLE_NAME));
     }
 
     @Override

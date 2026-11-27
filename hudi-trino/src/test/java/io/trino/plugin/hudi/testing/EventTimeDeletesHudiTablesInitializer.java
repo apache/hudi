@@ -47,7 +47,8 @@ import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
  * ({@code _hoodie_is_deleted=true}), an OBSOLETE soft delete and an OBSOLETE update (both with an ordering
  * value LOWER than the base row's, so event-time merging must keep the base row), and then a hard-delete
  * commit ({@code writeClient.delete}) that produces a native delete log file read back through the
- * connector's {@code getFileRecordIterator}.
+ * connector's {@code getFileRecordIterator}. A last log commit updates k1 a second time with an ordering value
+ * that loses to its first update.
  * <p>
  * Records are wrapped in {@link HoodieAvroPayload}, which implements {@code HoodieRecordPayload} directly
  * (NOT {@code BaseAvroPayload}), so rows with {@code _hoodie_is_deleted=true} are written as DATA records
@@ -58,10 +59,23 @@ public class EventTimeDeletesHudiTablesInitializer
 {
     public static final String TABLE_NAME = "deletes_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
+    public static final String SPILLING_TABLE_NAME = TABLE_NAME + SPILLING_SUFFIX;
+    public static final String SPILLING_RT_TABLE_NAME = SPILLING_TABLE_NAME + "_rt";
 
     public EventTimeDeletesHudiTablesInitializer()
     {
         super(TABLE_NAME);
+    }
+
+    private EventTimeDeletesHudiTablesInitializer(String tableName, Map<String, String> extraTableProperties)
+    {
+        super(tableName, extraTableProperties);
+    }
+
+    /** The same commits under {@link #SPILLING_TABLE_NAME}, read with {@link #spillEveryLogRecord}. */
+    public static EventTimeDeletesHudiTablesInitializer spillingEveryLogRecord()
+    {
+        return new EventTimeDeletesHudiTablesInitializer(SPILLING_TABLE_NAME, spillEveryLogRecord(SPILLING_TABLE_NAME));
     }
 
     @Override
@@ -139,6 +153,13 @@ public class EventTimeDeletesHudiTablesInitializer
         List<WriteStatus> deleteStatuses = client.delete(
                 ImmutableList.of(hoodieKey("k2")), deleteCommit);
         client.commit(deleteCommit, deleteStatuses);
+
+        // Fourth commit (log file): a second update of k1, with a ts (150) between the base row's and the first
+        // update's. It must lose to the buffered first update, so the merge compares it against a log record that
+        // the spilling twin has already written to disk and reads back with its ordering value.
+        String lateCommit = client.startCommit();
+        client.commit(lateCommit, client.upsert(ImmutableList.of(
+                record(schema, "k1", "k1_late", 12L, 150L, false)), lateCommit));
     }
 
     private static HoodieRecord<HoodieAvroPayload> record(Schema schema, String key, String name, long value, long ts, boolean deleted)
