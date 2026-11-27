@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
+import org.apache.hudi.HoodieSparkUtils.{gteqSpark3_4, gteqSpark3_5}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
@@ -676,6 +676,79 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, payload from $tableName")(
         Seq(1L, Row("OUT_OF_LINE", null, Row("blobs/updated", 10L, 100L, true)))
       )
+    }
+  }
+
+  test("Test Update Table With Nested Field Assignments") {
+    withTempDir { tmp =>
+      Seq(("cow", "primaryKey = 'id',"), ("mor", "primaryKey = 'id',"), ("cow", "")).foreach { case (tableType, keyProp) =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  s struct<c1:int, c2:struct<a:array<int>, m:map<string, string>>>,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, named_struct('c1', 2, 'c2', named_struct('a', array(1, 2), 'm', map('a', 'b'))), 10")
+        spark.sql(s"insert into $tableName select 2, null, 20")
+
+        if (gteqSpark3_5) {
+          spark.sql(s"update $tableName set s.c1 = -2, s.c2.a = array(-1, -2) where id = 1")
+          spark.sql(s"update $tableName set s.c1 = 5 where id = 2")
+          checkAnswer(s"select id, s, v from $tableName order by id")(
+            Seq(1, Row(-2, Row(Seq(-1, -2), Map("a" -> "b"))), 10),
+            Seq(2, Row(5, null), 20))
+
+          spark.sql(s"update $tableName set s.c2.m = map('k', 'v'), v = 11 where id = 1")
+          checkAnswer(s"select id, s, v from $tableName order by id")(
+            Seq(1, Row(-2, Row(Seq(-1, -2), Map("k" -> "v"))), 11),
+            Seq(2, Row(5, null), 20))
+
+          spark.sql(s"update $tableName set s.c1 = null, s.c2 = null where id = 1")
+          checkAnswer(s"select id, s, v from $tableName order by id")(
+            Seq(1, Row(null, null), 11),
+            Seq(2, Row(5, null), 20))
+
+          // refused at analysis, whatever the table
+          if (tableType == "cow" && keyProp.nonEmpty) {
+            checkExceptionContain(s"update $tableName set id = 3, s.c1 = 1, id = 4")("Multiple assignments for 'id'")
+            checkExceptionContain(
+              s"update $tableName set s.c1 = 1, s = named_struct('c1', 1, 'c2', null)")("Conflicting assignments for 's'")
+          }
+        } else {
+          checkExceptionContain(s"update $tableName set s.c1 = 5 where id = 2")(
+            "Assigning a nested field is not supported on Spark")
+        }
+      }
+
+      // A struct holding a record key field cannot be assigned, nor any field of it. Assigning the whole
+      // struct used to change the key in the data while _hoodie_record_key kept the old key.
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  s struct<c1:int, c2:int>
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (primaryKey = 's.c1', type = 'cow')
+         """.stripMargin)
+      spark.sql(s"insert into $tableName select 1, named_struct('c1', 1, 'c2', 2)")
+      val keyFieldAssignments = Seq(
+        // changes the key
+        s"update $tableName set s = named_struct('c1', 9, 'c2', 4) where id = 1",
+        // keeps the key
+        s"update $tableName set s = named_struct('c1', 1, 'c2', 3) where id = 1") ++
+        (if (gteqSpark3_5) Seq(s"update $tableName set s.c1 = 9 where id = 1") else Seq.empty)
+      keyFieldAssignments.foreach { statement =>
+        checkExceptionContain(statement)(
+          "Detected disallowed assignment clause in UPDATE statement for record key field `s.c1`")
+      }
+      checkAnswer(s"select _hoodie_record_key, id, s from $tableName")(Seq("1", 1, Row(1, 2)))
     }
   }
 }

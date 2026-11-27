@@ -514,12 +514,14 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
       plan match {
         // Convert to MergeIntoHoodieTableCommand
         case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
-          MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable])
+          MergeIntoHoodieTableCommand(resolveAssignments(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable]))
 
         // Convert to UpdateHoodieTableCommand
         case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
-          val inputPlan = UpdateHoodieTableCommand.inputPlan(sparkSession, ut)
-          UpdateHoodieTableCommand(ut, inputPlan)
+          val resolvedUpdate = ut.copy(assignments =
+            sparkAdapter.getCatalystPlanUtils.resolveRowLevelAssignments(ut.table.output, ut.assignments, isInsert = false))
+          val inputPlan = UpdateHoodieTableCommand.inputPlan(sparkSession, resolvedUpdate)
+          UpdateHoodieTableCommand(resolvedUpdate, inputPlan)
 
 
         // Convert to DeleteHoodieTableCommand
@@ -606,6 +608,22 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
       }
     }
     ProcedureArgs(isNamedArgs, map, new GenericInternalRow(values))
+  }
+
+  private def resolveAssignments(mergeInto: MergeIntoTable): MergeIntoTable = {
+    val planUtils = sparkAdapter.getCatalystPlanUtils
+    val targetOutput = mergeInto.targetTable.output
+    def resolveActions(actions: Seq[MergeAction]): Seq[MergeAction] = actions.map {
+      case update: UpdateAction =>
+        update.copy(assignments = planUtils.resolveRowLevelAssignments(targetOutput, update.assignments, isInsert = false))
+      case insert: InsertAction =>
+        insert.copy(assignments =
+          planUtils.resolveRowLevelAssignments(removeMetaFields(targetOutput), insert.assignments, isInsert = true))
+      case action => action
+    }
+    mergeInto.copy(
+      matchedActions = resolveActions(mergeInto.matchedActions),
+      notMatchedActions = resolveActions(mergeInto.notMatchedActions))
   }
 }
 

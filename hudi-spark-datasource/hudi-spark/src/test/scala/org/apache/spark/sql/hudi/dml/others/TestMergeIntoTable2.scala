@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.HoodieSparkUtils.gteqSpark3_5
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -1321,6 +1322,153 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             Seq(4, "Alice Johnson", 49, 2L))
         }
       }
+    }
+  }
+
+  test("Test MergeInto With Nested Field Assignments") {
+    withTempDir { tmp =>
+      Seq(("cow", "primaryKey = 'id',"), ("cow", ""), ("mor", "primaryKey = 'id',")).foreach { case (tableType, keyProp) =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  s struct<c1:int, c2:struct<a:array<int>, m:map<string, string>>>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, named_struct('c1', 2, 'c2', named_struct('a', array(1, 2), 'm', map('a', 'b')))")
+        spark.sql(s"insert into $tableName select 2, null")
+        val mergeNested =
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, -2 as c1 union all select 2, 5) src
+             |on t.id = src.id
+             |when matched then update set t.s.c1 = src.c1, t.s.c2.a = array(-1, -2)
+           """.stripMargin
+
+        if (!gteqSpark3_5) {
+          checkExceptionContain(mergeNested)("Assigning a nested field is not supported on Spark")
+        } else if (tableType == "mor") {
+          // the update of a nested field reads the other fields of the struct from the stored record
+          checkExceptionContain(mergeNested)("cannot be the right-value of the update clause for MOR table")
+        } else {
+          spark.sql(mergeNested)
+          checkAnswer(s"select id, s from $tableName order by id")(
+            Seq(1, Row(-2, Row(Seq(-1, -2), Map("a" -> "b")))),
+            Seq(2, Row(5, Row(Seq(-1, -2), null))))
+
+          // refused at analysis, whatever the table
+          if (keyProp.nonEmpty) {
+            checkExceptionContain(
+              s"""
+                 |merge into $tableName t using (select 3 as id) s on t.id = s.id
+                 |when not matched then insert (id, s.c1) values (s.id, 1)
+               """.stripMargin)("INSERT assignment keys cannot be nested fields")
+            checkExceptionContain(
+              s"""
+                 |merge into $tableName t using (select 1 as id) s on t.id = s.id
+                 |when matched then update set t.s.c1 = 1, t.s.c1 = 2
+               """.stripMargin)("Multiple assignments for 's.c1'")
+          }
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto On A MOR Table With Nested Field Assignments From The Source Only") {
+    // Every field of the struct is assigned from the source, so the rebuilt struct reads nothing from the stored
+    // record. With partial updates, v, which is not assigned, keeps its value. Without them every column is assigned.
+    Seq(
+      ("true", "t.s.c1 = src.c1, t.s.c2 = src.c2", 10, 20),
+      ("false", "t.id = src.id, t.s.c1 = src.c1, t.s.c2 = src.c2, t.v = src.v", 11, 21)
+    ).filter(_ => gteqSpark3_5).foreach { case (partialUpdates, assignments, v1, v2) =>
+      withTempDir { tmp =>
+        withSQLConf(DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> partialUpdates) {
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  s struct<c1:int, c2:string>,
+               |  v int
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (primaryKey = 'id', type = 'mor')
+             """.stripMargin)
+          spark.sql(s"insert into $tableName select 1, named_struct('c1', 1, 'c2', 'a'), 10")
+          spark.sql(s"insert into $tableName select 2, null, 20")
+
+          spark.sql(
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 100 as c1, 'p' as c2, 11 as v union all select 2, 200, 'q', 21) src
+               |on t.id = src.id
+               |when matched then update set $assignments
+             """.stripMargin)
+          checkAnswer(s"select id, s, v from $tableName order by id")(
+            Seq(1, Row(100, "p"), v1),
+            Seq(2, Row(200, "q"), v2))
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto And Update Refuse Assignments To A Field Nested In An Array Or A Map") {
+    // a nested field assignment needs Spark 3.5
+    if (gteqSpark3_5) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  a array<struct<c1:int, c2:int>>,
+             |  m map<string, string>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (primaryKey = 'id', type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, array(named_struct('c1', 2, 'c2', 3)), map('k', 'v')")
+        val merge = s"merge into $tableName t using (select 1 as id, -2 as c2) s on t.id = s.id when matched then "
+
+        Seq(
+          merge + "update set t.a.c1 = s.c2",
+          merge + "update set t.a.c1 = array(-2)",
+          merge + "update set t.m.key = 'new_key'",
+          s"update $tableName set a.c1 = 1",
+          s"update $tableName set m.key = 'new_key'").foreach { statement =>
+          checkExceptionContain(statement)("Updating nested fields is only supported for StructType")
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto Of A Table Without A Record Key Into Itself Does Not Support Nested Field Assignments") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v int,
+           |  s struct<c1:int, c2:int>
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (type = 'cow')
+         """.stripMargin)
+      spark.sql(s"insert into $tableName select 1, 10, named_struct('c1', 1, 'c2', 2)")
+
+      // A nested assignment of a MERGE INTO of a table into itself is not aligned, so the command still refuses it
+      Seq(
+        s"merge into $tableName using $tableName as src on $tableName.id = src.id " +
+          s"when matched then update set $tableName.s.c1 = src.v",
+        s"merge into $tableName t using (select * from $tableName) src on t.id = src.id " +
+          "when matched then update set t.s.c1 = src.v + 1").foreach { statement =>
+        checkExceptionContain(statement)("Only assignments of the form `t.field = ...` are supported")
+      }
+      checkAnswer(s"select id, v, s from $tableName")(Seq(1, 10, Row(1, 2)))
     }
   }
 }
