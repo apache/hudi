@@ -130,7 +130,8 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.3.0")
-      .withDocumentation("Control whether to write bloom filter or not to HFile.");
+      .withDocumentation("Control whether to write bloom filter or not to HFile. The metadata table writes it only when "
+          + "hoodie.metadata.bloom.filter.enable is also set, as its lookups only read the bloom filter then.");
 
   public static final ConfigProperty<String> VORTEX_MAX_FILE_SIZE = ConfigProperty
       .key("hoodie.vortex.max.file.size")

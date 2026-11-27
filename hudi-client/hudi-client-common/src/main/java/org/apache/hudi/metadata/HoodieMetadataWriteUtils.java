@@ -314,7 +314,9 @@ public class HoodieMetadataWriteUtils {
             // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
             // presence of keys
             .logFileDataBlockMaxSize(maxLogFileSizeBytes)
-            .hfileBloomFilterEnable(writeConfig.hfileBloomFilterEnabled())
+            // Metadata table lookups read the HFile bloom filter only with hoodie.metadata.bloom.filter.enable, so it is
+            // not written otherwise. On record index files with millions of keys it costs 5-10% of compaction time.
+            .hfileBloomFilterEnable(writeConfig.hfileBloomFilterEnabled() && writeConfig.getMetadataConfig().enableBloomFilter())
             .withBloomFilterType(writeConfig.getMetadataConfig().getBloomFilterType())
             .withBloomFilterNumEntries(writeConfig.getMetadataConfig().getBloomFilterNumEntries())
             .withBloomFilterFpp(writeConfig.getMetadataConfig().getBloomFilterFpp())
