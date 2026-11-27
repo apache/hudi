@@ -40,6 +40,7 @@ import org.apache.hudi.table.action.deltacommit.JavaBulkInsertPreppedDeltaCommit
 import org.apache.hudi.table.action.deltacommit.JavaDeleteDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaDeletePreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaInsertDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.JavaInsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaUpsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.restore.MergeOnReadRestoreActionExecutor;
@@ -61,6 +62,14 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insert(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> hoodieRecords) {
     return new JavaInsertDeltaCommitActionExecutor<>((HoodieJavaEngineContext) context, config, this, instantTime, hoodieRecords).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> insertPrepped(HoodieEngineContext context,
+                                                              String instantTime,
+                                                              List<HoodieRecord<T>> preppedRecords) {
+    return new JavaInsertPreppedDeltaCommitActionExecutor<>((HoodieJavaEngineContext) context, config,
+        this, instantTime, preppedRecords).execute();
   }
 
   @Override

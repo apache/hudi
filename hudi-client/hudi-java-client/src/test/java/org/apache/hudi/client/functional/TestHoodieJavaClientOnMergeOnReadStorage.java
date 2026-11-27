@@ -23,6 +23,9 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy;
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -33,8 +36,11 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.deltacommit.JavaUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 import org.apache.hudi.testutils.RecordingCommitCallback;
@@ -42,17 +48,23 @@ import org.apache.hudi.testutils.RecordingCommitCallback;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIELD;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertDataInMORTable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTestHarness {
@@ -183,6 +195,118 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     // Verify all the records.
     metaClient.reloadActiveTimeline();
     assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testInsertIntoSmallFileGroupKeepsLoggedUpdates(boolean preppedInsert) throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.BLOOM).build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+    String partition = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    HoodieTestDataGenerator singlePartitionDataGen = new HoodieTestDataGenerator(new String[] {partition});
+
+    // Inserts go to a base file since the index cannot look up records in log files.
+    String firstInsertTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, firstInsertTime);
+    client.commit(firstInsertTime, client.insert(singlePartitionDataGen.generateInserts(firstInsertTime, 20), firstInsertTime));
+
+    // Updates go to a log file of the same file group.
+    String updateTime = WriteClientTestUtils.createNewInstantTime();
+    List<HoodieRecord> updates = singlePartitionDataGen.generateUniqueUpdates(updateTime, 5);
+    WriteClientTestUtils.startCommitWithTime(client, updateTime);
+    client.commit(updateTime, client.upsert(updates, updateTime));
+
+    String secondInsertTime = WriteClientTestUtils.createNewInstantTime();
+    List<HoodieRecord> secondInserts = singlePartitionDataGen.generateInserts(secondInsertTime, 20);
+    WriteClientTestUtils.startCommitWithTime(client, secondInsertTime);
+    client.commit(secondInsertTime, preppedInsert
+        ? client.insertPreppedRecords(secondInserts, secondInsertTime)
+        : client.insert(secondInserts, secondInsertTime));
+
+    metaClient.reloadActiveTimeline();
+    Map<String, GenericRecord> snapshot =
+        GenericRecordValidationTestUtils.getRecordsMap(config, storageConf, singlePartitionDataGen);
+    assertEquals(40, snapshot.size());
+    updates.forEach(update -> assertEquals(updateTime,
+        snapshot.get(update.getRecordKey()).get(COMMIT_TIME_METADATA_FIELD).toString(),
+        "Snapshot must return the logged update of " + update.getRecordKey()));
+  }
+
+  @Test
+  public void testInsertsWithAnIndexOnLogFilesFillTheSmallFileGroup() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY).build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+    String partition = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    HoodieTestDataGenerator singlePartitionDataGen = new HoodieTestDataGenerator(new String[] {partition});
+
+    for (int i = 0; i < 2; i++) {
+      String insertTime = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, insertTime);
+      client.commit(insertTime, client.insert(singlePartitionDataGen.generateInserts(insertTime, 20), insertTime));
+    }
+
+    try (SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline())) {
+      assertEquals(1, fileSystemView.getLatestFileSlices(partition).count(), "the second insert goes to the small file group");
+    }
+    assertEquals(40, GenericRecordValidationTestUtils.getRecordsMap(config, storageConf, singlePartitionDataGen).size());
+  }
+
+  @Test
+  public void testInsertsSkipABaseFileAtTheSmallFileLimit() throws Exception {
+    assertSecondInsertSkipsTheFirstFileGroup(HoodieIndex.IndexType.BLOOM, (config, firstSlice) ->
+        getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM)
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .compactionSmallFileSize(firstSlice.getBaseFile().get().getFileSize()).build())
+            .build());
+  }
+
+  @Test
+  public void testInsertsWithAnIndexOnLogFilesSkipAFileGroupAtTheMaxFileSize() throws Exception {
+    assertSecondInsertSkipsTheFirstFileGroup(HoodieIndex.IndexType.INMEMORY, (config, firstSlice) ->
+        getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
+            .withStorageConfig(HoodieStorageConfig.newBuilder()
+                .parquetMaxFileSize(firstSlice.getTotalFileSizeAsParquetFormat(config)).build())
+            .build());
+  }
+
+  private void assertSecondInsertSkipsTheFirstFileGroup(HoodieIndex.IndexType indexType,
+      BiFunction<HoodieWriteConfig, FileSlice, HoodieWriteConfig> secondConfig) throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, indexType).build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+    String partition = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    HoodieTestDataGenerator singlePartitionDataGen = new HoodieTestDataGenerator(new String[] {partition});
+
+    String firstInsertTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, firstInsertTime);
+    client.commit(firstInsertTime, client.insert(singlePartitionDataGen.generateInserts(firstInsertTime, 20), firstInsertTime));
+    FileSlice firstSlice;
+    try (SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline())) {
+      firstSlice = fileSystemView.getLatestFileSlices(partition).findFirst().get();
+    }
+
+    HoodieWriteConfig limitedConfig = secondConfig.apply(config, firstSlice);
+    client = getHoodieWriteClient(limitedConfig);
+    String secondInsertTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, secondInsertTime);
+    client.commit(secondInsertTime, client.insert(singlePartitionDataGen.generateInserts(secondInsertTime, 20), secondInsertTime));
+
+    try (SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline())) {
+      assertTrue(fileSystemView.getLatestFileSlices(partition).count() > 1, "the second insert goes to a new file group");
+      FileSlice slice = fileSystemView.getLatestFileSlice(partition, firstSlice.getFileId()).get();
+      assertEquals(firstInsertTime, slice.getBaseInstantTime());
+      assertEquals(firstSlice.getLogFiles().count(), slice.getLogFiles().count());
+    }
+    assertEquals(40, GenericRecordValidationTestUtils.getRecordsMap(limitedConfig, storageConf, singlePartitionDataGen).size());
+  }
+
+  @Test
+  public void testUpsertPartitionerNeedsAWorkloadProfile() {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM).build();
+    JavaUpsertDeltaCommitActionExecutor<?> executor = new JavaUpsertDeltaCommitActionExecutor<>(context, config,
+        HoodieJavaTable.create(config, context, metaClient), WriteClientTestUtils.createNewInstantTime(), Collections.emptyList());
+    assertThrows(HoodieUpsertException.class, () -> executor.getUpsertPartitioner(null));
   }
 
   @Override
