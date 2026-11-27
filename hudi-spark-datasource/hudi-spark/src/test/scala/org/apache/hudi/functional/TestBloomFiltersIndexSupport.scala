@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.hash.{FileIndexID, PartitionIndexID}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.{JavaConversions, JFunction}
@@ -122,6 +122,125 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
 
     createTempTable(hudiOpts)
     verifyQueryPredicate(hudiOpts, "_row_key")
+  }
+
+  /**
+   * Regression for #20668: base-file blooms do not cover new keys in logs. A negative base
+   * bloom must not prune a whole base+log slice, and log-only slices must also survive.
+   * Layout: base-and-log = base(a) + log(b), base-only = base(c), log-only = log(d).
+   */
+  @Test
+  def testBloomFiltersIndexWithLogOnlyKeys(): Unit = {
+    val session = spark
+    import session.implicits._
+
+    // One bucket sends b to a's file group. Disable other query indexes and compaction
+    // so that metadata bloom pruning is tested against records that remain in logs.
+    val opts = commonOpts ++ Map(
+      TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      HoodieIndexConfig.INDEX_TYPE.key -> "BUCKET",
+      HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "1",
+      HoodieIndexConfig.BUCKET_QUERY_INDEX.key -> "false",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false",
+      "hoodie.compact.inline" -> "false",
+      "hoodie.compact.schedule.inline" -> "false",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+
+    Seq(("a", "base-and-log", 1L), ("c", "base-only", 1L)).toDF("_row_key", "partition", "timestamp")
+      .write.format("hudi").options(opts)
+      .option(OPERATION.key, INSERT_OVERWRITE_OPERATION_OPT_VAL).mode(SaveMode.Overwrite).save(basePath)
+    Seq(("b", "base-and-log", 2L)).toDF("_row_key", "partition", "timestamp")
+      .write.format("hudi").options(opts)
+      .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL).mode(SaveMode.Append).save(basePath)
+    // A new bucket would create a base file; INMEMORY allows a genuine log-only insert.
+    Seq(("d", "log-only", 2L)).toDF("_row_key", "partition", "timestamp")
+      .write.format("hudi").options(opts)
+      .option(HoodieIndexConfig.INDEX_TYPE.key, "INMEMORY")
+      .option(OPERATION.key, INSERT_OPERATION_OPT_VAL).mode(SaveMode.Append).save(basePath)
+
+    def query(keys: Seq[String], skipping: Boolean = true, readOptimized: Boolean = false): Set[String] = {
+      spark.read.format("hudi").options(opts)
+        .option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, skipping.toString)
+        .option(DataSourceReadOptions.QUERY_TYPE.key,
+          if (readOptimized) DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+        .load(basePath).filter(col("_row_key").isin(keys: _*)).select("_row_key").as[String].collect().toSet
+    }
+
+    // Without skipping all four keys are visible. Bloom pruning must preserve both log keys
+    // and the base record a in the retained base+log slice (not just its log files).
+    val allKeys = Seq("a", "b", "c", "d")
+    assertEquals(allKeys.toSet, query(allKeys, skipping = false))
+    assertEquals(allKeys.toSet, query(allKeys))
+    assertEquals(Set("b"), query(Seq("b")))
+    assertEquals(Set("d"), query(Seq("d")))
+    assertEquals(Set("b", "d"), query(Seq("b", "d")))
+    assertEquals(Set.empty[String], query(Seq("missing")))
+
+    // Read-optimized only reads bases: a and c are visible, while log-only keys b and d are not.
+    assertEquals(Set("a", "c"), query(allKeys, readOptimized = true))
+    assertEquals(Set.empty[String], query(Seq("b", "d"), readOptimized = true))
+  }
+
+  @Test
+  def testBloomPruningWithDeclaredIndexType(): Unit = {
+    val session = spark
+    import session.implicits._
+
+    val opts = commonOpts ++ Map(
+      TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      HoodieIndexConfig.BUCKET_QUERY_INDEX.key -> "false",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false",
+      "hoodie.compact.inline" -> "false",
+      "hoodie.compact.schedule.inline" -> "false",
+      "hoodie.parquet.small.file.limit" -> "0",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+    val writeOpts = opts + (HoodieIndexConfig.INDEX_TYPE.key -> "SIMPLE")
+
+    // SIMPLE writes new keys into bases; updating a appends a log whose key is covered by its base bloom.
+    Seq(("a", "base-and-log", 1L), ("c", "base-only", 1L)).toDF("_row_key", "partition", "timestamp")
+      .write.format("hudi").options(writeOpts)
+      .option(OPERATION.key, INSERT_OPERATION_OPT_VAL).mode(SaveMode.Overwrite).save(basePath)
+    Seq(("a", "base-and-log", 2L)).toDF("_row_key", "partition", "timestamp")
+      .write.format("hudi").options(writeOpts)
+      .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL).mode(SaveMode.Append).save(basePath)
+    // Even with a declared safe type, a slice without a base must never be pruned by base blooms.
+    Seq(("d", "log-only", 2L)).toDF("_row_key", "partition", "timestamp")
+      .write.format("hudi").options(opts)
+      .option(HoodieIndexConfig.INDEX_TYPE.key, "INMEMORY")
+      .option(OPERATION.key, INSERT_OPERATION_OPT_VAL).mode(SaveMode.Append).save(basePath)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val safeTypes = Seq("SIMPLE", "GLOBAL_SIMPLE", "BLOOM", "GLOBAL_BLOOM",
+      "RECORD_INDEX", "RECORD_LEVEL_INDEX", "GLOBAL_RECORD_LEVEL_INDEX", "simple")
+    val cases = safeTypes.map(indexType => (Map(HoodieIndexConfig.INDEX_TYPE.key -> indexType), true)) ++ Seq(
+      (Map.empty[String, String], false),
+      (Map(HoodieIndexConfig.INDEX_TYPE.key -> "BUCKET"), false),
+      (Map(HoodieIndexConfig.INDEX_TYPE.key -> "INMEMORY"), false),
+      (Map(HoodieIndexConfig.INDEX_TYPE.key -> "UNKNOWN"), false),
+      (Map(HoodieIndexConfig.INDEX_TYPE.key -> "SIMPLE",
+        HoodieIndexConfig.INDEX_CLASS_NAME.key -> "example.CustomIndex"), false))
+    val missingKey = EqualTo(attribute("_row_key"), Literal("missing"))
+    cases.foreach { case (indexOptions, canPruneLogs) =>
+      val readOpts = opts ++ indexOptions + ("path" -> basePath)
+      val fileIndex = HoodieFileIndex(spark, metaClient, None, readOpts, includeLogFiles = true)
+      val retained = fileIndex.filterFileSlices(Seq(missingKey), Seq.empty).flatMap(_._2)
+      val expected = if (canPruneLogs) Set("log-only") else Set("base-and-log", "log-only")
+      assertEquals(expected, retained.map(_.getPartitionPath).toSet, indexOptions.toString)
+      // Read-optimized strips logs before pruning, regardless of the declared index configuration.
+      val readOptimizedIndex = HoodieFileIndex(spark, metaClient, None, readOpts, includeLogFiles = false)
+      assertTrue(readOptimizedIndex.filterFileSlices(Seq(missingKey), Seq.empty).flatMap(_._2).isEmpty, indexOptions.toString)
+    }
+
+    // A positive base bloom retains the whole slice, so the updated log value wins; log-only d survives too.
+    val rows = spark.read.format("hudi").options(writeOpts).load(basePath)
+      .filter(col("_row_key").isin("a", "d")).select("_row_key", "timestamp").as[(String, Long)].collect().toSet
+    assertEquals(Set(("a", 2L), ("d", 2L)), rows)
   }
 
   private def createTempTable(hudiOpts: Map[String, String]): Unit = {
