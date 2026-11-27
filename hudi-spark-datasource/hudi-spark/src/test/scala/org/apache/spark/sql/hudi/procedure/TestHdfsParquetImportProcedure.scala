@@ -17,15 +17,19 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.cli.HDFSParquetImporterUtils
+import org.apache.hudi.common.HoodieJsonPayload
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils
 
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.avro.AvroParquetWriter
@@ -33,7 +37,7 @@ import org.apache.parquet.hadoop.ParquetWriter
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.io.IOException
 import java.util
@@ -109,6 +113,44 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
       }
 
       verifyResultData(insertData, storage, tablePath)
+    }
+  }
+
+  test("Test hdfs_parquet_import reads with the supplied schema and leaves the shared conf alone") {
+    withTempDir { tmp =>
+      val sourcePath = new Path(tmp.getCanonicalPath, "source")
+      val sourceDistances = createInsertRecords(sourcePath).asScala
+        .map(r => r.get("_row_key").toString -> r.get("distance_in_meters").asInstanceOf[Int].toLong).toMap
+      // The supplied schema drops `rider`, so a read that applies it yields records without that field,
+      // and widens the source's int `distance_in_meters` to long, which the read must accept.
+      val fields = HoodieTestDataGenerator.AVRO_SCHEMA.getFields.asScala
+        .filter(_.name != "rider")
+        .map { f =>
+          val fieldSchema = if (f.name == "distance_in_meters") Schema.create(Schema.Type.LONG) else f.schema
+          new Schema.Field(f.name, fieldSchema, f.doc, f.defaultVal)
+        }
+      val readSchema = Schema.createRecord(HoodieTestDataGenerator.AVRO_SCHEMA.getName, null,
+        HoodieTestDataGenerator.AVRO_SCHEMA.getNamespace, false, fields.asJava)
+      // AvroReadSupport.AVRO_READ_SCHEMA, which is private
+      val readSchemaKey = "parquet.avro.read.schema"
+      val sharedConf = spark.sparkContext.hadoopConfiguration
+      val sharedReadSchemaBefore = sharedConf.get(readSchemaKey)
+
+      val importer = new HDFSParquetImporterUtils("insert", sourcePath.toString,
+        new Path(tmp.getCanonicalPath, generateTableName).toString, generateTableName,
+        HoodieTableType.COPY_ON_WRITE.name, "_row_key", "timestamp", 1, null, 0, null)
+      val records = importer.buildHoodieRecordsForImport(new JavaSparkContext(spark.sparkContext), readSchema.toString)
+        .collect().asScala
+
+      assertEquals(96, records.size)
+      records.foreach { record =>
+        val payload = record.getData.asInstanceOf[HoodieJsonPayload]
+        assertEquals(record.getRecordKey, payload.getRowKey("_row_key"))
+        assertThrows[HoodieException](payload.getRowKey("rider"))
+        assertEquals(sourceDistances(record.getRecordKey),
+          payload.getInsertValue(readSchema).get.asInstanceOf[GenericRecord].get("distance_in_meters"))
+      }
+      assertEquals(sharedReadSchemaBefore, sharedConf.get(readSchemaKey))
     }
   }
 
