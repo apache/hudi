@@ -141,6 +141,10 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
         return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
             shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
       }
+      if (shouldPickOldRecord) {
+        // An empty merge means the old record is a newer delete, so it wins over this one.
+        return new PartialUpdateAvroPayload(oldRecord, oldValue.orderingVal);
+      }
     } catch (Exception ex) {
       log.warn("PartialUpdateAvroPayload precombine failed with ", ex);
       return this;
@@ -230,6 +234,9 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       GenericRecord updatingRecord, boolean isPreCombining) {
     if (isDeleteRecord(oldRecord) && !isPreCombining) {
       return Option.empty();
+    } else if (isDeleteRecord(updatingRecord)) {
+      // A deleted row's values must not fill a later live row; separate commits would not.
+      return Option.of(oldRecord);
     } else {
       final GenericRecordBuilder builder = new GenericRecordBuilder(schema);
       List<Schema.Field> fields = schema.getFields();

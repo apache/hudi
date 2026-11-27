@@ -81,7 +81,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
                 .map(IndexedRecord::getSchema)
                 .map(HoodieSchema::fromAvroSchema)
                 .orElseGet(() -> newerSchema),
-            recordContext, orderingFields, newer.getRecordKey(), updatedValue.isEmpty());
+            recordContext, orderingFields, newer.getRecordKey(), isDeleteRecord(payload, updatedRecord));
       } else {
         // If the updated value is empty, it means the result is a DELETE operation
         // If one of the inputs is a DELETE operation, simply return that
@@ -95,6 +95,15 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
         }
       }
     }
+  }
+
+  /**
+   * Returns whether the merged row is a delete by the payload's own delete check. Writers rebuild the payload
+   * from the row, so a delete row reported as live reaches them with an empty insert value.
+   */
+  static boolean isDeleteRecord(HoodieRecordPayload payload, IndexedRecord mergedRecord) {
+    return payload instanceof BaseAvroPayload && mergedRecord instanceof GenericRecord
+        && ((BaseAvroPayload) payload).isDeleteRecord((GenericRecord) mergedRecord);
   }
 
   protected void init(TypedProperties props) {
