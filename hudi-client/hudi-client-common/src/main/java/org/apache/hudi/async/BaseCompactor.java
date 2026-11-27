@@ -37,7 +37,19 @@ public abstract class BaseCompactor<T, I, K, O> implements Serializable {
     this.compactionClient = compactionClient;
   }
 
-  public abstract void compact(String instantTime) throws IOException;
+  /**
+   * Run compaction for the instant with the current write client.
+   */
+  public void compact(String instantTime) throws IOException {
+    compact(compactionClient, instantTime);
+  }
+
+  /**
+   * Run compaction for the instant with the given write client. The async compaction service reads the client once
+   * per run and passes it here, so that a failure of the run is attributed to the client that ran it even if the
+   * writer switches clients meanwhile.
+   */
+  public abstract void compact(BaseHoodieWriteClient<T, I, K, O> client, String instantTime) throws IOException;
 
   public void updateWriteClient(BaseHoodieWriteClient<T, I, K, O> writeClient) {
     this.compactionClient = writeClient;

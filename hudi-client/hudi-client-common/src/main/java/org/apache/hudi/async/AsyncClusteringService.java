@@ -22,6 +22,7 @@ package org.apache.hudi.async;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -76,8 +77,9 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
           final String instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
             log.info("Starting clustering for instant {}", instant);
-            clusteringClient.cluster(instant);
-            log.info("Finished clustering for instant {}", instant);
+            if (runWithClientHandoff("Clustering", instant, () -> clusteringClient.clusteringClient, clusteringClient::cluster)) {
+              log.info("Finished clustering for instant {}", instant);
+            }
           }
         }
         log.info("Clustering executor shutting down properly");
@@ -103,5 +105,18 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
    */
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
     this.clusteringClient.updateWriteClient(writeClient);
+    notifyAll();
+  }
+
+  /**
+   * Whether the clustering instant is still pending, i.e. a retry of it has work to do.
+   */
+  @Override
+  protected boolean isPendingInstant(BaseHoodieWriteClient client, String instantTime) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf().newInstance())
+        .setBasePath(client.getConfig().getBasePath())
+        .build();
+    return metaClient.getActiveTimeline().filterPendingClusteringTimeline().containsInstant(instantTime);
   }
 }

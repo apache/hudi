@@ -23,6 +23,8 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieSparkClusteringClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 
+import java.util.function.Predicate;
+
 /**
  * Async clustering service for Spark structured streaming.
  * Here, async clustering is run in daemon mode to prevent blocking shutting down the Spark application.
@@ -31,8 +33,27 @@ public class SparkStreamingAsyncClusteringService extends AsyncClusteringService
 
   private static final long serialVersionUID = 1L;
 
+  // whether a write client was retired by the sink, i.e. closed by the sink when it replaced its client
+  private final transient Predicate<BaseHoodieWriteClient> isRetiredClient;
+
   public SparkStreamingAsyncClusteringService(HoodieEngineContext context, BaseHoodieWriteClient writeClient) {
+    this(context, writeClient, c -> false);
+  }
+
+  public SparkStreamingAsyncClusteringService(HoodieEngineContext context, BaseHoodieWriteClient writeClient,
+      Predicate<BaseHoodieWriteClient> isRetiredClient) {
     super(context, writeClient, true);
+    this.isRetiredClient = isRetiredClient;
+  }
+
+  /**
+   * A clustering run that failed while using a write client the sink has since retired is retryable: the sink closes
+   * the previous client when it re-creates its client (e.g. on a schema change), which can fail a run still using it.
+   * Any other failure is not retryable and stops the service, which fails the next micro-batch with that failure.
+   */
+  @Override
+  protected boolean isRetryableFailure(BaseHoodieWriteClient runClient, Exception failure) {
+    return isRetiredClient.test(runClient);
   }
 
   @Override

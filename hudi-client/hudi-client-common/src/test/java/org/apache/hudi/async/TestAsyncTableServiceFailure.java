@@ -60,7 +60,7 @@ class TestAsyncTableServiceFailure {
         protected BaseClusterer createClusteringClient(BaseHoodieWriteClient writeClient) {
           return new BaseClusterer(writeClient) {
             @Override
-            public void cluster(String instantTime) throws IOException {
+            public void cluster(BaseHoodieWriteClient writeClient, String instantTime) throws IOException {
               throwFailure(failure);
             }
           };
@@ -77,7 +77,7 @@ class TestAsyncTableServiceFailure {
         protected BaseCompactor createCompactor(BaseHoodieWriteClient writeClient) {
           return new BaseCompactor(writeClient) {
             @Override
-            public void compact(String instantTime) throws IOException {
+            public void compact(BaseHoodieWriteClient writeClient, String instantTime) throws IOException {
               throwFailure(failure);
             }
           };

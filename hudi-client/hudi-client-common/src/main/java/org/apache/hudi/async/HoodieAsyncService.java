@@ -49,9 +49,9 @@ public abstract class HoodieAsyncService implements Serializable {
   // Flag to track if the service is started.
   @Getter
   private boolean started;
-  // Flag indicating shutdown is externally requested
+  // Flag indicating shutdown is externally requested; volatile as the service thread polls it
   @Getter
-  private boolean shutdownRequested;
+  private volatile boolean shutdownRequested;
   // Flag indicating the service is shutdown
   @Getter
   private volatile boolean shutdown;
@@ -116,6 +116,13 @@ public abstract class HoodieAsyncService implements Serializable {
   }
 
   /**
+   * Called once shutdown has been requested, before waiting for the service to stop. Services whose threads wait
+   * between rounds of work can wake them here, so that a graceful shutdown doesn't wait out those waits.
+   */
+  protected void onShutdownRequested() {
+  }
+
+  /**
    * Request shutdown either forcefully or gracefully. Graceful shutdown allows the service to finish up the current
    * round of work and shutdown. For graceful shutdown, it waits till the service is shutdown
    * 
@@ -125,6 +132,7 @@ public abstract class HoodieAsyncService implements Serializable {
     if (!shutdownRequested || force) {
       shutdownRequested = true;
       shutdown = true;
+      onShutdownRequested();
       if (executor != null) {
         if (force) {
           executor.shutdownNow();
