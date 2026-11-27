@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -213,11 +214,16 @@ public interface HoodieRecordMerger extends Serializable {
   }
 
   /**
-   * Returns the max ordering value with the given two records.
+   * Returns the max ordering value with the given two records. The default value, which has its own type, is the
+   * lowest one.
    */
   static <T> Comparable maxOrderingValue(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
     Comparable oldOrderingVal = oldRecord.getOrderingValue();
     Comparable newOrderingVal = newRecord.getOrderingValue();
-    return oldOrderingVal.compareTo(newOrderingVal) > 0 ? oldOrderingVal : newOrderingVal;
+    if (OrderingValues.isCommitTimeOrderingValue(oldOrderingVal)) {
+      return newOrderingVal;
+    }
+    return OrderingValues.isCommitTimeOrderingValue(newOrderingVal) || oldOrderingVal.compareTo(newOrderingVal) > 0
+        ? oldOrderingVal : newOrderingVal;
   }
 }

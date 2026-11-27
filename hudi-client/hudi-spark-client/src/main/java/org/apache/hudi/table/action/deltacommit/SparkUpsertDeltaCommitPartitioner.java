@@ -103,9 +103,11 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
     }
 
     // The merge that packs inserts into a small base file takes every record of its file group, and would take
-    // the partial updates this write makes to the records of the file for full records. Such files are left out
-    // before the candidates are limited, so that the next smallest files take the inserts.
-    Set<String> partiallyUpdatedFileIds = config.shouldWritePartialUpdates()
+    // the partial updates this write makes to the records of the file for full records, or evaluate the located
+    // records of a MERGE INTO that reads the target, which are already merged with the records they match, as
+    // source records of the statement once more. Such files are left out before the candidates are limited, so that
+    // the next smallest files take the inserts.
+    Set<String> updatedFileIds = config.shouldWritePartialUpdates() || config.isSparkSqlMergeIntoReadingTarget()
         ? profile.getWorkloadStat(partitionPath).getUpdateLocationToCount().keySet()
         : Collections.emptySet();
 
@@ -119,7 +121,7 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
                   //       hence skipping
                   fileSlice.getLogFiles().count() < 1
                   && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit()
-                  && !partiallyUpdatedFileIds.contains(fileSlice.getFileId()))
+                  && !updatedFileIds.contains(fileSlice.getFileId()))
           .sorted(Comparator.comparing(fileSlice -> fileSlice.getBaseFile().get().getFileSize()))
           .limit(config.getSmallFileGroupCandidatesLimit())
           .collect(Collectors.toList());

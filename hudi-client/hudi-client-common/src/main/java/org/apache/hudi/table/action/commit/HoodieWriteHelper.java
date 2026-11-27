@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
 public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
@@ -52,6 +54,21 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
   protected HoodieData<HoodieRecord<T>> tag(HoodieData<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context,
                                             HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
     return table.getIndex().tagLocation(dedupedRecords, context, table);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord<T>> mergeLocatedSqlMergeIntoRecords(HoodieData<HoodieRecord<T>> taggedRecords,
+                                                                        String instantTime,
+                                                                        HoodieEngineContext context,
+                                                                        HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+                                                                        int configuredShuffleParallelism) {
+    // The records are read more than once, and are tagged and may be computed from the source of the statement each time
+    taggedRecords.persist(table.getConfig().getTaggedRecordStorageLevel(), context,
+        HoodieDataCacheKey.of(table.getConfig().getBasePath(), instantTime));
+    // A key can still be located through a deleted copy in a base file. The record then keeps its location, as an
+    // insert into another file group would leave the key in two of them
+    return HoodieIndexUtils.mergeLocatedExpressionPayloadRecords(
+        taggedRecords, table.getConfig(), table, deduceShuffleParallelism(taggedRecords, configuredShuffleParallelism));
   }
 
   @Override

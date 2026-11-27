@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
@@ -38,7 +39,9 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -72,6 +75,10 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         // perform index loop up to get existing location of records
         context.setJobStatus(this.getClass().getSimpleName(), "Tagging: " + table.getConfig().getTableName());
         taggedRecords = tag(dedupedRecords, context, table);
+        if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
+            && table.getConfig().isSparkSqlMergeIntoReadingTarget()) {
+          taggedRecords = mergeLocatedSqlMergeIntoRecords(taggedRecords, instantTime, context, table, configuredShuffleParallelism);
+        }
       }
 
       HoodieWriteMetadata<O> result = executor.execute(taggedRecords, Option.of(sourceReadAndIndexTimer));
@@ -86,6 +93,17 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
 
   protected abstract I tag(
       I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table);
+
+  /**
+   * Replaces each located record of a Spark SQL MERGE INTO with what its matched clauses make of the record it
+   * matches, for a write that appends updates to log files, which evaluates the clauses of a located record
+   * without that record. See {@link HoodieWriteConfig#SPARK_SQL_MERGE_INTO_READS_TARGET_KEY}.
+   */
+  protected I mergeLocatedSqlMergeIntoRecords(I taggedRecords, String instantTime, HoodieEngineContext context,
+                                              HoodieTable<T, I, K, O> table, int configuredShuffleParallelism) {
+    throw new HoodieNotSupportedException(
+        HoodieWriteConfig.SPARK_SQL_MERGE_INTO_READS_TARGET_KEY + " is not supported by " + this.getClass().getName());
+  }
 
   public I combineOnCondition(
       boolean condition, I records, int configuredParallelism, HoodieTable<T, I, K, O> table) {
