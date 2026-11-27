@@ -466,7 +466,10 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
             ("action = 'clean' AND total_files_deleted >= 0", "AND logic"),
             ("total_files_deleted >= 0 OR time_taken_in_millis >= 0", "OR logic"),
             ("NOT (total_files_deleted < 0)", "NOT logic"),
-            ("action IN ('clean', 'commit', 'rollback')", "IN operator")
+            ("action IN ('clean', 'commit', 'rollback')", "IN operator"),
+            // concat isn't in the hardcoded table, so this is the only call-level coverage of a
+            // registry-resolved function actually working end to end, not just rejected differently.
+            ("concat(action, 'x') = 'cleanx'", "Registry-resolved function")
           )
 
           filterTests.foreach { case (filterExpr, description) =>
@@ -550,7 +553,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         assertResult(1)(rowCount("show_cleans_metadata", showArchived = false))
         assertResult(1)(rowCount("show_clean_plans", showArchived = false))
 
-        // The other half of #19639, which covers all three clean procedures. show_cleans and its
+        // A known limitation across all three clean procedures: show_cleans and its
         // show_cleans_metadata variant do route to getArchivedTimeline, but the archived instants
         // carry no content there, so readCleanMetadata cannot deserialize them and the call fails
         // outright rather than degrading to a partial row. Same missing-archived-content cause as
@@ -588,19 +591,19 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
           assert(!activePlan.isNullAt(activePlan.fieldIndex(name)), s"active clean plan should have a non-null $name")
         }
 
-        // Known limitation, see #19639: getCleanerPlans collects the archived clean instants but
-        // then hands every instant to processCleanPlan against the ACTIVE timeline, so the
-        // archived instant's .clean.requested file is not found, the read falls back to
-        // createErrorRow and every plan field comes back null. Only plan_time/state/action
-        // survive, because those are taken from the instant and not from the plan. A fix has to
-        // read the archived instant's own content and would flip the null assertions below to
-        // non-null; merely routing to getArchivedTimeline the way the sibling ShowCleansProcedure
-        // does is not enough, since that path throws today (pinned above).
+        // Known limitation: getCleanerPlans collects the archived clean instants but then hands
+        // every instant to processCleanPlan against the ACTIVE timeline, so the archived instant's
+        // .clean.requested file is not found, the read falls back to createErrorRow and every plan
+        // field comes back null. Only plan_time/state/action survive, because those are taken from
+        // the instant and not from the plan. A fix has to read the archived instant's own content
+        // and would flip the null assertions below to non-null; merely routing to
+        // getArchivedTimeline the way the sibling ShowCleansProcedure does is not enough, since
+        // that path throws today (pinned above).
         assertResult("COMPLETED")(archivedPlan.getString(1))
         assertResult("clean")(archivedPlan.getString(2))
         planFields.foreach { name =>
           assert(archivedPlan.isNullAt(archivedPlan.fieldIndex(name)),
-            s"archived clean plan is expected to return a null $name today (#19639)")
+            s"archived clean plan is expected to return a null $name today, a known limitation")
         }
       }
     }
@@ -637,9 +640,11 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
           s"""call show_clean_plans(table => '$tableName', filter => "nonexistent_col > 1")""")(
           "Invalid column references: nonexistent_col")
 
+        // concat is now resolved via the FunctionRegistry fallback, so a genuinely unknown
+        // function name is needed here to exercise the rejection path.
         checkExceptionContain(
-          s"""call show_clean_plans(table => '$tableName', filter => "concat(action, 'x') = 'cleanx'")""")(
-          "Unsupported functions: concat")
+          s"""call show_clean_plans(table => '$tableName', filter => "no_such_fn(action) = 'cleanx'")""")(
+          "Unsupported functions: no_such_fn")
       }
     }
   }
