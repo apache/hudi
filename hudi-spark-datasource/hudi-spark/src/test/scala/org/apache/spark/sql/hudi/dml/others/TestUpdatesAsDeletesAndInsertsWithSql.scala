@@ -103,6 +103,32 @@ class TestUpdatesAsDeletesAndInsertsWithSql extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test MERGE INTO that updates only newer rows of a key with a deleted copy writing updates as deletes and inserts") {
+    withTable { (tableName, tablePath) =>
+      // Leaves a deleted copy of id 3 in its first file group and the live copy in a new one
+      spark.sql(
+        s"""
+           |merge into $tableName t
+           |using (select 3 as id, 'a3m' as name, 31.0 as price, 'p1' as dt) s
+           |on t.id = s.id
+           |when matched then update set *
+         """.stripMargin)
+      // The index locates both copies; only the live one decides between the clauses
+      spark.sql(
+        s"""
+           |merge into $tableName t
+           |using (select 3 as id, 'stale' as name, 1.0 as price, 'p1' as dt) s
+           |on t.id = s.id
+           |when matched and s.price > t.price then update set *
+           |when not matched then insert *
+         """.stripMargin)
+      checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+        Seq(1, "a1", 10.0, "p1"), Seq(2, "a2", 20.0, "p1"), Seq(3, "a3m", 31.0, "p1"),
+        Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"))
+      assertEquals(Seq("3"), positionalDeletes(tablePath))
+    }
+  }
+
   test("Test MERGE INTO with a partial update assignment writing updates as deletes and inserts") {
     withTable { (tableName, tablePath) =>
       // An insert into a base file must carry every column, which a partial update record does not
