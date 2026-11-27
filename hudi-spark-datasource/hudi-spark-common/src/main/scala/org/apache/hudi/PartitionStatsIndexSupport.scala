@@ -41,7 +41,6 @@ import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, DateA
 import org.apache.spark.sql.hudi.DataSkippingUtils.getTargetIndexedColumnName
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.storage.StorageLevel
 
 import scala.collection.JavaConverters._
 
@@ -118,32 +117,20 @@ class PartitionStatsIndexSupport(spark: SparkSession,
         val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
         loadTransposed(queryReferencedColumns, readInMemory, Option.empty, Option.empty) {
           transposedPartitionStatsDF => {
-            try {
-              transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
-              // Use the file index's query-path inventory: partitions entirely absent from the
-              // projected stats must survive, just like files absent from the column stats index.
-              lazy val allPartitions = fileIndex.getAllQueryPartitionPaths.asScala.map(_.getPath).toSet
-              buildCandidateFilter(transposedPartitionStatsDF, filteredQueryFilters, filteredIndexedCols) match {
-                case None => Some(allPartitions)
-                case Some(candidateFilter) =>
-                  val indexedPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-                    .collect()
-                    .map(_.getString(0))
-                    .toSet
-                  if (indexedPartitions.nonEmpty) {
-                    val matchingPartitions = transposedPartitionStatsDF.where(candidateFilter)
-                      .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-                      .collect()
-                      .map(_.getString(0))
-                      .toSet
-                    Some((matchingPartitions ++ (allPartitions -- indexedPartitions)).intersect(allPartitions))
-                  } else {
-                    // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
-                    None
-                  }
-              }
-            } finally {
-              transposedPartitionStatsDF.unpersist()
+            // Use the file index's query-path inventory: partitions entirely absent from the
+            // projected stats must survive, just like files absent from the column stats index.
+            lazy val allPartitions = fileIndex.getAllQueryPartitionPaths.asScala.map(_.getPath).toSet
+            buildCandidateFilter(transposedPartitionStatsDF, filteredQueryFilters, filteredIndexedCols) match {
+              case None => Some(allPartitions)
+              case Some(candidateFilter) =>
+                val (indexedPartitions, matchingPartitions) =
+                  collectIndexedAndMatchingNames(transposedPartitionStatsDF, candidateFilter)
+                if (indexedPartitions.nonEmpty) {
+                  Some((matchingPartitions ++ (allPartitions -- indexedPartitions)).intersect(allPartitions))
+                } else {
+                  // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
+                  None
+                }
             }
           }
         }
