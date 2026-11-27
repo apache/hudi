@@ -1,0 +1,7 @@
+SLF4J: Class path contains multiple SLF4J bindings.
+Main called
+hudi->Metadata for table empty_table loaded
+╔══════════════════════╤══════════════════════╤═══════════════════╗
+║ CommitTime           │ Total Bytes Written  │ Total Records     ║
+╠══════════════════════╪══════════════════════╪═══════════════════╣
+╚══════════════════════╧══════════════════════╧═══════════════════╝
