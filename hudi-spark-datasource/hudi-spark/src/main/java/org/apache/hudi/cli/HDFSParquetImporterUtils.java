@@ -189,6 +189,9 @@ public class HDFSParquetImporterUtils implements Serializable {
     AvroReadSupport.setAvroReadSchema(job.getConfiguration(), readSchema);
     // Without the projection every source column is read, and one the read schema lacks fails the conversion.
     AvroReadSupport.setRequestedProjection(job.getConfiguration(), readSchema);
+    // The projection is type-checked strictly by default, which rejects widening such as a source int32 into
+    // a long field; relax it as HoodieAvroParquetReader does, unless the caller set it explicitly.
+    job.getConfiguration().setIfUnset(ParquetInputFormat.STRICT_TYPE_CHECKING, "false");
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
     AvroReadSupport.setAvroDataSupplier(job.getConfiguration(), GenericDataSupplier.class);
 
