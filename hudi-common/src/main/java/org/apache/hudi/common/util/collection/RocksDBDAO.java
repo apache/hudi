@@ -36,7 +36,6 @@ import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.DBOptions;
-import org.rocksdb.InfoLogLevel;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -67,6 +66,9 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 @Slf4j
 public class RocksDBDAO {
 
+  static final long MAX_INFO_LOG_FILE_SIZE = 16 * 1024 * 1024L;
+  static final long KEEP_INFO_LOG_FILE_NUM = 2;
+
   private transient ConcurrentHashMap<String, ColumnFamilyHandle> managedHandlesMap;
   private transient ConcurrentHashMap<String, ColumnFamilyDescriptor> managedDescriptorMap;
   @Getter(AccessLevel.PACKAGE)
@@ -76,11 +78,10 @@ public class RocksDBDAO {
   private final String rocksDBBasePath;
   private final transient ConcurrentHashMap<String, CustomSerializer<?>> columnFamilySerializers;
   private transient WriteOptions defaultWriteOptions;
+  @Getter(AccessLevel.PACKAGE)
   private transient Statistics statistics;
   @Getter(AccessLevel.PACKAGE)
   private transient DBOptions dbOptions;
-  @Getter(AccessLevel.PACKAGE)
-  private transient org.rocksdb.Logger logger;
   private final boolean disableWALForWrites;
   @Getter
   private long totalBytesWritten;
@@ -120,11 +121,11 @@ public class RocksDBDAO {
 
       // If already present, loads the existing column-family handles
       this.dbOptions = new DBOptions().setCreateIfMissing(true).setCreateMissingColumnFamilies(true)
-          .setWalDir(rocksDBBasePath).setStatsDumpPeriodSec(300);
+          .setWalDir(rocksDBBasePath).setStatsDumpPeriodSec(300)
+          // No Java logger: a RocksDB thread calling into the JVM while it exits deadlocks the exit.
+          .setMaxLogFileSize(MAX_INFO_LOG_FILE_SIZE).setKeepLogFileNum(KEEP_INFO_LOG_FILE_NUM);
       this.statistics = new Statistics();
       dbOptions.setStatistics(statistics);
-      this.logger = new RocksDBLogger(dbOptions);
-      dbOptions.setLogger(logger);
       final List<ColumnFamilyDescriptor> managedColumnFamilies = loadManagedColumnFamilies(dbOptions);
       final List<ColumnFamilyHandle> managedHandles = new ArrayList<>(managedColumnFamilies.size());
       FileIOUtils.mkdir(new File(rocksDBBasePath));
@@ -190,10 +191,6 @@ public class RocksDBDAO {
    */
   List<ColumnFamilyDescriptor> loadManagedColumnFamilies(DBOptions dbOptions) throws RocksDBException {
     final List<ColumnFamilyDescriptor> managedColumnFamilies = new ArrayList<>();
-    // The native Options copy-constructs from dbOptions, which copies its shared_ptr to the
-    // LoggerJniCallback. Leaving it open holds that refcount above zero for the life of the JVM,
-    // so closing the DB, the DBOptions and the Logger still never deletes the callback's JNI
-    // global reference to the Java Logger.
     try (ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
          Options options = new Options(dbOptions, columnFamilyOptions)) {
       List<byte[]> existing = RocksDB.listColumnFamilies(options, rocksDBBasePath);
@@ -577,11 +574,6 @@ public class RocksDBDAO {
         defaultWriteOptions.close();
       }
       getRocksDB().close();
-      // Every holder of the native LoggerJniCallback's shared_ptr must be released before its JNI
-      // global reference to this Logger is deleted: the DB (closed above), the DBOptions, the
-      // Options copy in loadManagedColumnFamilies, and the Logger itself. Order among them does
-      // not matter -- the last release is the one that frees it -- but skipping any one pins the
-      // Logger for the life of the JVM.
       closeNativeOptions();
       try {
         FileIOUtils.deleteDirectory(new File(rocksDBBasePath));
@@ -610,10 +602,6 @@ public class RocksDBDAO {
     if (statistics != null) {
       statistics.close();
       statistics = null;
-    }
-    if (logger != null) {
-      logger.close();
-      logger = null;
     }
     if (dbOptions != null) {
       dbOptions.close();
@@ -649,41 +637,6 @@ public class RocksDBDAO {
       return SerializationUtils.serialize(key);
     } catch (IOException e) {
       throw new HoodieException(e);
-    }
-  }
-
-  /**
-   * Static so it cannot capture the enclosing {@link RocksDBDAO}. RocksDB's native layer holds a
-   * JNI global reference to this object for the lifetime of the callback, so an inner class would
-   * keep the whole DAO - its column-family maps included - reachable until that reference is
-   * released. Package-private, not private, so a test can drive the level mapping directly.
-   */
-  static final class RocksDBLogger extends org.rocksdb.Logger {
-
-    RocksDBLogger(DBOptions dbOptions) {
-      super(dbOptions);
-    }
-
-    @Override
-    protected void log(InfoLogLevel infoLogLevel, String logMsg) {
-      switch (infoLogLevel) {
-        case DEBUG_LEVEL:
-          log.debug("From Rocks DB : {}", logMsg);
-          break;
-        case WARN_LEVEL:
-          log.warn("From Rocks DB : {}", logMsg);
-          break;
-        case ERROR_LEVEL:
-        case FATAL_LEVEL:
-          log.error("From Rocks DB : {}", logMsg);
-          break;
-        case HEADER_LEVEL:
-        case NUM_INFO_LOG_LEVELS:
-        case INFO_LEVEL:
-        default:
-          log.info("From Rocks DB : {}", logMsg);
-          break;
-      }
     }
   }
 

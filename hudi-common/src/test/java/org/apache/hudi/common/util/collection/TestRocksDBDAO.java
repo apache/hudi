@@ -23,12 +23,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import lombok.Value;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.Logger;
-import org.apache.logging.log4j.core.appender.AbstractAppender;
-import org.apache.logging.log4j.core.config.Configurator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,9 +33,9 @@ import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.DBOptions;
-import org.rocksdb.InfoLogLevel;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
+import org.rocksdb.Statistics;
 
 import java.io.File;
 import java.io.IOException;
@@ -63,7 +57,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -103,23 +96,21 @@ public class TestRocksDBDAO {
   }
 
   /**
-   * close() must release the RocksDB {@link org.rocksdb.Logger} and its {@link DBOptions}. The native
-   * LoggerJniCallback holds a JNI global reference to the Logger, so leaving it open pins the object
-   * for the life of the JVM and no GC can reclaim it.
+   * close() must release the DBOptions and the Statistics: rocksdbjni does not free a native reference on GC.
    */
   @Test
-  void testCloseReleasesNativeLoggerAndOptions() {
-    org.rocksdb.Logger logger = dbManager.getLogger();
+  void testCloseReleasesNativeOptionsAndStatistics() {
     DBOptions dbOptions = dbManager.getDbOptions();
-    assertTrue(logger.isOwningHandle());
+    Statistics statistics = dbManager.getStatistics();
     assertTrue(dbOptions.isOwningHandle());
+    assertTrue(statistics.isOwningHandle());
 
     dbManager.close();
 
-    assertFalse(logger.isOwningHandle(), "logger handle must be closed so it releases its shared_ptr to the native callback");
-    assertFalse(dbOptions.isOwningHandle(), "dbOptions must be closed so it drops its shared_ptr to the logger");
-    assertNull(dbManager.getLogger());
+    assertFalse(dbOptions.isOwningHandle(), "dbOptions must be closed");
+    assertFalse(statistics.isOwningHandle(), "statistics must be closed");
     assertNull(dbManager.getDbOptions());
+    assertNull(dbManager.getStatistics());
   }
 
   /**
@@ -240,31 +231,9 @@ public class TestRocksDBDAO {
   }
 
   /**
-   * The end-to-end claim: once every holder of the callback's shared_ptr is released, the native
-   * LoggerJniCallback is destroyed and deletes its JNI global reference, so the Logger -- and with
-   * it anything it reaches -- becomes collectable. Handle state alone does not show this; a single
-   * surviving copy of the shared_ptr (the Options built in loadManagedColumnFamilies is one) keeps
-   * the object pinned for the life of the JVM with every handle reading as closed.
-   */
-  @Test
-  void testCloseMakesLoggerCollectable() throws InterruptedException {
-    WeakReference<org.rocksdb.Logger> loggerRef = new WeakReference<>(dbManager.getLogger());
-
-    dbManager.close();
-    dbManager = null;
-
-    for (int attempt = 0; attempt < 30 && loggerRef.get() != null; attempt++) {
-      System.gc();
-      Thread.sleep(50);
-    }
-    assertNull(loggerRef.get(), "logger is still strongly reachable after close(), so a JNI global reference survived");
-  }
-
-  /**
-   * The production symptom was DAOs accumulating, not just Loggers: 458 instances retaining
-   * 9.51 GB on a driver after 13 days. One surviving JNI global reference per DAO is all it takes,
-   * so the contract is that a closed DAO -- and everything it reaches -- becomes collectable, over
-   * repeated create/close cycles rather than a single one.
+   * The production symptom was DAOs accumulating: 458 instances retaining 9.51 GB on a driver after
+   * 13 days. The contract is that a closed DAO -- and everything it reaches -- becomes collectable,
+   * over repeated create/close cycles rather than a single one.
    */
   @Test
   void testClosedDaosDoNotAccumulate() throws InterruptedException {
@@ -275,7 +244,7 @@ public class TestRocksDBDAO {
       dao.addColumnFamily("family");
       dao.put("family", "key", "value");
       refs.add(new WeakReference<>(dao));
-      refs.add(new WeakReference<>(dao.getLogger()));
+      refs.add(new WeakReference<>(dao.getStatistics()));
       refs.add(new WeakReference<>(dao.getDbOptions()));
       dao.close();
       dao = null;
@@ -305,7 +274,7 @@ public class TestRocksDBDAO {
     CAPTURED.clear();
     assertThrows(HoodieException.class, () -> newFailingDao(FailurePoint.BEFORE_OPEN));
 
-    assertFalse(CAPTURED.logger.isOwningHandle(), "logger must be closed when init() fails");
+    assertFalse(CAPTURED.statistics.isOwningHandle(), "statistics must be closed when init() fails");
     assertFalse(CAPTURED.dbOptions.isOwningHandle(), "dbOptions must be closed when init() fails");
   }
 
@@ -318,7 +287,7 @@ public class TestRocksDBDAO {
     assertThrows(IllegalStateException.class, () -> newFailingDao(FailurePoint.AFTER_OPEN));
 
     assertFalse(CAPTURED.rocksDB.isOwningHandle(), "an opened RocksDB must be closed when init() fails after it");
-    assertFalse(CAPTURED.logger.isOwningHandle(), "logger must be closed when init() fails");
+    assertFalse(CAPTURED.statistics.isOwningHandle(), "statistics must be closed when init() fails");
     assertFalse(CAPTURED.dbOptions.isOwningHandle(), "dbOptions must be closed when init() fails");
   }
 
@@ -339,13 +308,13 @@ public class TestRocksDBDAO {
   private static final Captured CAPTURED = new Captured();
 
   private static final class Captured {
-    private org.rocksdb.Logger logger;
+    private Statistics statistics;
     private DBOptions dbOptions;
     private RocksDB rocksDB;
     private FailurePoint failurePoint;
 
     void clear() {
-      logger = null;
+      statistics = null;
       dbOptions = null;
       rocksDB = null;
       failurePoint = null;
@@ -364,7 +333,7 @@ public class TestRocksDBDAO {
 
     @Override
     List<ColumnFamilyDescriptor> loadManagedColumnFamilies(DBOptions dbOptions) throws RocksDBException {
-      CAPTURED.logger = getLogger();
+      CAPTURED.statistics = getStatistics();
       CAPTURED.dbOptions = dbOptions;
       if (FailurePoint.BEFORE_OPEN == CAPTURED.failurePoint) {
         throw new RocksDBException("injected init failure before open");
@@ -385,37 +354,24 @@ public class TestRocksDBDAO {
 
 
   /**
-   * RocksDB's own levels must land on the log levels an operator greps for -- a FATAL_LEVEL
-   * emitted at INFO would hide a corrupt DB behind routine chatter.
+   * No RocksDB thread may call into the JVM: one doing so while the JVM exits deadlocks the exit. RocksDB
+   * creates its own info log file in the store's folder only when no Java logger is set.
    */
   @Test
-  void testLoggerMapsRocksDbLevelsToLogLevels() {
-    CapturingAppender appender = new CapturingAppender();
-    Logger daoLogger = (Logger) LogManager.getLogger(RocksDBDAO.class);
-    Level originalLevel = daoLogger.getLevel();
-    RocksDBDAO.RocksDBLogger rocksLogger = (RocksDBDAO.RocksDBLogger) dbManager.getLogger();
-    try {
-      appender.start();
-      daoLogger.addAppender(appender);
-      Configurator.setLevel(RocksDBDAO.class.getName(), Level.DEBUG);
+  void testInfoLogIsANativeFileInTheStoreFolder() throws Exception {
+    dbManager.addColumnFamily("family");
+    dbManager.put("family", "key", "value");
 
-      rocksLogger.log(InfoLogLevel.DEBUG_LEVEL, "rocksdb-level-debug");
-      rocksLogger.log(InfoLogLevel.WARN_LEVEL, "rocksdb-level-warn");
-      rocksLogger.log(InfoLogLevel.ERROR_LEVEL, "rocksdb-level-error");
-      rocksLogger.log(InfoLogLevel.FATAL_LEVEL, "rocksdb-level-fatal");
-      rocksLogger.log(InfoLogLevel.INFO_LEVEL, "rocksdb-level-info");
-      rocksLogger.log(InfoLogLevel.HEADER_LEVEL, "rocksdb-level-header");
+    File infoLog = new File(dbManager.getRocksDBBasePath(), "LOG");
+    assertTrue(infoLog.isFile() && infoLog.length() > 0, "RocksDB must write its info log to " + infoLog);
+    assertTrue(reachableOpenHandles(dbManager).keySet().stream().noneMatch(org.rocksdb.Logger.class::isInstance),
+        "no Java logger may be registered with RocksDB");
+    assertEquals(RocksDBDAO.MAX_INFO_LOG_FILE_SIZE, dbManager.getDbOptions().maxLogFileSize());
+    assertEquals(RocksDBDAO.KEEP_INFO_LOG_FILE_NUM, dbManager.getDbOptions().keepLogFileNum());
 
-      assertEquals(Level.DEBUG, appender.levelOf("rocksdb-level-debug"));
-      assertEquals(Level.WARN, appender.levelOf("rocksdb-level-warn"));
-      assertEquals(Level.ERROR, appender.levelOf("rocksdb-level-error"));
-      assertEquals(Level.ERROR, appender.levelOf("rocksdb-level-fatal"));
-      assertEquals(Level.INFO, appender.levelOf("rocksdb-level-info"));
-      assertEquals(Level.INFO, appender.levelOf("rocksdb-level-header"));
-    } finally {
-      daoLogger.removeAppender(appender);
-      Configurator.setLevel(RocksDBDAO.class.getName(), originalLevel);
-    }
+    dbManager.close();
+
+    assertFalse(infoLog.exists(), "the info log is removed with the store");
   }
 
   @Test
@@ -816,32 +772,6 @@ public class TestRocksDBDAO {
     T key;
     String val;
     String family;
-  }
-
-  /**
-   * RocksDB logs from its own background threads, so the captured list must tolerate concurrent
-   * appends and events are matched by marker rather than by position.
-   */
-  private static final class CapturingAppender extends AbstractAppender {
-
-    private final List<LogEvent> events = new CopyOnWriteArrayList<>();
-
-    private CapturingAppender() {
-      super(UUID.randomUUID().toString(), null, null, false, null);
-    }
-
-    @Override
-    public void append(LogEvent event) {
-      events.add(event.toImmutable());
-    }
-
-    Level levelOf(String marker) {
-      return events.stream()
-          .filter(event -> event.getMessage().getFormattedMessage().contains(marker))
-          .map(LogEvent::getLevel)
-          .findFirst()
-          .orElseThrow(() -> new AssertionError("no log event captured for " + marker));
-    }
   }
 
 }
