@@ -18,7 +18,10 @@ import io.airlift.units.DataSize;
 import io.trino.plugin.hive.HivePartitionKey;
 import io.trino.plugin.hudi.HudiSplit;
 import io.trino.plugin.hudi.HudiTableHandle;
+import io.trino.plugin.hudi.file.HudiBaseFile;
+import io.trino.spi.TrinoException;
 import io.trino.spi.predicate.TupleDomain;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -192,6 +195,52 @@ public class TestHudiSplitFactory
                     assertThat(split.getBaseFile()).isEmpty();
                     assertThat(split.getLogFiles()).hasSize(1);
                 });
+    }
+
+    @Test
+    public void testBootstrapSplitsUseExternalFilePathAndSize()
+    {
+        FileSlice slice = createFileSlice(DataSize.of(1, MEGABYTE), Option.empty());
+        BaseFile external = new BaseFile(new StoragePathInfo(
+                new StoragePath("/source/part-00000.parquet"), DataSize.of(65, MEGABYTE).toBytes(),
+                false, (short) 0, 0, 12345));
+        slice.getBaseFile().get().setBootstrapBaseFile(external);
+
+        for (HoodieTableType tableType : HoodieTableType.values()) {
+            List<HudiSplit> splits = new HudiSplitFactory(createTableHandle(tableType),
+                    HudiSplitWeightProvider.uniformStandardWeightProvider(), DataSize.of(20, MEGABYTE))
+                    .createSplits(PARTITION_KEYS, slice, COMMIT_TIME);
+            assertThat(splits).hasSize(4);
+            long position = 0;
+            for (HudiSplit split : splits) {
+                HudiBaseFile file = split.getBaseFile().orElseThrow();
+                assertThat(file.getPath()).isEqualTo(external.getPath());
+                assertThat(file.getFileSize()).isEqualTo(external.getFileSize());
+                assertThat(file.getModificationTime()).isEqualTo(12345);
+                assertThat(file.getStart()).isEqualTo(position);
+                position += file.getLength();
+            }
+            assertThat(position).isEqualTo(external.getFileSize());
+        }
+    }
+
+    @Test
+    public void testBootstrapWithLogsFailsInsteadOfReadingSkeletonData()
+    {
+        FileSlice slice = createFileSlice(DataSize.of(1, MEGABYTE), Option.of(DataSize.of(1, MEGABYTE)));
+        slice.getBaseFile().get().setBootstrapBaseFile(new BaseFile(new StoragePathInfo(
+                new StoragePath("/source/part-00000.parquet"), 100, false, (short) 0, 100, 1)));
+        HudiSplitWeightProvider weightProvider = HudiSplitWeightProvider.uniformStandardWeightProvider();
+        DataSize targetSplitSize = DataSize.of(128, MEGABYTE);
+
+        assertThatThrownBy(() -> new HudiSplitFactory(createTableHandle(HoodieTableType.MERGE_ON_READ), weightProvider, targetSplitSize)
+                .createSplits(PARTITION_KEYS, slice, COMMIT_TIME))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("metadata-only bootstrap");
+        assertThat(new HudiSplitFactory(createTableHandle(HoodieTableType.COPY_ON_WRITE), weightProvider, targetSplitSize)
+                .createSplits(PARTITION_KEYS, slice, COMMIT_TIME))
+                .singleElement().satisfies(split -> assertThat(split.getBaseFile().orElseThrow().getPath())
+                        .isEqualTo("/source/part-00000.parquet"));
     }
 
     @Test
