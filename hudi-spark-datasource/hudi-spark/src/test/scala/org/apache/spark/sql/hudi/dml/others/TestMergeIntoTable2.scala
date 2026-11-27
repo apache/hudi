@@ -1511,6 +1511,20 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            """.stripMargin)
         checkAnswer(s"select id, name, price from $tableName")(
           Seq(1, "n1", 11.0), Seq(2, "a2", 20.0), Seq(3, "n3", 31.0))
+
+        // With a matched delete clause the statement is upserted, and the deleted key still takes the insert clause
+        spark.sql(s"delete from $tableName where id = 3")
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'x1' as name, 12.0 as price union all select 2, 'd2', 0.0
+             |  union all select 3, 'm3', 32.0 union all select 4, 'm4', 41.0) s
+             | on t.id = s.id
+             | when matched and s.name = 'd2' then delete
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(1, "n1", 11.0), Seq(3, "m3", 32.0), Seq(4, "m4", 41.0))
       }
     }
   }

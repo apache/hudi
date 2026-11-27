@@ -133,11 +133,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * Whether the write reads the records the source records match and evaluates the matched clauses on both before
    * it appends to the log files of a merge-on-read table, which a statement on a table with a record key asks for
-   * when a matched clause refers to a field of the target table in its condition or in an assigned value.
+   * when a matched clause refers to a field of the target table in its condition or in an assigned value, or when
+   * it has a matched delete clause and a not-matched insert clause: an index that reads the keys of the base files
+   * locates a key deleted in a log file, and only the read tells that such a record takes the insert clauses.
    * See [[HoodieWriteConfig.SPARK_SQL_MERGE_INTO_READS_TARGET_KEY]].
    */
-  private lazy val readsTargetRecordsOnWrite: Boolean = targetTableType == MOR_TABLE_TYPE_OPT_VAL && hasPrimaryKey() &&
-    mergeInto.matchedActions.exists { action =>
+  private lazy val readsTargetRecordsOnWrite: Boolean = targetTableType == MOR_TABLE_TYPE_OPT_VAL && hasPrimaryKey() && (
+    (deletingActions.nonEmpty && insertingActions.nonEmpty) || mergeInto.matchedActions.exists { action =>
       val assignedValues = action match {
         case update: UpdateAction => update.assignments.map(_.value)
         case _ => Seq.empty
@@ -145,7 +147,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       (action.condition.toSeq ++ assignedValues).exists(_.collect {
         case attr: AttributeReference if mergeInto.targetTable.outputSet.contains(attr) => attr
       }.nonEmpty)
-    }
+    })
 
   /**
    * Whether the write evaluates the matched clauses on the source record alone, as the append to the log files of
