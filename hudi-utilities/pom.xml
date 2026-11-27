@@ -103,9 +103,11 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- Apache Tika: embedded document parsing for UnstructuredFileDFSSource.
-         Only tika-core ships in the bundles; parser modules (PDF, Office, ...) are
-         supplied at runtime via spark-submit packages (org.apache.tika:tika-parsers-standard-package) -->
+    <!-- Apache Tika: embedded document parsing for the unstructured file sources.
+         Only tika-core is compiled against, and only it ships in hudi-utilities-bundle.
+         The format parser modules are discovered at runtime through Tika's ServiceLoader,
+         so they are needed for tests and at runtime but never at compile time; they ship
+         in hudi-tika-bundle, which is passed alongside the utilities bundle. -->
     <dependency>
       <groupId>org.apache.tika</groupId>
       <artifactId>tika-core</artifactId>

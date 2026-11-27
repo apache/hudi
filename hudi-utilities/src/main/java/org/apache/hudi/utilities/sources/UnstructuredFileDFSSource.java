@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
+import org.apache.hudi.utilities.sources.helpers.unstructured.UnstructuredFilePathSelector;
 import org.apache.hudi.utilities.sources.helpers.unstructured.UnstructuredFileRecordBuilder;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -112,7 +112,7 @@ public class UnstructuredFileDFSSource extends RowSource {
       DataTypes.createStructField("parse_status", DataTypes.StringType, false),
       DataTypes.createStructField("parse_error", DataTypes.StringType, true)});
 
-  private final DFSPathSelector pathSelector;
+  private final UnstructuredFilePathSelector pathSelector;
   private final UnstructuredFileRecordBuilder recordBuilder;
   private final Set<String> allowedExtensions;
   private final Set<String> ignoredExtensions;
@@ -121,7 +121,7 @@ public class UnstructuredFileDFSSource extends RowSource {
   public UnstructuredFileDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = DFSPathSelector.createSourceSelector(props, sparkContext.hadoopConfiguration());
+    this.pathSelector = new UnstructuredFilePathSelector(props, sparkContext.hadoopConfiguration());
     this.recordBuilder = new UnstructuredFileRecordBuilder(props);
     this.allowedExtensions = parseExtensions(getStringWithAltKeys(props, FILE_EXTENSIONS, true));
     this.ignoredExtensions = parseExtensions(getStringWithAltKeys(props, FILE_EXTENSIONS_IGNORE, true));
@@ -146,36 +146,35 @@ public class UnstructuredFileDFSSource extends RowSource {
 
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    Pair<Option<String>, Checkpoint> selected =
-        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCheckpoint, sourceLimit);
-    return selected.getLeft()
-        .map(pathStr -> Pair.of(Option.of(fromFiles(pathStr)), selected.getRight()))
-        .orElseGet(() -> Pair.of(Option.empty(), selected.getRight()));
+    UnstructuredFilePathSelector.Batch batch = pathSelector.selectNextBatch(lastCheckpoint, sourceLimit);
+    List<UnstructuredFilePathSelector.FileEntry> eligible = batch.files.stream()
+        .filter(entry -> isEligible(new Path(entry.path).getName()))
+        .collect(Collectors.toList());
+    return eligible.isEmpty()
+        ? Pair.of(Option.empty(), batch.checkpoint)
+        : Pair.of(Option.of(fromFiles(eligible)), batch.checkpoint);
   }
 
-  private Dataset<Row> fromFiles(String pathStr) {
-    List<String> paths = Arrays.stream(pathStr.split(","))
-        .filter(p -> isEligible(new Path(p).getName()))
-        .collect(Collectors.toList());
-    int parallelism = Math.max(1, Math.min(paths.size(), listingParallelism));
+  private Dataset<Row> fromFiles(List<UnstructuredFilePathSelector.FileEntry> entries) {
+    int parallelism = Math.max(1, Math.min(entries.size(), listingParallelism));
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(sparkContext.hadoopConfiguration());
     UnstructuredFileRecordBuilder builder = this.recordBuilder;
     // one file -> one row, lazily: inline bytes and extracted text of a partition must
     // never be resident all at once, or partition memory scales with total corpus size
-    JavaRDD<Row> rows = sparkContext.parallelize(paths, parallelism).mapPartitions(pathIterator ->
-        new LazyIterableIterator<String, Row>(pathIterator) {
+    JavaRDD<Row> rows = sparkContext.parallelize(entries, parallelism).mapPartitions(entryIterator ->
+        new LazyIterableIterator<UnstructuredFilePathSelector.FileEntry, Row>(entryIterator) {
           private FileSystem fs;
 
           @Override
           protected Row computeNext() {
-            String path = inputItr.next();
+            UnstructuredFilePathSelector.FileEntry entry = inputItr.next();
             try {
               if (fs == null) {
-                fs = HadoopFSUtils.getFs(new Path(path), storageConf);
+                fs = HadoopFSUtils.getFs(new Path(entry.path), storageConf);
               }
-              return builder.buildRow(fs, path);
+              return builder.buildRow(fs, entry);
             } catch (IOException e) {
-              throw new UncheckedIOException("Failed to build record for " + path, e);
+              throw new UncheckedIOException("Failed to build record for " + entry.path, e);
             }
           }
         });
