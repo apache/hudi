@@ -91,6 +91,8 @@ class ExpressionPayload(@transient record: GenericRecord,
 
   override def canProduceSentinel: Boolean = true
 
+  override def decidesDeleteOnWrite: Boolean = true
+
   /**
    * Process the matched record. Firstly test if the record matched any of the update-conditions,
    * if matched, return the update assignments result. Secondly, test if the record matched

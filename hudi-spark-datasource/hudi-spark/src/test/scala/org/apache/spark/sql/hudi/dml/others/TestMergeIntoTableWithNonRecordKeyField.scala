@@ -21,8 +21,13 @@ package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.ScalaAssertionSupport
+import org.apache.hudi.metadata.MetadataPartitionType
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.junit.jupiter.api.Assertions.assertTrue
+
+import java.io.File
 
 class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
@@ -389,6 +394,162 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
         val cnt = spark.sql(s"select * from $tableName where id = 1").count()
         assertResult(0)(cnt)
       }
+    }
+  }
+
+  /**
+   * Creates a merge-on-read table (id int, name string, ts long, dep string) partitioned by `dep`, with the given table
+   * properties, and inserts the given rows.
+   */
+  private def createMorTable(tmp: File, tblProps: Seq[String], rows: String): String = {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (id int, name string, ts long, dep string) using hudi
+         | tblproperties (${("type = 'mor'" +: tblProps).mkString(", ")})
+         | partitioned by (dep)
+         | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+    spark.sql(s"insert into $tableName values $rows")
+    tableName
+  }
+
+  Seq("update set *", "update set name = s.name, ts = s.ts").foreach { updateClause =>
+    test(s"Test MergeInto deletes a matched record of a pkless mor table with an ordering field and $updateClause") {
+      withTempDir { tmp =>
+        val tableName = createMorTable(tmp, Seq("preCombineField = 'ts'"),
+          "(1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1'), (3, 'a3', 10, 'd1')")
+
+        // id 1 takes the delete clause and id 2 the update clause
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'a1m' as name, 20L as ts, 'd1' as dep union all select 2, 'a2m', 20L, 'd1') s
+             | on t.id = s.id
+             | when matched and s.id = 2 then $updateClause
+             | when matched then delete
+           """.stripMargin)
+        checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(2, "a2m", 20L, "d1"), Seq(3, "a3", 10L, "d1"))
+
+        // A statement with a delete clause only
+        spark.sql(s"merge into $tableName t using (select 3 as id, 20L as ts) s on t.id = s.id when matched then delete")
+        checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(2, "a2m", 20L, "d1"))
+      }
+    }
+  }
+
+  // The global indexes evaluate whether a source record is a delete while they tag it, before the append handle
+  // applies the clauses. The SIMPLE and BLOOM indexes do not keep that answer, as HoodieIndexUtils#tagAsNewRecordIfNeeded
+  // calls newInstance(), whose copy constructor drops it. GLOBAL_BLOOM tags like GLOBAL_SIMPLE and is covered below.
+  Seq("GLOBAL_SIMPLE", "RECORD_INDEX").foreach { indexType =>
+    Seq("ts", "").foreach { orderingField =>
+      val ordering = if (orderingField.isEmpty) "without an ordering field" else "with an ordering field"
+      test(s"Test MergeInto deletes a matched record of a keyed mor table $ordering with the $indexType index") {
+        withTempDir { tmp =>
+          withSQLConf("hoodie.index.type" -> indexType,
+            "hoodie.metadata.global.record.level.index.enable" -> (indexType == "RECORD_INDEX").toString) {
+            val orderingProp = if (orderingField.isEmpty) Seq.empty else Seq(s"preCombineField = '$orderingField'")
+            val tableName = createMorTable(tmp, "primaryKey = 'id'" +: orderingProp,
+              "(1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1'), (3, 'a3', 10, 'd1'), (4, 'a4', 10, 'd1')")
+
+            val statement =
+              s"""
+                 | merge into $tableName t
+                 | using (select 1 as id, 'a1m' as name, 20L as ts, 'd1' as dep union all select 2, 'a2m', 20L, 'd1') s
+                 | on t.id = s.id
+                 | when matched and s.id = 2 then update set *
+                 | when matched then delete
+               """.stripMargin
+            if (indexType == "RECORD_INDEX" && orderingField.nonEmpty) {
+              // A delete that loses to the record would remove the key from the record index
+              checkExceptionContain(statement)("A WHEN MATCHED DELETE clause is only supported with commit time ordering")
+            } else {
+              spark.sql(statement)
+              checkAnswer(s"select id, name, ts, dep from $tableName order by id")(
+                Seq(2, "a2m", 20L, "d1"), Seq(3, "a3", 10L, "d1"), Seq(4, "a4", 10L, "d1"))
+
+              // A statement with a delete clause only. Without an ordering field it is written as an insert, so it
+              // deletes nothing, as before this change (#20897).
+              if (orderingField.nonEmpty) {
+                // Under event time ordering, the delete with a higher ordering value than the record deletes it, and
+                // the one with a lower value loses to it
+                spark.sql(
+                  s"""
+                     | merge into $tableName t
+                     | using (select 3 as id, 'a3m' as name, 20L as ts, 'd1' as dep union all select 4, 'a4m', 5L, 'd1') s
+                     | on t.id = s.id
+                     | when matched then delete
+                   """.stripMargin)
+                checkAnswer(s"select id, name, ts, dep from $tableName order by id")(
+                  Seq(2, "a2m", 20L, "d1"), Seq(4, "a4", 10L, "d1"))
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // A global index tags a matched source record in another partition with the location of the record it matches
+  Seq("GLOBAL_SIMPLE", "GLOBAL_BLOOM").foreach { indexType =>
+    test(s"Test MergeInto applies a delete clause to a source record in another partition with the $indexType index") {
+      withTempDir { tmp =>
+        withSQLConf("hoodie.index.type" -> indexType) {
+          val tableName = createMorTable(tmp, Seq("primaryKey = 'id'", "preCombineField = 'ts'"),
+            "(1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1'), (3, 'a3', 10, 'd1')")
+
+          // id 1 moves to d2 with the update clause and id 2 takes the delete clause
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'a1m' as name, 20L as ts, 'd2' as dep union all select 2, 'a2m', 20L, 'd2') s
+               | on t.id = s.id
+               | when matched and s.id = 1 then update set *
+               | when matched then delete
+             """.stripMargin)
+          checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(1, "a1m", 20L, "d2"), Seq(3, "a3", 10L, "d1"))
+
+          // A statement with a delete clause only
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 3 as id, 'a3m' as name, 20L as ts, 'd2' as dep) s
+               | on t.id = s.id
+               | when matched then delete
+             """.stripMargin)
+          checkAnswer(s"select id, name, ts, dep from $tableName order by id")(Seq(1, "a1m", 20L, "d2"))
+        }
+      }
+    }
+  }
+
+  // A record level index the write keeps loses the key with a delete that loses to the record under event time ordering
+  private def deleteWithLowerOrderingValue(tableName: String): String =
+    s"""
+       | merge into $tableName t
+       | using (select 1 as id, 'a1m' as name, 5L as ts, 'd1' as dep) s
+       | on t.id = s.id
+       | when matched then delete
+     """.stripMargin
+
+  test("Test MergeInto refuses a delete clause on a keyed mor table with event time ordering when the write asks for a record level index") {
+    withTempDir { tmp =>
+      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE", "hoodie.metadata.global.record.level.index.enable" -> "true") {
+        val tableName = createMorTable(tmp, Seq("primaryKey = 'id'", "preCombineField = 'ts'"), "(1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1')")
+        checkExceptionContain(deleteWithLowerOrderingValue(tableName))("A WHEN MATCHED DELETE clause is only supported with commit time ordering")
+      }
+    }
+  }
+
+  test("Test MergeInto refuses a delete clause on a pkless mor table with event time ordering that has a record level index") {
+    withTempDir { tmp =>
+      // The record level index is built by the insert, and the statement does not ask for it
+      val tableName = withSQLConf("hoodie.metadata.global.record.level.index.enable" -> "true") {
+        createMorTable(tmp, Seq("preCombineField = 'ts'"), "(1, 'a1', 10, 'd1'), (2, 'a2', 10, 'd1')")
+      }
+      assertTrue(createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName").getTableConfig
+        .isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
+      checkExceptionContain(deleteWithLowerOrderingValue(tableName))("A WHEN MATCHED DELETE clause is only supported with commit time ordering")
     }
   }
 }
