@@ -66,6 +66,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -104,6 +105,8 @@ public class RequestHandler {
   private RemotePartitionerHandler partitionerHandler;
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private final ScheduledExecutorService asyncResultService;
+  // Per base path: the view timeline last checked under the view's monitor while no sync was running.
+  private final Map<String, CheckedLocalTimeline> checkedLocalTimelines = new ConcurrentHashMap<>();
 
   public RequestHandler(Javalin app, StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
                         FileSystemViewManager viewManager) {
@@ -247,6 +250,13 @@ public class RequestHandler {
     if (asyncResultService != null) {
       asyncResultService.shutdown();
     }
+  }
+
+  /**
+   * Drops the checked view timeline kept for a table whose file system view was cleared.
+   */
+  void unregisterBasePath(String basePath) {
+    checkedLocalTimelines.remove(basePath);
   }
 
   private void writeValueAsString(Context ctx, Object obj) throws JsonProcessingException {
@@ -526,6 +536,7 @@ public class RequestHandler {
 
     app.post(RemoteHoodieTableFileSystemView.REFRESH_TABLE_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("REFRESH_TABLE", 1);
+      checkedLocalTimelines.remove(getBasePathParam(ctx));
       boolean success = sliceHandler.refreshTable(getBasePathParam(ctx));
       writeValueAsString(ctx, success);
     }, false));
@@ -689,16 +700,12 @@ public class RequestHandler {
 
           if (refreshCheck) {
             long beginFinalCheck = System.currentTimeMillis();
-            if (isLocalViewBehind(context)) {
-              String lastKnownInstantFromClient = getLastInstantTsParam(context);
-              String timelineHashFromClient = getTimelineHashParam(context);
-              HoodieTimeline localTimeline =
-                  viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM)).getTimeline();
-              if (shouldThrowExceptionIfLocalViewBehind(localTimeline, timelineHashFromClient)) {
-                String errMsg = String.format("Last known instant from client was %s but server has the following timeline %s",
-                        lastKnownInstantFromClient, localTimeline.getInstants());
-                throw new BadRequestResponse(errMsg);
-              }
+            String basePath = context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+            HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
+            if (isLocalViewBehind(context, getCheckedLocalTimeline(basePath, localTimeline))) {
+              String errMsg = String.format("Last known instant from client was %s but server has the following timeline %s",
+                      getLastInstantTsParam(context), localTimeline.getInstants());
+              throw new BadRequestResponse(errMsg);
             }
             long endFinalCheck = System.currentTimeMillis();
             finalCheckTimeTaken = endFinalCheck - beginFinalCheck;
@@ -732,14 +739,19 @@ public class RequestHandler {
     }
 
     /**
-     * Determines if local view of table's timeline is behind that of client's view.
+     * Determines if local view of table's timeline is behind that of client's view, apart from a trailing clean.
+     *
+     * <p>The final check already accepts a trailing clean with an otherwise matching timeline, so the refresh check
+     * does not sync for it either. Other extensions still need a sync: restore may have deleted their extra instants.
      */
-    private boolean isLocalViewBehind(Context ctx) {
-      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+    private boolean isLocalViewBehind(Context ctx, CheckedLocalTimeline localTimeline) {
+      return !localTimeline.isClientMissingOnlyTrailingClean(getTimelineHashParam(ctx))
+          && isLocalViewBehind(ctx, localTimeline.getFilteredTimeline());
+    }
+
+    private boolean isLocalViewBehind(Context ctx, HoodieTimeline localTimeline) {
       String lastKnownInstantFromClient = getLastInstantTsParam(ctx);
       String timelineHashFromClient = getTimelineHashParam(ctx);
-      HoodieTimeline localTimeline =
-          viewManager.getFileSystemView(basePath).getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
       if (log.isDebugEnabled()) {
         log.debug("Client [ LastTs={}, TimelineHash={}], localTimeline={}",lastKnownInstantFromClient, timelineHashFromClient, localTimeline.getInstants());
       }
@@ -762,39 +774,46 @@ public class RequestHandler {
 
     /**
      * Syncs data-set view if local view is behind.
+     *
+     * <p>The check runs without the view's monitor only against a timeline that was checked under the monitor
+     * and is still the view's current timeline. The entry is dropped before {@code view.sync()}, because a sync
+     * publishes its new timeline before it finishes updating the rest of the view (and the stateless file-group
+     * lookups read the view without its read lock), so a request must not match the new timeline until the
+     * sync completes.
      */
     private boolean syncIfLocalViewBehind(Context ctx) {
       String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
       SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
+      CheckedLocalTimeline checked = checkedLocalTimelines.get(basePath);
+      if (checked != null && checked.isFor(view.getTimeline()) && !isLocalViewBehind(ctx, checked)) {
+        return false;
+      }
       synchronized (view) {
         HoodieTimeline localTimeline = view.getTimeline();
-        // The final check already accepts a trailing clean with an otherwise matching timeline.
-        // Other extensions still need a sync: restore may have deleted their extra instants.
-        if (!shouldThrowExceptionIfLocalViewBehind(localTimeline, getTimelineHashParam(ctx))) {
-          return false;
-        }
-        if (isLocalViewBehind(ctx)) {
+        checked = getCheckedLocalTimeline(basePath, localTimeline);
+        boolean synced = false;
+        if (isLocalViewBehind(ctx, checked)) {
           String lastKnownInstantFromClient = getLastInstantTsParam(ctx);
           if (log.isInfoEnabled()) {
             log.info("Syncing view as client passed last known instant {} as last known instant but server has the following last instant on timeline: {}",
                 lastKnownInstantFromClient, localTimeline.lastInstant());
           }
+          checkedLocalTimelines.remove(basePath);
           view.sync();
-          return true;
+          checked = new CheckedLocalTimeline(view.getTimeline());
+          synced = true;
         }
+        checkedLocalTimelines.put(basePath, checked);
+        return synced;
       }
-      return false;
     }
 
     /**
-     * Determine whether to throw an exception when local view of table's timeline is behind that of client's view.
+     * Returns the checked entry when it is for the given view timeline, else a new, unpublished one.
      */
-    private boolean shouldThrowExceptionIfLocalViewBehind(HoodieTimeline localTimeline, String timelineHashFromClient) {
-      Option<HoodieInstant> lastInstant = localTimeline.lastInstant();
-      // When performing async clean, we may have one more .clean.completed after lastInstantTs.
-      // In this case, we do not need to throw an exception.
-      return !lastInstant.isPresent() || !lastInstant.get().getAction().equals(HoodieTimeline.CLEAN_ACTION)
-          || !localTimeline.findInstantsBefore(lastInstant.get().requestedTime()).getTimelineHash().equals(timelineHashFromClient);
+    private CheckedLocalTimeline getCheckedLocalTimeline(String basePath, HoodieTimeline viewTimeline) {
+      CheckedLocalTimeline checked = checkedLocalTimelines.get(basePath);
+      return checked != null && checked.isFor(viewTimeline) ? checked : new CheckedLocalTimeline(viewTimeline);
     }
 
     private boolean isRefreshCheckDisabledInQuery(Context ctx) {
@@ -807,6 +826,42 @@ public class RequestHandler {
 
     private String getTimelineHashParam(Context ctx) {
       return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.TIMELINE_HASH, String.class).getOrDefault("");
+    }
+  }
+
+  /**
+   * A view timeline together with what the client freshness check derives from it: the completed-or-compaction
+   * filtered copy (whose hash is computed at construction) and, when the timeline ends with a clean, the hash of the
+   * timeline before that clean. Both are computed once per view timeline rather than once per request.
+   */
+  private static class CheckedLocalTimeline {
+    private final HoodieTimeline viewTimeline;
+    private final HoodieTimeline filteredTimeline;
+    private final Option<String> hashBeforeTrailingClean;
+
+    CheckedLocalTimeline(HoodieTimeline viewTimeline) {
+      this.viewTimeline = viewTimeline;
+      this.filteredTimeline = viewTimeline.filterCompletedOrMajorOrMinorCompactionInstants();
+      Option<HoodieInstant> lastInstant = viewTimeline.lastInstant();
+      // When performing async clean, we may have one more .clean.completed after lastInstantTs.
+      this.hashBeforeTrailingClean = lastInstant.isPresent() && lastInstant.get().getAction().equals(HoodieTimeline.CLEAN_ACTION)
+          ? Option.of(viewTimeline.findInstantsBefore(lastInstant.get().requestedTime()).getTimelineHash())
+          : Option.empty();
+    }
+
+    boolean isFor(HoodieTimeline timeline) {
+      return viewTimeline == timeline;
+    }
+
+    HoodieTimeline getFilteredTimeline() {
+      return filteredTimeline;
+    }
+
+    /**
+     * Whether the client's timeline is this timeline without its last instant, a clean.
+     */
+    boolean isClientMissingOnlyTrailingClean(String timelineHashFromClient) {
+      return hashBeforeTrailingClean.isPresent() && hashBeforeTrailingClean.get().equals(timelineHashFromClient);
     }
   }
 }
