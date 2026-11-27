@@ -21,6 +21,7 @@ package org.apache.hudi.common.schema.internal.utils;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.Type;
 import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -270,7 +271,8 @@ public class SerDeHelper {
           // build fields
           fields.add(Types.Field.get(id, optional, name, type, doc));
         }
-        return Types.RecordType.get(fields);
+        // a Blob persisted by 1.2.0 / 1.2.1 carries reference ids that shadow table column ids
+        return InternalSchemaConverter.upgradeLegacyBlobRecord(Types.RecordType.get(fields));
       } else if (ARRAY.equals(typeStr)) {
         int elementId = jsonNode.get(ELEMENT_ID).asInt();
         Type elementType = parseTypeFromJson(jsonNode.get(ELEMENT));

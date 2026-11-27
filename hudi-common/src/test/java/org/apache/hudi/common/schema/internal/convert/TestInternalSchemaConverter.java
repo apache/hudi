@@ -25,11 +25,17 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.Type;
 import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createArrayField;
@@ -293,5 +299,91 @@ public class TestInternalSchemaConverter {
     assertEquals(64, rtVec.getDimension());
     assertEquals(HoodieSchema.Vector.VectorElementType.DOUBLE, rtVec.getVectorElementType());
     assertEquals(HoodieSchema.Vector.StorageBacking.FIXED_BYTES, rtVec.getStorageBacking());
+  }
+
+  @Test
+  public void testBlobReferenceFieldsDoNotShadowTableColumns() {
+    HoodieSchema schema = createRecord("blobRecord",
+        createPrimitiveField("id", HoodieSchemaType.INT),
+        createPrimitiveField("name", HoodieSchemaType.STRING),
+        HoodieSchemaField.of("payload", HoodieSchema.createNullable(HoodieSchema.createBlob()), null, null),
+        createPrimitiveField("ts", HoodieSchemaType.LONG));
+
+    InternalSchema internalSchema = InternalSchemaConverter.convert(schema);
+
+    // every table column is found under its own id, wherever the blob sits between them
+    for (Types.Field column : internalSchema.columns()) {
+      assertEquals(column.name(), internalSchema.findField(column.fieldId()).name());
+    }
+    // the fields nested in the blob carry ids of their own and stay reachable by name
+    for (String referenceField : Arrays.asList("external_path", "offset", "length", "managed")) {
+      Types.Field nested = internalSchema.findField("payload.reference." + referenceField);
+      assertEquals(referenceField, nested.name());
+      assertTrue(nested.fieldId() < 0);
+    }
+
+    // the blob still survives the round trip back to a HoodieSchema, and the persisted form
+    HoodieSchema roundTripped = InternalSchemaConverter.convert(internalSchema, "blobRecord");
+    assertEquals(Arrays.asList("id", "name", "payload", "ts"),
+        roundTripped.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+    assertEquals(HoodieSchemaType.BLOB, roundTripped.getFields().get(2).schema().getNonNullType().getType());
+    assertEquals(internalSchema, SerDeHelper.fromJson(SerDeHelper.toJson(internalSchema)).get());
+  }
+
+  @Test
+  public void testNonNegativeFieldIdsAreUniqueWithSeveralBlobAndVariantColumns() {
+    // A BLOB and a VARIANT each convert to a fixed record type whose fields carry negative sentinel ids, shared by
+    // every column of that type. All other fields take their id from one counter, so a non-negative id must belong
+    // to exactly one field, however many BLOB and VARIANT columns there are and wherever they sit.
+    HoodieSchema schema = createRecord("blobAndVariantRecord",
+        createPrimitiveField("id", HoodieSchemaType.INT),
+        HoodieSchemaField.of("payload", HoodieSchema.createNullable(HoodieSchema.createBlob()), null, null),
+        createPrimitiveField("name", HoodieSchemaType.STRING),
+        HoodieSchemaField.of("thumbnail", HoodieSchema.createBlob(), null, null),
+        HoodieSchemaField.of("attributes", HoodieSchema.createNullable(HoodieSchema.createVariant()), null, null),
+        createNestedField("holder", HoodieSchema.createBlob()),
+        createPrimitiveField("ts", HoodieSchemaType.LONG),
+        createArrayField("attachments", HoodieSchema.createBlob()),
+        createMapField("previews", HoodieSchema.createBlob()),
+        HoodieSchemaField.of("extras", HoodieSchema.createVariant(), null, null));
+    // the BLOB and VARIANT columns of the schema above, by the path of the field that holds them
+    List<String> blobAndVariantColumns = Arrays.asList(
+        "payload", "thumbnail", "attributes", "holder.nested", "attachments.element", "previews.value", "extras");
+
+    Map<String, Integer> idsByPath = new LinkedHashMap<>();
+    collectFieldIds(InternalSchemaConverter.convert(schema).getRecord(), "", idsByPath);
+
+    for (String column : blobAndVariantColumns) {
+      assertTrue(idsByPath.keySet().stream().anyMatch(path -> path.startsWith(column + ".")), "no field walked below " + column);
+    }
+    Map<Integer, List<String>> pathsByNonNegativeId = new TreeMap<>();
+    List<String> negativeIdsOutsideBlobAndVariant = new ArrayList<>();
+    idsByPath.forEach((path, id) -> {
+      if (id >= 0) {
+        pathsByNonNegativeId.computeIfAbsent(id, k -> new ArrayList<>()).add(path);
+      } else if (blobAndVariantColumns.stream().noneMatch(column -> path.startsWith(column + "."))) {
+        negativeIdsOutsideBlobAndVariant.add(path + "=" + id);
+      }
+    });
+    pathsByNonNegativeId.values().removeIf(paths -> paths.size() == 1);
+
+    assertEquals(Collections.emptyMap(), pathsByNonNegativeId, "non-negative field ids used by more than one field");
+    assertEquals(Collections.emptyList(), negativeIdsOutsideBlobAndVariant, "negative field ids outside the BLOB and VARIANT columns");
+  }
+
+  /**
+   * Puts the id of every field below {@code type} into {@code idsByPath} under its dotted path: the fields of records,
+   * the element of arrays and the key and value of maps, at any depth. It does not go through the id maps of an
+   * InternalSchema: they keep one field per id, which would hide the collisions this test looks for.
+   */
+  private static void collectFieldIds(Type type, String path, Map<String, Integer> idsByPath) {
+    if (!type.isNestedType()) {
+      return;
+    }
+    for (Types.Field field : ((Type.NestedType) type).fields()) {
+      String fieldPath = path.isEmpty() ? field.name() : path + "." + field.name();
+      idsByPath.put(fieldPath, field.fieldId());
+      collectFieldIds(field.type(), fieldPath, idsByPath);
+    }
   }
 }
