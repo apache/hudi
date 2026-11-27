@@ -623,7 +623,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // Get the previous clean's earliest commit to retain, if available
       Option<String> previousEarliestCommitToRetain = Option.empty();
       lastCompletedClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
-      if (lastCompletedClean.isPresent() && config.getMaxCommitsToClean() != Long.MAX_VALUE) {
+      if (lastCompletedClean.isPresent()
+          && (config.getMaxCommitsToClean() != Long.MAX_VALUE || config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS)) {
         try {
           HoodieCleanMetadata cleanMetadata = hoodieTable.getActiveTimeline().readCleanMetadata(lastCompletedClean.get());
           lastCleanMetadata = Option.of(cleanMetadata);

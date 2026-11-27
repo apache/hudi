@@ -46,11 +46,15 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieCleanerTestBase;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -60,6 +64,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -501,10 +506,12 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files.
+   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files. With KEEP_LATEST_BY_HOURS every
+   * commit is older than the window, so the latest commit is retained.
    */
-  @Test
-  public void testKeepLatestCommitsMOR() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieCleaningPolicy.class, names = {"KEEP_LATEST_COMMITS", "KEEP_LATEST_BY_HOURS"})
+  public void testKeepLatestCommitsMOR(HoodieCleaningPolicy cleaningPolicy) throws Exception {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
@@ -512,7 +519,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
             // not valid (empty commit metadata, invalid parquet files)
             .withMetadataIndexColumnStats(false).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build())
+            .withCleanerPolicy(cleaningPolicy).retainCommits(1).cleanerNumHoursRetained(2).build())
         .build();
 
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
@@ -819,6 +826,184 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     } finally {
       testTable.close();
     }
+  }
+
+  /**
+   * When every completed commit is older than the hours window, the clean retains from the latest completed commit and
+   * records it as the earliest commit to retain.
+   */
+  @ParameterizedTest
+  @ValueSource(ints = {0, 2})
+  void testKeepXHoursCleansOlderSlicesWhenEveryCommitIsOlderThanTheWindow(int hoursRetained) throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withIncrementalCleaningMode(true)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS).cleanerNumHoursRetained(hoursRetained)
+            .build())
+        .build();
+
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, getMetadataWriter(config), Option.of(context));
+    try {
+      String p0 = "2020/01/01";
+      String file1 = UUID.randomUUID().toString();
+      String file2 = UUID.randomUUID().toString();
+      ZonedDateTime now = ZonedDateTime.ofInstant(Instant.now(), ZoneId.systemDefault());
+      String firstCommitTs = TimelineUtils.formatDate(Date.from(now.minusMinutes(300).toInstant()));
+      String secondCommitTs = TimelineUtils.formatDate(Date.from(now.minusMinutes(240).toInstant()));
+      String thirdCommitTs = TimelineUtils.formatDate(Date.from(now.minusMinutes(180).toInstant()));
+
+      commitWithMdt(firstCommitTs, Collections.singletonMap(p0, CollectionUtils.createImmutableList(file1)), testTable, config);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+      commitWithMdt(secondCommitTs, Collections.singletonMap(p0, CollectionUtils.createImmutableList(file1, file2)), testTable, config);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+      commitWithMdt(thirdCommitTs, Collections.singletonMap(p0, CollectionUtils.createImmutableList(file1, file2)), testTable, config);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      List<HoodieCleanStat> cleanStats = runCleaner(config);
+
+      assertEquals(1, cleanStats.size(), "One partition is cleaned");
+      assertFalse(testTable.baseFileExists(p0, firstCommitTs, file1));
+      assertTrue(testTable.baseFileExists(p0, secondCommitTs, file1), "the latest slice before the commit to retain is kept");
+      assertTrue(testTable.baseFileExists(p0, secondCommitTs, file2));
+      assertTrue(testTable.baseFileExists(p0, thirdCommitTs, file1));
+      assertTrue(testTable.baseFileExists(p0, thirdCommitTs, file2));
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieInstant firstClean = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant().get();
+      assertEquals(thirdCommitTs, CleanerUtils.getCleanerMetadata(metaClient, firstClean).getEarliestCommitToRetain());
+      HoodieTableMetaClient cleanedMetaClient = metaClient;
+      assertThrows(IllegalArgumentException.class, () -> TimelineUtils.validateTimestampAsOf(cleanedMetaClient, firstCommitTs),
+          "time travel to a cleaned commit is refused");
+      try (SparkRDDWriteClient<?> client = getHoodieWriteClient(config)) {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> client.savepoint(firstCommitTs, "user", "comment"));
+        assertTrue(e.getMessage().contains("beyond the lookup window"), e.getMessage());
+      }
+
+      String fourthCommitTs = TimelineUtils.formatDate(Date.from(now.minusMinutes(hoursRetained == 0 ? 150 : 30).toInstant()));
+      commitWithMdt(fourthCommitTs, Collections.singletonMap(p0, CollectionUtils.createImmutableList(file1)), testTable, config);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      List<HoodieCleanStat> nextCleanStats = runCleaner(config, 2, false);
+
+      assertEquals(1, nextCleanStats.size(), "The next clean finds the partition from the recorded commit to retain");
+      assertFalse(testTable.baseFileExists(p0, secondCommitTs, file1));
+      assertFalse(testTable.baseFileExists(p0, secondCommitTs, file2));
+      assertTrue(testTable.baseFileExists(p0, thirdCommitTs, file1));
+      assertTrue(testTable.baseFileExists(p0, thirdCommitTs, file2));
+      assertTrue(testTable.baseFileExists(p0, fourthCommitTs, file1));
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieInstant nextClean = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant().get();
+      assertEquals(fourthCommitTs, CleanerUtils.getCleanerMetadata(metaClient, nextClean).getEarliestCommitToRetain());
+    } finally {
+      testTable.close();
+    }
+  }
+
+  /**
+   * A clean records a commit inside the window while an earlier commit is pending. When every commit is older than the
+   * window later, the commit to retain does not move back before the recorded one.
+   */
+  @Test
+  void testKeepXHoursCommitToRetainDoesNotMoveBackWhileACommitIsPending() throws Exception {
+    HoodieWriteConfig config = hoursConfig(2);
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    try {
+      String p0 = "2020/01/01";
+      testTable.withPartitionMetaFiles(p0);
+      String file1 = UUID.randomUUID().toString();
+      ZonedDateTime now = ZonedDateTime.ofInstant(Instant.now(), metaClient.getTableConfig().getTimelineTimezone().getZoneId());
+      String firstCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(now.minusMinutes(300).toInstant()));
+      String secondCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(now.minusMinutes(270).toInstant()));
+      String pendingCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(now.minusMinutes(240).toInstant()));
+      String thirdCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(now.minusMinutes(60).toInstant()));
+      String fourthCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(now.minusMinutes(30).toInstant()));
+      commitToTestTable(testTable, firstCommitTs, p0, file1);
+      commitToTestTable(testTable, secondCommitTs, p0, file1);
+      testTable.addInflightCommit(pendingCommitTs);
+      commitToTestTable(testTable, thirdCommitTs, p0, file1);
+      commitToTestTable(testTable, fourthCommitTs, p0, file1);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      assertEquals(1, runCleaner(config).size(), "One partition is cleaned");
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieInstant clean = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant().get();
+      assertEquals(thirdCommitTs, CleanerUtils.getCleanerMetadata(metaClient, clean).getEarliestCommitToRetain());
+
+      HoodieWriteConfig windowOfZeroHours = hoursConfig(0);
+      HoodieTable table = HoodieSparkTable.create(windowOfZeroHours, context, metaClient);
+      Option<HoodieInstant> earliestCommitToRetain = new CleanPlanner(context, table, windowOfZeroHours).getEarliestCommitToRetain();
+      assertEquals(thirdCommitTs, earliestCommitToRetain.get().requestedTime(),
+          "the latest commit before the pending one is older than the commit the previous clean retained from");
+    } finally {
+      testTable.close();
+    }
+  }
+
+  /**
+   * The planner reads the commit the previous clean retained from and caps the commits the next clean covers.
+   */
+  @Test
+  void testMaxCommitsToCleanCapsTheCommitToRetainFromThePreviousClean() throws Exception {
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    try {
+      String p0 = "2020/01/01";
+      testTable.withPartitionMetaFiles(p0);
+      String file1 = UUID.randomUUID().toString();
+      ZonedDateTime now = ZonedDateTime.ofInstant(Instant.now(), metaClient.getTableConfig().getTimelineTimezone().getZoneId());
+      List<String> commits = new ArrayList<>();
+      for (int i = 6; i > 0; i--) {
+        commits.add(HoodieInstantTimeGenerator.formatDate(Date.from(now.minusMinutes(10L * i).toInstant())));
+      }
+      for (String commit : commits.subList(0, 3)) {
+        commitToTestTable(testTable, commit, p0, file1);
+      }
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      assertEquals(1, runCleaner(latestCommitsConfig(Long.MAX_VALUE)).size(), "One partition is cleaned");
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieInstant clean = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant().get();
+      assertEquals(commits.get(2), CleanerUtils.getCleanerMetadata(metaClient, clean).getEarliestCommitToRetain());
+
+      for (String commit : commits.subList(3, 6)) {
+        commitToTestTable(testTable, commit, p0, file1);
+      }
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      assertEquals(commits.get(3), earliestCommitToRetain(latestCommitsConfig(1L)),
+          "one commit from the commit the previous clean retained from is cleaned");
+      assertEquals(commits.get(5), earliestCommitToRetain(latestCommitsConfig(Long.MAX_VALUE)));
+    } finally {
+      testTable.close();
+    }
+  }
+
+  private String earliestCommitToRetain(HoodieWriteConfig config) {
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    Option<HoodieInstant> earliestCommitToRetain = new CleanPlanner(context, table, config).getEarliestCommitToRetain();
+    return earliestCommitToRetain.get().requestedTime();
+  }
+
+  private HoodieWriteConfig latestCommitsConfig(long maxCommitsToClean) {
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).withMaxCommitsToClean(maxCommitsToClean)
+            .build())
+        .build();
+  }
+
+  private HoodieWriteConfig hoursConfig(int hoursRetained) {
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS).cleanerNumHoursRetained(hoursRetained)
+            .build())
+        .build();
   }
 
   @ParameterizedTest
