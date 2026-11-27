@@ -333,7 +333,9 @@ public class HoodieMetadataWriteUtils {
         .withRecordMergeImplClasses(HoodieAvroRecordMerger.class.getCanonicalName())
         .withWriteRecordPositionsEnabled(false)
         .withWriteConcurrencyMode(concurrencyMode)
-        .withLockConfig(lockConfig);
+        .withLockConfig(lockConfig)
+        .withHeartbeatIntervalInMs(writeConfig.getIntOrDefault(HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS))
+        .withHeartbeatTolerableMisses(writeConfig.getHoodieClientHeartbeatTolerableMisses());
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();

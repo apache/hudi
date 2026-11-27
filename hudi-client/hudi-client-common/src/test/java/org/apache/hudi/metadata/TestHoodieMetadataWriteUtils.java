@@ -213,6 +213,22 @@ public class TestHoodieMetadataWriteUtils {
     assertEquals("snappy", metadataWriteConfig.getParquetCompressionCodec());
   }
 
+  @Test
+  public void testCreateMetadataWriteConfigPropagatesHeartbeatSettings() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/base_path/")
+        .withHeartbeatIntervalInMs(5000)
+        .withHeartbeatTolerableMisses(4)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withStreamingWriteEnabled(true).build())
+        .build();
+
+    HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
+    assertEquals(HoodieFailedWritesCleaningPolicy.LAZY, metadataWriteConfig.getFailedWritesCleanPolicy());
+    assertEquals(5000L, metadataWriteConfig.getHoodieClientHeartbeatIntervalInMs());
+    assertEquals(4, metadataWriteConfig.getHoodieClientHeartbeatTolerableMisses());
+  }
+
   @ParameterizedTest
   @EnumSource(value = MetricsReporterType.class, names = {
       "GRAPHITE", "JMX", "PROMETHEUS_PUSHGATEWAY", "M3", "PROMETHEUS"
