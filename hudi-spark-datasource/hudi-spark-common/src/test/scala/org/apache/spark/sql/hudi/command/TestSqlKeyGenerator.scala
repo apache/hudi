@@ -26,9 +26,18 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
+import org.apache.spark.sql.types.{LongType, StructField, StructType, TimestampType}
+import org.apache.spark.unsafe.types.UTF8String
 import org.joda.time.DateTimeZone
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
+
+import java.sql.Timestamp
+import java.time.Instant
+import java.util.TimeZone
 
 import scala.collection.JavaConverters._
 
@@ -118,11 +127,19 @@ class TestSqlKeyGenerator {
     record
   }
 
-  /** Runs `f` with the default timezone pinned, since the timestamp arms format in it. */
+  /**
+   * Runs `f` with the default timezones pinned, since the timestamp arms format in Joda's and the row
+   * delegates print a [[Timestamp]] in the JVM's.
+   */
   private def inUtc[T](f: => T): T = {
     val previousZone = DateTimeZone.getDefault
+    val previousJvmZone = TimeZone.getDefault
     DateTimeZone.setDefault(DateTimeZone.UTC)
-    try f finally DateTimeZone.setDefault(previousZone)
+    TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+    try f finally {
+      DateTimeZone.setDefault(previousZone)
+      TimeZone.setDefault(previousJvmZone)
+    }
   }
 
   @Test
@@ -253,5 +270,24 @@ class TestSqlKeyGenerator {
     record.put("amount", 15.0d)
     assertEquals(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH,
       keyGenerator().getPartitionPath(record))
+  }
+
+  /** 2026-08-11 00:00:00.123456 UTC in microseconds. */
+  private val subSecondMicros = 1786406400123456L
+
+  private val timestampRowSchema = StructType(Seq(StructField("id", LongType), StructField("dt", TimestampType)))
+
+  /** The row delegates hand over `00:00:00.123` or `00:00:00.123456`, which truncate to the second as on the Avro path. */
+  @Test
+  def testTimestampPartitionPathTruncatesASubSecondValueOnTheRowPaths(): Unit = inUtc {
+    assertEquals(UTF8String.fromString("2026-08-11 00%3A00%3A00"),
+      keyGenerator(Some("dt timestamp")).getPartitionPath(InternalRow(1L, subSecondMicros), timestampRowSchema))
+    val timestamp = Timestamp.from(Instant.ofEpochSecond(1786406400L, 123456000L))
+    assertEquals("2026-08-11 00%3A00%3A00", keyGenerator(Some("dt timestamp")).getPartitionPath(
+      new GenericRowWithSchema(Array[Any](1L, timestamp), timestampRowSchema): Row))
+    val record = new GenericData.Record(schema)
+    record.put("id", 1L)
+    record.put("dt", String.valueOf(subSecondMicros))
+    assertEquals("2026-08-11 00%3A00%3A00", keyGenerator(Some("dt timestamp")).getPartitionPath(record))
   }
 }

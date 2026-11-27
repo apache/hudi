@@ -199,5 +199,6 @@ object SqlKeyGenerator {
   val PARTITION_SCHEMA = "hoodie.sql.partition.schema"
   val ORIGINAL_KEYGEN_CLASS_NAME = "hoodie.sql.origin.keygen.class"
   private val timestampTimeFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss")
-  private val sqlTimestampFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.S")
+  // Parses one to nine fractional digits, as java.sql.Timestamp#toString prints them
+  private val sqlTimestampFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSSSSSSSS")
 }
