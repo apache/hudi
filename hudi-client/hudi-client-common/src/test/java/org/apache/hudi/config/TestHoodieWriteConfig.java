@@ -88,6 +88,20 @@ public class TestHoodieWriteConfig {
     assertTrue(exception.getMessage().contains(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key()));
   }
 
+  @Test
+  public void testArchiveBeyondSavepointIsRejected() {
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        () -> HoodieWriteConfig.newBuilder().withPath("/tmp")
+            .withProps(Collections.singletonMap(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key(), "true"))
+            .build());
+    assertTrue(exception.getMessage().contains(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key()));
+
+    // explicitly disabling it is still allowed
+    HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withProps(Collections.singletonMap(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key(), "false"))
+        .build();
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testPropertyLoading(boolean withAlternative) throws IOException {
