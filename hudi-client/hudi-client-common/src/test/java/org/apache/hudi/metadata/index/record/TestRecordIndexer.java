@@ -15,6 +15,7 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -258,6 +259,35 @@ class TestRecordIndexer {
     HoodieRecordGlobalLocation location = payload.getRecordGlobalLocation();
     assertEquals("p1", location.getPartitionPath());
     assertEquals(fileID, location.getFileId());
+  }
+
+  @Test
+  void testBuildUpdateRejectsLogFilesWhenTableSchemaIsUnresolved() {
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    HoodieTableMetaClient metaClient = mockMetaClientForUpdate(writeConfig, tableConfig);
+    when(tableConfig.hasRecordKey()).thenReturn(true);
+
+    HoodieData<HoodieRecord> records = (HoodieData<HoodieRecord>) (HoodieData<?>) engineContext.emptyHoodieData();
+    ExposedRecordIndexer indexer = new ExposedRecordIndexer(
+        engineContext, writeConfig, metaClient, new DataPartitionAndRecords(1, Option.empty(), records));
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
+    writeStat.setPartitionPath("p1");
+    writeStat.setPath("p1/.fileid-1_014.log.1_1-0-1");
+    writeStat.setFileId("fileid-1");
+    writeStat.setNumDeletes(1);
+    commitMetadata.addWriteStat("p1", writeStat);
+
+    try (MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtil = mockStatic(HoodieTableMetadataUtil.class)) {
+      mockedMetadataUtil.when(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(any())).thenReturn(Option.empty());
+      HoodieException exception = assertThrows(HoodieException.class, () -> indexer.buildUpdate(IndexUpdateContext.of(
+          "015", mock(HoodieBackedTableMetadata.class), Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)), commitMetadata)));
+      assertEquals("No schema found for table /tmp/hudi-record-index-test to read the log files written by 015",
+          exception.getCause().getMessage());
+    }
   }
 
   @Test
