@@ -40,6 +40,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -116,6 +117,30 @@ class TestHudiAvroSerializer
         assertThat(type.getLong(block, 0)).isEqualTo(expectedUnscaled);
     }
 
+    @ParameterizedTest
+    @MethodSource("longDecimals")
+    public void testAppendLongDecimalFromAvroFixed(int precision, int scale, String value)
+    {
+        DecimalType type = DecimalType.createDecimalType(precision, scale);
+        BlockBuilder builder = type.createBlockBuilder(null, 1);
+        HudiAvroSerializer.appendTo(type, avroDecimalFixed(precision, scale, value), builder);
+        assertThat(type.getObjectValue(builder.build(), 0).toString()).isEqualTo(value);
+    }
+
+    @ParameterizedTest
+    @MethodSource("shortDecimals")
+    public void testAppendShortDecimalFromAvroBytes(int precision, int scale, String value, long expectedUnscaled)
+    {
+        assertDecimalFromAvroBytes(precision, scale, value, BigDecimal.valueOf(expectedUnscaled, scale).toPlainString());
+    }
+
+    @ParameterizedTest
+    @MethodSource("longDecimals")
+    public void testAppendLongDecimalFromAvroBytes(int precision, int scale, String value)
+    {
+        assertDecimalFromAvroBytes(precision, scale, value, value);
+    }
+
     private static Stream<Arguments> shortDecimals()
     {
         return Stream.of(
@@ -128,6 +153,17 @@ class TestHudiAvroSerializer
                 // Widest short decimal: 18 digits, both signs
                 Arguments.of(18, 2, "9999999999999999.99", 999999999999999999L),
                 Arguments.of(18, 2, "-9999999999999999.99", -999999999999999999L));
+    }
+
+    private static Stream<Arguments> longDecimals()
+    {
+        return Stream.of(
+                Arguments.of(20, 2, "1.23"),
+                Arguments.of(20, 2, "-0.07"),
+                Arguments.of(20, 2, "0.00"),
+                Arguments.of(38, 0, "99999999999999999999999999999999999999"),
+                Arguments.of(38, 0, "-99999999999999999999999999999999999999"),
+                Arguments.of(38, 6, "12345678901234567890123456789012.123456"));
     }
 
     @Test
@@ -155,6 +191,33 @@ class TestHudiAvroSerializer
         assertThat(VARCHAR.getSlice(page.getBlock(1), 0).toStringUtf8()).isEqualTo("one");
         assertThat(VARCHAR.getSlice(page.getBlock(1), 1).toStringUtf8()).isEqualTo("two");
         assertThat(VARCHAR.getSlice(page.getBlock(1), 2).toStringUtf8()).isEqualTo("three");
+    }
+
+    private static void assertDecimalFromAvroBytes(int precision, int scale, String value, String expectedValue)
+    {
+        DecimalType type = DecimalType.createDecimalType(precision, scale);
+        LogicalTypes.Decimal logicalType = LogicalTypes.decimal(precision, scale);
+        Schema schema = logicalType.addToSchema(Schema.create(Schema.Type.BYTES));
+        ByteBuffer encoded = new Conversions.DecimalConversion().toBytes(new BigDecimal(value), schema, logicalType);
+
+        // Padding outside position/limit must not affect the decoded value, including in sliced buffers.
+        ByteBuffer padded = ByteBuffer.allocate(encoded.remaining() + 2);
+        padded.put((byte) 0x55).put(encoded.duplicate()).put((byte) 0x55);
+        padded.flip().position(1).limit(padded.limit() - 1);
+        ByteBuffer direct = ByteBuffer.allocateDirect(encoded.remaining());
+        direct.put(encoded.duplicate()).flip();
+        for (ByteBuffer buffer : List.of(encoded, padded, padded.slice(), padded.asReadOnlyBuffer(), direct)) {
+            int position = buffer.position();
+            int limit = buffer.limit();
+            BlockBuilder builder = type.createBlockBuilder(null, 2);
+            HudiAvroSerializer.appendTo(type, buffer, builder);
+            HudiAvroSerializer.appendTo(type, buffer, builder);
+            Block block = builder.build();
+            assertThat(type.getObjectValue(block, 0).toString()).isEqualTo(expectedValue);
+            assertThat(type.getObjectValue(block, 1).toString()).isEqualTo(expectedValue);
+            assertThat(buffer.position()).isEqualTo(position);
+            assertThat(buffer.limit()).isEqualTo(limit);
+        }
     }
 
     /**
