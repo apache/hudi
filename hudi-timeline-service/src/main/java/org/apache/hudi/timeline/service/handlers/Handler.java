@@ -19,12 +19,15 @@
 package org.apache.hudi.timeline.service.handlers;
 
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
 public abstract class Handler {
+
+  private static final ThreadLocal<SyncableFileSystemView> BOUND_VIEW = new ThreadLocal<>();
 
   protected final StorageConfiguration<?> conf;
   protected final TimelineService.Config timelineServiceConfig;
@@ -39,5 +42,25 @@ public abstract class Handler {
 
   protected HoodieStorage getStorage(String path) {
     return HoodieStorageUtils.getStorage(path, conf);
+  }
+
+  /**
+   * Binds the view the current request reads until {@link #unbindView()}; the handlers of the request read this view,
+   * which is the view the request holds a lease of.
+   */
+  public static void bindView(SyncableFileSystemView view) {
+    BOUND_VIEW.set(view);
+  }
+
+  public static void unbindView() {
+    BOUND_VIEW.remove();
+  }
+
+  /**
+   * The view bound to the current request, or the manager's view of the table when none is bound.
+   */
+  protected SyncableFileSystemView viewFor(String basePath) {
+    SyncableFileSystemView bound = BOUND_VIEW.get();
+    return bound != null ? bound : viewManager.getFileSystemView(basePath);
   }
 }
