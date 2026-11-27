@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.common.model.{HoodieRecordMerger, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.hudi.HoodieOptionConfig
@@ -94,8 +95,49 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
       HoodieOptionConfig.mapToTableConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true"))
     assertEquals(Some(HoodieTableConfig.BASE_FILE_FORMAT.key -> "PARQUET"),
       HoodieOptionConfig.mapToTableConfig("hoodie.table.ro.file.format", "PARQUET"))
-    // Only table-type values are aliases: a field named "cow" must stay a field name.
+    // Enum value normalization must not change a field named "cow".
     assertEquals(Some(HoodieTableConfig.RECORDKEY_FIELDS.key -> "cow"), HoodieOptionConfig.mapToTableConfig("primaryKey", "cow"))
+  }
+
+  @Test
+  def testMapToTableConfigRecognizesKeyGeneratorAndPartitionAliases(): Unit = {
+    Seq(
+      ("hoodie.datasource.write.partitionpath.field", HoodieTableConfig.PARTITION_FIELDS.key, "Part:simple"),
+      ("hoodie.datasource.write.keygenerator.class", HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key, "org.example.CustomKeyGenerator"),
+      ("hoodie.datasource.write.keygenerator.type", HoodieTableConfig.KEY_GENERATOR_TYPE.key, "CUSTOM")
+    ).foreach { case (alias, persisted, value) =>
+      assertEquals(Some(persisted -> value), HoodieOptionConfig.mapToTableConfig(alias, value))
+    }
+    assertEquals(Some(HoodieTableConfig.KEY_GENERATOR_TYPE.key -> "SIMPLE"),
+      HoodieOptionConfig.mapToTableConfig("hoodie.datasource.write.keygenerator.type", "simple"))
+  }
+
+  @Test
+  def testGetTableConfigValueRecognizesBothKeyGeneratorRepresentations(): Unit = {
+    val config = new HoodieTableConfig()
+    assertEquals(None, HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+    assertEquals(None, HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.KEY_GENERATOR_TYPE.key))
+    config.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, "SIMPLE")
+    assertEquals(Some(KeyGeneratorType.SIMPLE.getClassName),
+      HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+    config.getProps.remove(HoodieTableConfig.KEY_GENERATOR_TYPE.key)
+    config.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, KeyGeneratorType.COMPLEX.getClassName)
+    assertEquals(Some("COMPLEX"), HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.KEY_GENERATOR_TYPE.key))
+    config.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, "org.example.CustomKeyGenerator")
+    assertEquals(Some("USER_PROVIDED"), HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.KEY_GENERATOR_TYPE.key))
+    assertEquals(Some("org.example.CustomKeyGenerator"),
+      HoodieOptionConfig.getTableConfigValue(config, HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+  }
+
+  @Test
+  def testAvroClassReplayOnTablePersistingSparkKeyGenerator(): Unit = {
+    val config = new HoodieTableConfig()
+    config.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, KeyGeneratorType.COMPLEX.getClassName)
+    Seq("hoodie.datasource.write.keygenerator.class" -> KeyGeneratorType.COMPLEX_AVRO.getClassName,
+      "hoodie.datasource.write.keygenerator.type" -> "complex_avro").foreach { case (key, value) =>
+      val (tableKey, requested) = HoodieOptionConfig.mapToTableConfig(key, value).get
+      assertEquals(Some(requested), HoodieOptionConfig.getTableConfigValue(config, tableKey))
+    }
   }
 
   @Test
