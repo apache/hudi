@@ -37,8 +37,6 @@ public class LazyConcatenatingIterator<T> implements ClosableIterator<T> {
 
   private ClosableIterator<T> itr;
 
-  private boolean initialed = false;
-
   private boolean closed = false;
 
   public LazyConcatenatingIterator(List<Supplier<ClosableIterator<T>>> iteratorSuppliers) {
@@ -48,32 +46,26 @@ public class LazyConcatenatingIterator<T> implements ClosableIterator<T> {
   @Override
   public void close() {
     if (!closed) {
-      if (itr != null) {
-        itr.close();
-        itr = null;
-      }
-      iteratorSuppliers.clear();
       closed = true;
+      iteratorSuppliers.clear();
+      closeCurrent();
     }
   }
 
   @Override
   public boolean hasNext() {
-    init();
-    while (itr != null) {
-      if (itr.hasNext()) {
-        return true;
+    while (true) {
+      if (itr != null) {
+        if (itr.hasNext()) {
+          return true;
+        }
+        closeCurrent();
       }
-      // close current iterator
-      this.itr.close();
-      if (!iteratorSuppliers.isEmpty()) {
-        // move to the next
-        itr = iteratorSuppliers.poll().get();
-      } else {
-        itr = null;
+      if (iteratorSuppliers.isEmpty()) {
+        return false;
       }
+      itr = iteratorSuppliers.poll().get();
     }
-    return false;
   }
 
   @Override
@@ -82,16 +74,14 @@ public class LazyConcatenatingIterator<T> implements ClosableIterator<T> {
     return itr.next();
   }
 
-  // -------------------------------------------------------------------------
-  //  Utilities
-  // -------------------------------------------------------------------------
-
-  private void init() {
-    if (!initialed) {
-      if (!this.iteratorSuppliers.isEmpty()) {
-        this.itr = iteratorSuppliers.poll().get();
-      }
-      initialed = true;
+  /**
+   * Releases the reference before closing, so an iterator whose close fails is never closed again.
+   */
+  private void closeCurrent() {
+    ClosableIterator<T> current = itr;
+    itr = null;
+    if (current != null) {
+      current.close();
     }
   }
 }
