@@ -130,8 +130,8 @@ public final class LogReadAheadStorage extends HoodieStorage {
 
   /**
    * Starts reading the given log files ahead of the log scan, holding at most {@code windowBytes} of them at a time.
-   * The scan starts a fetch only while the read-ahead of all scans in this JVM holds less than both
-   * {@code executorLimitBytes} and the JVM-wide cap.
+   * The scan starts a fetch only while the bytes the read-ahead of all scans in this JVM holds, with that fetch, stay
+   * within both {@code executorLimitBytes} and the JVM-wide cap.
    */
   public static LogReadAheadStorage create(HoodieStorage delegate, List<HoodieLogFile> logFiles, long windowBytes,
                                            long executorLimitBytes) {
@@ -327,13 +327,13 @@ public final class LogReadAheadStorage extends HoodieStorage {
       future.complete(bytes);
       return;
     }
-    // Release before completing, so that the bytes are back by the time the scan sees the failure
+    // Completed before the release, which would otherwise cancel the future and hide the failure from the scan
+    future.completeExceptionally(failure);
     boolean wasRetained = unit.state == State.RETAINED;
     release(unit);
     unit.state = wasRetained || unit.wholeFile ? State.RELEASED : State.INLINE;
     stats.inlineReads++;
     fillWindow();
-    future.completeExceptionally(failure);
   }
 
   /**
@@ -648,7 +648,8 @@ public final class LogReadAheadStorage extends HoodieStorage {
   }
 
   /**
-   * Drops every fetched byte and returns it to the executor-wide cap. The wrapped storage belongs to the caller.
+   * Drops every fetched byte and returns it to the executor-wide cap, or, for a fetch still running, lets that fetch
+   * return its bytes when it ends. The wrapped storage belongs to the caller.
    */
   @Override
   public synchronized void close() {
@@ -689,7 +690,7 @@ public final class LogReadAheadStorage extends HoodieStorage {
     IN_FILE,
     // Read through the wrapped storage
     INLINE,
-    // Done with; its bytes are dropped
+    // Done with; its bytes are dropped, once its fetch ends if it is still running
     RELEASED
   }
 
