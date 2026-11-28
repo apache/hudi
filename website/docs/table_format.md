@@ -214,7 +214,7 @@ job that writes or reads the table through Hudi needs the plugin jar, including 
 
 ### Apache Iceberg
 
-With the Iceberg plugin, available from Hudi 1.3, every Hudi action also commits an Iceberg snapshot that follows the
+With the Iceberg plugin, available from Hudi 1.3, every Hudi write, compaction, clustering, clean and savepoint also commits an Iceberg snapshot that follows the
 [Iceberg table spec](https://iceberg.apache.org/spec/), at format version 3 by default. Engines that read Iceberg see each write
 as soon as it completes, with no sync job and no second copy of the data, while Hudi keeps its timeline,
 [metadata table](metadata.md), [indexes](indexes.md) and table services. [Apache XTable (incubating)](https://xtable.apache.org/)
