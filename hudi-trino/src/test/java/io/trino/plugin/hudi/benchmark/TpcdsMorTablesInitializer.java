@@ -532,7 +532,10 @@ final class TpcdsMorTablesInitializer
                 .withDeleteParallelism(4)
                 .forTable(tableName)
                 .withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING)
-                .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+                // The SIMPLE index tags updates and deletes with their base file row, so log blocks carry record positions
+                .withIndexConfig(HoodieIndexConfig.newBuilder()
+                        .withIndexType(Boolean.getBoolean("bench.recordPositions") ? HoodieIndex.IndexType.SIMPLE : HoodieIndex.IndexType.INMEMORY)
+                        .build())
                 .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                         .withInlineCompaction(false)
                         .withMaxNumDeltaCommitsBeforeCompaction(100)

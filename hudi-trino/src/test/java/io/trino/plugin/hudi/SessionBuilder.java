@@ -24,12 +24,16 @@ import static io.trino.plugin.hudi.HudiSessionProperties.COLUMN_STATS_INDEX_ENAB
 import static io.trino.plugin.hudi.HudiSessionProperties.COLUMN_STATS_WAIT_TIMEOUT;
 import static io.trino.plugin.hudi.HudiSessionProperties.DYNAMIC_FILTERING_WAIT_TIMEOUT;
 import static io.trino.plugin.hudi.HudiSessionProperties.METADATA_TABLE_ENABLED;
+import static io.trino.plugin.hudi.HudiSessionProperties.MOR_VECTORIZED_READ_ENABLED;
+import static io.trino.plugin.hudi.HudiSessionProperties.MOR_VECTORIZED_READ_LOG_PREFETCH_ENABLED;
+import static io.trino.plugin.hudi.HudiSessionProperties.MOR_VECTORIZED_READ_PREDICATE_PUSHDOWN_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.PARTITION_STATS_INDEX_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.QUERY_PARTITION_FILTER_REQUIRED;
 import static io.trino.plugin.hudi.HudiSessionProperties.RECORD_INDEX_WAIT_TIMEOUT;
-import static io.trino.plugin.hudi.HudiSessionProperties.RECORD_MERGER_IMPLS;
 import static io.trino.plugin.hudi.HudiSessionProperties.RECORD_LEVEL_INDEX_ENABLED;
+import static io.trino.plugin.hudi.HudiSessionProperties.RECORD_MERGER_IMPLS;
 import static io.trino.plugin.hudi.HudiSessionProperties.RESOLVE_COLUMN_NAME_CASING_ENABLED;
+import static io.trino.plugin.hudi.HudiSessionProperties.SCHEMA_COLUMN_TYPES_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.SECONDARY_INDEX_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.SECONDARY_INDEX_WAIT_TIMEOUT;
 import static io.trino.plugin.hudi.HudiSessionProperties.TABLE_STATISTICS_ENABLED;
@@ -160,5 +164,25 @@ public class SessionBuilder
     public SessionBuilder withResolveColumnNameCasingEnabled(boolean enabled)
     {
         return setCatalogProperty(RESOLVE_COLUMN_NAME_CASING_ENABLED, String.valueOf(enabled));
+    }
+
+    public SessionBuilder withSchemaColumnTypesEnabled(boolean enabled)
+    {
+        return setCatalogProperty(SCHEMA_COLUMN_TYPES_ENABLED, String.valueOf(enabled));
+    }
+
+    public SessionBuilder withMorVectorizedReadEnabled(boolean enabled)
+    {
+        return setCatalogProperty(MOR_VECTORIZED_READ_ENABLED, String.valueOf(enabled));
+    }
+
+    public SessionBuilder withMorVectorizedReadPredicatePushdownEnabled(boolean enabled)
+    {
+        return setCatalogProperty(MOR_VECTORIZED_READ_PREDICATE_PUSHDOWN_ENABLED, String.valueOf(enabled));
+    }
+
+    public SessionBuilder withMorVectorizedReadLogPrefetchEnabled(boolean enabled)
+    {
+        return setCatalogProperty(MOR_VECTORIZED_READ_LOG_PREFETCH_ENABLED, String.valueOf(enabled));
     }
 }

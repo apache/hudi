@@ -40,6 +40,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.Option;
@@ -53,6 +54,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 
 import static com.google.common.io.MoreFiles.deleteRecursively;
 import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
@@ -97,6 +99,7 @@ public abstract class AbstractMergerHudiTablesInitializer
             new Column("_hoodie_file_name", HIVE_STRING, Optional.empty(), Map.of()));
 
     private final String tableName;
+    private final Map<String, String> extraTableProperties;
 
     private TrinoFileSystem fileSystem;
     private Location tableLocation;
@@ -106,7 +109,18 @@ public abstract class AbstractMergerHudiTablesInitializer
 
     protected AbstractMergerHudiTablesInitializer(String tableName)
     {
+        this(tableName, Map.of());
+    }
+
+    /**
+     * @param extraTableProperties written into {@code hoodie.properties} after the initial commits. The connector builds
+     * the file-group reader's properties from the table config, so this sets reader-side configs such as
+     * {@code hoodie.memory.merge.max.size} for the fixture's reads.
+     */
+    protected AbstractMergerHudiTablesInitializer(String tableName, Map<String, String> extraTableProperties)
+    {
         this.tableName = requireNonNull(tableName, "tableName is null");
+        this.extraTableProperties = ImmutableMap.copyOf(extraTableProperties);
     }
 
     @Override
@@ -130,6 +144,7 @@ public abstract class AbstractMergerHudiTablesInitializer
             afterTableInit();
             writeClient = createWriteClient();
             writeInitialCommits(writeClient);
+            writeExtraTableProperties();
             syncToTrino();
 
             metastore.createTable(createTableDefinition(schemaName, tableName, false), PrincipalPrivileges.NO_PRIVILEGES);
@@ -255,6 +270,20 @@ public abstract class AbstractMergerHudiTablesInitializer
         catch (IOException e) {
             throw new RuntimeException("Could not init table " + tableName, e);
         }
+    }
+
+    private void writeExtraTableProperties()
+    {
+        if (extraTableProperties.isEmpty()) {
+            return;
+        }
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+                .setConf(new HadoopStorageConfiguration(new Configuration()))
+                .setBasePath(stagingTablePath.toString())
+                .build();
+        Properties properties = new Properties();
+        properties.putAll(extraTableProperties);
+        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), properties);
     }
 
     private HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient()

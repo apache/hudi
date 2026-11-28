@@ -63,7 +63,12 @@ public class TestHudiConfig
                 .setSecondaryIndexWaitTimeout(Duration.valueOf("2s"))
                 .setMetadataPartitionListingEnabled(true)
                 .setMetadataCacheEnabled(true)
-                .setResolveColumnNameCasingEnabled(false));
+                .setResolveColumnNameCasingEnabled(false)
+                .setSchemaColumnTypesEnabled(false)
+                .setMorVectorizedReadEnabled(false)
+                .setMorVectorizedReadPredicatePushdownEnabled(true)
+                .setMorVectorizedReadLogPrefetchEnabled(true)
+                .setMorVectorizedReadLogPrefetchMaxSize(DataSize.of(256, MEGABYTE)));
     }
 
     @Test
@@ -99,6 +104,11 @@ public class TestHudiConfig
                 .put("hudi.metadata.cache.enabled", "false")
                 .put("hudi.metadata.partition-listing.enabled", "false")
                 .put("hudi.table.resolve-column-name-casing.enabled", "true")
+                .put("hudi.schema-column-types.enabled", "true")
+                .put("hudi.mor-vectorized-read.enabled", "true")
+                .put("hudi.mor-vectorized-read.predicate-pushdown.enabled", "false")
+                .put("hudi.mor-vectorized-read.log-prefetch.enabled", "false")
+                .put("hudi.mor-vectorized-read.log-prefetch.max-size", "16MB")
                 .buildOrThrow();
 
         HudiConfig expected = new HudiConfig()
@@ -130,7 +140,12 @@ public class TestHudiConfig
                 .setSecondaryIndexWaitTimeout(Duration.valueOf("1s"))
                 .setMetadataPartitionListingEnabled(false)
                 .setMetadataCacheEnabled(false)
-                .setResolveColumnNameCasingEnabled(true);
+                .setResolveColumnNameCasingEnabled(true)
+                .setSchemaColumnTypesEnabled(true)
+                .setMorVectorizedReadEnabled(true)
+                .setMorVectorizedReadPredicatePushdownEnabled(false)
+                .setMorVectorizedReadLogPrefetchEnabled(false)
+                .setMorVectorizedReadLogPrefetchMaxSize(DataSize.of(16, MEGABYTE));
 
         assertFullMapping(properties, expected);
     }

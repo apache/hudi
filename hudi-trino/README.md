@@ -85,6 +85,8 @@ Knobs (`-D` system properties):
 | `bench.nativeLogs` | false | true writes table version 10 native logs instead of version 9 Avro logs |
 | `bench.metadata` | true | false writes no metadata table and sets `hudi.metadata-enabled=false`, so partitions are listed from storage |
 | `bench.s3.samples` | false | true prints one example path per request and file type |
+| `bench.recordPositions` | false | true writes with the SIMPLE index, so log blocks carry record positions for the positional merge |
+| `bench.variants` | all | comma-separated session variants of `HudiMorReadBenchmark`, e.g. `schema_types,vectorized` |
 | `bench.logRecords` | 300000 | log records in `HudiMergeBufferBenchmark` |
 
 `HudiMorReadBenchmark` prints one line per query with wall time, CPU, base-file input bytes and storage calls per file type, and appends the same to `target/hudi-mor-read-benchmark.jsonl` together with the run's start time and settings. Log file bytes are not part of the input bytes, so log reads show only in the storage calls.
