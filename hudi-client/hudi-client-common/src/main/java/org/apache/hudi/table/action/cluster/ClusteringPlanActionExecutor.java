@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringPlanStrategy;
@@ -55,6 +56,11 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseTableServicePl
   }
 
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
+    if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout() && config.isClusteringSortEnabled()) {
+      throw new HoodieClusteringException("Custom clustering sort columns are not supported for LSM tables because "
+          + "LSM files must be ordered by record key");
+    }
+
     log.info("Checking if clustering needs to be run on {}", config.getBasePath());
     Option<HoodieInstant> lastClusteringInstant =
         table.getActiveTimeline().getLastClusteringInstant();

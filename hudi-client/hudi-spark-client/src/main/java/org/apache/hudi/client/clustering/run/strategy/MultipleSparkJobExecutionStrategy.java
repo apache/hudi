@@ -42,7 +42,7 @@ import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
@@ -445,7 +445,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(internalSchemaStr);
 
         // instantiate FG reader
-        HoodieFileGroupReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, tableSchemaWithMetaFields, internalSchemaOption,
+        HoodieRecordReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, tableSchemaWithMetaFields, internalSchemaOption,
             readerContextFactory, instantTime, readerProperties, usePosition);
         // read records from the FG reader
         return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());
