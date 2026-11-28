@@ -607,8 +607,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
-    // Drops the operation types of writes that are no longer pending, such as one that failed before its commit
-    operationTypesByInstant.keySet().retainAll(this.pendingInflightAndRequestedInstants);
+    // Drops only the operation types of completed instants, since the timeline of the given meta client can be loaded
+    // before a write of this client started and then does not list that write as pending
+    if (!operationTypesByInstant.isEmpty()) {
+      HoodieTimeline completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
+      operationTypesByInstant.keySet().removeIf(completedTimeline::containsInstant);
+    }
     if (!WriteOperationType.isTableService(writeOperationType)) {
       // A table service commits through the table service client, which sets its own operation type
       operationTypesByInstant.put(instantTime, writeOperationType);
@@ -701,6 +705,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           table::getBaseFileOnlyView, extraMetadata);
     } finally {
       this.heartbeatClient.stop(instantTime);
+      operationTypesByInstant.remove(instantTime);
     }
   }
 
