@@ -381,15 +381,18 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private def insertSourceRecords(): Unit = {
     if (insertingActions.nonEmpty) {
       checkInsertingActions(insertingActions, buildMergeIntoConfig(hoodieCatalogTable))
-      // The source has to supply the partition fields, as it does for a merge on the record key
-      hoodieCatalogTable.partitionFields.foreach(resolvePartitionFieldFromSource)
+      // The source has to supply the partition fields, as it does for a merge on the record key, and gives a clause
+      // the ones it does not assign
+      val partitionAssignments = hoodieCatalogTable.partitionFields.toSeq.flatMap(resolvePartitionFieldFromSource)
+        .map { case (attr, value) => Assignment(attr, value) }
       // The first clause that accepts a source record decides it, so each condition is evaluated once per record
       val clauseIndex = Alias(CaseWhen(insertingActions.map(_.condition.getOrElse(Literal.TrueLiteral)).zipWithIndex.map {
         case (condition, index) => (condition, Literal(index))
       }), "_hoodie_merge_into_insert_clause")()
       val sourceWithClause = Project(mergeInto.sourceTable.output :+ clauseIndex, mergeInto.sourceTable)
       val values = insertingActions.map(action =>
-        alignAssignments(action.assignments, Some(PartialAssignmentMode.NULL_VALUE), keepUpdatedFieldsOnly = false).map(_.value))
+        alignAssignments(action.assignments ++ partitionAssignments, Some(PartialAssignmentMode.NULL_VALUE),
+          keepUpdatedFieldsOnly = false).map(_.value))
       val output = mergeInto.targetTable.output.filterNot(attr => isMetaField(attr.name)).zip(values.transpose).map {
         case (attr, clauseValues) =>
           Alias(CaseWhen(clauseValues.zipWithIndex.map { case (value, index) =>

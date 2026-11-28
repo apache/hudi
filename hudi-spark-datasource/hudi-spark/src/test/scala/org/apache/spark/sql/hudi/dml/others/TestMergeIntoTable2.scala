@@ -1448,6 +1448,14 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       assert(inserted.nonEmpty && inserted.length < 40, s"inserted ${inserted.length} of 40 source records")
       assert(inserted.forall(row => row.getString(1) == s"a${row.getInt(0)}" && row.getString(2) == "p2"))
 
+      // A clause that leaves out the partition field takes it from the source, and one that assigns it keeps its value
+      spark.sql(s"merge into $tableName t using (select 60 as id, 'a60' as name, 'p3' as dt union all " +
+        "select 61 as id, 'a61' as name, 'p3' as dt) s on false " +
+        "when not matched and s.id = 60 then insert (id, name) values (s.id, s.name) " +
+        "when not matched then insert (id, name, dt) values (s.id, s.name, 'p4')")
+      checkAnswer(s"select id, name, dt, _hoodie_partition_path from $tableName where id >= 60 order by id")(
+        Seq(60, "a60", "p3", "dt=p3"), Seq(61, "a61", "p4", "dt=p4"))
+
       // The clause is refused before the statement runs
       if (HoodieSparkUtils.gteqSpark3_4) {
         checkExceptionContain(s"merge into $tableName t using (select 50 as id, 'a50' as name, 'p1' as dt) s on false " +
