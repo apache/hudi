@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.HoodieSparkUtils.gteqSpark3_5
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
@@ -1791,6 +1792,140 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             Seq(3, "Bob Smith", 14, 1599058800L),
             Seq(4, "Alice Johnson", 49, 2L))
         }
+      }
+    }
+  }
+
+  test("Test MergeInto With A Source Key Of Another Integral Type") {
+    withTempDir { tmp =>
+      // a wider source key type relies on Spark 3.5 casting an inserted value with an ANSI cast
+      for (tableType <- Seq("cow", "mor"); keyProp <- Seq("primaryKey = 'id',", "") if gteqSpark3_5) {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties ($keyProp type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 10), (2, 20)")
+
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 1L as id, 11 as v union all select 3L, 30) s
+             |on t.id = s.id
+             |when matched then update set *
+             |when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 11), Seq(2, 20), Seq(3, 30))
+
+        // a source key out of the range of the key column cannot be inserted, and on a table with a record
+        // key, whose record key is rendered from the source key, it fails the statement
+        val outOfRange = "(select 4294967297L as id, 40 as v)"
+        checkExceptionContain(
+          s"merge into $tableName t using $outOfRange s on t.id = s.id when not matched then insert *")("overflow")
+        if (keyProp.nonEmpty) {
+          checkExceptionContain(
+            s"merge into $tableName t using $outOfRange s on t.id = s.id when matched then update set v = s.v")("overflow")
+          checkExceptionContain(
+            s"""
+               |merge into $tableName t using $outOfRange s on t.id = s.id
+               |when not matched then insert (id, v) values (cast(s.id as int), s.v)
+             """.stripMargin)("overflow")
+          checkExceptionContain(
+            s"""
+               |merge into $tableName t using (select 4294967297L as sid, 40 as v) s on t.id = s.sid
+               |when not matched then insert (id, v) values (cast(s.sid as int), s.v)
+             """.stripMargin)("overflow")
+          // a source that is not a local relation, whose key is only read when the statement runs
+          spark.range(4294967297L, 4294967298L).selectExpr("id", "40 as v").createOrReplaceTempView(s"${tableName}_src")
+          checkExceptionContain(
+            s"merge into $tableName t using ${tableName}_src s on t.id = s.id when matched then update set v = s.v")("overflow")
+          checkExceptionContain(
+            s"merge into $tableName t using ${tableName}_src s on t.id = s.id when not matched then insert *")("overflow")
+        }
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 11), Seq(2, 20), Seq(3, 30))
+
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 2L as sid, 21 as v union all select 4L, 40) s
+             |on t.id = s.sid
+             |when matched then update set id = s.sid, v = s.v
+             |when not matched then insert (id, v) values (s.sid, s.v)
+           """.stripMargin)
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 11), Seq(2, 21), Seq(3, 30), Seq(4, 40))
+      }
+
+      if (gteqSpark3_5) {
+        // a record key field that the merge condition does not match on is checked as well
+        val compositeKeyTable = generateTableName
+        spark.sql(
+          s"""
+             |create table $compositeKeyTable (
+             |  id int,
+             |  k int,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$compositeKeyTable'
+             | tblproperties (primaryKey = 'id,k', type = 'cow')
+           """.stripMargin)
+        spark.sql(s"insert into $compositeKeyTable values (1, 1, 10)")
+        checkExceptionContain(
+          s"""
+             |merge into $compositeKeyTable t using (select 2 as id, 4294967297L as k, 40 as v) s on t.id = s.id
+             |when not matched then insert (id, k, v) values (s.id, cast(s.k as int), s.v)
+           """.stripMargin)("overflow")
+        checkAnswer(s"select id, k, v from $compositeKeyTable")(Seq(1, 1, 10))
+      }
+
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id bigint,
+           |  v int
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (primaryKey = 'id', type = 'cow')
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 10)")
+      spark.sql(
+        s"""
+           |merge into $tableName t
+           |using (select 1 as id, 11 as v union all select 3, 30) s
+           |on t.id = s.id
+           |when matched then update set *
+           |when not matched then insert *
+         """.stripMargin)
+      checkAnswer(s"select id, v from $tableName order by id")(Seq(1L, 11), Seq(3L, 30))
+    }
+  }
+
+  test("Test MergeInto With A Source Key Column The Merge Condition Does Not Match On") {
+    withTempDir { tmp =>
+      for (tableType <- Seq("cow", "mor");
+           source <- Seq("select 2L as id, 1L as match_id, 99 as v", "select 2 as id, 1 as match_id, 99 as v");
+           updateClause <- Seq("update set v = s.v", "update set *")) {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v int
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 10), (2, 20)")
+        // the source column id would render the record key 2, while the merge condition matches id 1
+        checkExceptionContain(
+          s"merge into $tableName t using ($source) s on t.id = s.match_id when matched then $updateClause")(
+          "Invalid MERGE INTO matching condition")
+        checkAnswer(s"select id, v from $tableName order by id")(Seq(1, 10), Seq(2, 20))
       }
     }
   }
