@@ -21,9 +21,14 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -33,7 +38,9 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
@@ -44,8 +51,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -53,6 +62,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertDataInMORTable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTestHarness {
@@ -188,6 +198,143 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
   @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
+  }
+
+  /**
+   * Each delta commit records its own operation type, also when the same client ran a compaction
+   * between the write and its commit, or right before the write.
+   */
+  @Test
+  void testDeltaCommitsRecordTheirOwnOperationTypeAroundCompaction() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    String insertTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, insertTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    Option<String> compactionTime = client.scheduleCompaction(Option.empty());
+    assertTrue(compactionTime.isPresent());
+
+    String upsertTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, upsertTime);
+    List<WriteStatus> statuses = client.upsert(dataGen.generateUniqueUpdates(upsertTime, 10), upsertTime);
+    client.commitCompaction(compactionTime.get(), client.compact(compactionTime.get()), Option.empty());
+    client.commit(upsertTime, statuses);
+
+    String nextUpsertTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, nextUpsertTime);
+    client.commit(nextUpsertTime, client.upsert(dataGen.generateUniqueUpdates(nextUpsertTime, 10), nextUpsertTime));
+
+    assertEquals(WriteOperationType.COMPACT, operationTypeOf(compactionTime.get()));
+    assertEquals(WriteOperationType.UPSERT, operationTypeOf(upsertTime));
+    assertEquals(WriteOperationType.UPSERT, operationTypeOf(nextUpsertTime));
+  }
+
+  /**
+   * A delta commit records its own operation type when a compaction of the same client starts with a meta client whose
+   * timeline was loaded before the write started.
+   */
+  @Test
+  void testDeltaCommitRecordsItsOwnOperationTypeAfterCompactionWithStaleTimeline() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    String insertTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, insertTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    Option<String> compactionTime = client.scheduleCompaction(Option.empty());
+    assertTrue(compactionTime.isPresent());
+    HoodieTableMetaClient staleMetaClient = HoodieTableMetaClient.reload(metaClient);
+    staleMetaClient.reloadActiveTimeline();
+
+    String upsertTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, upsertTime);
+    List<WriteStatus> statuses = client.upsert(dataGen.generateUniqueUpdates(upsertTime, 10), upsertTime);
+    client.preWrite(compactionTime.get(), WriteOperationType.COMPACT, staleMetaClient);
+    assertEquals(Collections.singletonMap(upsertTime, WriteOperationType.UPSERT), client.getOperationTypesByInstant());
+    client.commitCompaction(compactionTime.get(), client.compact(compactionTime.get()), Option.empty());
+    client.commit(upsertTime, statuses);
+
+    assertEquals(WriteOperationType.COMPACT, operationTypeOf(compactionTime.get()));
+    assertEquals(WriteOperationType.UPSERT, operationTypeOf(upsertTime));
+    assertEquals(Collections.emptyMap(), client.getOperationTypesByInstant());
+  }
+
+  /**
+   * The client forgets the operation type of a write once it commits, auto-commits, fails or has its resources
+   * released, and tracks none for a compaction.
+   */
+  @Test
+  void testOperationTypesAreReleasedAfterEachWrite() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withProps(Collections.singletonMap(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "false"))
+        .build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    String insertTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, insertTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    assertEquals(Collections.emptyMap(), client.getOperationTypesByInstant());
+
+    String emptyTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, emptyTime);
+    client.commit(emptyTime, client.upsert(Collections.emptyList(), emptyTime));
+    assertEquals(Collections.emptyMap(), client.getOperationTypesByInstant(), "after a skipped empty commit");
+
+    String failedCommitTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, failedCommitTime);
+    List<WriteStatus> statuses = client.upsert(dataGen.generateUniqueUpdates(failedCommitTime, 10), failedCommitTime);
+    BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata> failingPreCommit = (tableMetaClient, metadata) -> {
+      throw new HoodieException("failing the commit");
+    };
+    assertThrows(HoodieException.class, () -> client.commit(failedCommitTime, statuses, Option.empty(),
+        HoodieTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.of(failingPreCommit), Option.empty()));
+    assertEquals(Collections.emptyMap(), client.getOperationTypesByInstant(), "after a failed commit");
+
+    String uncommittedTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, uncommittedTime);
+    client.upsert(dataGen.generateUniqueUpdates(uncommittedTime, 10), uncommittedTime);
+    assertEquals(Collections.singletonMap(uncommittedTime, WriteOperationType.UPSERT), client.getOperationTypesByInstant());
+    String nextTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, nextTime);
+    client.commit(nextTime, client.upsert(dataGen.generateUniqueUpdates(nextTime, 10), nextTime));
+    assertEquals(Collections.singletonMap(uncommittedTime, WriteOperationType.UPSERT), client.getOperationTypesByInstant(),
+        "a pending write keeps its operation type across another write");
+    client.releaseResources(uncommittedTime);
+    assertEquals(Collections.emptyMap(), client.getOperationTypesByInstant(), "after releasing the resources of a write");
+    client.rollback(failedCommitTime);
+    client.rollback(uncommittedTime);
+
+    Option<String> compactionTime = client.scheduleCompaction(Option.empty());
+    assertTrue(compactionTime.isPresent());
+    client.commitCompaction(compactionTime.get(), client.compact(compactionTime.get()), Option.empty());
+    assertEquals(Collections.emptyMap(), client.getOperationTypesByInstant(), "after a compaction");
+
+    String autoCommitTime = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, autoCommitTime);
+    client.preWrite(autoCommitTime, WriteOperationType.DELETE_PARTITION, metaClient);
+    assertEquals(Collections.singletonMap(autoCommitTime, WriteOperationType.DELETE_PARTITION), client.getOperationTypesByInstant());
+    HoodieWriteMetadata<List<WriteStatus>> autoCommitResult = new HoodieWriteMetadata<>();
+    autoCommitResult.setWriteStatuses(Collections.emptyList());
+    autoCommitResult.setCommitMetadata(Option.of(new HoodieCommitMetadata()));
+    autoCommitResult.setCommitted(true);
+    client.postWrite(autoCommitResult, autoCommitTime, HoodieJavaTable.create(config, context, metaClient));
+    assertEquals(Collections.emptyMap(), client.getOperationTypesByInstant(), "after an auto-committed write");
+  }
+
+  private WriteOperationType operationTypeOf(String instantTime) throws Exception {
+    HoodieTimeline completedTimeline = metaClient.reloadActiveTimeline().filterCompletedInstants();
+    HoodieInstant instant = completedTimeline.getInstantsAsStream()
+        .filter(i -> i.requestedTime().equals(instantTime)).findFirst().get();
+    return completedTimeline.readCommitMetadata(instant).getOperationType();
   }
 
   @Test

@@ -118,6 +118,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 
@@ -146,6 +147,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   @Getter
   @Setter
   private transient WriteOperationType operationType;
+  // The operation type of each instant started by preWrite, since table services and other writes of
+  // this client can run between a write and its commit
+  private final transient Map<String, WriteOperationType> operationTypesByInstant = new ConcurrentHashMap<>();
 
   protected transient Timer.Context writeTimer = null;
 
@@ -249,6 +253,20 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
                              boolean skipStreamingWritesToMetadataTable,
                              Option<HoodieTable> hoodieTableOpt) {
+    try {
+      return commitStatsAndRunPostCommit(instantTime, tableWriteStats, extraMetadata, commitActionType, partitionToReplaceFileIds,
+          extraPreCommitFunc, skipStreamingWritesToMetadataTable, hoodieTableOpt);
+    } finally {
+      operationTypesByInstant.remove(instantTime);
+    }
+  }
+
+  private boolean commitStatsAndRunPostCommit(String instantTime, TableWriteStats tableWriteStats,
+                                              Option<Map<String, String>> extraMetadata,
+                                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
+                                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                                              boolean skipStreamingWritesToMetadataTable,
+                                              Option<HoodieTable> hoodieTableOpt) {
     // Skip the empty commit if not allowed
     if (!config.allowEmptyCommit() && tableWriteStats.isEmptyDataTableWriteStats()) {
       return true;
@@ -262,7 +280,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
             table.getMetaClient().getTableType(), commitActionType)
         .reconcileMetadataForMissingFiles(config, context, table, instantTime,
             CommitUtils.buildMetadata(tableWriteStats.getDataTableWriteStats(), partitionToReplaceFileIds,
-                extraMetadata, operationType, config.getWriteSchema(), commitActionType));
+                extraMetadata, operationTypesByInstant.getOrDefault(instantTime, operationType), config.getWriteSchema(), commitActionType));
     HoodieInstant inflightInstant = table.getMetaClient().createNewInstant(State.INFLIGHT, commitActionType, instantTime);
     WriterHeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     this.txnManager.beginStateChange(Option.of(inflightInstant),
@@ -589,6 +607,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
+    // Drops only the operation types of completed instants, since the timeline of the given meta client can be loaded
+    // before a write of this client started and then does not list that write as pending
+    if (!operationTypesByInstant.isEmpty()) {
+      HoodieTimeline completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
+      operationTypesByInstant.keySet().removeIf(completedTimeline::containsInstant);
+    }
+    if (!WriteOperationType.isTableService(writeOperationType)) {
+      // A table service commits through the table service client, which sets its own operation type
+      operationTypesByInstant.put(instantTime, writeOperationType);
+    }
     this.pendingInflightAndRequestedInstants.remove(instantTime);
     tableServiceClient.setLastCompletedTxnAndMetadata(this.lastCompletedTxnAndMetadata);
     tableServiceClient.setPendingInflightAndRequestedInstants(this.pendingInflightAndRequestedInstants);
@@ -677,6 +705,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           table::getBaseFileOnlyView, extraMetadata);
     } finally {
       this.heartbeatClient.stop(instantTime);
+      operationTypesByInstant.remove(instantTime);
     }
   }
 
@@ -1675,6 +1704,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void releaseResources(String instantTime) {
     // stop heartbeat for instant
     heartbeatClient.stop(instantTime);
+    operationTypesByInstant.remove(instantTime);
+  }
+
+  @VisibleForTesting
+  public Map<String, WriteOperationType> getOperationTypesByInstant() {
+    return Collections.unmodifiableMap(operationTypesByInstant);
   }
 
   @Override
