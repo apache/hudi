@@ -44,4 +44,18 @@ public class IndexInitializationContext {
   private final Map<String, List<FileInfo>> allFiles;
   private final Lazy<List<FileSliceAndPartition>> latestFileSlices;
   private final Lazy<Option<HoodieSchema>> tableSchema;
+  /**
+   * The metadata partition an indexing action asked to initialize, for the index types that
+   * cover many partitions (one per index definition). Empty for a regular write, which lets the
+   * indexer infer the partition from the uninitialized definitions instead.
+   */
+  private final Option<String> requestedIndexPartition;
+
+  public static IndexInitializationContext of(String dataInstantTime,
+                                              String metadataInstantTime,
+                                              Map<String, List<FileInfo>> allFiles,
+                                              Lazy<List<FileSliceAndPartition>> latestFileSlices,
+                                              Lazy<Option<HoodieSchema>> tableSchema) {
+    return of(dataInstantTime, metadataInstantTime, allFiles, latestFileSlices, tableSchema, Option.empty());
+  }
 }
