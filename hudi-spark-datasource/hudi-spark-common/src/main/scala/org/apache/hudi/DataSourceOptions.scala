@@ -754,9 +754,10 @@ object DataSourceWriteOptions {
       + "combines them. In other words, a given record as deduced by the key generation policy can be ingested only once to the target table "
       + "of interest. When the policy is not set, a native table and a table without a record key keep the duplicates, and a table "
       + "of a non-native table format (hoodie.table.format) with a record key fails the write when a record key appears more than "
-      + "once in the incoming records unless hoodie.combine.before.insert combines them. It also fails on a record key the table "
-      + "already holds only with the record level index once it is built; with any other index set \"fail\" to check the incoming "
-      + "record keys against the table.")
+      + "once in the incoming records unless hoodie.combine.before.insert combines them. Only when the write uses the record level "
+      + "index and that index is built does it also fail on a record key the table already holds; with any other index, or before "
+      + "the record level index is built, the default does not keep record keys unique in the table, so set \"fail\" to check the "
+      + "incoming record keys against the table.")
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes

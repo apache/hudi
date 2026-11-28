@@ -21,12 +21,16 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieInsertException}
 import org.apache.hudi.index.HoodieGlobalSimpleIndex
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.metadata.MetadataPartitionType
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.tableformat.NativeBackedTestTableFormat
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
@@ -34,6 +38,8 @@ import org.junit.jupiter.api.{Assertions, Test}
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
+
+import scala.collection.JavaConverters._
 
 class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
   import TestInsertDedupPolicy._
@@ -189,6 +195,15 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
     write(native, key, Seq((1, "a3", 12L)), nativeOpts)
     Assertions.assertEquals(keptDuplicates, rows(native))
 
+    // On a native table the fail policy checks the inserted records as well, unless they are combined first
+    val failPolicy = Map(INSERT_DUP_POLICY.key -> FAIL_INSERT_DUP_POLICY)
+    assertDuplicateKey("5", DUPLICATE_INCOMING_KEY,
+      write(s"$basePath/native_fail", key, Seq((5, "a", 50L), (5, "b", 51L)), nativeOpts ++ failPolicy))
+    val nativeFailCombined = s"$basePath/native_fail_combined"
+    write(nativeFailCombined, key, Seq((5, "a", 50L), (5, "b", 51L)), nativeOpts ++ failPolicy ++ Map(
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> "true", HoodieTableConfig.ORDERING_FIELDS.key -> "ts"))
+    Assertions.assertEquals(Seq((5, "b", 51L)), rows(nativeFailCombined))
+
     // The format name is matched as the table loads it, so a table configured as NATIVE is native too
     val nativeByName = s"$basePath/native_by_name"
     val nativeByNameOpts = indexOpts + (HoodieTableConfig.TABLE_FORMAT.key -> "NATIVE")
@@ -271,6 +286,52 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
     Assertions.assertEquals(firstIds, idsInBaseFileOf(firstIds.head))
     insert(secondIds)
     Assertions.assertEquals(secondIds, idsInBaseFileOf(secondIds.head))
+  }
+
+  /**
+   * With a built record level index, an insert without a policy into a table of a non-native format fails on a key
+   * the table holds, and the index sees a delete of the key, which a merge-on-read table writes to a log file.
+   */
+  @ParameterizedTest
+  @CsvSource(Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testInsertWithBuiltRecordIndexChecksKeysInTable(tableType: String): Unit = {
+    val path = s"$basePath/record_index_built"
+    def write(rows: Seq[(Int, String, Long)], operation: String): Unit =
+      spark.createDataFrame(rows).toDF("id", "name", "ts").write.format("hudi")
+        .option(TABLE_NAME.key, "test_table")
+        .option(TABLE_TYPE.key, tableType)
+        .option(OPERATION.key, operation)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(HoodieTableConfig.TABLE_FORMAT.key, NativeBackedTestTableFormat.NAME)
+        .option(HoodieIndexConfig.INDEX_TYPE.key, "RECORD_INDEX")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key, "true")
+        .option(HoodieCompactionConfig.INLINE_COMPACT.key, "false")
+        .mode(SaveMode.Append)
+        .save(path)
+    def rows(): Seq[(Int, String, Long)] = spark.read.format("hudi").load(path)
+      .select("id", "name", "ts").collect().map(r => (r.getInt(0), r.getString(1), r.getLong(2))).sorted.toSeq
+
+    write(Seq((1, "a1", 10L), (2, "b1", 20L)), INSERT_OPERATION_OPT_VAL)
+    val metaClient = HoodieTestUtils.createMetaClient(storageConf(), path)
+    Assertions.assertEquals(NativeBackedTestTableFormat.NAME, metaClient.getTableFormat.getName)
+    assertTrue(metaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
+    val root = HoodieTestUtils.getRootCause(Assertions.assertThrows(classOf[Throwable],
+      () => write(Seq((1, "a2", 11L), (3, "c1", 30L)), INSERT_OPERATION_OPT_VAL)))
+    assertTrue(root.isInstanceOf[HoodieDuplicateKeyException], s"Expected a duplicate key failure, got: $root")
+    assertTrue(root.getMessage.startsWith(s"Duplicate key found for insert statement, key is: 1. $DUPLICATE_EXISTING_KEY"),
+      root.getMessage)
+    Assertions.assertEquals(Seq((1, "a1", 10L), (2, "b1", 20L)), rows())
+
+    write(Seq((1, "a1", 10L)), DELETE_OPERATION_OPT_VAL)
+    if (tableType == "MERGE_ON_READ") {
+      metaClient.reloadActiveTimeline()
+      val deleteCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants.lastInstant.get
+      val deleteStats = metaClient.getActiveTimeline.readCommitMetadata(deleteCommit).getWriteStats.asScala
+      assertTrue(deleteStats.nonEmpty && deleteStats.forall(stat => FSUtils.isLogFile(new StoragePath(stat.getPath).getName)),
+        s"Expected the delete in log files: ${deleteStats.map(_.getPath)}")
+    }
+    write(Seq((1, "a2", 11L)), INSERT_OPERATION_OPT_VAL)
+    Assertions.assertEquals(Seq((1, "a2", 11L), (2, "b1", 20L)), rows())
   }
 
   /**

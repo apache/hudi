@@ -24,6 +24,7 @@ import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -299,8 +301,8 @@ public class DataSourceUtils {
 
   /**
    * Fails an insert before it writes, with a {@link HoodieDuplicateKeyException} as the cause, if a record key
-   * repeats among the incoming records, unless {@code hoodie.combine.before.insert} combines them, or, with
-   * {@code lookUpDataset}, is already present in the dataset.
+   * repeats among the incoming records the write inserts, unless {@code hoodie.combine.before.insert} combines
+   * them, or, with {@code lookUpDataset}, is already present in the dataset.
    *
    * <p>The check runs as jobs of its own and the write gets the incoming records as they are, in their order
    * and partitioning. The incoming records are persisted for that at the level the write persists them at, so
@@ -321,13 +323,17 @@ public class DataSourceUtils {
           engineContext, HoodieData.HoodieDataCacheKey.of(writeConfig.getBasePath(), instantTime));
     }
     try {
+      // The write handles skip a record that no insert clause of a MERGE INTO accepts, so the check does too
+      HoodieSchema writeSchema = HoodieSchema.parse(writeConfig.getWriteSchema());
+      TypedProperties props = writeConfig.getProps();
+      JavaRDD<HoodieRecord> insertedRecords = incomingHoodieRecords.filter(record -> !record.shouldIgnore(writeSchema, props));
       if (checkIncomingRecords) {
-        failOnIncomingDuplicates(incomingHoodieRecords, writeConfig);
+        failOnIncomingDuplicates(insertedRecords, writeConfig);
       }
       if (lookUpDataset) {
         // An index persists the records it tags and releases them once they are tagged, so it gets a view of
         // the incoming records, which stay persisted for the write
-        handleDuplicates(engineContext, incomingHoodieRecords.map(record -> record), writeConfig, true).count();
+        handleDuplicates(engineContext, insertedRecords, writeConfig, true).count();
       }
     } catch (Exception e) {
       if (persist) {

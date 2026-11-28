@@ -398,6 +398,45 @@ class TestInsertTable5 extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test a MERGE INTO written as an insert checks the duplicate keys of the rows its clauses insert") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        def mergeInto(tableName: String, secondOp: String): Unit = spark.sql(
+          s"""
+             |merge into $tableName t
+             |using (select 1 as id, 'a' as name, 10L as ts, 'I' as op
+             |       union all select 1 as id, 'b' as name, 11L as ts, '$secondOp' as op) s
+             |on t.id = s.id
+             |when not matched and s.op = 'I' then insert (id, name, ts) values (s.id, s.name, s.ts)
+             |""".stripMargin)
+        Seq("test-format", "native").foreach { tableFormat =>
+          val tableName = generateTableName
+          createTable(tableName, tableType, "primaryKey = 'id',", tmp.getCanonicalPath, tableFormat)
+          mergeInto(tableName, "D")
+          checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "a", 10))
+        }
+        val withFailPolicy = generateTableName
+        createTable(withFailPolicy, tableType, "primaryKey = 'id',", tmp.getCanonicalPath, "native")
+        withSQLConf("hoodie.datasource.insert.dup.policy" -> FAIL_INSERT_DUP_POLICY) {
+          mergeInto(withFailPolicy, "D")
+          // The table is looked up for the rows the clauses insert only
+          spark.sql(
+            s"""
+               |merge into $withFailPolicy t
+               |using (select 1 as id, 'b' as name, 11L as ts, 'D' as op) s
+               |on t.id = s.id
+               |when not matched and s.op = 'I' then insert (id, name, ts) values (s.id, s.name, s.ts)
+               |""".stripMargin)
+        }
+        checkAnswer(s"select id, name, ts from $withFailPolicy")(Seq(1, "a", 10))
+        val tableName = generateTableName
+        createTable(tableName, tableType, "primaryKey = 'id',", tmp.getCanonicalPath)
+        checkExceptionContain(() => mergeInto(tableName, "I"))(s"$DUPLICATE_KEY_PREFIX 1. $DUPLICATE_INCOMING_KEY")
+        checkAnswer(s"select id, name, ts from $tableName")()
+      }
+    }
+  }
+
   test("Test throwing error on schema evolution in INSERT INTO") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
