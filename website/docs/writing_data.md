@@ -546,7 +546,7 @@ Set `hoodie.table.base.file.format=lance` on the write options:
    .save("/path/to/my_ai_table"))
 ```
 
-See [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) for full Lance behavior
+See [Table Format → Lance](table_format.md#lance-base-file-format) for full Lance behavior
 and configs.
 
 ### Concurrency Control
@@ -598,7 +598,7 @@ The following advanced storage configuration options were added in Hudi 1.2.0:
 | Config | Default | Description |
 |---|---|---|
 | `hoodie.parquet.write.config.injector.class` | (none) | Fully-qualified class name of a custom `HoodieParquetConfigInjector` implementation. Use this to inject custom Parquet writer properties (e.g., disable dictionary encoding, set bloom filter sizes) without modifying the Hudi source. The implementing class must implement `org.apache.hudi.io.HoodieParquetConfigInjector`. |
-| `hoodie.table.base.file.format` | `parquet` | Base file format for the table. Accepts `parquet`, `orc`, `hfile`, or `lance`. See [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format) for the Lance-specific options. |
+| `hoodie.table.base.file.format` | `parquet` | Base file format for the table. Accepts `parquet`, `orc`, `hfile`, or `lance`. See [Table Format → Lance](table_format.md#lance-base-file-format) for the Lance-specific options. |
 
 
 ## Java Client

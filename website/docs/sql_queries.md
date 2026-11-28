@@ -429,7 +429,7 @@ FROM hudi_vector_search(
 ```
 
 The TVF also works on Lance-backed tables. Set `hoodie.table.base.file.format=lance` at table
-creation (see [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format)); the call site
+creation (see [Table Format → Lance](table_format.md#lance-base-file-format)); the call site
 is unchanged.
 
 :::note

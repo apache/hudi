@@ -562,7 +562,7 @@ variant value.
 struct directly.
 
 The Lance base file format is Spark-only. Reading a Lance-backed table from Flink throws
-`HoodieValidationException`; see [Storage Layouts → Lance](storage_layouts.md#lance-base-file-format).
+`HoodieValidationException`; see [Table Format → Lance](table_format.md#lance-base-file-format).
 
 ## Advanced Options
 

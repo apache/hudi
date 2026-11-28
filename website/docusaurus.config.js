@@ -106,6 +106,10 @@ module.exports = {
           if (allDocHomesPaths.includes(path)) {
             return [`${path}/quick-start-guide`];
           }
+          // redirect the old storage layouts page in every docs version that has the table format page
+          if (/^\/docs\/(.+\/)?table_format$/.test(path)) {
+            return [path.replace(/table_format$/, "storage_layouts")];
+          }
         },
         redirects: [
           {

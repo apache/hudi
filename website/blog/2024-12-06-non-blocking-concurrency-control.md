@@ -39,7 +39,7 @@ and then a simple SQL demo to show the NBCC related config options. The blog wil
 
 ## Older Design 
 
-It's important to understand the Hudi [storage layout](/docs/next/storage_layouts) and it evolves/manages data versions. In older release before 1.0.0,
+It's important to understand the Hudi [storage layout](/docs/next/table_format) and it evolves/manages data versions. In older release before 1.0.0,
 Hudi organizes the data files with units as `FileGroup`. Each file group contains multiple `FileSlice`s. Every compaction on this file group generates a new file slice.
 Each file slice may comprise an optional base file(columnar file format like Apache Parquet or ORC) and multiple log files(row file format in Apache Avro or Parquet).
 
