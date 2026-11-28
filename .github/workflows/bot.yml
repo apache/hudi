@@ -166,7 +166,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
-            flinkProfile: "flink2.2"
+            flinkProfile: "flink2.3"
 
     steps:
       - uses: actions/checkout@v5
@@ -245,7 +245,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
-            flinkProfile: "flink2.2"
+            flinkProfile: "flink2.3"
 
     steps:
       - uses: actions/checkout@v5
@@ -293,7 +293,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
-            flinkProfile: "flink2.2"
+            flinkProfile: "flink2.3"
 
     steps:
       - uses: actions/checkout@v5
@@ -381,7 +381,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
-            flinkProfile: "flink2.2"
+            flinkProfile: "flink2.3"
 
     env:
       UT_MODULES: >-
@@ -1504,7 +1504,7 @@ jobs:
 #          - flinkProfile: "flink2.0"
 #            flinkAvroVersion: "1.11.4"
 #            flinkParquetVersion: '1.14.4'
-          - flinkProfile: "flink2.2"
+          - flinkProfile: "flink2.3"
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.15.2'
     steps:
@@ -1538,7 +1538,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
-        if: ${{ endsWith(env.FLINK_PROFILE, '2.2') }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '2.3') }}
         run: |
           mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER1 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
@@ -1549,10 +1549,10 @@ jobs:
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
-        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
+        if: always() && endsWith(matrix.flinkProfile, '2.3') && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
+        if: always() && endsWith(matrix.flinkProfile, '2.3') && github.event_name != 'merge_group'
         uses: ./.github/actions/upload-coverage
         with:
           flags: flink-integration-tests
@@ -1566,7 +1566,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: "flink2.2"
+          - flinkProfile: "flink2.3"
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.15.2'
     steps:
@@ -1592,7 +1592,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
-        if: ${{ endsWith(env.FLINK_PROFILE, '2.2') }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '2.3') }}
         run: |
           mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER2 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
@@ -1600,10 +1600,10 @@ jobs:
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
-        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
+        if: always() && endsWith(matrix.flinkProfile, '2.3') && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
+        if: always() && endsWith(matrix.flinkProfile, '2.3') && github.event_name != 'merge_group'
         uses: ./.github/actions/upload-coverage
         with:
           flags: flink-integration-tests
@@ -1683,7 +1683,7 @@ jobs:
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.9'
           - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink2.2'
+            flinkProfile: 'flink2.3'
             flinkAvroVersion: '1.11.4'
             flinkParquetVersion: '1.15.2'
             sparkProfile: 'spark3.5'
@@ -1879,7 +1879,7 @@ jobs:
       matrix:
         include:
           - sparkProfile: 'spark3.5'
-            flinkProfile: 'flink2.2'
+            flinkProfile: 'flink2.3'
             sparkArchive: 'spark-3.5.10/spark-3.5.10-bin-hadoop3.tgz'
     env:
       # The only modules with integration-test classes besides hudi-flink, whose ITs run in the

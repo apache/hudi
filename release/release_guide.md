@@ -349,7 +349,7 @@ Good to run this for all profiles
 
 ```shell
 # -Prelease turns off the activeByDefault profiles; keep these in sync with the activeByDefault spark and flink profiles in the root pom.xml
-mvn -Prelease clean install -Dscala-2.12 -Dspark3.5 -Dflink2.2
+mvn -Prelease clean install -Dscala-2.12 -Dspark3.5 -Dflink2.3
 ```
 
 ## Checklist to proceed to the next step

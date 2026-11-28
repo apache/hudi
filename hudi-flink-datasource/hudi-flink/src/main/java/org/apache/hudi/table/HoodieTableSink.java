@@ -44,6 +44,7 @@ import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelDelete;
 import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelUpdate;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.RowKind;
 
 import javax.annotation.Nullable;
 
@@ -149,7 +150,17 @@ public class HoodieTableSink implements
     if (conf.get(FlinkOptions.CHANGELOG_ENABLED)) {
       return ChangelogModes.FULL;
     } else {
-      return ChangelogModes.UPSERT;
+      // Keep the row kinds of the input and leave out UPDATE_BEFORE, which an upsert by record key does not require.
+      // An insert-only input then stays insert-only: asking for an upsert stream makes Flink 2.3 require
+      // an ON CONFLICT clause for a plain INSERT, and Flink 2.3.0 adds a stateful SinkUpsertMaterializer
+      // in front of the writer when that check is switched off.
+      ChangelogMode.Builder builder = ChangelogMode.newBuilder();
+      for (RowKind kind : changelogMode.getContainedKinds()) {
+        if (kind != RowKind.UPDATE_BEFORE) {
+          builder.addContainedKind(kind);
+        }
+      }
+      return builder.build();
     }
   }
 

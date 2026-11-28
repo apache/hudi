@@ -101,7 +101,7 @@ Prerequisites for building Apache Hudi:
 ```
 # Checkout code and build
 git clone https://github.com/apache/hudi.git && cd hudi
-mvn clean package -DskipTests -Dspark3.5 -Dflink2.2
+mvn clean package -DskipTests -Dspark3.5 -Dflink2.3
 
 # Start command
 spark-3.5.0-bin-hadoop3/bin/spark-shell \
@@ -163,10 +163,10 @@ mvn clean package -DskipTests -Dspark3.5 -Dscala-2.13 -pl packaging/hudi-spark-b
 For example,
 ```
 # Build against Spark 3.5.x
-mvn clean package -DskipTests -Dspark3.5 -Dflink2.2
+mvn clean package -DskipTests -Dspark3.5 -Dflink2.3
 
 # Build against Spark 3.4.x
-mvn clean package -DskipTests -Dspark3.4 -Dflink2.2
+mvn clean package -DskipTests -Dspark3.4 -Dflink2.3
 ```
 
 #### What about "spark-avro" module?
@@ -175,14 +175,15 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 ### Build with different Flink versions
 
-The default Flink version supported is 2.2. The default Flink 2.2.x version, corresponding to the `flink2.2` profile, is 2.2.1.
+The default Flink version supported is 2.3. The default Flink 2.3.x version, corresponding to the `flink2.3` profile, is 2.3.0.
 Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
 Refer to the table below for building with different Flink and Scala versions.
 
 | Maven build options | Expected Flink bundle jar name | Notes                            |
 |:--------------------|:--------------------------------|:---------------------------------|
-| (empty)             | hudi-flink2.2-bundle            | For Flink 2.2 (default options)  |
-| `-Dflink2.2`        | hudi-flink2.2-bundle            | For Flink 2.2 (same as default)  |
+| (empty)             | hudi-flink2.3-bundle            | For Flink 2.3 (default options)  |
+| `-Dflink2.3`        | hudi-flink2.3-bundle            | For Flink 2.3 (same as default)  |
+| `-Dflink2.2`        | hudi-flink2.2-bundle            | For Flink 2.2                    |
 | `-Dflink2.1`        | hudi-flink2.1-bundle            | For Flink 2.1                    |
 | `-Dflink2.0`        | hudi-flink2.0-bundle            | For Flink 2.0                    |
 | `-Dflink1.20`       | hudi-flink1.20-bundle           | For Flink 1.20                   |
@@ -191,8 +192,8 @@ Refer to the table below for building with different Flink and Scala versions.
 
 For example,
 ```
-# Build against Flink 2.2.x
-mvn clean package -DskipTests -Dflink2.2
+# Build against Flink 2.3.x
+mvn clean package -DskipTests -Dflink2.3
 ```
 
 ## Running Tests

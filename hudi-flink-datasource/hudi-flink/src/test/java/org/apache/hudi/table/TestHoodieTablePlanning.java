@@ -28,6 +28,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.transformations.LegacySourceTransformation;
 import org.apache.flink.streaming.api.transformations.SourceTransformation;
+import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.ExplainDetail;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
@@ -39,6 +40,7 @@ import java.io.File;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -129,6 +131,41 @@ class TestHoodieTablePlanning {
     assertTrue(
         appendPlan.contains("hoodie_append_write: default_database.append_sink"),
         appendPlan);
+  }
+
+  @Test
+  void testStreamingSinkPlanning() throws Exception {
+    TableEnvironment tableEnv =
+        TableEnvironment.create(EnvironmentSettings.newInstance().inStreamingMode().build());
+    createTable(tableEnv, "streaming_sink", new File(tempFile, "streaming_sink"), true);
+    createTable(tableEnv, "streaming_source", new File(tempFile, "streaming_source"), true);
+
+    // An insert-only input: the statement plans without an ON CONFLICT clause (Flink 2.3 asks an upsert sink
+    // for one) and no upsert materializer is put in front of the writer.
+    String insertOnlyPlan = tableEnv.explainSql(
+        "INSERT INTO streaming_sink VALUES "
+            + "('id1', 'Alice', 20, TIMESTAMP '2026-01-01 00:00:00', 'p1')",
+        ExplainDetail.CHANGELOG_MODE,
+        ExplainDetail.JSON_EXECUTION_PLAN);
+    assertTrue(
+        insertOnlyPlan.contains("Sink(table=[default_catalog.default_database.streaming_sink]"),
+        insertOnlyPlan);
+    assertTrue(
+        insertOnlyPlan.contains("stream_write: default_database.streaming_sink"),
+        insertOnlyPlan);
+    assertFalse(insertOnlyPlan.contains("upsertMaterialize"), insertOnlyPlan);
+    assertFalse(insertOnlyPlan.contains("SinkMaterializer"), insertOnlyPlan);
+
+    // An input with updates, grouped by the column that feeds the primary key of the sink:
+    // the sink still takes it as an upsert stream, without UPDATE_BEFORE.
+    String upsertPlan = tableEnv.explainSql(
+        "INSERT INTO streaming_sink "
+            + "SELECT name, MAX(uuid), MAX(age), MAX(ts), MAX(`partition`) "
+            + "FROM streaming_source GROUP BY name",
+        ExplainDetail.CHANGELOG_MODE);
+    assertTrue(upsertPlan.contains("changelogMode=[I,UA]"), upsertPlan);
+    assertFalse(upsertPlan.contains("changelogMode=[I,UB,UA]"), upsertPlan);
+    assertFalse(upsertPlan.contains("upsertMaterialize"), upsertPlan);
   }
 
   private static void createTable(
