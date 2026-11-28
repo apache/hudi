@@ -283,6 +283,21 @@ class TestPositionBasedFileGroupRecordBuffer {
     }
   }
 
+  /**
+   * The reusable loader keeps the log records in a map shared by its readers, so a reader built with it does not
+   * return log records, and is rejected before it reads a log file.
+   */
+  @Test
+  void testFileGroupReaderRejectsLogRecordsForReusableLoader() throws Exception {
+    HoodieTableConfig tableConfig = tableConfig(RecordMergeMode.COMMIT_TIME_ORDERING);
+    FileGroupRecordBufferLoader<IndexedRecord> loader = spy(FileGroupRecordBufferLoader.createReusable(readerContext(tableConfig)));
+    try (HoodieFileGroupReader<IndexedRecord> reader = fileGroupReader(readerContext(tableConfig), tableConfig, loader, false)) {
+      IllegalArgumentException e = assertThrows(IllegalArgumentException.class, reader::getLogRecordsByPositionOrKey);
+      assertEquals("Log records are not returned for a reader that reuses the log records of another reader", e.getMessage());
+    }
+    verify(loader, never()).getRecordBuffer(any(), any(), any(), any(), any(), any(), any(), any(), any());
+  }
+
   private HoodieFileGroupReader<IndexedRecord> fileGroupReader(HoodieReaderContext<IndexedRecord> readerContext, HoodieTableConfig tableConfig,
                                                                FileGroupRecordBufferLoader<IndexedRecord> loader, boolean sortOutput) {
     String tablePath = tempDir.toUri().toString();

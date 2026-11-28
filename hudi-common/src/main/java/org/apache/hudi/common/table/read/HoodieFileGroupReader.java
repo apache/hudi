@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.buffer.ReusableFileGroupRecordBufferLoader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
@@ -426,10 +427,14 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
    * otherwise. After a fallback to key-based merging, deletes read without their record keys stay keyed by position,
    * and a record keyed by the record key of the same base file row is newer than such a delete.
    * The map is valid until this reader is closed, and this reader is not iterated after this call.
+   * A reader built with {@link FileGroupRecordBufferLoader#createReusable} is rejected.
    */
   public Map<Serializable, BufferedRecord<T>> getLogRecordsByPositionOrKey() throws IOException {
     ValidationUtils.checkState(recordBuffer == null && baseFileIterator == null, "The log records of this reader are already read");
     ValidationUtils.checkArgument(!readerParameters.isSortOutputs(), "Log records are not returned for sorted output");
+    // the reusable loader shares one map of log records across readers, and its buffers do not expose that map
+    ValidationUtils.checkArgument(!(recordBufferLoader instanceof ReusableFileGroupRecordBufferLoader),
+        "Log records are not returned for a reader that reuses the log records of another reader");
     initRecordBuffer();
     ValidationUtils.checkState(recordBuffer.getBufferType() != HoodieFileGroupRecordBuffer.BufferType.UNMERGED,
         "Log records are not returned when merging is skipped");
