@@ -48,6 +48,7 @@ import static org.apache.hudi.tableformat.TestTableFormat.LAST_UPDATED_SEQUENCE_
 import static org.apache.hudi.tableformat.TestTableFormat.ROW_ID_COLUMN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -61,6 +62,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class RowLineageTestUtils {
 
   public static final Pair<Long, Long> NO_ROW_LINEAGE = Pair.of(null, null);
+
+  /**
+   * Returns the row lineage a rewrite stores for a record it updates: the row ID of the record it replaces, and no
+   * sequence number, so the updated record gets the one of the rewritten base file.
+   *
+   * @param replaced the derived row lineage of the replaced record
+   */
+  public static Pair<Long, Long> storedOnUpdate(Pair<Long, Long> replaced) {
+    return Pair.of(replaced.getLeft(), null);
+  }
 
   public static MessageType readParquetSchema(StorageConfiguration<?> storageConf, HoodieBaseFile baseFile) throws IOException {
     Configuration conf = storageConf.unwrapAs(Configuration.class);
@@ -170,24 +181,45 @@ public class RowLineageTestUtils {
   }
 
   /**
-   * Asserts that the new and updated records of a rewritten base file have a row lineage of that base file with
-   * row IDs no record had before the rewrite, and that every record of the file has a row ID of its own.
+   * Asserts that the updated records of a rewritten base file keep the row IDs of the records they replace, and have
+   * the sequence number of that base file, which is not the one of the records they replace, and that every record
+   * of the file has a row ID of its own.
    *
    * @param rowLineage         the derived row lineage of the records in the rewritten base file
-   * @param changedKeys        the keys of the records the rewrite inserted or updated
+   * @param updatedKeys        the keys of the records the rewrite updated
+   * @param previousRowLineage the derived row lineage of the records before the rewrite by record key
+   */
+  public static void assertUpdatedRowLineage(String basePath, HoodieBaseFile baseFile, Map<String, Pair<Long, Long>> rowLineage,
+                                             Set<String> updatedKeys, Map<String, Pair<Long, Long>> previousRowLineage) {
+    Long sequenceNumber = TestTableFormat.getBaseFileRowLineage(basePath, baseFile.getFileName()).get().getSequenceNumber();
+    assertFalse(updatedKeys.isEmpty());
+    for (String key : updatedKeys) {
+      Pair<Long, Long> previous = previousRowLineage.get(key);
+      assertEquals(Pair.of(previous.getLeft(), sequenceNumber), rowLineage.get(key), () -> "Updated record " + key + " had the row lineage " + previous);
+      assertNotEquals(previous.getRight(), sequenceNumber);
+    }
+    assertEquals(rowLineage.size(), rowLineage.values().stream().map(Pair::getLeft).distinct().count());
+  }
+
+  /**
+   * Asserts that the new records of a rewritten base file have a row lineage of that base file with row IDs no
+   * record had before the rewrite, and that every record of the file has a row ID of its own.
+   *
+   * @param rowLineage         the derived row lineage of the records in the rewritten base file
+   * @param insertedKeys       the keys of the records the rewrite inserted
    * @param previousRowLineage the derived row lineage of the records before the rewrite
    */
   public static void assertNewRowLineage(String basePath, HoodieBaseFile baseFile, Map<String, Pair<Long, Long>> rowLineage,
-                                         Set<String> changedKeys, Collection<Pair<Long, Long>> previousRowLineage) {
+                                         Set<String> insertedKeys, Collection<Pair<Long, Long>> previousRowLineage) {
     BaseFileRowLineage baseFileRowLineage = TestTableFormat.getBaseFileRowLineage(basePath, baseFile.getFileName()).get();
     Set<Long> previousRowIds = previousRowLineage.stream().map(Pair::getLeft).collect(Collectors.toSet());
-    assertFalse(changedKeys.isEmpty());
-    for (String key : changedKeys) {
-      Pair<Long, Long> changed = rowLineage.get(key);
-      assertEquals(baseFileRowLineage.getSequenceNumber(), changed.getRight());
-      assertTrue(changed.getLeft() >= baseFileRowLineage.getFirstRowId()
-          && changed.getLeft() < baseFileRowLineage.getFirstRowId() + rowLineage.size(), () -> "Unexpected row ID: " + changed);
-      assertFalse(previousRowIds.contains(changed.getLeft()), () -> "Row ID is not new: " + changed);
+    assertFalse(insertedKeys.isEmpty());
+    for (String key : insertedKeys) {
+      Pair<Long, Long> inserted = rowLineage.get(key);
+      assertEquals(baseFileRowLineage.getSequenceNumber(), inserted.getRight());
+      assertTrue(inserted.getLeft() >= baseFileRowLineage.getFirstRowId()
+          && inserted.getLeft() < baseFileRowLineage.getFirstRowId() + rowLineage.size(), () -> "Unexpected row ID: " + inserted);
+      assertFalse(previousRowIds.contains(inserted.getLeft()), () -> "Row ID is not new: " + inserted);
     }
     assertEquals(rowLineage.size(), rowLineage.values().stream().map(Pair::getLeft).distinct().count());
   }

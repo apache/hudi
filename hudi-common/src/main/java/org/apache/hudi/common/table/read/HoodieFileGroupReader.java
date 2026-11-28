@@ -93,7 +93,12 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
   @Getter
   private List<String> validBlockInstants = Collections.emptyList();
   private BufferedRecordConverter<T> bufferedRecordConverter;
-  // Maintains the format meta columns of the returned records, null unless the reader is given format meta columns
+  /**
+   * Maintains the format meta columns of the returned records, null unless the reader is given format meta columns.
+   * It relies on two properties of the reader: a returned record without an operation is a record of the base file
+   * returned unchanged, and the reader returns the merged version of a record of the base file before it reads the
+   * next record of the base file.
+   */
   private final FormatMetaColumnHandler<T> formatMetaColumnHandler;
 
   @Builder(setterPrefix = "with")
@@ -282,7 +287,8 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
           readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
-    // Resolved before any filter applies, as the values are resolved from the position of a record in the base file
+    // Resolved before any filter applies, as the values are resolved from the position of a record in the base file,
+    // which needs every record of the file: the read must not push predicates down or skip row groups
     ClosableIterator<T> baseFileRecords = formatMetaColumnHandler == null ? recordIterator
         : formatMetaColumnHandler.resolveBaseFileRecords(recordIterator, readerContext.getSchemaHandler().getRequiredSchema());
     return readerContext.getInstantRange().isPresent()

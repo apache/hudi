@@ -58,8 +58,9 @@ import java.util.function.Supplier;
  * <p>With {@link #ROW_LINEAGE_ENABLED} set in the table config, the table format also tracks row lineage: when
  * a commit completes, it assigns the next sequence number to the commit and to every base file the commit
  * added, and the next range of row IDs, one per record, to each of these base files. It declares two format meta
- * columns: the row ID and the last updated sequence number of a row. A rewrite stores them null for a new or
- * updated row, which gets a new row lineage, and for a row carried over unchanged, it stores the value its base
+ * columns: the row ID and the last updated sequence number of a row. A rewrite stores both null for a new row,
+ * which gets a new row lineage. An updated row keeps its row ID and stores a null sequence number, so it gets the
+ * sequence number of the new base file. For a row carried over unchanged, the rewrite stores the value its base
  * file stores, or derives it: the first row ID of the base file plus the position of the row in the file, and the
  * sequence number of the base file.
  *
@@ -211,8 +212,9 @@ public class TestTableFormat implements HoodieTableFormat {
   }
 
   /**
-   * A row lineage column: null for a new or updated row, and for a row carried over unchanged, the value its base
-   * file stores, or the one derived from the row lineage values assigned to the base file.
+   * A row lineage column: null for a new row, the value of the replaced row for the row ID of an updated row and null
+   * for its sequence number, and for a row carried over unchanged, the value its base file stores, or the one derived
+   * from the row lineage values assigned to the base file.
    */
   private static class RowLineageColumn implements FormatMetaColumn {
     private final String name;
@@ -231,6 +233,11 @@ public class TestTableFormat implements HoodieTableFormat {
     @Override
     public Object valueOnWrite(String instantTime) {
       return null;
+    }
+
+    @Override
+    public Object valueOnUpdate(String instantTime, Object replacedValue) {
+      return rowId ? replacedValue : null;
     }
 
     @Override

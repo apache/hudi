@@ -55,7 +55,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,9 +65,11 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.NO_ROW_LINEAGE;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.assertNewRowLineage;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.assertRowLineageChangesWithCommitSeqNo;
+import static org.apache.hudi.common.testutils.RowLineageTestUtils.assertUpdatedRowLineage;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.deriveRowLineage;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.hasRowLineageColumns;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.readStoredRowLineage;
+import static org.apache.hudi.common.testutils.RowLineageTestUtils.storedOnUpdate;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -156,11 +157,12 @@ public class TestSparkCopyOnWriteRowLineageForTestFormat extends SparkClientFunc
 
       Map<String, Pair<Long, Long>> expectedStored = new LinkedHashMap<>(rowLineage1);
       expectedStored.keySet().removeAll(keys(deletes));
-      Set<String> changedKeys = new HashSet<>(keys(updates));
-      changedKeys.addAll(keys(newInserts));
-      changedKeys.forEach(key -> expectedStored.put(key, NO_ROW_LINEAGE));
+      keys(updates).forEach(key -> expectedStored.put(key, storedOnUpdate(rowLineage1.get(key))));
+      keys(newInserts).forEach(key -> expectedStored.put(key, NO_ROW_LINEAGE));
       assertEquals(expectedStored, readStoredRowLineage(storageConf(), baseFile2));
-      assertNewRowLineage(tableBasePath, baseFile2, deriveRowLineage(storageConf(), tableBasePath, baseFile2), changedKeys, rowLineage1.values());
+      Map<String, Pair<Long, Long>> rowLineage2 = deriveRowLineage(storageConf(), tableBasePath, baseFile2);
+      assertNewRowLineage(tableBasePath, baseFile2, rowLineage2, keys(newInserts), rowLineage1.values());
+      assertUpdatedRowLineage(tableBasePath, baseFile2, rowLineage2, keys(updates), rowLineage1);
       assertRowLineageChangesWithCommitSeqNo(storageConf(), tableBasePath, baseFile1, baseFile2, 15, 3);
     }
   }

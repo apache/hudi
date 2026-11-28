@@ -165,6 +165,11 @@ public interface HoodieTableFormat extends Serializable {
    * Returns the per-row metadata columns this table format declares for base files, see {@link FormatMetaColumn},
    * or an empty list, the default. A rewrite of a base file stores them after the columns of the table, in this
    * order, and fails if it cannot carry them over.
+   *
+   * <p>The names of the columns are reserved: a rewrite fails if the table has a column with one of them. The Flink
+   * writers refuse to rewrite the base files of a table whose format declares columns. A table format that declares
+   * columns should verify at {@link #commit} that the base files the commit adds carry them, which also covers a
+   * custom merge handle or clustering strategy that does not.
    */
   default List<FormatMetaColumn> getFormatMetaColumns() {
     return Collections.emptyList();

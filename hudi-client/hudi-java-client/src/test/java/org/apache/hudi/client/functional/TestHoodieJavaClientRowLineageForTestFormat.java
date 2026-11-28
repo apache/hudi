@@ -98,10 +98,12 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.NO_ROW_LINEAGE;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.assertNewRowLineage;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.assertRowLineageChangesWithCommitSeqNo;
+import static org.apache.hudi.common.testutils.RowLineageTestUtils.assertUpdatedRowLineage;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.deriveRowLineage;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.hasRowLineageColumns;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.readParquetSchema;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.readStoredRowLineage;
+import static org.apache.hudi.common.testutils.RowLineageTestUtils.storedOnUpdate;
 import static org.apache.hudi.tableformat.TestTableFormat.LAST_UPDATED_SEQUENCE_NUMBER_COLUMN;
 import static org.apache.hudi.tableformat.TestTableFormat.ROW_ID_COLUMN;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -186,11 +188,12 @@ public class TestHoodieJavaClientRowLineageForTestFormat extends HoodieJavaClien
 
     Map<String, Pair<Long, Long>> expectedStored2 = new LinkedHashMap<>(rowLineage1);
     expectedStored2.keySet().removeAll(keys(deletes1));
-    keys(updates1).forEach(key -> expectedStored2.put(key, NO_ROW_LINEAGE));
+    keys(updates1).forEach(key -> expectedStored2.put(key, storedOnUpdate(rowLineage1.get(key))));
     keys(inserts1).forEach(key -> expectedStored2.put(key, NO_ROW_LINEAGE));
     assertEquals(expectedStored2, readStoredRowLineage(storageConf, baseFile2));
     Map<String, Pair<Long, Long>> rowLineage2 = deriveRowLineage(storageConf, basePath, baseFile2);
-    assertNewRowLineage(basePath, baseFile2, rowLineage2, union(keys(updates1), keys(inserts1)), rowLineage1.values());
+    assertNewRowLineage(basePath, baseFile2, rowLineage2, keys(inserts1), rowLineage1.values());
+    assertUpdatedRowLineage(basePath, baseFile2, rowLineage2, keys(updates1), rowLineage1);
     assertRowLineageChangesWithCommitSeqNo(storageConf, basePath, baseFile1, baseFile2, 15, 3);
 
     // The second rewrite of the file group carries over records that store their row lineage in the base file
@@ -204,18 +207,21 @@ public class TestHoodieJavaClientRowLineageForTestFormat extends HoodieJavaClien
 
     Map<String, Pair<Long, Long>> expectedStored3 = new LinkedHashMap<>(rowLineage2);
     expectedStored3.keySet().removeAll(keys(deletes2));
-    keys(updates2).forEach(key -> expectedStored3.put(key, NO_ROW_LINEAGE));
+    keys(updates2).forEach(key -> expectedStored3.put(key, storedOnUpdate(rowLineage2.get(key))));
     keys(inserts2).forEach(key -> expectedStored3.put(key, NO_ROW_LINEAGE));
     Map<String, Pair<Long, Long>> stored3 = readStoredRowLineage(storageConf, baseFile3);
     assertEquals(expectedStored3, stored3);
     // A record no write has changed still has the row lineage it got when it was inserted
     String unchangedKey = inserts.get(19).getRecordKey();
     assertEquals(rowLineage1.get(unchangedKey), stored3.get(unchangedKey));
-    // A record the first rewrite updated has the row lineage derived from the second base file
+    // A record the first rewrite updated keeps its row ID with the sequence number derived from the second base file
     String updatedOnceKey = inserts.get(7).getRecordKey();
     assertEquals(rowLineage2.get(updatedOnceKey), stored3.get(updatedOnceKey));
+    assertEquals(rowLineage1.get(updatedOnceKey).getLeft(), stored3.get(updatedOnceKey).getLeft());
     assertNotEquals(rowLineage1.get(updatedOnceKey), stored3.get(updatedOnceKey));
-    assertNewRowLineage(basePath, baseFile3, deriveRowLineage(storageConf, basePath, baseFile3), union(keys(updates2), keys(inserts2)), rowLineage2.values());
+    Map<String, Pair<Long, Long>> rowLineage3 = deriveRowLineage(storageConf, basePath, baseFile3);
+    assertNewRowLineage(basePath, baseFile3, rowLineage3, keys(inserts2), rowLineage2.values());
+    assertUpdatedRowLineage(basePath, baseFile3, rowLineage3, keys(updates2), rowLineage2);
     assertRowLineageChangesWithCommitSeqNo(storageConf, basePath, baseFile2, baseFile3, 18, 3);
 
     assertRowLineageColumnsNotInTable(23);
@@ -300,10 +306,10 @@ public class TestHoodieJavaClientRowLineageForTestFormat extends HoodieJavaClien
 
     Map<String, Pair<Long, Long>> expectedStored2 = new LinkedHashMap<>(rowLineage1);
     expectedStored2.keySet().removeAll(keys(deletes1));
-    keys(updates1).forEach(key -> expectedStored2.put(key, NO_ROW_LINEAGE));
+    keys(updates1).forEach(key -> expectedStored2.put(key, storedOnUpdate(rowLineage1.get(key))));
     assertEquals(expectedStored2, readStoredRowLineage(storageConf, baseFile2));
     Map<String, Pair<Long, Long>> rowLineage2 = deriveRowLineage(storageConf, basePath, baseFile2);
-    assertNewRowLineage(basePath, baseFile2, rowLineage2, keys(updates1), rowLineage1.values());
+    assertUpdatedRowLineage(basePath, baseFile2, rowLineage2, keys(updates1), rowLineage1);
     assertRowLineageChangesWithCommitSeqNo(storageConf, basePath, baseFile1, baseFile2, 15, 3);
 
     // The second compaction carries over records that store their row lineage in the base file and records
@@ -317,13 +323,14 @@ public class TestHoodieJavaClientRowLineageForTestFormat extends HoodieJavaClien
 
     Map<String, Pair<Long, Long>> expectedStored3 = new LinkedHashMap<>(rowLineage2);
     expectedStored3.keySet().removeAll(keys(deletes2));
-    keys(updates2).forEach(key -> expectedStored3.put(key, NO_ROW_LINEAGE));
+    keys(updates2).forEach(key -> expectedStored3.put(key, storedOnUpdate(rowLineage2.get(key))));
     Map<String, Pair<Long, Long>> stored3 = readStoredRowLineage(storageConf, baseFile3);
     assertEquals(expectedStored3, stored3);
     String updatedOnceKey = inserts.get(7).getRecordKey();
     assertEquals(rowLineage2.get(updatedOnceKey), stored3.get(updatedOnceKey));
+    assertEquals(rowLineage1.get(updatedOnceKey).getLeft(), stored3.get(updatedOnceKey).getLeft());
     assertNotEquals(rowLineage1.get(updatedOnceKey), stored3.get(updatedOnceKey));
-    assertNewRowLineage(basePath, baseFile3, deriveRowLineage(storageConf, basePath, baseFile3), keys(updates2), rowLineage2.values());
+    assertUpdatedRowLineage(basePath, baseFile3, deriveRowLineage(storageConf, basePath, baseFile3), keys(updates2), rowLineage2);
     assertRowLineageChangesWithCommitSeqNo(storageConf, basePath, baseFile2, baseFile3, 15, 2);
 
     assertRowLineageColumnsNotInTable(17);
@@ -332,7 +339,7 @@ public class TestHoodieJavaClientRowLineageForTestFormat extends HoodieJavaClien
   /**
    * Clustering carries the records of several file groups over unchanged into a new base file, so every record keeps
    * its row lineage, whether its base file stores it or not. A record that a log file of a merge-on-read file slice
-   * updates gets a new row lineage.
+   * updates keeps its row ID and gets the sequence number of the new base file.
    */
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
@@ -372,7 +379,7 @@ public class TestHoodieJavaClientRowLineageForTestFormat extends HoodieJavaClien
 
     Map<String, Pair<Long, Long>> expectedStored = new HashMap<>(rowLineageBefore);
     if (tableType == HoodieTableType.MERGE_ON_READ) {
-      keys(updates).forEach(key -> expectedStored.put(key, NO_ROW_LINEAGE));
+      keys(updates).forEach(key -> expectedStored.put(key, storedOnUpdate(rowLineageBefore.get(key))));
     }
     assertEquals(expectedStored, new HashMap<>(readStoredRowLineage(storageConf, clusteredBaseFile)));
     for (FileSlice fileSlice : fileSlices) {
@@ -472,7 +479,7 @@ public class TestHoodieJavaClientRowLineageForTestFormat extends HoodieJavaClien
     if (fallback) {
       write(client, dataGen.generateUpdates("002", updates), true);
       Map<String, Pair<Long, Long>> expectedStored = new LinkedHashMap<>(rowLineage1);
-      keys(updates).forEach(key -> expectedStored.put(key, NO_ROW_LINEAGE));
+      keys(updates).forEach(key -> expectedStored.put(key, storedOnUpdate(rowLineage1.get(key))));
       assertEquals(expectedStored, readStoredRowLineage(storageConf, getOnlyLatestBaseFile()));
       return;
     }
@@ -571,12 +578,6 @@ public class TestHoodieJavaClientRowLineageForTestFormat extends HoodieJavaClien
 
   private static Set<String> keys(List<HoodieRecord> records) {
     return records.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet());
-  }
-
-  private static Set<String> union(Set<String> first, Set<String> second) {
-    Set<String> result = new HashSet<>(first);
-    result.addAll(second);
-    return result;
   }
 
   private HoodieBaseFile getOnlyLatestBaseFile() throws IOException {

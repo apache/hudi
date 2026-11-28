@@ -41,11 +41,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.testutils.RowLineageTestUtils.NO_ROW_LINEAGE;
-import static org.apache.hudi.common.testutils.RowLineageTestUtils.assertNewRowLineage;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.assertRowLineageChangesWithCommitSeqNo;
+import static org.apache.hudi.common.testutils.RowLineageTestUtils.assertUpdatedRowLineage;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.deriveRowLineage;
 import static org.apache.hudi.common.testutils.RowLineageTestUtils.readStoredRowLineage;
+import static org.apache.hudi.common.testutils.RowLineageTestUtils.storedOnUpdate;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -66,7 +66,7 @@ class TestSparkRecordCopyOnWriteRowLineageForTestFormat extends TestSparkCopyOnW
 
   /**
    * Compaction merges the updates and deletes in the log files of a merge-on-read file group into a new base file,
-   * which keeps the row lineage of the records no log file changes.
+   * which keeps the row lineage of the records no log file changes and the row IDs of the records a log file updates.
    */
   @Test
   void testCompactionKeepsRowLineageOfUnchangedRecords() throws IOException {
@@ -96,9 +96,9 @@ class TestSparkRecordCopyOnWriteRowLineageForTestFormat extends TestSparkCopyOnW
 
       Map<String, Pair<Long, Long>> expectedStored = new LinkedHashMap<>(rowLineage1);
       expectedStored.keySet().removeAll(keys(deletes));
-      keys(updates).forEach(key -> expectedStored.put(key, NO_ROW_LINEAGE));
+      keys(updates).forEach(key -> expectedStored.put(key, storedOnUpdate(rowLineage1.get(key))));
       assertEquals(expectedStored, readStoredRowLineage(storageConf(), baseFile2));
-      assertNewRowLineage(tableBasePath, baseFile2, deriveRowLineage(storageConf(), tableBasePath, baseFile2), keys(updates), rowLineage1.values());
+      assertUpdatedRowLineage(tableBasePath, baseFile2, deriveRowLineage(storageConf(), tableBasePath, baseFile2), keys(updates), rowLineage1);
       assertRowLineageChangesWithCommitSeqNo(storageConf(), tableBasePath, baseFile1, baseFile2, 15, 3);
     }
   }

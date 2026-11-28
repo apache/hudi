@@ -55,7 +55,9 @@ public interface FormatMetaColumn extends Serializable {
    * Returns the value of the column for a record that a write with the given instant writes into a base file as a
    * changed version of a record of the base file being rewritten, such as an update merged with the record it
    * updates. Returns {@link #valueOnWrite} unless the table format overrides it, for example to keep the value of
-   * the replaced record.
+   * the replaced record. A row lineage format returns {@code replacedValue} for the row ID, so an updated row keeps
+   * its identity, and null for the last updated sequence number, so the row gets the one of the commit that adds the
+   * new base file.
    *
    * @param instantTime   instant time of the write.
    * @param replacedValue the value of the column for the replaced record, as {@link #resolverFor} resolves it.
@@ -65,9 +67,10 @@ public interface FormatMetaColumn extends Serializable {
   }
 
   /**
-   * Returns the resolver of the values of the column for the records of a base file being rewritten, possibly
-   * called from a distributed task. Throws if the table format cannot resolve the values for the base file, which
-   * fails the write, as the records carried over from the file would lose their values.
+   * Returns the resolver of the values of the column for the records of a base file being rewritten, called for each
+   * column by the task that rewrites the base file, possibly a distributed task. The call should be cheap and the
+   * resolver serializable. Throws if the table format has not recorded the base file or cannot resolve the values
+   * for it, which fails the rewrite, as the records carried over from the file would lose their values.
    *
    * @param metaClient metaClient of the table.
    * @param baseFile   the base file being rewritten.
