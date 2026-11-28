@@ -167,6 +167,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       "hoodie.table.type" -> "COPY_ON_WRITE",
       "hoodie.table.version" -> tableVersion.versionCode().toString,
       "hoodie.table.partition.fields" -> "partition",
+      "hoodie.datasource.write.partitionpath.timestamp.fractional.seconds" ->
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN).toString,
       "hoodie.table.keygenerator.type" -> "SIMPLE",
       "hoodie.table.base.file.format" -> "PARQUET",
       "hoodie.table.format" -> "native",

@@ -173,6 +173,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       "hoodie.datasource.write.drop.partition.columns" -> "false",
       "hoodie.datasource.write.hive_style_partitioning" -> "true",
       "hoodie.datasource.write.partitionpath.urlencode" -> "false",
+      "hoodie.datasource.write.partitionpath.timestamp.fractional.seconds" ->
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN).toString,
       "hoodie.archivelog.folder" -> "archived",
       "hoodie.timeline.path" -> "timeline",
       "hoodie.timeline.history.path" -> "history")

@@ -216,6 +216,8 @@ public class TestHoodieDeltaStreamerSchemaAndTypes extends HoodieDeltaStreamerTe
     configs.put("hoodie.datasource.write.drop.partition.columns", "false");
     configs.put("hoodie.datasource.write.hive_style_partitioning", "false");
     configs.put("hoodie.datasource.write.partitionpath.urlencode", "false");
+    configs.put("hoodie.datasource.write.partitionpath.timestamp.fractional.seconds",
+        String.valueOf(version.greaterThanOrEquals(HoodieTableVersion.TEN)));
     configs.put("hoodie.archivelog.folder", "history");
     configs.put("hoodie.timeline.path", "timeline");
     configs.put("hoodie.timeline.history.path", "history");

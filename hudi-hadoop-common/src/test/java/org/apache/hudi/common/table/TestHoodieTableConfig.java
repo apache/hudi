@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -438,6 +439,46 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
         "the recorded encoding must survive on a " + tableVersion + " table");
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
+  void testTimestampPartitionFractionalSecondsSurvivesConfigVersionDropping(HoodieTableVersion tableVersion) {
+    // loading the table keeps the layout its partition paths were written in, at any table version
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS, "true");
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion.versionCode()));
+
+    HoodieTableConfig.dropInvalidConfigs(config);
+
+    assertEquals("true", config.getString(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS));
+  }
+
+  @Test
+  void testNewTableRecordsTimestampPartitionFractionalSeconds() {
+    assertEquals("true", newTableProps(HoodieTableVersion.TEN, "ts", null)
+        .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+    // a table created at an older version keeps the layout the writers of that version produce
+    assertEquals("false", newTableProps(HoodieTableVersion.NINE, "ts", null)
+        .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+    assertEquals("false", newTableProps(HoodieTableVersion.TEN, "ts", false)
+        .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+    // an older writer truncates the fractional seconds, so a table created at an older version cannot keep them
+    assertThrows(IllegalArgumentException.class, () -> newTableProps(HoodieTableVersion.NINE, "ts", true));
+    assertEquals("false", newTableProps(HoodieTableVersion.NINE, "ts", false)
+        .getProperty(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+    assertFalse(newTableProps(HoodieTableVersion.TEN, null, null)
+        .containsKey(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key()));
+  }
+
+  private static Properties newTableProps(HoodieTableVersion tableVersion, String partitionFields, Boolean fractionalSeconds) {
+    return HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName("test-table")
+        .setTableVersion(tableVersion)
+        .setPartitionFields(partitionFields)
+        .setTimestampPartitionFractionalSeconds(fractionalSeconds)
+        .build();
+  }
+
   private static Stream<Arguments> tableVersionsAndMetaFieldsModes() {
     return Stream.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, HoodieTableVersion.TEN)
         .flatMap(version -> Arrays.stream(MetaFieldsMode.values())
@@ -497,7 +538,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(47, configProperties.size());
+    assertEquals(48, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());

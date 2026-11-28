@@ -79,6 +79,32 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
   }
 
   @Test
+  void validateTableConfigHoldsAWriteToTheRecordedTimestampPartitionLayout() throws IOException {
+    String key = HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key();
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "ts");
+    HoodieTableConfig recorded = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, props, "")
+        .initTable(storageConf, tempDir.resolve("fractionalSecondsTable").toString()).getTableConfig();
+    assertEquals("true", recorded.getString(key));
+    HoodieTableConfig truncating = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, props, "")
+        .initTable(storageConf, tempDir.resolve("truncatingTable").toString()).getTableConfig();
+    // As a table created before the property existed
+    truncating.getProps().remove(key);
+
+    for (HoodieTableConfig tableConfig : new HoodieTableConfig[] {recorded, truncating}) {
+      String layout = tableConfig.getStringOrDefault(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS);
+      TypedProperties writeProps = new TypedProperties();
+      writeProps.put(key, layout);
+      Assertions.assertDoesNotThrow(() -> HoodieWriterUtils.validateTableConfig(
+          sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(writeProps), tableConfig));
+      writeProps.put(key, Boolean.toString(!Boolean.parseBoolean(layout)));
+      HoodieException ex = assertThrows(HoodieException.class, () -> HoodieWriterUtils.validateTableConfig(
+          sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(writeProps), tableConfig));
+      assertTrue(ex.getMessage().contains(key), ex.getMessage());
+    }
+  }
+
+  @Test
   void validateTableConfigRejectsMultiFieldSlashPartitioningOnOverwrite() {
     // SaveMode.Overwrite nulls the table config, so the rejection has to fire off the params
     // alone, ahead of the isOverWriteMode gate that skips the rest of the validation

@@ -339,6 +339,8 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     configs.put("hoodie.table.version", String.valueOf(version.versionCode()));
     configs.put("hoodie.table.recordkey.fields", "key");
     configs.put("hoodie.table.partition.fields", "partition");
+    configs.put("hoodie.datasource.write.partitionpath.timestamp.fractional.seconds",
+        String.valueOf(version.greaterThanOrEquals(HoodieTableVersion.TEN)));
     configs.put("hoodie.table.ordering.fields", "ts");
     configs.put("hoodie.table.keygenerator.type", "SIMPLE");
     configs.put("hoodie.meta.fields.mode", "ALL");

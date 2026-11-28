@@ -1310,8 +1310,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(COPY_ON_WRITE, false);
     // Use table version 6 so HoodieBackedTableMetadataWriterTableVersionSix is used
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    tableConfig.setTableVersion(HoodieTableVersion.SIX);
-    initMetaClient(COPY_ON_WRITE, tableConfig.getProps());
+    initMetaClient(COPY_ON_WRITE, propsAtVersionSix(tableConfig));
 
     writeConfig = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
@@ -3187,8 +3186,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<WriteStatus> writeStatuses;
     // Set Writer Version 6.
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    tableConfig.setTableVersion(HoodieTableVersion.SIX);
-    initMetaClient(COPY_ON_WRITE, tableConfig.getProps());
+    initMetaClient(COPY_ON_WRITE, propsAtVersionSix(tableConfig));
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).withWriteTableVersion(6).build();
     String commitTimestamp;
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
@@ -3207,8 +3205,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     changeTableVersion(HoodieTableVersion.TWO);
     // Set Writer Version 6.
     HoodieTableConfig tableConfig2 = metaClient.getTableConfig();
-    tableConfig2.setTableVersion(HoodieTableVersion.SIX);
-    initMetaClient(COPY_ON_WRITE, tableConfig2.getProps());
+    initMetaClient(COPY_ON_WRITE, propsAtVersionSix(tableConfig2));
     HoodieWriteConfig writeConfig2 = getWriteConfigBuilder(true, true, false)
         .withWriteTableVersion(HoodieTableVersion.SIX.versionCode()).build();
 
@@ -3273,8 +3270,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     String commitTimestamp;
     // Set Writer Version 6.
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    tableConfig.setTableVersion(HoodieTableVersion.SIX);
-    initMetaClient(COPY_ON_WRITE, tableConfig.getProps());
+    initMetaClient(COPY_ON_WRITE, propsAtVersionSix(tableConfig));
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       commitTimestamp = client.startCommit();
       records = dataGen.generateInserts(commitTimestamp, 5);
@@ -3299,8 +3295,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     changeTableVersion(HoodieTableVersion.TWO);
     // Set Writer Version 6.
     HoodieTableConfig tableConfig2 = metaClient.getTableConfig();
-    tableConfig2.setTableVersion(HoodieTableVersion.SIX);
-    initMetaClient(COPY_ON_WRITE, tableConfig2.getProps());
+    initMetaClient(COPY_ON_WRITE, propsAtVersionSix(tableConfig2));
     writeConfig = getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
@@ -4588,5 +4583,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Properties properties = new Properties();
     properties.setProperty("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
     return properties;
+  }
+
+  /**
+   * The properties of the table at table version 6, which keeps no fractional seconds in TIMESTAMP partition paths.
+   */
+  private static Properties propsAtVersionSix(HoodieTableConfig tableConfig) {
+    tableConfig.setTableVersion(HoodieTableVersion.SIX);
+    Properties props = tableConfig.getProps();
+    props.remove(HoodieTableConfig.TIMESTAMP_PARTITION_FRACTIONAL_SECONDS.key());
+    return props;
   }
 }
