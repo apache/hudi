@@ -130,6 +130,7 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -229,6 +230,43 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   @ParameterizedTest
   @MethodSource("viewStorageArgs")
   public void testMetadataTableValidation(String viewStorageTypeForFSListing, String viewStorageTypeForMDTListing, boolean includeUncommittedLogFiles) throws Exception {
+    runMetadataTableValidation(viewStorageTypeForFSListing, viewStorageTypeForMDTListing, includeUncommittedLogFiles, false);
+  }
+
+  /**
+   * Same MOR scenario under the v2 validator. Unlike v1, v2 does not tolerate the uncommitted log
+   * file a simulated task retry leaves in a data partition: the completed deltacommit does not name
+   * it, so it is reported DANGLING. The v1 view-storage knobs are not part of the matrix here: v2
+   * hosts its own driver-side view (configured via fsViewStorageType) and ignores them, so varying
+   * them would only produce duplicate runs.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testMetadataTableValidationWithValidatorV2(boolean includeUncommittedLogFiles) throws Exception {
+    runMetadataTableValidation(null, null, includeUncommittedLogFiles, true);
+  }
+
+  /**
+   * The log file a retried task would leave beside {@code logPath}: the same file group, delta commit
+   * and log version under a different write token, named in the same (inline or native) format.
+   * Cutting the path at its last '-' only works for the inline format: a native log file name
+   * carries its write token mid-name, so the cut would leave a name that is not a log file at all.
+   */
+  private static StoragePath retryCopyOf(StoragePath logPath) {
+    HoodieLogFile logFile = new HoodieLogFile(logPath);
+    String token = logFile.getLogWriteToken();
+    String retryToken = token.substring(0, token.lastIndexOf('-') + 1) + "000";
+    String name = logFile.isNativeLogFile()
+        ? FSUtils.makeNativeLogFileName(logFile.getFileId(), retryToken, logFile.getDeltaCommitTime(),
+            logFile.getLogVersion(), logFile.getFileExtension(),
+            HoodieFileFormat.fromFileExtension("." + logFile.getSuffix()))
+        : FSUtils.makeInlineLogFileName(logFile.getFileId(), "." + logFile.getFileExtension(),
+            logFile.getDeltaCommitTime(), logFile.getLogVersion(), retryToken);
+    return new StoragePath(logPath.getParent(), name);
+  }
+
+  private void runMetadataTableValidation(String viewStorageTypeForFSListing, String viewStorageTypeForMDTListing,
+                                          boolean includeUncommittedLogFiles, boolean useValidatorV2) throws Exception {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
@@ -255,16 +293,26 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .save(basePath);
     updates.unpersist(true);
 
+    StoragePath uncommittedLogFile = null;
     if (includeUncommittedLogFiles) {
-      // add uncommitted log file to simulate task retry
+      // add uncommitted log file to simulate task retry. For v2 the copy must land in a data
+      // partition, so the metadata table's own log files are skipped there; the v1 case keeps
+      // upstream's input unchanged.
       for (StoragePathInfo storagePathInfo : storage.listFiles(new StoragePath(basePath))) {
         StoragePath path = storagePathInfo.getPath();
-        if (FSUtils.isLogFile(path)) {
-          String modifiedPath = path.toString().substring(0, path.toString().lastIndexOf("-") + 1) + "000";
+        if (FSUtils.isLogFile(path)
+            && (!useValidatorV2 || !path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))) {
+          String modifiedPath = useValidatorV2
+              ? retryCopyOf(path).toString()
+              : path.toString().substring(0, path.toString().lastIndexOf("-") + 1) + "000";
           FileSystem fs = HadoopFSUtils.getFs(path, new Configuration(false));
           fs.copyFromLocalFile(new Path(path.toString()), new Path(modifiedPath));
+          uncommittedLogFile = new StoragePath(modifiedPath);
           break;
         }
+      }
+      if (useValidatorV2) {
+        assertNotNull(uncommittedLogFile, "the table has no data log file to copy");
       }
     }
 
@@ -272,19 +320,36 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
     config.basePath = "file:" + basePath;
     config.validateLatestFileSlices = true;
-    config.validateAllFileGroups = true;
+    // v2 implements latest-file-slice validation only and rejects a run that asks for more,
+    // rather than skipping it and reporting success.
+    config.validateAllFileGroups = !useValidatorV2;
+    config.useValidatorV2 = useValidatorV2;
     if (viewStorageTypeForFSListing != null && viewStorageTypeForMDTListing != null) {
       config.viewStorageTypeForFSListing = viewStorageTypeForFSListing;
       config.viewStorageTypeForMetadata = viewStorageTypeForMDTListing;
     }
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    if (useValidatorV2 && uncommittedLogFile != null) {
+      HoodieValidationException failure = assertThrows(HoodieValidationException.class, validator::run);
+      String partition = FSUtils.getRelativePartitionPath(new StoragePath(basePath), uncommittedLogFile.getParent());
+      assertTrue(failure.getMessage().contains("1 of 1 differing file(s) fail validation")
+          && failure.getMessage().contains("{DANGLING=1}")
+          && failure.getMessage().contains("Partition(s): " + partition), failure.getMessage());
+      return;
+    }
     assertTrue(validator.run());
     assertFalse(validator.hasValidationFailure());
     assertTrue(validator.getThrowables().isEmpty());
   }
 
-  @Test
-  void missingLogFileFailsValidation() throws Exception {
+  /**
+   * A stale metadata table missing the newest log file must fail validation under both validators:
+   * v1's latest-file-slice comparison sees a log file storage has and the metadata table does not,
+   * and so does v2's FS-MDT comparison.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void missingLogFileFailsValidation(boolean useValidatorV2) throws Exception {
     FileSystem fs = HadoopFSUtils.getFs(tempDir.toString(), new Configuration(false));
 
     Map<String, String> writeOptions = new HashMap<>();
@@ -328,12 +393,82 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
     config.basePath = "file:" + basePath;
     config.validateLatestFileSlices = true;
-    config.validateAllFileGroups = true;
+    config.validateAllFileGroups = !useValidatorV2;
     config.ignoreFailed = true;
+    config.useValidatorV2 = useValidatorV2;
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
     assertFalse(validator.run());
     assertTrue(validator.hasValidationFailure());
     assertFalse(validator.getThrowables().isEmpty());
+  }
+
+  /**
+   * The mirror of {@link #missingLogFileFailsValidation}: there the metadata table is stale and
+   * missing a file the file system has; here the metadata table reports a log file that is no
+   * longer on storage. Both validators must fail on it, and both must pass again once the file is
+   * restored — a validator that only detects one direction of divergence is half a validator.
+   *
+   * <p>Only the latest-file-slice half of {@code testAdditionalFilesInMetadata} is exercised
+   * against both: the rest of that test drives --validate-all-file-groups and
+   * --validate-last-n-file-slices, which v2 does not implement and rejects in its config
+   * validation.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void logFileMissingFromStorageFailsValidation(boolean useValidatorV2) throws Exception {
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
+    writeOptions.put(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "2");
+
+    Dataset<Row> inserts = makeInsertDf("000", 10).cache();
+    inserts.write().format("hudi").options(writeOptions).mode(SaveMode.Overwrite).save(basePath);
+    for (int i = 0; i < 6; i++) {
+      inserts.write().format("hudi").options(writeOptions).mode(SaveMode.Append).save(basePath);
+    }
+    inserts.unpersist(true);
+
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient localMetaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath).setConf(engineContext.getStorageConf()).build();
+
+    java.nio.file.Path quarantineNioPath = tempDir.resolve("missing_log_file_quarantine");
+    java.nio.file.Files.createDirectories(quarantineNioPath);
+    Path quarantinePath = new Path(quarantineNioPath.toAbsolutePath().toString());
+
+    // Take a log file out of the latest file slice: the metadata table still reports it.
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(
+        context, localMetaClient,
+        localMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
+    FileSlice latestFileSlice = fsView.getLatestFileSlices(StringUtils.EMPTY_STRING)
+        .filter(fileSlice -> fileSlice.getLogFiles().count() > 0)
+        .collect(Collectors.toList()).get(0);
+    HoodieLogFile latestLogFile = latestFileSlice.getLogFiles().collect(Collectors.toList()).get(0);
+    Path logFilePath = new Path(latestLogFile.getPath().toString());
+    FileSystem fs = HadoopFSUtils.getFs(logFilePath, new Configuration(false));
+    fs.moveFromLocalFile(logFilePath, quarantinePath);
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.ignoreFailed = true;
+    config.useValidatorV2 = useValidatorV2;
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    assertFalse(validator.run(), "Validation must fail while a reported log file is absent");
+    assertTrue(validator.hasValidationFailure());
+    assertFalse(validator.getThrowables().isEmpty());
+    assertTrue(validator.getThrowables().get(0) instanceof HoodieValidationException);
+
+    // Restore it and the same configuration must pass, so the failure above is attributable to
+    // the missing file and not to the fixture.
+    fs.moveFromLocalFile(new Path(quarantinePath + "/" + latestLogFile.getFileName()),
+        new Path(basePath));
+    validator = new HoodieMetadataTableValidator(jsc, config);
+    assertTrue(validator.run(), "Validation must pass once the log file is restored");
+    assertFalse(validator.hasValidationFailure());
   }
 
   @Test

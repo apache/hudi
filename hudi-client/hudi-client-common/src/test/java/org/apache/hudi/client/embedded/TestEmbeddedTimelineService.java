@@ -25,6 +25,8 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.junit.jupiter.api.Test;
@@ -220,6 +222,38 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
     service2.stopForBasePath(writeConfig2.getBasePath());
     verify(mockService2, times(1)).unregisterBasePath(writeConfig2.getBasePath());
     verify(mockService2, times(1)).close();
+  }
+
+  /**
+   * Releasing one table's view must not skip stopping the shared server. A failure out of
+   * unregisterBasePath (a view whose close fails, wrapped in a HoodieException) used to propagate
+   * out of stopForBasePath before the server was closed, leaving it running with no reference left
+   * to stop it.
+   */
+  @Test
+  public void serverIsClosedWhenReleasingTheTableViewFails() throws Exception {
+    // The timeline service is a mock, so the storage configuration it is handed is never read; a
+    // mock keeps this case independent of the Hadoop runtime on the test classpath.
+    StorageConfiguration<?> storageConf = Mockito.mock(StorageConfiguration.class);
+    HoodieEngineContext engineContext = Mockito.mock(HoodieEngineContext.class);
+    Mockito.doReturn(storageConf).when(engineContext).getStorageConf();
+    Mockito.doReturn(storageConf).when(storageConf).newInstance();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.resolve("table_view_release_fails").toString())
+        .withEmbeddedTimelineServerEnabled(true)
+        .withEmbeddedTimelineServerReuseEnabled(true)
+        .build();
+    EmbeddedTimelineService.TimelineServiceCreator mockCreator = Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
+    TimelineService mockService = Mockito.mock(TimelineService.class);
+    when(mockCreator.create(any(), any(), any())).thenReturn(mockService);
+    when(mockService.startService()).thenReturn(556);
+    doThrow(new HoodieException("Unable to close file system view"))
+        .when(mockService).unregisterBasePath(writeConfig.getBasePath());
+    EmbeddedTimelineService service = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, null, writeConfig, mockCreator);
+
+    assertDoesNotThrow(() -> service.stopForBasePath(writeConfig.getBasePath()));
+    verify(mockService, times(1)).unregisterBasePath(writeConfig.getBasePath());
+    verify(mockService, times(1)).close();
   }
 
   /**

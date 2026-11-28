@@ -39,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -228,13 +229,24 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     // by AbstractTableFileSystemView.close(). This prevents a race where a concurrent reader
     // holding readLock could be mid-call in RocksDBDAO.put() when the handles are cleared,
     // causing a NullPointerException at RocksDB.put(null_handle, ...).
+    //
+    // The maps must be closed BEFORE super.closeResources(), which nulls the six fields below. Each
+    // close is guarded on its own (RocksDBDAO.close() throws when it cannot delete its directory), so
+    // one failing map neither leaks the others nor skips super.closeResources(). A map that fails to
+    // close is logged rather than rethrown: closing this view never threw while the maps were left
+    // open, and a caller closing several views (FileSystemViewManager.close()) must not stop at the
+    // first one that cannot clean up its spill directory.
+    for (Runnable closeMap : Arrays.<Runnable>asList(this::closeFileGroupsMapIfPresent,
+        this::closePendingClusteringMapIfPresent, this::closePendingCompactionMapIfPresent,
+        this::closePendingLogCompactionMapIfPresent, this::closeBootstrapFileMapIfPresent,
+        this::closeReplaceInstantsMapIfPresent)) {
+      try {
+        closeMap.run();
+      } catch (RuntimeException e) {
+        log.warn("Failed to close a spillable map of the file system view; continuing with the rest", e);
+      }
+    }
     super.closeResources();
-    closeFileGroupsMapIfPresent();
-    closePendingClusteringMapIfPresent();
-    closePendingCompactionMapIfPresent();
-    closePendingLogCompactionMapIfPresent();
-    closeBootstrapFileMapIfPresent();
-    closeReplaceInstantsMapIfPresent();
   }
 
   private void closeReplaceInstantsMapIfPresent() {
