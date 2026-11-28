@@ -140,6 +140,31 @@ with dbapi.connect(driver='spark', db_kwargs={'uri': uri}, autocommit=True) as c
         z.show(pd.DataFrame(cur.fetchall(), columns=['id', 'region', 'amount', 'ts']))
 ```
 
+### Connect Zeppelin with a token and TLS
+
+1. Inject the token into the **Zeppelin Python interpreter** as
+   `SPARK_CONNECT_AUTHENTICATE_TOKEN`. Only use a trusted interpreter: anyone who
+   can run Python there can read its environment.
+2. Install the issuing CA in the interpreter's OS trust store. Use the sidecar's
+   Service DNS name and port below, or replace them with your gateway's TLS address.
+3. Run this `%python` paragraph and check that it returns `(1,)`. Foundry does
+   not read the environment variable itself: pass it as the ADBC `password`,
+   separately from the URI.
+
+```python
+%python
+import os
+from adbc_driver_manager import dbapi
+
+uri = 'spark://hudi-spark-connect.hudi-lakehouse.svc:15002?api=connect&auth_type=token&tls=true'
+with dbapi.connect(driver='spark', db_kwargs={
+    'uri': uri, 'password': os.environ['SPARK_CONNECT_AUTHENTICATE_TOKEN'],
+}, autocommit=True) as conn:
+    with conn.cursor() as cur:
+        cur.execute('SELECT 1')
+        print(cur.fetchone())
+```
+
 The adapter tests also exercise Zeppelin writes and MERGE; see the
 [client guide](README.md) and [Zeppelin test instructions](../charts/hudi-spark-connect/README.md#bi-clients).
 Zeppelin uses ADBC from `%python`; this example does not use `%jdbc`.

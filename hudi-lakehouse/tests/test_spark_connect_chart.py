@@ -96,6 +96,35 @@ class ConnectChartTest(unittest.TestCase):
                          {"name": "spark-connect-s3", "key": "accessKey"})
         self.assertEqual(env["AWS_SESSION_TOKEN"]["valueFrom"]["secretKeyRef"]["key"], "token")
 
+    def test_endpoint_auth_with_sidecar_or_external_gateway(self):
+        for cert in ("", "tls-secret"):
+            with self.subTest(cert=cert):
+                docs = render({"auth": {"existingSecret": "auth-secret", "tokenKey": "bearer"},
+                               "tls": {"existingSecret": cert}})
+                pod = docs["Deployment"]["spec"]["template"]["spec"]
+                driver, *proxies = pod["containers"]
+                configs = docs["ConfigMap"]["data"]
+                target = docs["Service"]["spec"]["ports"][0]["targetPort"]
+                env = {entry["name"]: entry for entry in driver["env"]}
+                self.assertNotIn("Secret", docs)
+                self.assertEqual(env["SPARK_CONNECT_AUTHENTICATE_TOKEN"]["valueFrom"]["secretKeyRef"],
+                                 {"name": "auth-secret", "key": "bearer"})
+                if cert:
+                    proxy, = proxies
+                    self.assertEqual(proxy["ports"], [{"name": target, "containerPort": 15443}])
+                    self.assertNotIn("ports", driver)
+                    self.assertIn("exec", driver["startupProbe"])
+                    self.assertIn("exec", driver["readinessProbe"])
+                    self.assertIn("spark.connect.grpc.binding.address 127.0.0.1", configs["spark-defaults.conf"])
+                    self.assertIn("server driver 127.0.0.1:15002", configs["haproxy.cfg"])
+                    volume = next(v for v in pod["volumes"] if v["name"] == "tls")
+                    self.assertEqual(volume["secret"]["secretName"], cert)
+                else:
+                    self.assertFalse(proxies)
+                    self.assertNotIn("haproxy.cfg", configs)
+                    self.assertIn("spark.connect.grpc.binding.address 0.0.0.0", configs["spark-defaults.conf"])
+                    self.assertEqual(driver["ports"], [{"name": target, "containerPort": 15002}])
+
     def test_external_s3_and_default_credentials(self):
         docs = render({"catalog": {"metastoreUri": "thrift://hms.example:9083",
                                    "warehouse": "s3a://example/warehouse"}}, local=False)
@@ -184,6 +213,9 @@ class ConnectChartTest(unittest.TestCase):
 
     def test_invalid_values_rejected(self):
         invalid = [
+            {"spark": {"extraConf": {"spark.connect.authenticate.token": "test"}}},
+            {"auth": {"tokenKey": ""}},
+            {"tls": {"existingSecret": "certificate-without-auth"}},
             {"scratch": {"sizeLimit": 20}},
             {"spark": {"cores": 0}},
             {"spark": {"driverMemory": "oops"}},

@@ -70,6 +70,17 @@ readiness:
     table: ""
     column: ""
 
+# Existing Secret containing the shared Spark Connect bearer token.
+auth:
+  existingSecret: ""
+  tokenKey: token
+
+# Set a kubernetes.io/tls Secret to terminate TLS in the driver Pod.
+# Leave empty when an existing gRPC gateway terminates TLS.
+tls:
+  existingSecret: ""
+  image: haproxy:3.2-alpine@sha256:7816a9801a6846b912bc37e48529808e2fa87c3c47992441940f68e393ebcfeb
+
 # No public ingress or unauthenticated LoadBalancer is provisioned.
 service:
   port: 15002

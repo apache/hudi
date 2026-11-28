@@ -43,12 +43,54 @@ jobs:
         env:
           PYTHON: ${{ runner.temp }}/connect-venv/bin/python
         run: ./hudi-lakehouse/local-dev/scripts/test-spark-connect.sh --restart-endpoint --sql-matrix
+      - name: Verify authenticated SQL over TLS
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          cert_dir=$(mktemp -d)
+          trap 'rm -rf "$cert_dir"' EXIT
+          umask 077
+          openssl rand -hex 32 | tr -d '\n' > "$cert_dir/token"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=hudi-spark-connect' \
+            -addext 'subjectAltName=DNS:hudi-spark-connect,DNS:localhost' \
+            -keyout "$cert_dir/tls.key" -out "$cert_dir/tls.crt"
+          kubectl -n hudi-lakehouse create secret generic connect-ci-auth --from-file=psk="$cert_dir/token"
+          kubectl -n hudi-lakehouse create secret tls connect-ci-tls --cert="$cert_dir/tls.crt" --key="$cert_dir/tls.key"
+          helm upgrade hudi-spark-connect hudi-lakehouse/charts/hudi-spark-connect -n hudi-lakehouse \
+            --reuse-values --set auth.existingSecret=connect-ci-auth --set auth.tokenKey=psk \
+            --set tls.existingSecret=connect-ci-tls --wait --timeout 10m
+
+          # Use separate PySpark processes so gRPC loads each process's trusted roots.
+          client=(kubectl -n hudi-lakehouse exec -i deploy/hudi-spark-connect -c spark-connect --)
+          auth_test=hudi-lakehouse/local-dev/scripts/test-spark-connect-auth.py
+          "${client[@]}" env -u GRPC_DEFAULT_SSL_ROOTS_FILE_PATH \
+            python3 - hudi-spark-connect:15002 --expect-untrusted-ca < "$auth_test"
+          "${client[@]}" sh -c 'cat > /tmp/connect-ci.crt' < "$cert_dir/tls.crt"
+          "${client[@]}" env GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=/tmp/connect-ci.crt \
+            python3 - hudi-spark-connect:15002 < "$auth_test"
+
+          # The pinned Foundry driver takes the token as the ADBC database password.
+          kubectl -n hudi-lakehouse port-forward svc/hudi-spark-connect 15002:15002 > "$cert_dir/forward.log" 2>&1 &
+          forward_pid=$!
+          trap 'kill "$forward_pid" 2>/dev/null || true; rm -rf "$cert_dir"' EXIT
+          timeout 30 bash -c 'until grep -q "Forwarding from" "$1"; do sleep 0.2; done' _ "$cert_dir/forward.log"
+          SSL_CERT_FILE="$cert_dir/tls.crt" "$RUNNER_TEMP/connect-venv/bin/python" - "$cert_dir/token" <<'PY'
+          from pathlib import Path
+          import sys
+          from adbc_driver_manager import dbapi
+
+          options = {"uri": "spark://localhost:15002?api=connect&auth_type=token&tls=true",
+                     "password": Path(sys.argv[1]).read_text()}
+          with dbapi.connect(driver="spark", db_kwargs=options, autocommit=True) as conn, conn.cursor() as cursor:
+              cursor.execute("SELECT 1")
+              assert cursor.fetchone() == (1,)
+          PY
       - name: Diagnostics on failure
         if: failure()
         run: |
           kubectl -n hudi-lakehouse get pods -o wide || true
           kubectl -n hudi-lakehouse describe pods || true
-          kubectl -n hudi-lakehouse logs deploy/hudi-spark-connect --tail=200 || true
+          kubectl -n hudi-lakehouse logs deploy/hudi-spark-connect --all-containers --prefix --tail=200 || true
       - name: Delete isolated cluster
         if: always()
         run: kind delete cluster --name hudi-connect-ci --kubeconfig "$KUBECONFIG"

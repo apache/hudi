@@ -18,6 +18,10 @@ limitations under the License.
 Spark Connect is reachable inside the cluster at:
   {{ include "hudi-spark-connect.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
 
+{{ if .Values.auth.existingSecret -}}
+Clients must send a shared bearer token.
+{{ if .Values.tls.existingSecret }}Connect with TLS using a hostname on the server certificate.{{ else }}Terminate TLS at your gRPC gateway and protect its connection to this Service.{{ end }}
+{{ else -}}
 For local clients:
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "hudi-spark-connect.fullname" . }} 15002:{{ .Values.service.port }}
 
@@ -27,5 +31,6 @@ Foundry ADBC URI (client-side driver required):
 This endpoint has no client authentication/TLS configured. Use only on trusted
 networks; ClusterIP alone is not an authorization boundary. Do not publish it
 through an ingress/LoadBalancer without authentication and access controls.
+{{ end -}}
 One shared Spark driver (master: {{ include "hudi-spark-connect.master" . }}) serves all sessions. Restarting it loses
 sessions, not tables in the external metastore/object store.

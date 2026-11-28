@@ -42,7 +42,8 @@ def main():
     spark = None
     stage = 'connection'
     try:
-        spark = SparkSession.builder.remote('sc://127.0.0.1:15002').getOrCreate()
+        # PySpark uses local channel credentials for a bearer token on localhost.
+        spark = SparkSession.builder.remote('sc://localhost:15002').getOrCreate()
         stage = 'sql'
         if spark.sql('SELECT 1').collect()[0][0] != 1:
             raise ValueError('unexpected SQL result')
