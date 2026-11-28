@@ -201,8 +201,9 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public R get(Object key) {
-    if (inMemoryMap.containsKey(key)) {
-      return inMemoryMap.get(key);
+    R value = inMemoryMap.get(key);
+    if (value != null || inMemoryMap.containsKey(key)) {
+      return value;
     } else if (inDiskContainsKey(key)) {
       return diskBasedMap.get(key);
     }
@@ -211,25 +212,29 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public R put(T key, R value) {
-    if (this.inMemoryMap.containsKey(key)) {
+    if (this.currentInMemoryMapSize < this.maxInMemorySizeInBytes) {
+      // put returns null for both a new key and a key mapped to null, so a size change marks a new key
+      int sizeBefore = this.inMemoryMap.size();
       this.inMemoryMap.put(key, value);
-    } else if (this.currentInMemoryMapSize < this.maxInMemorySizeInBytes) {
-      if (this.estimatedPayloadSize == 0) {
-        // At first, use the sizeEstimate of a record being inserted into the spillable map.
-        // Note, the converter may over-estimate the size of a record in the JVM
-        this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
-      } else if (this.inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
-        this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
-        this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
-        if (this.inMemoryMap.size() / NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 1) {
-          log.info("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
+      if (this.inMemoryMap.size() != sizeBefore) {
+        if (this.estimatedPayloadSize == 0) {
+          // At first, use the sizeEstimate of a record being inserted into the spillable map.
+          // Note, the converter may over-estimate the size of a record in the JVM
+          this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
+        } else if (sizeBefore % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
+          this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
+          this.currentInMemoryMapSize = sizeBefore * this.estimatedPayloadSize;
+          if (sizeBefore / NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 1) {
+            log.info("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
+          }
+        }
+        this.currentInMemoryMapSize += this.estimatedPayloadSize;
+        // Remove the old version of the record from disk to avoid data duplication.
+        if (inDiskContainsKey(key)) {
+          diskBasedMap.remove(key);
         }
       }
-      this.currentInMemoryMapSize += this.estimatedPayloadSize;
-      // Remove the old version of the record from disk first to avoid data duplication.
-      if (inDiskContainsKey(key)) {
-        diskBasedMap.remove(key);
-      }
+    } else if (this.inMemoryMap.containsKey(key)) {
       this.inMemoryMap.put(key, value);
     } else {
       if (diskBasedMap == null) {
