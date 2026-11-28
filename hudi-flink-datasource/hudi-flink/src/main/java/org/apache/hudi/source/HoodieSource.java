@@ -97,6 +97,9 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
     this.readerFunctionSupplier = readerFunctionSupplier;
     this.splitComparator = splitComparator;
     this.metaClient = metaClient;
+    if (metaClient != null) {
+      scanContext.setTimelineTimeZone(metaClient.getTableConfig().getTimelineTimezone());
+    }
     this.recordEmitter = recordEmitter;
     this.tableName = metaClient == null
         ? scanContext.getConf().get(FlinkOptions.TABLE_NAME)

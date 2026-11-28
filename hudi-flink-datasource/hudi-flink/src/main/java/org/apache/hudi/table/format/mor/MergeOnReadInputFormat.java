@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -51,6 +52,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplitAssigner;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -136,7 +139,7 @@ public class MergeOnReadInputFormat
   protected final InternalSchemaManager internalSchemaManager;
 
   /**
-   * The table metadata client
+   * Metadata for the current split, shared by the metrics lookup and the record reader.
    */
   protected transient HoodieTableMetaClient metaClient;
 
@@ -173,12 +176,24 @@ public class MergeOnReadInputFormat
     return new Builder();
   }
 
+  @Nullable
+  public HoodieTimelineTimeZone getTimelineTimeZone() {
+    ensureMetaClient();
+    return metaClient == null ? null : metaClient.getTableConfig().getTimelineTimezone();
+  }
+
+  private void ensureMetaClient() {
+    if (metaClient == null) {
+      hadoopConf = HadoopConfigurations.getHadoopConf(conf);
+      metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
+    }
+  }
+
   @Override
   public void open(MergeOnReadInputSplit split) throws IOException {
     this.currentReadCount = 0L;
     this.closed = false;
-    this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
-    this.metaClient = StreamerUtil.metaClientForReader(this.conf, hadoopConf);
+    ensureMetaClient();
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
     this.iterator = initIterator(split);
     this.tableName = metaClient.getTableConfig().getTableName();
@@ -254,6 +269,7 @@ public class MergeOnReadInputFormat
       this.iterator.close();
     }
     this.iterator = null;
+    this.metaClient = null;
     this.closed = true;
   }
 

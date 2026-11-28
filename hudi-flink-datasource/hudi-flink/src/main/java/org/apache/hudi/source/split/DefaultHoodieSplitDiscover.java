@@ -69,6 +69,7 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
   private HoodieTableMetaClient getOrCreateMetaClient() {
     if (metaClient == null && StreamerUtil.tableExists(scanContext.getPath().toString(), hadoopConf)) {
       metaClient = StreamerUtil.createMetaClient(scanContext.getPath().toString(), hadoopConf);
+      scanContext.setTimelineTimeZone(metaClient.getTableConfig().getTimelineTimezone());
     }
     return metaClient;
   }

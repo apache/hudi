@@ -52,7 +52,7 @@ public class HoodieSourceReader<T> extends
           SourceReaderContext context,
           SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
           SerializableComparator<HoodieSourceSplit> splitComparator) {
-    this(createReaderMetrics(context, tableName), recordEmitter, scanContext, context, readerFunctionSupplier, splitComparator);
+    this(createReaderMetrics(context, tableName, scanContext), recordEmitter, scanContext, context, readerFunctionSupplier, splitComparator);
   }
 
   @VisibleForTesting
@@ -69,8 +69,8 @@ public class HoodieSourceReader<T> extends
     this.readerMetrics = readerMetrics;
   }
 
-  private static FlinkStreamReadMetrics createReaderMetrics(SourceReaderContext context, String tableName) {
-    FlinkStreamReadMetrics readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName);
+  private static FlinkStreamReadMetrics createReaderMetrics(SourceReaderContext context, String tableName, HoodieScanContext scanContext) {
+    FlinkStreamReadMetrics readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName, scanContext::getTimelineTimeZone);
     readerMetrics.registerMetrics();
     return readerMetrics;
   }

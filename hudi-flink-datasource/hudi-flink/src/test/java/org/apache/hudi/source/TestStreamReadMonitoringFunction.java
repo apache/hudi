@@ -21,13 +21,17 @@ package org.apache.hudi.source;
 import org.apache.hudi.adapter.SourceFunctionAdapter;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.utils.MockStreamingRuntimeContext;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -36,6 +40,8 @@ import org.apache.hudi.utils.TestUtils;
 
 import lombok.Getter;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.api.operators.StreamSource;
 import org.apache.flink.streaming.api.watermark.Watermark;
@@ -44,13 +50,17 @@ import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 
 import java.io.File;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Properties;
+import java.util.TimeZone;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -60,6 +70,11 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_SELF;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Test cases for {@link StreamReadMonitoringFunction}.
@@ -80,6 +95,67 @@ public class TestStreamReadMonitoringFunction {
     conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 2); // check every 2 seconds
 
     StreamerUtil.initTableIfNotExists(conf);
+  }
+
+  @Test
+  public void testIssuedInstantOnLateUtcTableAndAfterRestore(@TempDir File lateTable) throws Exception {
+    Configuration lateConf = TestConfigurations.getDefaultConf(lateTable.getAbsolutePath());
+    lateConf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    long expected = Instant.parse("2020-01-01T12:00:00Z").getEpochSecond();
+    CollectingSourceContext output = new CollectingSourceContext(new CountDownLatch(0));
+    TimeZone original = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
+    try {
+      OperatorSubtaskState state;
+      StreamReadMonitoringFunction monitor = TestUtils.getMonitorFunc(lateConf);
+      try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(monitor)) {
+        harness.setup();
+        OperatorMetricGroup metrics = captureMetrics(monitor);
+        harness.open();
+        monitor.monitorDirAndForwardSplits(output);
+        harness.snapshot(1, 1);
+        assertEquals(0L, gaugeValue(metrics, "issuedInstant"));
+
+        HoodieTableMetaClient client = StreamerUtil.initTableIfNotExists(lateConf);
+        Properties properties = new Properties();
+        properties.setProperty(HoodieTableConfig.TIMELINE_TIMEZONE.key(), "UTC");
+        HoodieTableConfig.update(client.getStorage(), client.getMetaPath(), properties);
+        HoodieTestTable.of(client).addCommit("20200101120000000", Option.of("20200101120001000"), Option.of(new HoodieCommitMetadata()));
+        monitor.monitorDirAndForwardSplits(output);
+        state = harness.snapshot(2, 2);
+        assertEquals(expected, gaugeValue(metrics, "issuedInstant"));
+      }
+
+      StreamReadMonitoringFunction restored = TestUtils.getMonitorFunc(lateConf);
+      try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(restored)) {
+        harness.setup();
+        OperatorMetricGroup metrics = captureMetrics(restored);
+        harness.initializeState(state);
+        harness.open();
+        harness.snapshot(3, 3);
+        assertEquals(0L, gaugeValue(metrics, "issuedInstant"));
+        restored.monitorDirAndForwardSplits(output);
+        harness.snapshot(4, 4);
+        assertEquals(expected, gaugeValue(metrics, "issuedInstant"));
+      }
+    } finally {
+      TimeZone.setDefault(original);
+    }
+  }
+
+  private static OperatorMetricGroup captureMetrics(StreamReadMonitoringFunction monitor) {
+    MockStreamingRuntimeContext context = mock(MockStreamingRuntimeContext.class);
+    OperatorMetricGroup metrics = mock(OperatorMetricGroup.class, RETURNS_SELF);
+    when(context.getMetricGroup()).thenReturn(metrics);
+    monitor.setRuntimeContext(context);
+    return metrics;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static long gaugeValue(OperatorMetricGroup metrics, String name) {
+    ArgumentCaptor<Gauge<Long>> gauge = ArgumentCaptor.forClass(Gauge.class);
+    verify(metrics).gauge(eq(name), gauge.capture());
+    return gauge.getValue().getValue();
   }
 
   @Test

@@ -321,7 +321,10 @@ public class StreamReadMonitoringFunction
     this.instantState.clear();
     if (this.issuedInstant != null) {
       this.instantState.add(this.issuedInstant);
-      this.readMetrics.setIssuedInstant(this.issuedInstant);
+      // A restored instant can be checkpointed before the first scan has found the table.
+      if (metaClient != null) {
+        readMetrics.setIssuedInstant(issuedInstant, metaClient.getTableConfig().getTimelineTimezone());
+      }
     }
     if (this.issuedOffset != null) {
       this.instantState.add(this.issuedOffset);

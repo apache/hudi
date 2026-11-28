@@ -107,7 +107,8 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
     if (!result.getSplits().isEmpty()) {
       splitProvider.onDiscoveredSplits(result.getSplits());
       if (enumeratorMetrics != null) {
-        position.get().getIssuedInstant().ifPresent(enumeratorMetrics::setIssuedInstant);
+        position.get().getIssuedInstant().ifPresent(
+            instant -> enumeratorMetrics.setIssuedInstant(instant, scanContext.getTimelineTimeZone()));
       }
       log.debug(
           "Added {} splits discovered between ({}, {}] to the assigner",

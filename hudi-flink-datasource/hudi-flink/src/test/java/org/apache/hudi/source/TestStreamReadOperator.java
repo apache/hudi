@@ -18,7 +18,9 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -46,6 +48,7 @@ import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -54,13 +57,21 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.configuration.FlinkOptions.READ_AS_STREAMING;
 import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE;
 import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE_MERGE_ON_READ;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 
 /**
  * Test cases for {@link StreamReadOperator}.
@@ -102,12 +113,13 @@ public class TestStreamReadOperator {
 
       List<MergeOnReadInputSplit> splits = generateSplits(func);
       assertThat("Should have 4 splits", splits.size(), is(4));
-      for (MergeOnReadInputSplit split : splits) {
-        // Process this element to enqueue to mail-box.
-        harness.processElement(split, -1);
-
-        // Run the mail-box once to read all records from the given split.
-        assertThat("Should process 1 split", processor.runMailboxStep());
+      try (MockedStatic<StreamerUtil> streamer = mockStatic(StreamerUtil.class, CALLS_REAL_METHODS)) {
+        for (MergeOnReadInputSplit split : splits) {
+          harness.processElement(split, -1);
+          assertTrue(processor.runMailboxStep());
+        }
+        // The metric lookup and open share a client for each split, and close clears it.
+        streamer.verify(() -> StreamerUtil.metaClientForReader(any(), any()), times(splits.size()));
       }
       // Assert the output has expected elements.
       TestData.assertRowDataEquals(harness.extractOutputValues(), TestData.DATA_SET_INSERT);
@@ -222,6 +234,31 @@ public class TestStreamReadOperator {
       assertThat(TestData.rowDataToString(harness.extractOutputValues()),
           is(getSplitExpected(splits.subList(2, 4), EXPECTED)));
     }
+  }
+
+  @Test
+  void testTimelineTimeZoneIsReadOnceTheTableExists(@TempDir File lateTableDir) throws Exception {
+    Configuration lateConf = TestConfigurations.getDefaultConf(lateTableDir.getAbsolutePath());
+    lateConf.set(READ_AS_STREAMING, true);
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE);
+    MergeOnReadInputFormat format = MergeOnReadInputFormat.builder()
+        .config(lateConf)
+        .tableState(new MergeOnReadTableState<MergeOnReadInputSplit>(
+            TestConfigurations.ROW_TYPE, TestConfigurations.ROW_TYPE, schema.toString(), schema.toString(), Collections.emptyList()))
+        .fieldTypes(TestConfigurations.ROW_DATA_TYPE.getChildren())
+        .limit(1000L)
+        .emitDelete(true)
+        .build();
+
+    assertNull(format.getTimelineTimeZone());
+
+    HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(lateConf);
+    Properties utcTimeline = new Properties();
+    utcTimeline.setProperty(HoodieTableConfig.TIMELINE_TIMEZONE.key(), HoodieTimelineTimeZone.UTC.toString());
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), utcTimeline);
+
+    assertEquals(HoodieTimelineTimeZone.UTC, format.getTimelineTimeZone(),
+        "The persisted timezone applies once the table exists");
   }
 
   private static String getSplitExpected(List<MergeOnReadInputSplit> splits, Map<String, String> expected) {

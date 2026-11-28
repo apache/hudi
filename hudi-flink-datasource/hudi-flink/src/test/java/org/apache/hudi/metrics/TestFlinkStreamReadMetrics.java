@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 
 import org.apache.flink.metrics.Gauge;
@@ -34,6 +35,9 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TimeZone;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -51,10 +55,7 @@ class TestFlinkStreamReadMetrics {
 
   @BeforeEach
   void setUp() throws ParseException {
-    metricGroup = new CapturingMetricGroup();
-    clock = new MutableClock(toInstant(INSTANT));
-    metrics = new FlinkStreamReadMetrics(metricGroup, "test_table", clock);
-    metrics.registerMetrics();
+    createMetrics(() -> HoodieTimelineTimeZone.LOCAL, toInstant(INSTANT));
   }
 
   @Test
@@ -145,6 +146,68 @@ class TestFlinkStreamReadMetrics {
     metrics.startSplit("split-1", "not-an-instant");
     assertEquals(0L, gauge("splitLatestCommit"));
     assertEquals(0L, gauge("splitLatestCommitDelay"));
+  }
+
+  @Test
+  void testUtcTimelineIsReadInUtcWhateverTheReaderJvmZone() {
+    withDefaultZone("Asia/Shanghai", () -> {
+      createMetrics(() -> HoodieTimelineTimeZone.UTC, Instant.parse("2026-11-11T10:10:00Z"));
+      long commitEpochSecond = Instant.parse("2026-11-11T10:00:00Z").getEpochSecond();
+
+      metrics.setIssuedInstant("20261111100000000");
+      metrics.startSplit("split-1", "20261111100000000");
+
+      assertEquals(600L, gauge("issuedInstantDelay"));
+      assertEquals(600L, gauge("splitLatestCommitDelay"));
+      assertEquals(commitEpochSecond, gauge("issuedInstant"));
+      assertEquals(commitEpochSecond, gauge("splitLatestCommit"));
+    });
+  }
+
+  @Test
+  void testLocalTimelineIsReadInTheZoneOfTheReader() {
+    withDefaultZone("Asia/Shanghai", () -> {
+      createMetrics(() -> HoodieTimelineTimeZone.LOCAL, Instant.parse("2026-11-11T10:10:00Z"));
+      long commitEpochSecond = Instant.parse("2026-11-11T10:00:00Z").getEpochSecond();
+
+      metrics.setIssuedInstant("20261111180000000");
+      metrics.startSplit("split-1", "20261111180000000");
+
+      assertEquals(600L, gauge("issuedInstantDelay"));
+      assertEquals(600L, gauge("splitLatestCommitDelay"));
+      assertEquals(commitEpochSecond, gauge("issuedInstant"));
+      assertEquals(commitEpochSecond, gauge("splitLatestCommit"));
+    });
+  }
+
+  @Test
+  void testSplitMetricsWaitForTheTableTimeZone() {
+    withDefaultZone("Asia/Shanghai", () -> {
+      AtomicReference<HoodieTimelineTimeZone> tableTimeZone = new AtomicReference<>();
+      createMetrics(tableTimeZone::get, Instant.parse("2026-11-11T10:10:00Z"));
+      metrics.startSplit("first", "20261111100000000");
+      assertEquals(0L, gauge("splitLatestCommit"));
+      tableTimeZone.set(HoodieTimelineTimeZone.UTC);
+      metrics.startSplit("second", "20261111100000000");
+      assertEquals(Instant.parse("2026-11-11T10:00:00Z").getEpochSecond(), gauge("splitLatestCommit"));
+    });
+  }
+
+  private void createMetrics(Supplier<HoodieTimelineTimeZone> timelineTimeZone, Instant now) {
+    metricGroup = new CapturingMetricGroup();
+    clock = new MutableClock(now);
+    metrics = new FlinkStreamReadMetrics(metricGroup, "test_table", timelineTimeZone, clock);
+    metrics.registerMetrics();
+  }
+
+  private static void withDefaultZone(String zoneId, Runnable body) {
+    TimeZone original = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
+    try {
+      body.run();
+    } finally {
+      TimeZone.setDefault(original);
+    }
   }
 
   private long gauge(String name) {
