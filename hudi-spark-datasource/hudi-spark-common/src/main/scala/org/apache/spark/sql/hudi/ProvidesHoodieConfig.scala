@@ -306,19 +306,17 @@ trait ProvidesHoodieConfig extends Logging {
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
+  /**
+   * An unset duplicate policy is left to the writer, which fails an insert of duplicate record keys into a table
+   * with a record key, except in the legacy insert mode flow, where the insert mode decides.
+   */
   def getDropDupsConfig(useLegacyInsertModeFlow: Boolean, incomingParams: Map[String, String]): Map[String, String] = {
+    val insertDupPolicyOpt = incomingParams.get(INSERT_DUP_POLICY.key())
     if (!useLegacyInsertModeFlow) {
-      Map(DataSourceWriteOptions.INSERT_DUP_POLICY.key() -> incomingParams.getOrElse(DataSourceWriteOptions.INSERT_DUP_POLICY.key(),
-        DataSourceWriteOptions.INSERT_DUP_POLICY.defaultValue()),
-        if (incomingParams.contains(DataSourceWriteOptions.INSERT_DUP_POLICY.key()) &&
-          incomingParams(DataSourceWriteOptions.INSERT_DUP_POLICY.key()) == DROP_INSERT_DUP_POLICY) {
-          DataSourceWriteOptions.INSERT_DROP_DUPS.key() -> "true"
-        } else {
-          DataSourceWriteOptions.INSERT_DROP_DUPS.key() -> "false"
-        }
-      )
+      insertDupPolicyOpt.map(INSERT_DUP_POLICY.key() -> _).toMap +
+        (INSERT_DROP_DUPS.key() -> insertDupPolicyOpt.contains(DROP_INSERT_DUP_POLICY).toString)
     } else {
-      Map()
+      Map(INSERT_DUP_POLICY.key() -> insertDupPolicyOpt.getOrElse(NONE_INSERT_DUP_POLICY))
     }
   }
 

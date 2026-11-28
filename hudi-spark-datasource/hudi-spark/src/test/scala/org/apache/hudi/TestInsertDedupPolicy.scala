@@ -21,18 +21,29 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieUpsertException
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieInsertException}
+import org.apache.hudi.index.HoodieGlobalSimpleIndex
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.metadata.MetadataPartitionType
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.tableformat.NativeBackedTestTableFormat
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
-import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.{Assertions, Test}
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
+
+import scala.collection.JavaConverters._
 
 class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
+  import TestInsertDedupPolicy._
+
   val firstInsertData: Seq[(Int, String, String, String, Double, Int)] = Seq(
     (10, "1", "rider-A", "driver-A", 19.10, 7),
     (10, "2", "rider-B", "driver-B", 27.70, 1),
@@ -84,7 +95,7 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
     if (dedupPolicy.equals(FAIL_INSERT_DUP_POLICY)) {
       // Write and check throws.
       Assertions.assertThrows(
-        classOf[HoodieUpsertException],
+        classOf[HoodieInsertException],
         () => insertsWithDup.write.format("hudi").options(opts).mode(SaveMode.Append).save(basePath)
       )
     } else {
@@ -118,9 +129,245 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
       TestInsertDedupPolicy.validate(expectedSecondaryKeyFilterDf, secondaryKeyFilterDf)
     }
   }
+
+  /**
+   * Without a policy, a record key that repeats among the inserted records fails an insert into a table of a
+   * non-native format, while one the table holds is looked up only through the record level index, which the test
+   * format does not serve; the fail policy checks the table. A native table keeps the duplicates.
+   */
+  @ParameterizedTest
+  @CsvSource(Array("COPY_ON_WRITE,SIMPLE", "MERGE_ON_READ,SIMPLE"))
+  def testDuplicateKeysFailInsertIntoTableWithRecordKeyByDefault(tableType: String, indexType: String): Unit = {
+    val keyed = s"$basePath/keyed"
+    val keyless = s"$basePath/keyless"
+    val key = Some("id")
+    val indexOpts = Map(
+      HoodieTableConfig.TABLE_FORMAT.key -> TEST_TABLE_FORMAT,
+      HoodieIndexConfig.INDEX_TYPE.key -> indexType,
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> (indexType == "RECORD_INDEX").toString)
+    def write(path: String, recordKey: Option[String], rows: Seq[(Int, String, Long)],
+              extraOpts: Map[String, String] = Map.empty, operation: String = INSERT_OPERATION_OPT_VAL): Unit =
+      spark.createDataFrame(rows).toDF("id", "name", "ts").write.format("hudi")
+        .option(TABLE_NAME.key, "test_table")
+        .option(TABLE_TYPE.key, tableType)
+        .option(OPERATION.key, operation)
+        .options(recordKey.map(RECORDKEY_FIELD.key -> _).toMap ++ extraOpts)
+        .mode(SaveMode.Append)
+        .save(path)
+    def assertDuplicateKey(duplicateKey: String, detail: String, failingWrite: => Unit): Unit = {
+      val root = HoodieTestUtils.getRootCause(Assertions.assertThrows(classOf[Throwable], () => failingWrite))
+      assertTrue(root.isInstanceOf[HoodieDuplicateKeyException], s"Expected a duplicate key failure, got: $root")
+      assertTrue(root.getMessage.startsWith(s"Duplicate key found for insert statement, key is: $duplicateKey. $detail"), root.getMessage)
+    }
+    def rows(path: String): Seq[(Int, String, Long)] = spark.read.format("hudi").load(path)
+      .select("id", "name", "ts").collect().map(r => (r.getInt(0), r.getString(1), r.getLong(2))).sorted.toSeq
+
+    assertDuplicateKey("1", DUPLICATE_INCOMING_KEY, write(keyed, key, Seq((1, "a1", 10L), (1, "a2", 11L)), indexOpts))
+    write(keyed, key, Seq((1, "a1", 10L)), indexOpts)
+    assertDuplicateKey("1", DUPLICATE_EXISTING_KEY,
+      write(keyed, key, Seq((1, "a2", 11L)), indexOpts + (INSERT_DUP_POLICY.key -> FAIL_INSERT_DUP_POLICY)))
+    val unchecked = s"$basePath/unchecked"
+    write(unchecked, key, Seq((1, "a1", 10L)), indexOpts)
+    write(unchecked, key, Seq((1, "a2", 11L)), indexOpts)
+    Assertions.assertEquals(Seq((1, "a1", 10L), (1, "a2", 11L)), rows(unchecked))
+    assertDuplicateKey("2", DUPLICATE_INCOMING_KEY, write(keyed, key, Seq((2, "b1", 20L), (3, "c1", 30L), (2, "b2", 21L)), indexOpts))
+    Assertions.assertEquals(Seq((1, "a1", 10L)), rows(keyed))
+
+    // An explicit policy wins, and an upsert is not turned into an insert by the default policy
+    write(keyed, key, Seq((1, "a2", 11L), (2, "b1", 20L)), indexOpts + (INSERT_DUP_POLICY.key -> DROP_INSERT_DUP_POLICY))
+    write(keyed, key, Seq((2, "b2", 21L)), indexOpts, UPSERT_OPERATION_OPT_VAL)
+    Assertions.assertEquals(Seq((1, "a1", 10L), (2, "b2", 21L)), rows(keyed))
+
+    val keptDuplicates = Seq((1, "a1", 10L), (1, "a2", 11L), (1, "a3", 12L))
+    val keyedWithoutPolicy = s"$basePath/keyed_without_policy"
+    val nonePolicy = Map(INSERT_DUP_POLICY.key -> NONE_INSERT_DUP_POLICY)
+    write(keyedWithoutPolicy, key, Seq((1, "a1", 10L), (1, "a2", 11L)), indexOpts ++ nonePolicy)
+    write(keyedWithoutPolicy, key, Seq((1, "a3", 12L)), indexOpts ++ nonePolicy)
+    Assertions.assertEquals(keptDuplicates, rows(keyedWithoutPolicy))
+
+    write(keyless, None, Seq((1, "a1", 10L), (1, "a2", 11L)), indexOpts)
+    write(keyless, None, Seq((1, "a3", 12L)), indexOpts)
+    Assertions.assertEquals(keptDuplicates, rows(keyless))
+
+    val native = s"$basePath/native"
+    val nativeOpts = indexOpts - HoodieTableConfig.TABLE_FORMAT.key
+    write(native, key, Seq((1, "a1", 10L), (1, "a2", 11L)), nativeOpts)
+    write(native, key, Seq((1, "a3", 12L)), nativeOpts)
+    Assertions.assertEquals(keptDuplicates, rows(native))
+
+    // On a native table the fail policy checks the inserted records as well, unless they are combined first
+    val failPolicy = Map(INSERT_DUP_POLICY.key -> FAIL_INSERT_DUP_POLICY)
+    assertDuplicateKey("5", DUPLICATE_INCOMING_KEY,
+      write(s"$basePath/native_fail", key, Seq((5, "a", 50L), (5, "b", 51L)), nativeOpts ++ failPolicy))
+    val nativeFailCombined = s"$basePath/native_fail_combined"
+    write(nativeFailCombined, key, Seq((5, "a", 50L), (5, "b", 51L)), nativeOpts ++ failPolicy ++ Map(
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> "true", HoodieTableConfig.ORDERING_FIELDS.key -> "ts"))
+    Assertions.assertEquals(Seq((5, "b", 51L)), rows(nativeFailCombined))
+
+    // The format name is matched as the table loads it, so a table configured as NATIVE is native too
+    val nativeByName = s"$basePath/native_by_name"
+    val nativeByNameOpts = indexOpts + (HoodieTableConfig.TABLE_FORMAT.key -> "NATIVE")
+    write(nativeByName, key, Seq((1, "a1", 10L), (1, "a2", 11L)), nativeByNameOpts)
+    write(nativeByName, key, Seq((1, "a3", 12L)), nativeByNameOpts)
+    Assertions.assertEquals(keptDuplicates, rows(nativeByName))
+  }
+
+  /**
+   * The inserted records are keyed as the index of the write keys them, and an index class takes precedence over
+   * the index type, so with a global index class a record key repeated across partitions fails the insert.
+   */
+  @Test
+  def testDuplicateKeysAcrossPartitionsFailInsertWithGlobalIndexClass(): Unit = {
+    val path = s"$basePath/global_index_class"
+    def write(rows: Seq[(Int, String, Long, String)]): Unit =
+      spark.createDataFrame(rows).toDF("id", "name", "ts", "part").write.format("hudi")
+        .option(TABLE_NAME.key, "test_table")
+        .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(PARTITIONPATH_FIELD.key, "part")
+        .option(HoodieTableConfig.TABLE_FORMAT.key, TEST_TABLE_FORMAT)
+        .option(HoodieIndexConfig.INDEX_TYPE.key, "SIMPLE")
+        .option(HoodieIndexConfig.INDEX_CLASS_NAME.key, classOf[GlobalSimpleIndexClass].getName)
+        .mode(SaveMode.Append)
+        .save(path)
+
+    write(Seq((1, "a1", 10L, "p1"), (2, "b1", 20L, "p2")))
+    val root = HoodieTestUtils.getRootCause(Assertions.assertThrows(classOf[Throwable],
+      () => write(Seq((3, "c1", 30L, "p1"), (3, "c2", 31L, "p2")))))
+    assertTrue(root.isInstanceOf[HoodieDuplicateKeyException], s"Expected a duplicate key failure, got: $root")
+    assertTrue(root.getMessage.startsWith(s"Duplicate key found for insert statement, key is: 3. $DUPLICATE_INCOMING_KEY"),
+      root.getMessage)
+    Assertions.assertEquals(Seq((1, "a1", 10L), (2, "b1", 20L)), spark.read.format("hudi").load(path)
+      .select("id", "name", "ts").collect().map(r => (r.getInt(0), r.getString(1), r.getLong(2))).sorted.toSeq)
+  }
+
+  /**
+   * The duplicate key check leaves the inserted records in their order, so a base file holds them in the order
+   * of the insert, into an empty table and into one whose records the check looks up. The check and the write
+   * read the inserted records once.
+   */
+  @ParameterizedTest
+  @CsvSource(Array("COPY_ON_WRITE,SIMPLE,", "COPY_ON_WRITE,GLOBAL_SIMPLE,", "COPY_ON_WRITE,BLOOM,",
+    "MERGE_ON_READ,SIMPLE,", "COPY_ON_WRITE,SIMPLE,fail", "MERGE_ON_READ,SIMPLE,fail"))
+  def testDuplicateKeyCheckKeepsOrderOfInsertedRecords(tableType: String, indexType: String, dedupPolicy: String): Unit = {
+    val opts = Map(
+      HoodieTableConfig.TABLE_FORMAT.key -> TEST_TABLE_FORMAT,
+      HoodieIndexConfig.INDEX_TYPE.key -> indexType,
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> (indexType == "RECORD_INDEX").toString,
+      // every insert writes a new base file
+      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key -> "0") ++ Option(dedupPolicy).map(INSERT_DUP_POLICY.key -> _)
+    val reads = spark.sparkContext.longAccumulator
+    def insert(ids: Seq[Int]): Unit = {
+      reads.reset()
+      val rows = spark.sparkContext.parallelize(ids.map(id => (id, s"name$id", id.toLong)), 1).map { row =>
+        reads.add(1)
+        row
+      }
+      spark.createDataFrame(rows).toDF("id", "name", "ts")
+        .write.format("hudi")
+        .option(TABLE_NAME.key, "test_table")
+        .option(TABLE_TYPE.key, tableType)
+        .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .options(opts)
+        .mode(SaveMode.Append)
+        .save(basePath)
+      Assertions.assertEquals(ids.size, reads.value)
+    }
+    def idsInBaseFileOf(id: Int): Seq[Int] = {
+      val baseFile = spark.read.format("hudi").load(basePath).where(s"id = $id").select("_hoodie_file_name").head.getString(0)
+      spark.read.parquet(s"$basePath/$baseFile").select("id").collect().map(_.getInt(0)).toSeq
+    }
+
+    // two permutations of 40 ids each, neither in the order of the ids
+    val firstIds = (1 to 40).map(i => i * 17 % 41)
+    val secondIds = (1 to 40).map(i => 100 + i * 23 % 41)
+    insert(firstIds)
+    Assertions.assertEquals(firstIds, idsInBaseFileOf(firstIds.head))
+    insert(secondIds)
+    Assertions.assertEquals(secondIds, idsInBaseFileOf(secondIds.head))
+  }
+
+  /**
+   * With a built record level index, an insert without a policy into a table of a non-native format fails on a key
+   * the table holds, and the index sees a delete of the key, which a merge-on-read table writes to a log file.
+   */
+  @ParameterizedTest
+  @CsvSource(Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testInsertWithBuiltRecordIndexChecksKeysInTable(tableType: String): Unit = {
+    val path = s"$basePath/record_index_built"
+    def write(rows: Seq[(Int, String, Long)], operation: String): Unit =
+      spark.createDataFrame(rows).toDF("id", "name", "ts").write.format("hudi")
+        .option(TABLE_NAME.key, "test_table")
+        .option(TABLE_TYPE.key, tableType)
+        .option(OPERATION.key, operation)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(HoodieTableConfig.TABLE_FORMAT.key, NativeBackedTestTableFormat.NAME)
+        .option(HoodieIndexConfig.INDEX_TYPE.key, "RECORD_INDEX")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key, "true")
+        .option(HoodieCompactionConfig.INLINE_COMPACT.key, "false")
+        .mode(SaveMode.Append)
+        .save(path)
+    def rows(): Seq[(Int, String, Long)] = spark.read.format("hudi").load(path)
+      .select("id", "name", "ts").collect().map(r => (r.getInt(0), r.getString(1), r.getLong(2))).sorted.toSeq
+
+    write(Seq((1, "a1", 10L), (2, "b1", 20L)), INSERT_OPERATION_OPT_VAL)
+    val metaClient = HoodieTestUtils.createMetaClient(storageConf(), path)
+    Assertions.assertEquals(NativeBackedTestTableFormat.NAME, metaClient.getTableFormat.getName)
+    assertTrue(metaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
+    val root = HoodieTestUtils.getRootCause(Assertions.assertThrows(classOf[Throwable],
+      () => write(Seq((1, "a2", 11L), (3, "c1", 30L)), INSERT_OPERATION_OPT_VAL)))
+    assertTrue(root.isInstanceOf[HoodieDuplicateKeyException], s"Expected a duplicate key failure, got: $root")
+    assertTrue(root.getMessage.startsWith(s"Duplicate key found for insert statement, key is: 1. $DUPLICATE_EXISTING_KEY"),
+      root.getMessage)
+    Assertions.assertEquals(Seq((1, "a1", 10L), (2, "b1", 20L)), rows())
+
+    write(Seq((1, "a1", 10L)), DELETE_OPERATION_OPT_VAL)
+    if (tableType == "MERGE_ON_READ") {
+      metaClient.reloadActiveTimeline()
+      val deleteCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants.lastInstant.get
+      val deleteStats = metaClient.getActiveTimeline.readCommitMetadata(deleteCommit).getWriteStats.asScala
+      assertTrue(deleteStats.nonEmpty && deleteStats.forall(stat => FSUtils.isLogFile(new StoragePath(stat.getPath).getName)),
+        s"Expected the delete in log files: ${deleteStats.map(_.getPath)}")
+    }
+    write(Seq((1, "a2", 11L)), INSERT_OPERATION_OPT_VAL)
+    Assertions.assertEquals(Seq((1, "a2", 11L), (2, "b1", 20L)), rows())
+  }
+
+  /**
+   * Until the record index of a merge-on-read table is built, the index falls back to one that reads the keys of the
+   * base files, which does not see a delete in a log file, so an insert of a deleted key must not fail by default.
+   */
+  @Test
+  def testInsertOfDeletedKeyIntoMergeOnReadTableBeforeRecordIndexIsBuilt(): Unit = {
+    val path = s"$basePath/mor_record_index_not_built"
+    def write(rows: Seq[(Int, String, Long)], operation: String): Unit =
+      spark.createDataFrame(rows).toDF("id", "name", "ts").write.format("hudi")
+        .option(TABLE_NAME.key, "test_table")
+        .option(TABLE_TYPE.key, "MERGE_ON_READ")
+        .option(OPERATION.key, operation)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(HoodieTableConfig.TABLE_FORMAT.key, TEST_TABLE_FORMAT)
+        .option(HoodieIndexConfig.INDEX_TYPE.key, "RECORD_INDEX")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key, "false")
+        .option(HoodieCompactionConfig.INLINE_COMPACT.key, "false")
+        .mode(SaveMode.Append)
+        .save(path)
+
+    write(Seq((1, "a1", 10L), (2, "b1", 20L)), INSERT_OPERATION_OPT_VAL)
+    write(Seq((1, "a1", 10L)), DELETE_OPERATION_OPT_VAL)
+    write(Seq((1, "a2", 11L)), INSERT_OPERATION_OPT_VAL)
+    Assertions.assertEquals(Seq((1, "a2", 11L), (2, "b1", 20L)), spark.read.format("hudi").load(path)
+      .select("id", "name", "ts").collect().map(r => (r.getInt(0), r.getString(1), r.getLong(2))).sorted.toSeq)
+  }
 }
 
 object TestInsertDedupPolicy {
+  val DUPLICATE_EXISTING_KEY = "The table already has a record with this key."
+  val DUPLICATE_INCOMING_KEY = "More than one inserted record has this key."
+  // A non-native table format, whose tables fail an insert of duplicate record keys by default
+  val TEST_TABLE_FORMAT = "test-format"
+
   def provideParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
       Arguments.of("MERGE_ON_READ", NONE_INSERT_DUP_POLICY),
@@ -139,4 +386,8 @@ object TestInsertDedupPolicy {
   }
 }
 
-
+/**
+ * A global index set through hoodie.index.class.
+ */
+class GlobalSimpleIndexClass(config: HoodieWriteConfig)
+  extends HoodieGlobalSimpleIndex(config, HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config))
