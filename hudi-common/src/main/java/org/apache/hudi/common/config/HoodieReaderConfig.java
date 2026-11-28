@@ -73,8 +73,10 @@ public class HoodieReaderConfig extends HoodieConfig {
       .noDefaultValue("10% of the JVM heap, at most 512 MB")
       .markAdvanced()
       .sinceVersion("1.3.0")
-      .withDocumentation("Bytes the log read-ahead of all merge-on-read log scans in one JVM holds at a time. A scan "
-          + "whose next fetch does not fit reads that file or block in line instead of waiting.");
+      .withDocumentation("Bytes the log read-ahead of all merge-on-read log scans in one JVM may hold for a scan with "
+          + "this setting to fetch ahead. A scan whose next fetch does not fit reads that file or block in line instead "
+          + "of waiting. The setting applies to the scans that set it and can only lower the JVM-wide cap of 10% of "
+          + "the JVM heap, at most 512 MB.");
 
   public static final ConfigProperty<Integer> LSM_SORT_MERGE_SPILL_THRESHOLD = ConfigProperty
       .key("hoodie.lsm.sort.merge.spill.threshold")

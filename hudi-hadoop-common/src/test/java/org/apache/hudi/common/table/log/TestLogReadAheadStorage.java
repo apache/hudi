@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -49,6 +50,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.io.ByteArraySeekableDataInputStream;
+import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -69,14 +72,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.DATA_GEN;
+import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.RECORD_KEY_INDEX;
+import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.RIDER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
 
 /**
  * Reads multi-file, multi-block log files through {@link LogReadAheadStorage} with windows of different sizes and
@@ -128,9 +139,8 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
     long largest = logFiles.stream().mapToLong(HoodieLogFile::getFileSize).max().getAsLong();
     assertTrue(largest < total / 2, "The window between the largest file and the total needs room");
 
-    List<String> expected = readMerged(fileSlice, storage, useRecordPositions, Long.MAX_VALUE);
-    // Keys 1-15 and 190-195 are deleted
-    assertEquals(BASE_RECORDS - 21, expected.size());
+    List<String> expected = readSerial(fileSlice, useRecordPositions);
+    assertEquals(expectedRiders(), readSerialRiders(fileSlice, useRecordPositions));
 
     // Smaller than every file: no file is fetched whole, and the block contents are fetched ahead of the merge
     LogReadAheadStorage.Stats small = assertReadAheadMatches(fileSlice, useRecordPositions, smallest / 2, expected);
@@ -149,20 +159,67 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
   }
 
   @Test
-  void testExhaustedExecutorCapReadsInLine() throws Exception {
+  void testExecutorLimitOnlyAppliesToItsScan() throws Exception {
     FileSlice fileSlice = writeFileSlice(false);
-    List<String> expected = readMerged(fileSlice, storage, false, Long.MAX_VALUE);
-    long cap = LogReadAheadStorage.getExecutorBudget();
-    LogReadAheadStorage.setExecutorBudget(0);
+    List<String> expected = readSerial(fileSlice, false);
+    LogReadAheadStorage.Stats limited = assertReadAheadMatches(fileSlice, false, Long.MAX_VALUE / 4, 0, expected);
+    assertEquals(0, limited.filesFetched);
+    assertEquals(0, limited.blocksFetched);
+    assertTrue(limited.executorCapDenials > 0);
+    assertTrue(limited.inlineReads > 0);
+
+    // A reader configured with no executor-wide read-ahead leaves the scans after it alone
+    assertEquals(expected, readMerged(fileSlice, storage, false, Long.MAX_VALUE,
+        HoodieReaderConfig.LOG_READ_AHEAD_EXECUTOR_BYTES.key(), "0"));
+    LogReadAheadStorage.Stats unlimited = assertReadAheadMatches(fileSlice, false, Long.MAX_VALUE / 4, Long.MAX_VALUE, expected);
+    assertEquals(logFilesOf(fileSlice).size(), unlimited.filesFetched);
+    assertEquals(0, unlimited.executorCapDenials);
+  }
+
+  /**
+   * A fetch holds its bytes against the executor-wide cap until it ends, even after its scan is closed, while a fetch
+   * that is still queued gives them back when its scan is closed.
+   */
+  @Test
+  void testFetchHoldsItsBytesUntilItEnds() throws Exception {
+    int fileSize = 64 * 1024;
+    int running = LogReadAheadStorage.FETCH_THREADS;
+    long limit = (long) running * fileSize;
+    CountDownLatch started = new CountDownLatch(running);
+    CountDownLatch proceed = new CountDownLatch(1);
+    HoodieStorage blocking = spy(storage);
+    doAnswer(invocation -> {
+      started.countDown();
+      assertTrue(proceed.await(60, TimeUnit.SECONDS));
+      return new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(new byte[fileSize]));
+    }).when(blocking).openSeekable(any(StoragePath.class), anyBoolean());
+
+    List<HoodieLogFile> busy = IntStream.rangeClosed(1, running)
+        .mapToObj(version -> syntheticLogFile(version, fileSize)).collect(Collectors.toList());
     try {
-      LogReadAheadStorage.Stats stats = assertReadAheadMatches(fileSlice, false, Long.MAX_VALUE / 4, expected);
-      assertEquals(0, stats.filesFetched);
-      assertEquals(0, stats.blocksFetched);
-      assertTrue(stats.executorCapDenials > 0);
-      assertTrue(stats.inlineReads > 0);
+      LogReadAheadStorage first = LogReadAheadStorage.create(blocking, busy, limit, limit);
+      assertTrue(started.await(60, TimeUnit.SECONDS));
+      assertEquals(running, first.getStats().filesFetched);
+      first.close();
+      assertEquals(limit, LogReadAheadStorage.executorBytesInUse());
+
+      // The fetches of the closed scan still count against the cap
+      try (LogReadAheadStorage second = LogReadAheadStorage.create(
+          blocking, Collections.singletonList(syntheticLogFile(running + 1, fileSize)), limit, limit)) {
+        assertEquals(0, second.getStats().filesFetched);
+        assertEquals(1, second.getStats().executorCapDenials);
+      }
+      // Every fetch thread is busy, so this fetch is queued and its bytes come back on close
+      try (LogReadAheadStorage third = LogReadAheadStorage.create(
+          blocking, Collections.singletonList(syntheticLogFile(running + 2, fileSize)), limit, Long.MAX_VALUE)) {
+        assertEquals(1, third.getStats().filesFetched);
+        assertEquals(limit + fileSize, LogReadAheadStorage.executorBytesInUse());
+      }
+      assertEquals(limit, LogReadAheadStorage.executorBytesInUse());
     } finally {
-      LogReadAheadStorage.setExecutorBudget(cap);
+      proceed.countDown();
     }
+    awaitExecutorBytesReturned();
   }
 
   @ParameterizedTest
@@ -173,10 +230,10 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
     long total = fileSlice.getLogFiles().mapToLong(HoodieLogFile::getFileSize).sum();
 
     long mergeBudget = 4 * 1024;
-    try (LogReadAheadStorage readAhead = LogReadAheadStorage.create(storage, logFilesOf(fileSlice), total / 2)) {
+    try (LogReadAheadStorage readAhead = LogReadAheadStorage.create(storage, logFilesOf(fileSlice), total / 2, Long.MAX_VALUE)) {
       assertEquals(expected, readMerged(fileSlice, readAhead, useRecordPositions, mergeBudget));
     }
-    assertEquals(0, LogReadAheadStorage.executorBytesInUse());
+    awaitExecutorBytesReturned();
   }
 
   @Test
@@ -185,7 +242,7 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
     HoodieLogFile logFile = logFilesOf(fileSlice).get(0);
     long size = logFile.getFileSize();
     for (long window : new long[] {Long.MAX_VALUE / 4, 0}) {
-      try (LogReadAheadStorage readAhead = LogReadAheadStorage.create(storage, Collections.singletonList(logFile), window);
+      try (LogReadAheadStorage readAhead = LogReadAheadStorage.create(storage, Collections.singletonList(logFile), window, Long.MAX_VALUE);
            SeekableDataInputStream in = readAhead.openSeekable(logFile.getPath(), 4096, true)) {
         byte[] whole = new byte[(int) size];
         in.readFully(whole);
@@ -209,7 +266,8 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
     List<String> expected = readBlocks(storage, logFile, null);
     // A recorded size past the end of the file makes the whole-file fetch fail
     HoodieLogFile oversized = new HoodieLogFile(logFile.getPath(), logFile.getFileSize() + 100);
-    try (LogReadAheadStorage readAhead = LogReadAheadStorage.create(storage, Collections.singletonList(oversized), Long.MAX_VALUE / 4)) {
+    try (LogReadAheadStorage readAhead = LogReadAheadStorage.create(
+        storage, Collections.singletonList(oversized), Long.MAX_VALUE / 4, Long.MAX_VALUE)) {
       assertEquals(expected, readBlocks(readAhead, oversized, null));
       assertEquals(1, readAhead.getStats().filesFetched);
       assertTrue(readAhead.getStats().inlineReads > 0);
@@ -226,7 +284,7 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
       expected.addAll(readBlocks(storage, logFile, null));
     }
     long smallest = logFiles.stream().mapToLong(HoodieLogFile::getFileSize).min().getAsLong();
-    try (LogReadAheadStorage readAhead = LogReadAheadStorage.create(storage, logFiles, smallest - 1)) {
+    try (LogReadAheadStorage readAhead = LogReadAheadStorage.create(storage, logFiles, smallest - 1, Long.MAX_VALUE)) {
       List<String> actual = new ArrayList<>();
       List<HoodieLogBlock> blocks = new ArrayList<>();
       for (HoodieLogFile logFile : logFiles) {
@@ -246,19 +304,39 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
       assertTrue(stats.blocksFetched > 0);
       assertTrue(stats.peakHeldBytes <= smallest - 1);
     }
-    assertEquals(0, LogReadAheadStorage.executorBytesInUse());
+    awaitExecutorBytesReturned();
   }
 
   private LogReadAheadStorage.Stats assertReadAheadMatches(FileSlice fileSlice, boolean useRecordPositions, long window,
                                                            List<String> expected) throws Exception {
+    return assertReadAheadMatches(fileSlice, useRecordPositions, window, Long.MAX_VALUE, expected);
+  }
+
+  private LogReadAheadStorage.Stats assertReadAheadMatches(FileSlice fileSlice, boolean useRecordPositions, long window,
+                                                           long executorLimit, List<String> expected) throws Exception {
     LogReadAheadStorage.Stats stats;
-    try (LogReadAheadStorage readAhead = LogReadAheadStorage.create(storage, logFilesOf(fileSlice), window)) {
+    try (LogReadAheadStorage readAhead = LogReadAheadStorage.create(storage, logFilesOf(fileSlice), window, executorLimit)) {
       assertEquals(expected, readMerged(fileSlice, readAhead, useRecordPositions, Long.MAX_VALUE), "window " + window);
       stats = readAhead.getStats();
       assertTrue(stats.peakHeldBytes <= window, "Held " + stats.peakHeldBytes + " bytes in a window of " + window);
     }
-    assertEquals(0, LogReadAheadStorage.executorBytesInUse());
+    awaitExecutorBytesReturned();
     return stats;
+  }
+
+  /**
+   * A fetch the scan did not consume may still be running when the scan is closed; it returns its bytes when it ends.
+   */
+  private static void awaitExecutorBytesReturned() throws InterruptedException {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+    while (LogReadAheadStorage.executorBytesInUse() != 0 && System.nanoTime() < deadline) {
+      Thread.sleep(10);
+    }
+    assertEquals(0, LogReadAheadStorage.executorBytesInUse());
+  }
+
+  private HoodieLogFile syntheticLogFile(int version, long size) {
+    return new HoodieLogFile(new StoragePath(basePath, "." + FILE_ID + "_" + BASE_INSTANT + ".log." + version + "_1-0-1"), size);
   }
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -266,8 +344,11 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
   // ---------------------------------------------------------------------------------------------------------------
 
   private HoodieFileGroupReader<IndexedRecord> newReader(FileSlice fileSlice, HoodieStorage readStorage,
-                                                         boolean useRecordPositions, long mergeBudget) {
+                                                         boolean useRecordPositions, long mergeBudget, String... extraProps) {
     TypedProperties props = new TypedProperties();
+    for (int i = 0; i < extraProps.length; i += 2) {
+      props.setProperty(extraProps[i], extraProps[i + 1]);
+    }
     props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(Math.min(mergeBudget, 1024L * 1024 * 1000)));
     props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME);
     props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.BITCASK.name());
@@ -286,10 +367,17 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
         .build();
   }
 
+  /**
+   * Reads the file slice with the log read-ahead turned off.
+   */
+  private List<String> readSerial(FileSlice fileSlice, boolean useRecordPositions) throws IOException {
+    return readMerged(fileSlice, storage, useRecordPositions, Long.MAX_VALUE, HoodieReaderConfig.LOG_READ_AHEAD_BYTES.key(), "0");
+  }
+
   private List<String> readMerged(FileSlice fileSlice, HoodieStorage readStorage, boolean useRecordPositions,
-                                  long mergeBudget) throws IOException {
+                                  long mergeBudget, String... extraProps) throws IOException {
     List<String> rows = new ArrayList<>();
-    try (HoodieFileGroupReader<IndexedRecord> reader = newReader(fileSlice, readStorage, useRecordPositions, mergeBudget);
+    try (HoodieFileGroupReader<IndexedRecord> reader = newReader(fileSlice, readStorage, useRecordPositions, mergeBudget, extraProps);
          ClosableIterator<IndexedRecord> iterator = reader.getClosableIterator()) {
       while (iterator.hasNext()) {
         rows.add(iterator.next().toString());
@@ -297,6 +385,34 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
     }
     Collections.sort(rows);
     return rows;
+  }
+
+  /**
+   * The rider of each key that survives the merge of {@link #writeFileSlice}, which names the instant that wrote it.
+   */
+  private static Map<String, String> expectedRiders() {
+    Map<String, String> riders = new HashMap<>();
+    for (int key = 16; key <= BASE_RECORDS; key++) {
+      if (key >= 190 && key <= 195) {
+        continue;
+      }
+      String instant = key >= 180 ? "006" : key >= 150 ? "003" : key > 120 ? BASE_INSTANT : key >= 20 && key <= 70 ? "005" : "002";
+      riders.put(String.valueOf(key), "rider-" + instant + "-" + key);
+    }
+    return riders;
+  }
+
+  private Map<String, String> readSerialRiders(FileSlice fileSlice, boolean useRecordPositions) throws IOException {
+    Map<String, String> riders = new HashMap<>();
+    try (HoodieFileGroupReader<IndexedRecord> reader = newReader(fileSlice, storage, useRecordPositions, Long.MAX_VALUE,
+             HoodieReaderConfig.LOG_READ_AHEAD_BYTES.key(), "0");
+         ClosableIterator<IndexedRecord> iterator = reader.getClosableIterator()) {
+      while (iterator.hasNext()) {
+        IndexedRecord record = iterator.next();
+        riders.put(record.get(RECORD_KEY_INDEX).toString(), record.get(HOODIE_SCHEMA.getField(RIDER).get().pos()).toString());
+      }
+    }
+    return riders;
   }
 
   private static List<String> readBlocks(HoodieStorage readStorage, HoodieLogFile logFile, List<HoodieLogBlock> out)
@@ -403,7 +519,7 @@ class TestLogReadAheadStorage extends HoodieFileGroupReaderTestHarness {
   private HoodieDataBlock dataBlock(String instantTime, int from, int to, long timestamp, boolean writePositions) {
     List<HoodieRecord> records = records(from, to, instantTime, timestamp).stream()
         .map(record -> (HoodieRecord) new HoodieAvroIndexedRecord(record,
-            new HoodieRecordLocation("", "", keyToPosition.get(record.get(HoodieFileSliceTestUtils.RECORD_KEY_INDEX).toString()))))
+            new HoodieRecordLocation("", "", keyToPosition.get(record.get(RECORD_KEY_INDEX).toString()))))
         .collect(Collectors.toList());
     return new HoodieAvroDataBlock(records, header(instantTime, writePositions), HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }

@@ -46,7 +46,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -69,9 +68,11 @@ import java.util.stream.Collectors;
  * The merge therefore runs on one block while the next blocks are on the way, and never holds more than the window
  * in fetched bytes. When everything fits in the window, each file is read once, all at the start.
  *
- * <p>The bytes held by all instances in the JVM are capped as well ({@link #setExecutorBudget}). A file or block that
- * cannot be fetched ahead, because it is larger than the window, because the cap is used up when the scan reaches
- * it, or because its fetch failed, is read in line through the wrapped storage, as without this storage.
+ * <p>The bytes held by all instances in the JVM are capped as well ({@link #defaultExecutorBudget}), and a scan can
+ * lower that cap for its own fetches. A fetch holds its bytes against both caps until it ends, even when the scan
+ * drops it while it runs. A file or block that cannot be fetched ahead, because it is larger than the window, because
+ * the cap is used up when the scan reaches it, or because its fetch failed, is read in line through the wrapped
+ * storage, as without this storage.
  *
  * <p>Streams over fetched bytes behave as file system streams do at the end of a file: a read there returns -1, and a
  * seek past it throws {@link EOFException}.
@@ -80,13 +81,15 @@ import java.util.stream.Collectors;
 public final class LogReadAheadStorage extends HoodieStorage {
 
   // Fetches wait on object store latency rather than on CPU, so a few per core keep the cores busy
-  private static final int FETCH_THREADS = Math.max(8, 4 * Runtime.getRuntime().availableProcessors());
+  static final int FETCH_THREADS = Math.max(8, 4 * Runtime.getRuntime().availableProcessors());
   private static final AtomicInteger THREAD_ID = new AtomicInteger();
   private static final ThreadPoolExecutor FETCH_POOL = createFetchPool();
   private static final ExecutorBudget EXECUTOR_BUDGET = new ExecutorBudget(defaultExecutorBudget());
 
   private final HoodieStorage delegate;
   private final long windowBytes;
+  // The bytes the read-ahead of all scans may hold for this scan to start a fetch
+  private final long executorLimitBytes;
   // Log files in the order the scan reads them
   private final List<FileEntry> files;
   private final Map<String, FileEntry> filesByPath;
@@ -101,10 +104,11 @@ public final class LogReadAheadStorage extends HoodieStorage {
   private long retainedBytes;
   private boolean closed;
 
-  private LogReadAheadStorage(HoodieStorage delegate, List<HoodieLogFile> logFiles, long windowBytes) {
+  private LogReadAheadStorage(HoodieStorage delegate, List<HoodieLogFile> logFiles, long windowBytes, long executorLimitBytes) {
     super(delegate.getConf());
     this.delegate = delegate;
     this.windowBytes = Math.max(0L, windowBytes);
+    this.executorLimitBytes = Math.max(0L, executorLimitBytes);
     this.files = new ArrayList<>(logFiles.size());
     this.filesByPath = new HashMap<>();
     for (HoodieLogFile logFile : logFiles) {
@@ -126,13 +130,16 @@ public final class LogReadAheadStorage extends HoodieStorage {
 
   /**
    * Starts reading the given log files ahead of the log scan, holding at most {@code windowBytes} of them at a time.
+   * The scan starts a fetch only while the read-ahead of all scans in this JVM holds less than both
+   * {@code executorLimitBytes} and the JVM-wide cap.
    */
-  public static LogReadAheadStorage create(HoodieStorage delegate, List<HoodieLogFile> logFiles, long windowBytes) {
+  public static LogReadAheadStorage create(HoodieStorage delegate, List<HoodieLogFile> logFiles, long windowBytes,
+                                           long executorLimitBytes) {
     List<HoodieLogFile> ordered = logFiles.stream()
         .filter(logFile -> !logFile.isCDC())
         .sorted(HoodieLogFile.getLogFileComparator())
         .collect(Collectors.toList());
-    LogReadAheadStorage storage = new LogReadAheadStorage(delegate, ordered, windowBytes);
+    LogReadAheadStorage storage = new LogReadAheadStorage(delegate, ordered, windowBytes, executorLimitBytes);
     synchronized (storage) {
       storage.fillWindow();
     }
@@ -145,18 +152,6 @@ public final class LogReadAheadStorage extends HoodieStorage {
    */
   public static long defaultExecutorBudget() {
     return Math.min(512L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 10);
-  }
-
-  /**
-   * Caps the bytes held by the read-ahead of all log scans in this JVM. Scans keep reading in line while the cap is
-   * used up.
-   */
-  public static void setExecutorBudget(long capBytes) {
-    EXECUTOR_BUDGET.cap = Math.max(0L, capBytes);
-  }
-
-  static long getExecutorBudget() {
-    return EXECUTOR_BUDGET.cap;
   }
 
   /**
@@ -274,7 +269,7 @@ public final class LogReadAheadStorage extends HoodieStorage {
     if (heldBytes + unit.length > windowBytes) {
       return false;
     }
-    if (!EXECUTOR_BUDGET.tryAcquire(unit.length)) {
+    if (!EXECUTOR_BUDGET.tryAcquire(unit.length, executorLimitBytes)) {
       stats.executorCapDenials++;
       return false;
     }
@@ -292,37 +287,53 @@ public final class LogReadAheadStorage extends HoodieStorage {
   }
 
   private void runFetch(Unit unit) {
-    CompletableFuture<byte[]> future = unit.bytes;
-    if (future == null || !unit.claimed.compareAndSet(false, true)) {
-      return;
+    CompletableFuture<byte[]> future;
+    synchronized (this) {
+      future = unit.bytes;
+      if (future == null || unit.fetchClaimed) {
+        return;
+      }
+      unit.fetchClaimed = true;
+      unit.fetchRunning = true;
     }
+    byte[] bytes = null;
+    Throwable failure = null;
     try {
-      byte[] bytes = new byte[unit.length];
+      bytes = new byte[unit.length];
       try (SeekableDataInputStream in = delegate.openSeekable(unit.file.path, false)) {
         if (unit.offset > 0) {
           in.seek(unit.offset);
         }
         in.readFully(bytes, 0, bytes.length);
       }
-      future.complete(bytes);
     } catch (Throwable t) {
-      // Release before completing, so that the bytes are back by the time the scan sees the failure
-      onFetchFailed(unit, future);
-      future.completeExceptionally(t);
+      failure = t;
     }
+    onFetchEnd(unit, future, bytes, failure);
   }
 
   /**
-   * Returns the bytes of a failed fetch to the window and the executor-wide cap; the scan reads the unit in line.
+   * Hands the bytes of a fetch to the scan, or returns them to the window and the executor-wide cap when the scan
+   * dropped the unit while the fetch ran. After a failure the scan reads the unit in line.
    */
-  private synchronized void onFetchFailed(Unit unit, CompletableFuture<byte[]> future) {
-    if (unit.bytes == future && (unit.state == State.FETCHING || unit.state == State.RETAINED)) {
-      boolean wasRetained = unit.state == State.RETAINED;
-      release(unit);
-      unit.state = wasRetained || unit.wholeFile ? State.RELEASED : State.INLINE;
-      stats.inlineReads++;
+  private synchronized void onFetchEnd(Unit unit, CompletableFuture<byte[]> future, byte[] bytes, Throwable failure) {
+    unit.fetchRunning = false;
+    if (unit.bytes != future) {
+      returnReservation(unit);
       fillWindow();
+      return;
     }
+    if (failure == null) {
+      future.complete(bytes);
+      return;
+    }
+    // Release before completing, so that the bytes are back by the time the scan sees the failure
+    boolean wasRetained = unit.state == State.RETAINED;
+    release(unit);
+    unit.state = wasRetained || unit.wholeFile ? State.RELEASED : State.INLINE;
+    stats.inlineReads++;
+    fillWindow();
+    future.completeExceptionally(failure);
   }
 
   /**
@@ -351,20 +362,26 @@ public final class LogReadAheadStorage extends HoodieStorage {
 
   private void release(Unit unit) {
     if (unit.state == State.FETCHING || unit.state == State.RETAINED) {
-      heldBytes -= unit.length;
-      EXECUTOR_BUDGET.release(unit.length);
       if (unit.state == State.RETAINED) {
         retainedBytes -= unit.length;
       }
-      // A fetch that has not started yet does not run
-      unit.claimed.set(true);
+      // A fetch that has not started yet does not run; one that is running returns the bytes when it ends
+      unit.fetchClaimed = true;
       CompletableFuture<byte[]> future = unit.bytes;
       if (future != null) {
         future.cancel(false);
       }
       unit.bytes = null;
+      if (!unit.fetchRunning) {
+        returnReservation(unit);
+      }
     }
     unit.state = State.RELEASED;
+  }
+
+  private void returnReservation(Unit unit) {
+    heldBytes -= unit.length;
+    EXECUTOR_BUDGET.release(unit.length);
   }
 
   private void releaseAll() {
@@ -702,7 +719,9 @@ public final class LogReadAheadStorage extends HoodieStorage {
     private final FileEntry file;
     private final long offset;
     private final int length;
-    private final AtomicBoolean claimed = new AtomicBoolean();
+    // Guarded by the storage: a thread has taken the fetch, and that thread has not handed its bytes over yet
+    private boolean fetchClaimed;
+    private boolean fetchRunning;
     private boolean wholeFile;
     private int index = -1;
     private State state = State.PENDING;
@@ -743,16 +762,17 @@ public final class LogReadAheadStorage extends HoodieStorage {
 
   private static final class ExecutorBudget {
     private final AtomicLong used = new AtomicLong();
-    private volatile long cap;
+    private final long cap;
 
     private ExecutorBudget(long cap) {
       this.cap = cap;
     }
 
-    private boolean tryAcquire(long bytes) {
+    private boolean tryAcquire(long bytes, long limit) {
+      long effectiveCap = Math.min(cap, limit);
       while (true) {
         long current = used.get();
-        if (current + bytes > cap) {
+        if (current + bytes > effectiveCap) {
           return false;
         }
         if (used.compareAndSet(current, current + bytes)) {

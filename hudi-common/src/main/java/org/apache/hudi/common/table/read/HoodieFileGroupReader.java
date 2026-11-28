@@ -267,10 +267,8 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
         || skipMerge || readerContext.getKeyFilterOpt().isPresent() || HoodieTableMetadata.isMetadataTable(tableState.getBasePath())) {
       return null;
     }
-    if (props.containsKey(HoodieReaderConfig.LOG_READ_AHEAD_EXECUTOR_BYTES.key())) {
-      LogReadAheadStorage.setExecutorBudget(props.getLong(HoodieReaderConfig.LOG_READ_AHEAD_EXECUTOR_BYTES.key()));
-    }
-    return LogReadAheadStorage.create(storage, inputSplit.getLogFiles(), windowBytes);
+    long executorLimitBytes = props.getLong(HoodieReaderConfig.LOG_READ_AHEAD_EXECUTOR_BYTES.key(), Long.MAX_VALUE);
+    return LogReadAheadStorage.create(storage, inputSplit.getLogFiles(), windowBytes, executorLimitBytes);
   }
 
   private ClosableIterator<T> makeBaseFileIterator() throws IOException {
