@@ -537,6 +537,19 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " writing to storage. This should be turned off only if you are absolutely certain that there are no duplicates incoming, "
           + " otherwise it can lead to duplicate keys and violate the uniqueness guarantees.");
 
+  public static final ConfigProperty<Boolean> UPSERT_FAIL_ON_MULTIPLE_MATCHES = ConfigProperty
+      .key("hoodie.upsert.fail.on.multiple.matches")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Whether an upsert fails when more than one incoming record matches the same existing record, "
+          + "instead of combining them into one update. Incoming records with a key the table does not hold yet are "
+          + "still combined as " + COMBINE_BEFORE_UPSERT.key() + " sets. Spark SQL MERGE INTO turns this on for a "
+          + "statement with a WHEN MATCHED clause on a table of a non-native table format by default, see "
+          + "hoodie.spark.sql.merge.into.cardinality.check. The check does not run with the bucket index, which locates "
+          + "new keys by their bucket, and with the partitioned record level index, which locates a key in each "
+          + "partition that holds it.");
+
   public static final ConfigProperty<String> COMBINE_BEFORE_DELETE = ConfigProperty
       .key("hoodie.combine.before.delete")
       .defaultValue("true")
@@ -1715,6 +1728,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldCombineBeforeUpsert() {
     return getBoolean(COMBINE_BEFORE_UPSERT);
+  }
+
+  public boolean shouldFailUpsertOnMultipleMatches() {
+    return getBoolean(UPSERT_FAIL_ON_MULTIPLE_MATCHES);
   }
 
   public boolean shouldCombineBeforeDelete() {

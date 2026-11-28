@@ -100,9 +100,10 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyLocationPairs,
       HoodieData<HoodieRecord<R>> records,
       HoodieTable hoodieTable) {
+    // Keeps the position of the row, which tells apart the rows of a key that a file holds more than once
     HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations = keyLocationPairs
-        .mapToPair(p -> Pair.of(p.getLeft().getRecordKey(),
-            HoodieRecordGlobalLocation.fromLocal(p.getLeft().getPartitionPath(), p.getRight())));
+        .mapToPair(p -> Pair.of(p.getLeft().getRecordKey(), new HoodieRecordGlobalLocation(p.getLeft().getPartitionPath(),
+            p.getRight().getInstantTime(), p.getRight().getFileId(), p.getRight().getPosition())));
     boolean mayContainDuplicateLookup = hoodieTable.getMetaClient().getTableType() == MERGE_ON_READ;
     boolean shouldUpdatePartitionPath = config.getGlobalBloomIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
     return tagGlobalLocationBackToRecords(records, keyAndExistingLocations,

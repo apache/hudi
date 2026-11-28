@@ -737,6 +737,23 @@ object DataSourceWriteOptions {
       + "in MOR tables with Spark SQL MERGE INTO statement. The data blocks containing partial "
       + "updates have a schema with a subset of fields compared to the full schema of the table.")
 
+  val MERGE_INTO_CARDINALITY_CHECK: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.spark.sql.merge.into.cardinality.check")
+    .noDefaultValue("true for a table of a non-native table format (hoodie.table.format other than native), "
+      + "false otherwise")
+    .markAdvanced()
+    .sinceVersion("1.3.0")
+    .withDocumentation("Whether a Spark SQL MERGE INTO statement fails when more than one source row matches the same "
+      + "target row, as the SQL standard requires. The check applies to a statement with a WHEN MATCHED clause other "
+      + "than a single unconditional DELETE, and shuffles the incoming records by record key after the index lookup. "
+      + "When off, the source rows that match the same target row are combined into one update, by the ordering "
+      + "fields of the table, or in no defined order without them. Unless set, the check is on only for a table of a "
+      + "non-native table format, so a MERGE INTO on a native table keeps combining such source rows. On a table "
+      + "with a record key, the check is not supported with the bucket index, the partitioned record level index and an "
+      + "index class: a statement fails when this is set to true, and runs without the check when it is not set. Setting "
+      + "it to true also fails a statement with insert clauses whose only matched clause is a conditional delete, on a "
+      + "merge-on-read table without ordering fields and with a SIMPLE or BLOOM index.")
+
   val NONE_INSERT_DUP_POLICY = "none"
   val DROP_INSERT_DUP_POLICY = "drop"
   val FAIL_INSERT_DUP_POLICY = "fail"

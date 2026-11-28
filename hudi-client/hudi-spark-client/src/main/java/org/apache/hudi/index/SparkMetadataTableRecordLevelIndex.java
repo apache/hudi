@@ -60,6 +60,13 @@ public class SparkMetadataTableRecordLevelIndex extends SparkMetadataTableGlobal
   }
 
   @Override
+  public boolean locatesOnlyMatchingRecords() {
+    // The looked up locations are joined back on the record key alone, so a record is located in each partition that
+    // holds its key
+    return false;
+  }
+
+  @Override
   protected HoodieIndex.IndexType getFallbackIndexType() {
     return IndexType.SIMPLE;
   }

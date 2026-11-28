@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -41,6 +42,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMultipleMatchesException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
@@ -66,15 +68,20 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                       WriteOperationType operationType) {
     try {
       HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start();
+      // Records matching the same existing record are only told apart after tagging, so they are combined then
+      boolean failOnMultipleMatches = shouldFailOnMultipleMatches(table, operationType);
       // De-dupe/merge if needed
       I dedupedRecords =
-          combineOnCondition(shouldCombine, inputRecords, configuredShuffleParallelism, table);
+          combineOnCondition(shouldCombine && !failOnMultipleMatches, inputRecords, configuredShuffleParallelism, table);
 
       I taggedRecords = dedupedRecords;
       if (table.getIndex().requiresTagging(operationType)) {
         // perform index loop up to get existing location of records
         context.setJobStatus(this.getClass().getSimpleName(), "Tagging: " + table.getConfig().getTableName());
         taggedRecords = tag(dedupedRecords, context, table);
+        if (failOnMultipleMatches) {
+          taggedRecords = failOnMultipleMatches(taggedRecords, shouldCombine, table);
+        }
         if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
             && table.getConfig().isSparkSqlMergeIntoReadingTarget()) {
           taggedRecords = mergeLocatedSqlMergeIntoRecords(taggedRecords, instantTime, context, table, configuredShuffleParallelism);
@@ -105,6 +112,34 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         HoodieWriteConfig.SPARK_SQL_MERGE_INTO_READS_TARGET_KEY + " is not supported by " + this.getClass().getName());
   }
 
+  private static boolean shouldFailOnMultipleMatches(HoodieTable<?, ?, ?, ?> table, WriteOperationType operationType) {
+    return operationType == WriteOperationType.UPSERT
+        && table.getConfig().shouldFailUpsertOnMultipleMatches()
+        && table.getIndex().requiresTagging(operationType)
+        && table.getIndex().locatesOnlyMatchingRecords();
+  }
+
+  /**
+   * Fails with a {@link HoodieMultipleMatchesException} when more than one tagged record matches the same existing
+   * record, that is, when two records with the same key are located at the same row of a file group. Combines the
+   * records of a key the table does not hold yet when {@code combineNewKeys} is set. See
+   * {@link HoodieWriteConfig#UPSERT_FAIL_ON_MULTIPLE_MATCHES}.
+   */
+  protected I failOnMultipleMatches(I taggedRecords, boolean combineNewKeys, HoodieTable<T, I, K, O> table) {
+    throw new HoodieNotSupportedException(
+        HoodieWriteConfig.UPSERT_FAIL_ON_MULTIPLE_MATCHES.key() + " is not supported by " + this.getClass().getName());
+  }
+
+  /**
+   * The exception for more than one incoming record matching the existing record with the given key and location.
+   */
+  public static HoodieMultipleMatchesException multipleMatchesException(String recordKey, String partitionPath, String fileId) {
+    return new HoodieMultipleMatchesException(recordKey, "More than one incoming record matches the existing record with key "
+        + recordKey + " in partition " + partitionPath + " and file group " + fileId
+        + ", so the upsert cannot apply them as one update. Set " + HoodieWriteConfig.UPSERT_FAIL_ON_MULTIPLE_MATCHES.key()
+        + " to false to combine them instead.");
+  }
+
   public I combineOnCondition(
       boolean condition, I records, int configuredParallelism, HoodieTable<T, I, K, O> table) {
     int targetParallelism = deduceShuffleParallelism(records, configuredParallelism);
@@ -119,38 +154,68 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
    * @return Collection of HoodieRecord already be deduplicated
    */
   public I deduplicateRecords(I records, HoodieTable<T, I, K, O> table, int parallelism) {
-    HoodieReaderContext<T> readerContext =
-        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryForWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps())
-            .getContext();
-    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-    readerContext.initRecordMergerForIngestion(table.getConfig().getProps());
-    List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), table.getMetaClient());
-    HoodieSchema recordSchema;
-    if (StringUtils.nonEmpty(table.getConfig().getPartialUpdateSchema())) {
-      recordSchema = HoodieSchema.parse(table.getConfig().getPartialUpdateSchema());
-    } else {
-      recordSchema = HoodieSchema.parse(table.getConfig().getWriteSchema());
-    }
-    recordSchema = HoodieSchemaCache.intern(recordSchema);
-    TypedProperties mergedProperties = readerContext.getMergeProps(table.getConfig().getProps());
-    BufferedRecordMerger<T> bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext,
-        readerContext.getMergeMode(),
-        false,
-        readerContext.getRecordMerger().map(HoodieRecordUtils::mergerToPreCombineMode),
-        Option.ofNullable(table.getConfig().getPayloadClass()),
-        recordSchema,
-        mergedProperties,
-        tableConfig.getPartialUpdateMode());
+    RecordMergerSetup<T> setup = new RecordMergerSetup<>(table);
     return deduplicateRecords(
         records,
         table.getIndex(),
         parallelism,
         table.getConfig().getSchema(),
-        mergedProperties,
-        bufferedRecordMerger,
-        readerContext,
-        orderingFieldNames.toArray(new String[0]));
+        setup.props,
+        setup.merger,
+        setup.readerContext,
+        setup.orderingFieldNames);
+  }
+
+  /**
+   * The function {@link #deduplicateRecords} combines two records with the same key with.
+   */
+  protected static <T> SerializableBiFunction<HoodieRecord<T>, HoodieRecord<T>, HoodieRecord<T>> recordCombiner(
+      HoodieTable<T, ?, ?, ?> table) {
+    RecordMergerSetup<T> setup = new RecordMergerSetup<>(table);
+    TypedProperties props = setup.props;
+    BufferedRecordMerger<T> merger = setup.merger;
+    String[] orderingFieldNames = setup.orderingFieldNames;
+    HoodieSchema schema = HoodieSchema.parse(table.getConfig().getSchema());
+    RecordContext<T> recordContext = setup.readerContext.getRecordContext();
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
+    return (previous, next) -> reduceRecords(props, merger, orderingFieldNames, previous, next, schema, recordContext, deleteContext);
+  }
+
+  /**
+   * The record merger of the table for combining incoming records with the same key, and its inputs.
+   */
+  private static class RecordMergerSetup<T> {
+    private final HoodieReaderContext<T> readerContext;
+    private final TypedProperties props;
+    private final BufferedRecordMerger<T> merger;
+    private final String[] orderingFieldNames;
+
+    private RecordMergerSetup(HoodieTable<T, ?, ?, ?> table) {
+      this.readerContext =
+          (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryForWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps())
+              .getContext();
+      HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
+      readerContext.initRecordMergerForIngestion(table.getConfig().getProps());
+      List<String> orderingFields = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), table.getMetaClient());
+      HoodieSchema recordSchema;
+      if (StringUtils.nonEmpty(table.getConfig().getPartialUpdateSchema())) {
+        recordSchema = HoodieSchema.parse(table.getConfig().getPartialUpdateSchema());
+      } else {
+        recordSchema = HoodieSchema.parse(table.getConfig().getWriteSchema());
+      }
+      recordSchema = HoodieSchemaCache.intern(recordSchema);
+      this.props = readerContext.getMergeProps(table.getConfig().getProps());
+      this.merger = BufferedRecordMergerFactory.create(
+          readerContext,
+          readerContext.getMergeMode(),
+          false,
+          readerContext.getRecordMerger().map(HoodieRecordUtils::mergerToPreCombineMode),
+          Option.ofNullable(table.getConfig().getPayloadClass()),
+          recordSchema,
+          props,
+          tableConfig.getPartialUpdateMode());
+      this.orderingFieldNames = orderingFields.toArray(new String[0]);
+    }
   }
 
   public abstract I deduplicateRecords(I records,

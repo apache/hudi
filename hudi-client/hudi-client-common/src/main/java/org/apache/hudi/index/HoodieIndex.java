@@ -128,6 +128,18 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public abstract boolean canIndexLogFiles();
 
   /**
+   * Whether tagging locates an incoming record only at records with its key and, for a non-global index, its partition
+   * path, so that two incoming records located at one row have the same key. The located record can be one that a log
+   * file deletes, if the index reads the keys of the base files.
+   *
+   * @return Returns false if the index can locate an incoming record at a row of another key or partition
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public boolean locatesOnlyMatchingRecords() {
+    return true;
+  }
+
+  /**
    * An index is "implicit" with respect to storage, if just writing new data to a file slice, updates the index as
    * well. This is used by storage, to save memory footprint in certain cases.
    */
