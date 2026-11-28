@@ -22,7 +22,6 @@ import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
@@ -261,13 +260,9 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   private static boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
     String[] orderingFields = ConfigUtils.getOrderingFields(prop);
     if (orderingFields != null) {
-      boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(prop.getProperty(
-          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-
       Comparable oldOrderingVal = OrderingValues.create(
           orderingFields,
-          field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, field, true, consistentLogicalTimestampEnabled));
+          field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, field, true, false));
 
       // pick the payload with greater ordering value as insert record
       return oldOrderingVal != null

@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -304,5 +305,29 @@ public class TestPartialUpdateAvroPayload {
     PartialUpdateAvroPayload payloadAfterPreCombine = payload3.preCombine(payload2, schema, properties);
     IndexedRecord finalOutputWithPreCombine = payloadAfterPreCombine.combineAndGetUpdateValue(record1, schema, properties).get();
     assertEquals(outputWithPreCombineUsed, finalOutputWithPreCombine);
+  }
+
+  @Test
+  void testTimestampMicrosOrderingWithConsistentLogicalTimestamp() throws IOException {
+    Schema tsSchema = new Schema.Parser().parse(jsonSchema.replace(
+        "{\"name\": \"ts\", \"type\": [\"null\", \"long\"]}",
+        "{\"name\": \"ts\", \"type\": [\"null\", {\"type\": \"long\", \"logicalType\": \"timestamp-micros\"}]}"));
+    Properties properties = new Properties();
+    properties.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
+    properties.put(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+
+    GenericRecord persisted = new GenericData.Record(tsSchema);
+    persisted.put("id", "1");
+    persisted.put("ts", 1_000_500L);
+    persisted.put("city", "city_persisted");
+    GenericRecord olderBy1Micro = new GenericData.Record(tsSchema);
+    olderBy1Micro.put("id", "1");
+    olderBy1Micro.put("ts", 1_000_499L);
+    olderBy1Micro.put("city", "city_incoming");
+
+    GenericRecord merged = (GenericRecord) new PartialUpdateAvroPayload(olderBy1Micro, 1_000_499L)
+        .combineAndGetUpdateValue(persisted, tsSchema, properties).get();
+    assertEquals("city_persisted", merged.get("city").toString());
+    assertEquals(1_000_500L, merged.get("ts"));
   }
 }

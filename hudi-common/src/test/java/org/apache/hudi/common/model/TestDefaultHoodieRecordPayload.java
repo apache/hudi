@@ -20,7 +20,9 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.testutils.OrderingFieldsTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
@@ -353,5 +355,31 @@ public class TestDefaultHoodieRecordPayload {
 
     assertTrue(result.isPresent(), "Result should be present");
     assertEquals(incomingRecord, result.get(), "Default behavior should update on same ordering field");
+  }
+
+  @Test
+  void testTimestampMicrosOrderingWithConsistentLogicalTimestamp() throws IOException {
+    Schema tsSchema = Schema.createRecord(Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
+        new Schema.Field("ts", LogicalTypes.timestampMicros().addToSchema(Schema.create(Type.LONG)), "", null),
+        new Schema.Field("_hoodie_is_deleted", Schema.create(Type.BOOLEAN), "", false)));
+    props.setProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+    GenericRecord persisted = timestampRecord(tsSchema, 1_000_500L);
+    GenericRecord olderBy1Micro = timestampRecord(tsSchema, 1_000_499L);
+    GenericRecord newerBy1Micro = timestampRecord(tsSchema, 1_000_501L);
+
+    assertEquals(SENTINEL, new DefaultHoodieRecordPayload(olderBy1Micro, 1_000_499L).combineAndGetUpdateValue(persisted, tsSchema, props).get());
+    assertEquals(newerBy1Micro, new DefaultHoodieRecordPayload(newerBy1Micro, 1_000_501L).combineAndGetUpdateValue(persisted, tsSchema, props).get());
+    // A delete without a record carries only its ordering value
+    assertEquals(SENTINEL, new DefaultHoodieRecordPayload(null, 1_000_499L).combineAndGetUpdateValue(persisted, tsSchema, props).get());
+    assertFalse(new DefaultHoodieRecordPayload(null, 1_000_501L).combineAndGetUpdateValue(persisted, tsSchema, props).isPresent());
+  }
+
+  private static GenericRecord timestampRecord(Schema schema, long tsMicros) {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("ts", tsMicros);
+    record.put("_hoodie_is_deleted", false);
+    return record;
   }
 }
