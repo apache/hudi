@@ -21,25 +21,37 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
+import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -58,6 +70,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
@@ -68,6 +81,12 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness {
   private static final HoodieSchema SCHEMA = getSchemaFromResource(TestHoodieJavaWriteClientInsert.class, "/exampleSchema.avsc");
@@ -144,6 +163,83 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
       }
     }
     writeClient.close();
+  }
+
+  /**
+   * The archiver removes instants after a writer loads its timeline and before the timeline server loads its view.
+   * The first instant of the timeline is a rollback. In table version 6, TimelineArchiverV1 keeps the rollback and
+   * removes commits that are newer. In the current table version, TimelineArchiverV2 removes the first instants.
+   *
+   * <p>The timeline server syncs its view one time. The tasks of the writer then list the files locally.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testTimelineServerSyncsOnceWhenArchivalCompletesBeforeViewLoad(boolean tableVersionSix) throws Exception {
+    String partition = "2021/09/11";
+    HoodieTableVersion tableVersion = tableVersionSix ? HoodieTableVersion.SIX : HoodieTableVersion.current();
+    Properties tableProps = new Properties();
+    tableProps.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersion.versionCode()));
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, tableProps);
+    assertEquals(tableVersion, metaClient.getTableConfig().getTableVersion());
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder(basePath)
+        .withWriteTableVersion(tableVersion.versionCode())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMetadataConfig(metadataConfig)
+        .withCleanConfig(HoodieCleanConfig.newBuilder().withAutoClean(false).retainCommits(1).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().withAutoArchive(false).archiveCommitsWith(2, 3).build())
+        .build();
+
+    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
+    // The first write fails, so its rollback is the first instant of the timeline.
+    String failedCommitTime = writeClient.startCommit();
+    writeClient.insert(Collections.singletonList(createSimpleRecord("0", "2021-09-11T16:16:41.415Z", 0)), failedCommitTime);
+    assertTrue(writeClient.rollback(failedCommitTime));
+    for (int i = 1; i <= 6; i++) {
+      String commitTime = writeClient.startCommit();
+      List<HoodieRecord> records = Collections.singletonList(createSimpleRecord(String.valueOf(i), "2021-09-11T16:16:41.415Z", i));
+      writeClient.commit(commitTime, writeClient.insert(records, commitTime));
+    }
+
+    // A writer loads the timeline that its tasks use.
+    HoodieTableMetaClient clientMetaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
+    HoodieTimeline clientTimeline = clientMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    assertEquals(HoodieTimeline.ROLLBACK_ACTION, clientTimeline.firstInstant().get().getAction());
+    List<String> expectedBaseFiles = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, clientMetaClient, clientTimeline)
+        .getLatestBaseFiles(partition).map(HoodieBaseFile::getFileName).sorted().collect(Collectors.toList());
+    assertFalse(expectedBaseFiles.isEmpty());
+
+    // A clean and archival complete before the timeline server loads its view.
+    writeClient.clean();
+    writeClient.archive();
+    HoodieTableMetaClient serverMetaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
+    HoodieTimeline serverTimeline = serverMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    assertTrue(serverTimeline.getCommitsTimeline().countInstants() < clientTimeline.getCommitsTimeline().countInstants());
+    assertEquals(tableVersionSix ? HoodieTimeline.ROLLBACK_ACTION : HoodieTimeline.COMMIT_ACTION, serverTimeline.firstInstant().get().getAction());
+
+    SyncableFileSystemView serverView = spy(HoodieTableFileSystemView.fileListingBasedFileSystemView(context, serverMetaClient, serverMetaClient.getActiveTimeline()));
+    FileSystemViewManager serverViewManager = mock(FileSystemViewManager.class);
+    when(serverViewManager.getFileSystemView(anyString())).thenReturn(serverView);
+    TimelineService timelineServer = new TimelineService(storageConf, TimelineService.Config.builder().serverPort(0).build(), serverViewManager);
+    timelineServer.startService();
+    try {
+      FileSystemViewStorageConfig taskViewConfig = FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.REMOTE_FIRST)
+          .withRemoteServerHost("localhost").withRemoteServerPort(timelineServer.getServerPort()).build();
+      for (int task = 0; task < 3; task++) {
+        FileSystemViewManager taskViewManager = FileSystemViewManager.createViewManager(context, metadataConfig, taskViewConfig, HoodieCommonConfig.newBuilder().build());
+        try {
+          assertEquals(expectedBaseFiles, taskViewManager.getFileSystemView(clientMetaClient).getLatestBaseFiles(partition)
+              .map(HoodieBaseFile::getFileName).sorted().collect(Collectors.toList()));
+        } finally {
+          taskViewManager.close();
+        }
+      }
+      verify(serverView).sync();
+      verify(serverView, never()).getLatestBaseFiles(partition);
+    } finally {
+      timelineServer.close();
+      serverView.close();
+    }
   }
 
   /**
