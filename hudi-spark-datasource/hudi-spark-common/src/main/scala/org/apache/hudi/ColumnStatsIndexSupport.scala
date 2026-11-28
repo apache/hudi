@@ -468,6 +468,11 @@ object ColumnStatsIndexSupport {
     dataType match {
       case ShortType => colStatsValue.asInstanceOf[Int].toShort
       case ByteType => colStatsValue.asInstanceOf[Int].toByte
+      // Spark keeps a binary value as an array, and the index keeps it as a buffer
+      case BinaryType => colStatsValue match {
+        case buffer: ByteBuffer => toBytes(buffer.duplicate())
+        case other => other
+      }
       case _ => colStatsValue
     }
   }

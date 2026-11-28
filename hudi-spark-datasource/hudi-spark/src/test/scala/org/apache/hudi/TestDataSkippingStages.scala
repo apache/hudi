@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, Cast, Coalesce, DateFormatClass, EqualNullSafe, EqualTo, Expression, FromUnixTime, GreaterThan, GreaterThanOrEqual, Hour, If, In, InSet, IsNull, LeafExpression, Length, LessThan, LessThanOrEqual, Literal, Log, Minute, Not, Or, StartsWith, TryEval, UnaryMinus, UnixTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, Cast, Coalesce, DateFormatClass, EqualNullSafe, EqualTo, Expression, FromUnixTime, GreaterThan, GreaterThanOrEqual, Hour, If, In, InSet, IsNull, LeafExpression, Length, LessThan, LessThanOrEqual, Literal, Log, Minute, Not, Or, StartsWith, Substring, TryEval, UnaryMinus, UnixTimestamp, Upper}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Decreasing, ExpressionIndexSource, Increasing, IndexedExpression, Leaf, Op, RangeRule, StatsFilterCompiler, Step, TermRange, TimeZones, Verdict}
 import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering
@@ -125,8 +125,10 @@ class TestDataSkippingStages {
       verdict(Op.In, ten, one))
     assertEquals(Not(Or(And(EqualTo(lo, ten), EqualTo(hi, ten)), And(EqualTo(lo, one), EqualTo(hi, one)))),
       verdict(Op.NotIn, ten, one))
-    // Bug #20430, pinned as is: STARTS WITH checks lo <= p <= hi
-    assertEquals(And(LessThanOrEqual(lo, prefix), GreaterThanOrEqual(hi, prefix)), verdict(Op.StartsWith, prefix))
+    // #20430: STARTS WITH compares the first len(p) characters of lo, thus a min 'abcd' keeps the prefix 'abc'
+    assertEquals(
+      And(LessThanOrEqual(Substring(lo, Literal(1), Literal(2)), prefix), GreaterThanOrEqual(hi, prefix)),
+      verdict(Op.StartsWith, prefix))
     assertEquals(Not(And(StartsWith(lo, prefix), StartsWith(hi, prefix))), verdict(Op.NotStartsWith, prefix))
     assertEquals(Or(IsNull(nulls), GreaterThan(nulls, Literal(0))), verdict(Op.IsNull))
     assertEquals(Or(Or(IsNull(nulls), IsNull(rows)), LessThan(nulls, rows)), verdict(Op.IsNotNull))

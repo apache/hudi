@@ -28,10 +28,13 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieSparkLanceWriter;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
@@ -45,6 +48,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.common.model.HoodieFileFormat.VORTEX;
 import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
 
 /**
@@ -75,6 +79,8 @@ public class HoodieInternalRowFileWriterFactory {
       long allocatorSize = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES);
       long flushByteWatermark = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_FLUSH_BYTE_WATERMARK);
       return newLanceInternalRowFileWriter(path, hoodieTable, schema, maxFileSize, allocatorSize, flushByteWatermark);
+    } else if (VORTEX.getFileExtension().equals(extension)) {
+      return newVortexInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -160,6 +166,33 @@ public class HoodieInternalRowFileWriterFactory {
         .allocatorSize(allocatorSize)
         .flushByteWatermark(flushByteWatermark)
         .build();
+  }
+
+  /**
+   * Creates a Vortex writer for the row writer path. {@link HoodieRowCreateHandle} sets the meta
+   * fields of each row, thus the writer does not populate them.
+   *
+   * <p>Only a JDK 17 build compiles the Vortex sources, thus the writer is created by reflection.
+   */
+  private static HoodieInternalRowFileWriter newVortexInternalRowFileWriter(StoragePath path,
+                                                                            HoodieTable table,
+                                                                            HoodieWriteConfig writeConfig,
+                                                                            StructType structType,
+                                                                            Option<BloomFilter> bloomFilterOpt) {
+    long maxFileSize = writeConfig.getLongOrDefault(HoodieStorageConfig.VORTEX_MAX_FILE_SIZE);
+    long allocatorSize = writeConfig.getLongOrDefault(HoodieStorageConfig.VORTEX_WRITE_ALLOCATOR_SIZE_BYTES);
+    long flushByteWatermark = writeConfig.getLongOrDefault(HoodieStorageConfig.VORTEX_WRITE_FLUSH_BYTE_WATERMARK);
+    String edition = writeConfig.getStringOrDefault(HoodieStorageConfig.VORTEX_WRITE_EDITION);
+    boolean compact = writeConfig.getBooleanOrDefault(HoodieStorageConfig.VORTEX_WRITE_COMPACT);
+    int workerThreads = writeConfig.getIntOrDefault(HoodieStorageConfig.VORTEX_WORKER_THREADS);
+    String instantTime = FSUtils.getCommitTime(path.getName());
+
+    return (HoodieInternalRowFileWriter) ReflectionUtils.invokeStaticMethod(
+        "org.apache.hudi.io.storage.HoodieSparkVortexWriter", "newWriter",
+        new Object[] {path, structType, instantTime, new LocalTaskContextSupplier(), table.getStorage(), false,
+            bloomFilterOpt, maxFileSize, allocatorSize, flushByteWatermark, edition, compact, workerThreads},
+        StoragePath.class, StructType.class, String.class, TaskContextSupplier.class, HoodieStorage.class,
+        boolean.class, Option.class, long.class, long.class, long.class, String.class, boolean.class, int.class);
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {

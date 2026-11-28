@@ -1241,6 +1241,11 @@ public class HoodieTableMetadataUtil {
         return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
             .getFileFormatUtils(HoodieFileFormat.PARQUET)
             .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex, indexVersion);
+      } else if (partitionPathFileName.endsWith(HoodieFileFormat.VORTEX.getFileExtension())) {
+        // The footer of a Vortex file has statistics for its top-level columns.
+        return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
+            .getFileFormatUtils(HoodieFileFormat.VORTEX)
+            .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex, indexVersion);
       } else if (FSUtils.isLogFile(fileName)) {
         Option<HoodieSchema> writerSchemaOpt = tryResolveSchemaForTable(datasetMetaClient);
         log.info("Reading log file: {}, to build column range metadata.", partitionPathFileName);

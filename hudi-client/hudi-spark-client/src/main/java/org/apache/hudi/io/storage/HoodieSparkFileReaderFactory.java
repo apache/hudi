@@ -27,6 +27,7 @@ import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.spark.sql.internal.SQLConf;
@@ -62,11 +63,43 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
   @Override
   protected HoodieFileReader newVortexFileReader(HoodieConfig hoodieConfig, StoragePath path) {
     long dataAllocatorSize = hoodieConfig.getLongOrDefault(HoodieStorageConfig.VORTEX_READ_ALLOCATOR_SIZE_BYTES);
+    StorageConfiguration<?> conf = vortexReadConf(hoodieConfig);
+
     // Vortex sources are compiled only under JDK 17 (see the vortex profile in this module's pom),
     // so instantiate the reader reflectively to keep this factory compilable on the Java 11 build.
     return (HoodieFileReader) ReflectionUtils.loadClass(
         "org.apache.hudi.io.storage.HoodieSparkVortexReader",
-        new Class<?>[] {StoragePath.class, long.class}, path, dataAllocatorSize);
+        new Class<?>[] {StoragePath.class, long.class, StorageConfiguration.class}, path, dataAllocatorSize, conf);
+  }
+
+  /**
+   * Returns the storage configuration for a Vortex reader. The Vortex reader reads its concurrency
+   * and worker thread settings from the storage configuration. If the Hudi configuration sets them, this method
+   * returns a copy of the storage configuration with these values. The shared configuration does
+   * not change.
+   */
+  private StorageConfiguration<?> vortexReadConf(HoodieConfig hoodieConfig) {
+    boolean hasSplitConcurrency = hoodieConfig.contains(HoodieStorageConfig.VORTEX_READ_SPLIT_CONCURRENCY);
+    boolean hasIoConcurrency = hoodieConfig.contains(HoodieStorageConfig.VORTEX_READ_IO_CONCURRENCY);
+    boolean hasWorkerThreads = hoodieConfig.contains(HoodieStorageConfig.VORTEX_WORKER_THREADS);
+    if (!hasSplitConcurrency && !hasIoConcurrency && !hasWorkerThreads) {
+      return storage.getConf();
+    }
+
+    StorageConfiguration<?> conf = storage.getConf().newInstance();
+    if (hasSplitConcurrency) {
+      conf.set(HoodieStorageConfig.VORTEX_READ_SPLIT_CONCURRENCY.key(),
+          hoodieConfig.getString(HoodieStorageConfig.VORTEX_READ_SPLIT_CONCURRENCY));
+    }
+    if (hasIoConcurrency) {
+      conf.set(HoodieStorageConfig.VORTEX_READ_IO_CONCURRENCY.key(),
+          hoodieConfig.getString(HoodieStorageConfig.VORTEX_READ_IO_CONCURRENCY));
+    }
+    if (hasWorkerThreads) {
+      conf.set(HoodieStorageConfig.VORTEX_WORKER_THREADS.key(),
+          hoodieConfig.getString(HoodieStorageConfig.VORTEX_WORKER_THREADS));
+    }
+    return conf;
   }
 
   @Override

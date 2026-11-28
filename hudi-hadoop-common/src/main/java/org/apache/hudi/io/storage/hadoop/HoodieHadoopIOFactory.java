@@ -44,6 +44,8 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
  */
 public class HoodieHadoopIOFactory extends HoodieIOFactory {
 
+  private static final String VORTEX_UTILS_CLASS = "org.apache.hudi.io.vortex.HoodieVortexFileFormatUtils";
+
   public HoodieHadoopIOFactory(HoodieStorage storage) {
     super(storage);
   }
@@ -116,7 +118,7 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
       case LANCE:
         return new LanceUtils();
       case VORTEX:
-        return new VortexUtils();
+        return newVortexUtils();
       default:
         throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
     }
@@ -137,5 +139,17 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
                                   ConsistencyGuard consistencyGuard) {
     return new HoodieHadoopStorage(path, storage.getConf(), enableRetry, maxRetryIntervalMs,
         maxRetryNumbers, maxRetryIntervalMs, retryExceptions, consistencyGuard);
+  }
+
+  /**
+   * Returns the Vortex utils that read the Vortex footer with vortex-jni. Only a JDK 17 build
+   * compiles that class, thus it is loaded by name. Without it, Vortex has no footer support.
+   */
+  private static VortexUtils newVortexUtils() {
+    try {
+      return (VortexUtils) Class.forName(VORTEX_UTILS_CLASS).getDeclaredConstructor().newInstance();
+    } catch (ReflectiveOperationException | LinkageError e) {
+      return new VortexUtils();
+    }
   }
 }
