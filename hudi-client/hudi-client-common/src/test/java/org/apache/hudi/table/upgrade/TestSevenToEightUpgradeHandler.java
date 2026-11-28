@@ -28,6 +28,8 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ActiveAction;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -41,6 +43,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
@@ -48,9 +51,13 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE;
@@ -61,6 +68,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -191,11 +199,34 @@ class TestSevenToEightUpgradeHandler {
     verify(writer, never()).compactAndClean(any());
   }
 
+  @Test
+  void testUpgradeToLSMTimelineWritesBatchesInInstantTimeOrder() throws Exception {
+    // the legacy reader can return instants out of time order, and the LSM file name is taken from the batch ends
+    List<ActiveAction> actions = Stream.of("003", "001", "004", "002")
+        .map(instantTime -> ActiveAction.fromInstants(Collections.singletonList(
+            INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime, instantTime))))
+        .collect(Collectors.toList());
+    LSMTimelineWriter writer = runMigration(2, actions);
+    ArgumentCaptor<List<ActiveAction>> batches = ArgumentCaptor.forClass(List.class);
+    verify(writer, times(2)).write(batches.capture(), any(), any());
+    assertEquals(Arrays.asList("001,003", "002,004"), batches.getAllValues().stream()
+        .map(batch -> batch.stream().map(ActiveAction::getInstantTime).collect(Collectors.joining(",")))
+        .collect(Collectors.toList()));
+  }
+
+  private LSMTimelineWriter runMigration(int migrationBatchSize, int totalActions) {
+    List<ActiveAction> actions = new ArrayList<>();
+    for (int i = 0; i < totalActions; i++) {
+      actions.add(mock(ActiveAction.class));
+    }
+    return runMigration(migrationBatchSize, actions);
+  }
+
   /**
    * Runs {@link SevenToEightUpgradeHandler#upgradeToLSMTimeline} with the given migration batch size
-   * over the given number of archived actions, and returns the (mocked) LSM timeline writer for verification.
+   * over the given archived actions, and returns the (mocked) LSM timeline writer for verification.
    */
-  private LSMTimelineWriter runMigration(int migrationBatchSize, int totalActions) {
+  private LSMTimelineWriter runMigration(int migrationBatchSize, List<ActiveAction> actions) {
     HoodieTable table = mock(HoodieTable.class);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
@@ -207,11 +238,6 @@ class TestSevenToEightUpgradeHandler {
     when(config.getMigrationCommitArchivalBatchSize()).thenReturn(migrationBatchSize);
     // The regular archival batch size must not be consulted during migration.
     lenient().when(config.getCommitArchivalBatchSize()).thenReturn(1);
-
-    List<ActiveAction> actions = new ArrayList<>();
-    for (int i = 0; i < totalActions; i++) {
-      actions.add(mock(ActiveAction.class));
-    }
 
     LSMTimelineWriter writer = mock(LSMTimelineWriter.class);
     try (MockedStatic<LSMTimelineWriter> mockedWriterStatic = mockStatic(LSMTimelineWriter.class);
