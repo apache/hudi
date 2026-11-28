@@ -22,6 +22,7 @@ import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -107,6 +108,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
@@ -420,10 +422,11 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     checkNotNull(tablePath, "Table path cannot be null");
     Table hiveTable = translateSparkTable2Flink(tablePath, getHiveTable(tablePath));
     String path = hiveTable.getSd().getLocation();
-    Map<String, String> parameters = hiveTable.getParameters();
+    Map<String, String> parameters = new HashMap<>(hiveTable.getParameters());
     HoodieSchema latestTableSchema = StreamerUtil.getLatestTableSchema(path, hiveConf);
     org.apache.flink.table.api.Schema schema;
     if (latestTableSchema != null) {
+      supplementVectorColumns(parameters, latestTableSchema);
       String pkColumnsStr = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());
       List<String> pkColumns = StringUtils.isNullOrEmpty(pkColumnsStr)
           ? null : StringUtils.split(pkColumnsStr, ",");
@@ -451,6 +454,23 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     Map<String, String> options = supplementOptions(tablePath, parameters);
     return CatalogUtils.createCatalogTable(
         schema, HiveSchemaUtils.getFieldNames(hiveTable.getPartitionKeys()), options, parameters.get(COMMENT));
+  }
+
+  private static void supplementVectorColumns(Map<String, String> options, HoodieSchema tableSchema) {
+    if (options.containsKey(FlinkOptions.VECTOR_COLUMNS.key())) {
+      return;
+    }
+    // Flink exposes VECTOR fields as ARRAYs. Keep their dimensions for sink schema inference.
+    StringJoiner vectorColumns = new StringJoiner(",");
+    for (HoodieSchemaField field : tableSchema.getFields()) {
+      HoodieSchema type = field.getNonNullSchema();
+      if (type instanceof HoodieSchema.Vector) {
+        vectorColumns.add(field.name() + ":" + ((HoodieSchema.Vector) type).getDimension());
+      }
+    }
+    if (vectorColumns.length() > 0) {
+      options.put(FlinkOptions.VECTOR_COLUMNS.key(), vectorColumns.toString());
+    }
   }
 
   @Override
