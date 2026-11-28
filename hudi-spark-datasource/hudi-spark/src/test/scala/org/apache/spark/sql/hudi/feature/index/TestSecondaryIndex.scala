@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi.feature.index
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
@@ -336,6 +336,61 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase with ExclusiveSuite {
             }
           }
         }
+      }
+    }
+  }
+
+  // The secondary index takes its file group count from an entry size estimated from a sample of its keys, which matches,
+  // without far overshooting, the bytes its entries take in the HFiles, whether few or all of the entries share a
+  // secondary key.
+  Seq(("a few secondary keys", "concat('city_', cast(id % 50 as string))"),
+    ("unique secondary keys", "substr(sha2(concat('s', cast(id as string)), 256), 1, 36)")).foreach { case (label, cityExpr) =>
+    test(s"Secondary index file groups follow the estimated entry size with $label") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        val rows = 200000L
+        val maxFileGroupBytes = 1024 * 1024L
+        val growthFactor = HoodieMetadataConfig.RECORD_INDEX_GROWTH_FACTOR_PROP.defaultValue().toDouble
+        spark.sql(
+          s"""
+             |create table $tableName (id string, city string, ts long) using hudi
+             |tblproperties (
+             |  primaryKey = 'id',
+             |  orderingFields = 'ts',
+             |  'hoodie.metadata.enable' = 'true',
+             |  'hoodie.metadata.global.record.level.index.enable' = 'true'
+             |)
+             |location '$basePath'
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |insert into $tableName
+             |select concat_ws('-', substr(h, 1, 8), substr(h, 9, 4), substr(h, 13, 4), substr(h, 17, 4), substr(h, 21, 12)),
+             |  $cityExpr, id
+             |from (select id, sha2(cast(id as string), 256) as h from range($rows))
+             |""".stripMargin)
+        // 1MB file groups, so that the 200k entries spread over several; the HFile bloom filters, which take a few bytes
+        // an entry in files this small, are left out so that the HFile sizes are those of the entries
+        withSQLConf(
+          HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1",
+          HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1000",
+          HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key -> maxFileGroupBytes.toString,
+          HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED.key -> "false") {
+          spark.sql(s"create index idx_city on $tableName (city)")
+        }
+
+        val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(HoodieTestUtils.getDefaultStorageConf).build()
+        val indexDir = new StoragePath(metaClient.getMetaPath, s"metadata/${PARTITION_NAME_SECONDARY_INDEX}_idx_city")
+        val hfiles = metaClient.getStorage.listDirectEntries(indexDir).asScala.filter(f => FSUtils.isBaseFile(f.getPath))
+        // the index is initialized in one commit, so each file group has one base file holding its share of the entries
+        val actualEntrySize = hfiles.map(_.getLength).sum.toDouble / rows
+        val fileGroups = hfiles.map(f => FSUtils.getFileId(f.getPath.getName)).distinct.size
+        // the estimate is a whole number of bytes, so it can fall up to a byte short of an exact one
+        val coveringFileGroups = (math.floor(actualEntrySize).toInt to (1.5 * actualEntrySize).toInt)
+          .map(size => math.max(1L, (rows * growthFactor).toLong / (maxFileGroupBytes / size)).toInt).toSet
+        assertTrue(coveringFileGroups.contains(fileGroups),
+          s"$fileGroups file groups for entries of $actualEntrySize bytes, expected one of $coveringFileGroups")
       }
     }
   }

@@ -2927,6 +2927,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getRecordIndexGrowthFactor();
   }
 
+  public Option<Integer> getRecordIndexAverageRecordSize() {
+    return metadataConfig.getRecordIndexAverageRecordSize();
+  }
+
+  public float getRecordIndexEntrySizeKeyFactor() {
+    return metadataConfig.getRecordIndexEntrySizeKeyFactor();
+  }
+
   public long getRecordIndexMaxFileGroupSizeBytes() {
     return metadataConfig.getRecordIndexMaxFileGroupSizeBytes();
   }

@@ -542,6 +542,9 @@ class TestHoodieTableMetadataUtil {
         MetadataPartitionType.RECORD_INDEX, () -> 10_000L, 1, 1, 10, 1.0f, 100));
     assertEquals(5, HoodieTableMetadataUtil.estimateFileGroupCount(
         MetadataPartitionType.RECORD_INDEX, () -> 500L, 1, 2, 10, 1.0f, 100));
+    // an entry larger than a whole file group takes a file group per record, up to the maximum
+    assertEquals(10, HoodieTableMetadataUtil.estimateFileGroupCount(
+        MetadataPartitionType.RECORD_INDEX, () -> 500L, 200, 1, 10, 1.0f, 100));
 
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);

@@ -91,6 +91,7 @@ class TestSecondaryIndexer {
     when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
     when(metadataConfig.getSecondaryIndexParallelism()).thenReturn(8);
     when(writeConfig.getProps()).thenReturn(new TypedProperties());
+    when(writeConfig.getRecordIndexAverageRecordSize()).thenReturn(Option.empty());
 
     HoodieData<HoodieRecord> records = (HoodieData<HoodieRecord>) (HoodieData<?>) engineContext.parallelize(
         Collections.singletonList(HoodieMetadataPayload.createPartitionFilesRecord("p_sec",
@@ -117,6 +118,39 @@ class TestSecondaryIndexer {
       List<HoodieRecord> collected = initializationList.get(0).dataPartitionAndRecords().get(0).indexRecords().collectAsList();
       assertEquals(1, collected.size());
       assertEquals("p_sec", collected.get(0).getRecordKey());
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test
+  void testConfiguredEntrySizeSizesTheFileGroups() throws IOException {
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
+    when(metadataConfig.getSecondaryIndexParallelism()).thenReturn(8);
+    when(writeConfig.getProps()).thenReturn(new TypedProperties());
+    when(writeConfig.getRecordIndexAverageRecordSize()).thenReturn(Option.of(120));
+    when(writeConfig.getGlobalRecordLevelIndexMinFileGroupCount()).thenReturn(1);
+    when(writeConfig.getGlobalRecordLevelIndexMaxFileGroupCount()).thenReturn(100);
+
+    HoodieData<HoodieRecord> records = (HoodieData<HoodieRecord>) (HoodieData<?>) engineContext.parallelize(
+        Collections.singletonList(HoodieMetadataPayload.createSecondaryIndexRecord("r1", "s1", "secondary_index_sec_idx", false)), 1);
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class);
+         MockedStatic<org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils> mockedSecondaryUtil = mockStatic(org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.class)) {
+      mockedUtil.when(() -> HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit(any(), any(), any()))
+          .thenReturn(Collections.singleton("sec_idx"));
+      mockedUtil.when(() -> HoodieTableMetadataUtil.getHoodieIndexDefinition("sec_idx", metaClient)).thenReturn(mock(HoodieIndexDefinition.class));
+      mockedSecondaryUtil.when(() -> org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices(any(), any(), anyInt(), any(), any(), any(), any()))
+          .thenReturn(records);
+      mockedUtil.when(() -> HoodieTableMetadataUtil.estimateFileGroupCount(any(), any(), eq(120), eq(1), eq(100), anyFloat(), anyLong()))
+          .thenReturn(9);
+
+      List<IndexInitializationPlan> initializationList = new SecondaryIndexer(engineContext, writeConfig, metaClient).buildInitialization(
+          IndexInitializationContext.of("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList), Lazy.lazily(Option::empty)));
+      // the configured 120 bytes an entry reach the file group count, in place of an estimate from the keys
+      assertEquals(9, initializationList.get(0).totalFileGroups());
     }
   }
 
