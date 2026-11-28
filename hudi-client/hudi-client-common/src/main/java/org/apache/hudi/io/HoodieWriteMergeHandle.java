@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -31,15 +32,18 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.table.read.FormatMetaColumnHandler;
 import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileReader;
@@ -125,6 +129,9 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   protected long recordsDeleted = 0;
   protected long updatedRecordsWritten = 0;
   protected long insertRecordsWritten = 0;
+  // The data schema with the format meta columns, and the handler that sets their values on write, see writeToFile
+  private HoodieSchema writeSchemaWithFormatMetaColumns;
+  private FormatMetaColumnHandler<T> formatMetaColumnsOnWrite;
 
   public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                 MergeContext<T> mergeContext, String partitionPath, String fileId,
@@ -209,6 +216,41 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
   protected HoodieRecord.HoodieRecordType getRecordType() {
     return recordMerger.getRecordType();
+  }
+
+  /**
+   * Fails if the table format declares format meta columns, as this handle does not carry them over to the file it
+   * writes. A handle that carries them over overrides this method.
+   */
+  @Override
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    return checkNoFormatMetaColumns();
+  }
+
+  /**
+   * Fails if the table format declares format meta columns, and returns no format meta columns otherwise.
+   */
+  protected final List<FormatMetaColumn> checkNoFormatMetaColumns() {
+    if (!hoodieTable.isMetadataTable()) {
+      FormatMetaColumn.checkNotDeclared(hoodieTable.getMetaClient().getTableFormat(), getClass());
+    }
+    return Collections.emptyList();
+  }
+
+  /**
+   * Returns the format meta columns the table format declares, none for the metadata table.
+   */
+  protected List<FormatMetaColumn> getTableFormatMetaColumns() {
+    return hoodieTable.isMetadataTable() ? Collections.emptyList() : hoodieTable.getMetaClient().getTableFormat().getFormatMetaColumns();
+  }
+
+  /**
+   * Returns a handler of the format meta columns of the records read from the file group, empty without format meta
+   * columns. Fails if the table format cannot resolve their values for the base file.
+   */
+  protected Option<FormatMetaColumnHandler<T>> createFormatMetaColumnHandler() {
+    return FormatMetaColumnHandler.create(readerContext.getRecordContext(), formatMetaColumns, hoodieTable.getMetaClient(),
+        Option.ofNullable(baseFileToMerge), instantTime);
   }
 
   /**
@@ -448,10 +490,41 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
           : record;
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, props);
     } else {
+      if (!formatMetaColumns.isEmpty()) {
+        record = appendFormatMetaColumnValuesOnWrite(key.getRecordKey(), record, schema, props);
+        schema = writeSchemaWithFormatMetaColumns;
+      }
       // rewrite the record to include metadata fields in schema, and the values will be set later.
       record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
       fileWriter.writeWithMetadata(key, record, writeSchemaWithMetaFields, props);
     }
+  }
+
+  /**
+   * Sets the handler of the format meta columns that gives the values of a record written as new or changed. A handle
+   * that writes the records of a file group reader sets the handler of the reader, so that a record the reader
+   * returns as a changed version of a record of the base file gets the values on update for that record.
+   */
+  protected void setFormatMetaColumnsOnWrite(FormatMetaColumnHandler<T> formatMetaColumnsOnWrite) {
+    this.formatMetaColumnsOnWrite = formatMetaColumnsOnWrite;
+  }
+
+  /**
+   * Appends the format meta columns to a record written as new or changed, with their values on update or on write.
+   */
+  private HoodieRecord<T> appendFormatMetaColumnValuesOnWrite(String recordKey, HoodieRecord<T> record, HoodieSchema schema, Properties props) {
+    if (writeSchemaWithFormatMetaColumns == null) {
+      writeSchemaWithFormatMetaColumns = HoodieSchemaUtils.appendFormatMetaColumns(writeSchema, formatMetaColumns);
+    }
+    if (formatMetaColumnsOnWrite == null) {
+      formatMetaColumnsOnWrite = FormatMetaColumnHandler.create(readerContext.getRecordContext(), formatMetaColumns,
+          hoodieTable.getMetaClient(), Option.empty(), instantTime).get();
+    }
+    HoodieRecord<T> newRecord = record.rewriteRecordWithNewSchema(schema, props, writeSchemaWithFormatMetaColumns);
+    T data = newRecord.getData();
+    ValidationUtils.checkState(formatMetaColumnsOnWrite.setNonNullValuesOnWrite(recordKey, data, writeSchemaWithFormatMetaColumns) == data,
+        "The format meta columns of a record have to be updated in place");
+    return newRecord;
   }
 
   protected void writeIncomingRecords() throws IOException {

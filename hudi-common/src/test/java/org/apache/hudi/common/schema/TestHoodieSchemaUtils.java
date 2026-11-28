@@ -18,8 +18,12 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.common.BaseFileColumnResolver;
+import org.apache.hudi.common.FormatMetaColumn;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -2545,5 +2549,85 @@ public class TestHoodieSchemaUtils {
     assertFalse(HoodieSchemaUtils.isTimestampMillisField(
                     HoodieSchema.createLocalTimestampMicros()),
             "Should return false for local-timestamp-micros");
+  }
+
+  private static HoodieSchemaField nullableLongField(String name) {
+    return HoodieSchemaField.of(name, HoodieSchema.createNullable(HoodieSchemaType.LONG), null, HoodieSchema.NULL_VALUE);
+  }
+
+  private static List<FormatMetaColumn> formatMetaColumns(HoodieSchemaField... fields) {
+    return Arrays.stream(fields).map(field -> new FormatMetaColumn() {
+      @Override
+      public HoodieSchemaField field() {
+        return field;
+      }
+
+      @Override
+      public Object valueOnWrite(String instantTime) {
+        return null;
+      }
+
+      @Override
+      public BaseFileColumnResolver resolverFor(HoodieTableMetaClient metaClient, HoodieBaseFile baseFile) {
+        throw new UnsupportedOperationException();
+      }
+    }).collect(Collectors.toList());
+  }
+
+  @Test
+  void testAppendFormatMetaColumns() {
+    HoodieSchema schema = HoodieSchema.createRecord("rec", "ns", "doc", Arrays.asList(
+        HoodieSchemaField.of("key", HoodieSchema.create(HoodieSchemaType.STRING)),
+        nullableLongField("ts")));
+    assertSame(schema, HoodieSchemaUtils.appendFormatMetaColumns(schema, Collections.emptyList()));
+
+    HoodieSchemaField rowIdField = nullableLongField("row_id");
+    rowIdField.addProp("prop", "value");
+    List<FormatMetaColumn> columns = formatMetaColumns(rowIdField, nullableLongField("seq"));
+    HoodieSchema withColumns = HoodieSchemaUtils.appendFormatMetaColumns(schema, columns);
+    assertEquals(Arrays.asList("key", "ts", "row_id", "seq"),
+        withColumns.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+    assertEquals(schema.getFullName(), withColumns.getFullName());
+    assertEquals(rowIdField, withColumns.getFields().get(2));
+    assertEquals("value", withColumns.getFields().get(2).getProp("prop"));
+    assertEquals(HoodieSchema.NULL_VALUE, withColumns.getFields().get(3).defaultVal().get());
+    // The fields of the table format are copied, so they can be appended to any number of schemas
+    assertEquals(withColumns, HoodieSchemaUtils.appendFormatMetaColumns(schema, columns));
+    // A nullable int that defaults to null
+    HoodieSchemaField intField = HoodieSchemaField.of("version", HoodieSchema.createNullable(HoodieSchemaType.INT), null, HoodieSchema.NULL_VALUE);
+    assertEquals(intField, HoodieSchemaUtils.appendFormatMetaColumns(schema, formatMetaColumns(intField)).getFields().get(2));
+  }
+
+  @Test
+  void testAppendInvalidFormatMetaColumns() {
+    HoodieSchema schema = HoodieSchema.createRecord("rec", "ns", "doc", Arrays.asList(
+        HoodieSchemaField.of("key", HoodieSchema.create(HoodieSchemaType.STRING)),
+        nullableLongField("ts")));
+    HoodieSchemaField rowIdField = nullableLongField("row_id");
+    Stream.of(
+        formatMetaColumns(rowIdField, nullableLongField("row_id")),
+        formatMetaColumns(rowIdField, nullableLongField("ts")),
+        formatMetaColumns(rowIdField, HoodieSchemaField.of("seq", HoodieSchema.create(HoodieSchemaType.LONG))),
+        formatMetaColumns(rowIdField, HoodieSchemaField.of("seq", HoodieSchema.createNullable(HoodieSchemaType.LONG))))
+        .forEach(columns -> assertThrows(IllegalArgumentException.class,
+            () -> HoodieSchemaUtils.appendFormatMetaColumns(schema, columns), columns::toString));
+
+    // The Hudi meta fields are reserved, also when the schema does not have them yet
+    HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.forEach(name -> {
+      List<FormatMetaColumn> columns = formatMetaColumns(rowIdField, nullableLongField(name));
+      IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+          () -> HoodieSchemaUtils.appendFormatMetaColumns(schema, columns), name);
+      assertEquals("The format meta column " + name + " has the name of a Hudi meta field", e.getMessage());
+    });
+
+    // Only long and int columns can be set in place in an engine row
+    Stream.of(HoodieSchemaType.STRING, HoodieSchemaType.DOUBLE, HoodieSchemaType.BOOLEAN, HoodieSchemaType.BYTES)
+        .forEach(type -> {
+          List<FormatMetaColumn> columns = formatMetaColumns(
+              HoodieSchemaField.of("tag", HoodieSchema.createNullable(type), null, HoodieSchema.NULL_VALUE));
+          IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+              () -> HoodieSchemaUtils.appendFormatMetaColumns(schema, columns), type::toString);
+          assertTrue(e.getMessage().startsWith("A format meta column has to be of type long or int"), e.getMessage());
+        });
   }
 }

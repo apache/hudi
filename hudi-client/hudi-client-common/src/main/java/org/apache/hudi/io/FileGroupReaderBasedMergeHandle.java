@@ -20,6 +20,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.FormatMetaColumn;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -47,6 +48,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.FormatMetaColumnHandler;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
@@ -265,6 +267,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   }
 
   @Override
+  protected List<FormatMetaColumn> getFormatMetaColumns() {
+    return getTableFormatMetaColumns();
+  }
+
+  @Override
   protected void populateIncomingRecordsMap(Iterator<HoodieRecord<T>> newRecordsItr) {
     // no op.
   }
@@ -351,6 +358,9 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         .withInternalSchemaOpt(internalSchemaOption).withProps(props)
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(createCallback());
+    Option<FormatMetaColumnHandler<T>> formatMetaColumnHandler = createFormatMetaColumnHandler();
+    formatMetaColumnHandler.ifPresent(this::setFormatMetaColumnsOnWrite);
+    fileGroupBuilder.withFormatMetaColumnHandler(formatMetaColumnHandler);
 
     if (logFileStreamOpt.isPresent()) {
       fileGroupBuilder.withLogFiles(logFileStreamOpt.get());

@@ -52,6 +52,11 @@ public class JavaSortAndSizeExecutionStrategy<T>
   }
 
   @Override
+  protected boolean writesFormatMetaColumns() {
+    return true;
+  }
+
+  @Override
   public List<WriteStatus> performClusteringWithRecordList(
       final List<HoodieRecord<T>> inputRecords, final int numOutputGroups,
       final String instantTime, final Map<String, String> strategyParams, final HoodieSchema schema,
@@ -63,6 +68,7 @@ public class JavaSortAndSizeExecutionStrategy<T>
         .withEngineType(EngineType.JAVA)
         .withProps(getWriteConfig().getProps()).build();
     newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(getWriteConfig().getClusteringTargetFileMaxBytes()));
+    setFormatMetaColumnsWriteSchema(newConfig);
     return (List<WriteStatus>) JavaBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
         false, getPartitioner(strategyParams, schema), true, numOutputGroups, new CreateHandleFactory(preserveHoodieMetadata));
   }

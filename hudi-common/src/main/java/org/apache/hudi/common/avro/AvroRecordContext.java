@@ -196,6 +196,12 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
+  public IndexedRecord setValue(IndexedRecord record, int pos, Object value) {
+    record.put(pos, value instanceof Comparable ? convertValueToEngineType((Comparable) value) : value);
+    return record;
+  }
+
+  @Override
   public HoodieRecord.HoodieRecordType getEngineRecordType() {
     return HoodieRecord.HoodieRecordType.AVRO;
   }
