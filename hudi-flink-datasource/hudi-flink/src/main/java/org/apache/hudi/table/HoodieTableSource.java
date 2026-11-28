@@ -243,6 +243,9 @@ public class HoodieTableSource extends FileIndexReader implements
    * @return the configured DataStream
    */
   private DataStream<RowData> produceNewSourceDataStream(StreamExecutionEnvironment execEnv) {
+    if (conf.get(FlinkOptions.READ_AS_STREAMING)) {
+      validateStreamingQueryType();
+    }
     HoodieSource<RowData> hoodieSource = createHoodieSource();
     DataStreamSource<RowData> source = execEnv.fromSource(
         hoodieSource, WatermarkStrategy.noWatermarks(), "hudi_source");
@@ -570,22 +573,22 @@ public class HoodieTableSource extends FileIndexReader implements
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
 
-    final String queryType = this.conf.get(FlinkOptions.QUERY_TYPE);
-    switch (queryType) {
-      case FlinkOptions.QUERY_TYPE_SNAPSHOT:
-      case FlinkOptions.QUERY_TYPE_INCREMENTAL:
-        final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.get(FlinkOptions.TABLE_TYPE));
-        boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
-        if (this.conf.get(FlinkOptions.CDC_ENABLED)) {
-          return cdcInputFormat(rowType, requiredRowType, tableSchema, rowDataType, Collections.emptyList());
-        } else {
-          return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
-              rowDataType, Collections.emptyList(), emitDelete);
-        }
-      default:
-        String errMsg = String.format("Invalid query type : '%s', options ['%s', '%s'] are supported now", queryType,
-            FlinkOptions.QUERY_TYPE_SNAPSHOT, FlinkOptions.QUERY_TYPE_INCREMENTAL);
-        throw new HoodieException(errMsg);
+    validateStreamingQueryType();
+    final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.get(FlinkOptions.TABLE_TYPE));
+    boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
+    if (this.conf.get(FlinkOptions.CDC_ENABLED)) {
+      return cdcInputFormat(rowType, requiredRowType, tableSchema, rowDataType, Collections.emptyList());
+    } else {
+      return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
+          rowDataType, Collections.emptyList(), emitDelete);
+    }
+  }
+
+  private void validateStreamingQueryType() {
+    String queryType = conf.get(FlinkOptions.QUERY_TYPE);
+    if (!FlinkOptions.QUERY_TYPE_SNAPSHOT.equals(queryType) && !FlinkOptions.QUERY_TYPE_INCREMENTAL.equals(queryType)) {
+      throw new HoodieException(String.format("Invalid query type : '%s', options ['%s', '%s'] are supported now", queryType,
+          FlinkOptions.QUERY_TYPE_SNAPSHOT, FlinkOptions.QUERY_TYPE_INCREMENTAL));
     }
   }
 
