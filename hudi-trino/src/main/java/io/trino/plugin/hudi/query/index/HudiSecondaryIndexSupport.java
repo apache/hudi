@@ -40,6 +40,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static io.trino.plugin.hudi.HudiSessionProperties.getSecondaryIndexWaitTimeout;
+import static io.trino.plugin.hudi.HudiSessionProperties.isSchemaColumnTypesEnabled;
 import static io.trino.plugin.hudi.query.index.HudiRecordLevelIndexSupport.constructRecordKeys;
 import static io.trino.plugin.hudi.query.index.HudiRecordLevelIndexSupport.extractPredicatesForColumns;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -56,6 +57,7 @@ public class HudiSecondaryIndexSupport
     {
         super(log, schemaTableName, lazyMetaClient);
         this.secondaryIndexWaitTimeout = getSecondaryIndexWaitTimeout(session);
+        boolean schemaColumnTypes = isSchemaColumnTypesEnabled(session);
         this.relevantFileIdsFuture = CompletableFuture.supplyAsync(() -> {
             HoodieTimer timer = HoodieTimer.start();
             if (regularColumnPredicates.isAll() || lazyMetaClient.get().getIndexMetadata().isEmpty()) {
@@ -77,7 +79,7 @@ public class HudiSecondaryIndexSupport
             log.debug(String.format("Using secondary index '%s' on columns %s for pruning.", indexName, indexedColumns));
             TupleDomain<String> indexPredicates = extractPredicatesForColumns(regularColumnPredicates, indexedColumns);
 
-            List<String> secondaryKeys = constructRecordKeys(indexPredicates, indexedColumns);
+            List<String> secondaryKeys = constructRecordKeys(indexPredicates, indexedColumns, schemaColumnTypes);
             if (secondaryKeys.isEmpty()) {
                 log.warn("Took %s ms, but could not construct secondary keys for index '%s' from predicates. Skipping pruning for table %s",
                         timer.endTimer(), indexName, schemaTableName);

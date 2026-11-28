@@ -17,9 +17,15 @@ import io.trino.metastore.HiveType;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hudi.testing.MaxRankRecordMerger;
 import io.trino.plugin.hudi.testing.NonProjectionCompatibleRankMerger;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.TrinoException;
+import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.DecimalType;
+import io.trino.spi.type.MapType;
+import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
+import io.trino.spi.type.TypeOperators;
+import io.trino.spi.type.UuidType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -27,6 +33,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.collection.Pair;
 import org.junit.jupiter.api.Test;
@@ -36,13 +43,20 @@ import java.util.Optional;
 
 import static io.trino.plugin.hudi.HudiUtil.appendMissingSchemaColumns;
 import static io.trino.plugin.hudi.HudiUtil.resolveMergeModeAndStrategyId;
+import static io.trino.plugin.hudi.HudiUtil.toMetadataHiveType;
 import static io.trino.plugin.hudi.HudiUtil.usesNonProjectionCompatibleMerger;
 import static io.trino.plugin.hudi.HudiUtil.validateCustomMergeStrategyId;
+import static io.trino.plugin.hudi.HudiUtil.withSchemaColumnTypes;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.IntegerType.INTEGER;
+import static io.trino.spi.type.RealType.REAL;
+import static io.trino.spi.type.TimeType.TIME_MICROS;
+import static io.trino.spi.type.TimeType.TIME_MILLIS;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MICROS;
+import static io.trino.spi.type.TimestampWithTimeZoneType.TIMESTAMP_TZ_MICROS;
+import static io.trino.spi.type.TimestampWithTimeZoneType.TIMESTAMP_TZ_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -58,6 +72,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class TestHudiUtilColumnHandles
 {
+    private static final TypeOperators TYPE_OPERATORS = new TypeOperators();
+    private static final TrinoTypeMapper TYPE_MAPPER = new TrinoTypeMapper(TYPE_OPERATORS);
+
     @Test
     public void testNullableStringMatchesHudiMetaColumnHandle()
     {
@@ -166,6 +183,112 @@ class TestHudiUtilColumnHandles
 
         assertThat(appendMissingSchemaColumns(dataSchema, List.of(projected)))
                 .containsExactly(projected);
+    }
+
+    @Test
+    public void testWithSchemaColumnTypes()
+    {
+        HoodieSchema tableSchema = HoodieSchema.createRecord("rec", null, null, List.of(
+                HoodieSchemaField.of("_hoodie_record_key", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, HoodieSchema.NULL_VALUE),
+                HoodieSchemaField.of("Event_Time", HoodieSchema.createTimestampMicros(), null, null),
+                HoodieSchemaField.of("id", HoodieSchema.createUUID(), null, null),
+                HoodieSchemaField.of("dt", HoodieSchema.create(HoodieSchemaType.STRING), null, null)));
+        HiveColumnHandle recordKey = HiveColumnHandle.createBaseColumn(
+                "_hoodie_record_key", 0, HiveType.HIVE_STRING, VARCHAR, HiveColumnHandle.ColumnType.REGULAR, Optional.empty());
+        // hive_sync declares a timestamp-micros as bigint without support_timestamp, and a uuid as string
+        HiveColumnHandle eventTime = HiveColumnHandle.createBaseColumn(
+                "event_time", 1, HiveType.HIVE_LONG, BIGINT, HiveColumnHandle.ColumnType.REGULAR, Optional.of("when"));
+        HiveColumnHandle id = HiveColumnHandle.createBaseColumn(
+                "id", 2, HiveType.HIVE_STRING, VARCHAR, HiveColumnHandle.ColumnType.REGULAR, Optional.empty());
+        HiveColumnHandle notInSchema = HiveColumnHandle.createBaseColumn(
+                "extra", 3, HiveType.HIVE_INT, INTEGER, HiveColumnHandle.ColumnType.REGULAR, Optional.empty());
+        // A partition column keeps its metastore type even when the schema carries a field of that name
+        HiveColumnHandle partition = HiveColumnHandle.createBaseColumn(
+                "dt", -1, HiveType.HIVE_DATE, DATE, HiveColumnHandle.ColumnType.PARTITION_KEY, Optional.empty());
+        HiveColumnHandle path = HiveColumnHandle.pathColumnHandle();
+
+        List<HiveColumnHandle> typed = withSchemaColumnTypes(List.of(recordKey, eventTime, id, notInSchema, partition, path), tableSchema, TYPE_MAPPER);
+
+        assertThat(typed).hasSize(6);
+        assertThat(typed.get(0)).isEqualTo(recordKey);
+        // The data columns take the mapper's type and keep the metastore's name, index, comment and Hive type
+        assertThat(typed.get(1)).isEqualTo(HiveColumnHandle.createBaseColumn(
+                "event_time", 1, HiveType.HIVE_LONG, TIMESTAMP_TZ_MICROS, HiveColumnHandle.ColumnType.REGULAR, Optional.of("when")));
+        assertThat(typed.get(2)).isEqualTo(HiveColumnHandle.createBaseColumn(
+                "id", 2, HiveType.HIVE_STRING, UuidType.UUID, HiveColumnHandle.ColumnType.REGULAR, Optional.empty()));
+        assertThat(typed.get(3)).isSameAs(notInSchema);
+        assertThat(typed.get(4)).isSameAs(partition);
+        assertThat(typed.get(5)).isSameAs(path);
+    }
+
+    @Test
+    public void testWithSchemaColumnTypesRejectsFieldsWithoutATrinoType()
+    {
+        HoodieSchema tableSchema = HoodieSchema.createRecord("rec", null, null, List.of(
+                HoodieSchemaField.of("u", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.STRING)), null, null)));
+        HiveColumnHandle handle = HiveColumnHandle.createBaseColumn(
+                "u", 0, HiveType.HIVE_STRING, VARCHAR, HiveColumnHandle.ColumnType.REGULAR, Optional.empty());
+
+        // Failing the query keeps the column visible rather than silently dropping it
+        assertThatThrownBy(() -> withSchemaColumnTypes(List.of(handle), tableSchema, TYPE_MAPPER))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Trino has no union type");
+    }
+
+    @Test
+    public void testToColumnHandleWithSchemaTypeMapper()
+    {
+        HoodieSchemaField field = HoodieSchemaField.of("ts", HoodieSchema.createTimestampMicros());
+        // Without the mapper the legacy Avro-based typing applies: a timestamp without time zone
+        assertThat(HudiUtil.toColumnHandle(field, Optional.empty()).getType()).isEqualTo(TIMESTAMP_MICROS);
+        // With it the mapper's instant type, and the Hive type a Hive sync declares for it
+        HiveColumnHandle handle = HudiUtil.toColumnHandle(field, Optional.of(TYPE_MAPPER));
+        assertThat(handle.getName()).isEqualTo("ts");
+        assertThat(handle.getType()).isEqualTo(TIMESTAMP_TZ_MICROS);
+        assertThat(handle.getHiveType()).isEqualTo(HiveType.HIVE_TIMESTAMP);
+        assertThat(handle.getColumnType()).isEqualTo(HiveColumnHandle.ColumnType.REGULAR);
+
+        // The legacy typing has no Hive counterpart for uuid; the schema-typed one falls back to string
+        HiveColumnHandle uuidHandle = HudiUtil.toColumnHandle(HoodieSchemaField.of("id", HoodieSchema.createUUID()), Optional.of(TYPE_MAPPER));
+        assertThat(uuidHandle.getType()).isEqualTo(UuidType.UUID);
+        assertThat(uuidHandle.getHiveType()).isEqualTo(HiveType.HIVE_STRING);
+    }
+
+    @Test
+    public void testMetadataHiveTypeFallbacks()
+    {
+        // Types Hive can declare translate as they are
+        assertThat(toMetadataHiveType(BIGINT)).isEqualTo(HiveType.HIVE_LONG);
+        assertThat(toMetadataHiveType(new ArrayType(REAL))).isEqualTo(HiveType.valueOf("array<float>"));
+        // Types it cannot fall back to what a Hive sync declares for them, at any depth
+        assertThat(toMetadataHiveType(TIMESTAMP_TZ_MILLIS)).isEqualTo(HiveType.HIVE_TIMESTAMP);
+        assertThat(toMetadataHiveType(TIMESTAMP_TZ_MICROS)).isEqualTo(HiveType.HIVE_TIMESTAMP);
+        assertThat(toMetadataHiveType(TIME_MILLIS)).isEqualTo(HiveType.HIVE_INT);
+        assertThat(toMetadataHiveType(TIME_MICROS)).isEqualTo(HiveType.HIVE_LONG);
+        assertThat(toMetadataHiveType(UuidType.UUID)).isEqualTo(HiveType.HIVE_STRING);
+        assertThat(toMetadataHiveType(RowType.from(List.of(
+                RowType.field("id", UuidType.UUID),
+                RowType.field("at", new ArrayType(TIME_MICROS)),
+                RowType.field("tags", new MapType(VARCHAR, TIMESTAMP_TZ_MICROS, TYPE_OPERATORS))))))
+                .isEqualTo(HiveType.valueOf("struct<id:string,at:array<bigint>,tags:map<string,timestamp>>"));
+    }
+
+    @Test
+    public void testAppendMissingColumnsWithSchemaTypeMapper()
+    {
+        HoodieSchema dataSchema = HoodieSchema.createRecord("rec", null, null, List.of(
+                HoodieSchemaField.of("col_a", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+                HoodieSchemaField.of("col_t", HoodieSchema.createTimeMillis(), null, null)));
+        HiveColumnHandle projected = HiveColumnHandle.createBaseColumn(
+                "col_a", 0, HiveType.HIVE_STRING, VARCHAR, HiveColumnHandle.ColumnType.REGULAR, Optional.empty());
+
+        List<HiveColumnHandle> expanded = appendMissingSchemaColumns(dataSchema, List.of(projected), Optional.of(TYPE_MAPPER));
+
+        assertThat(expanded).hasSize(2);
+        assertThat(expanded.get(0)).isSameAs(projected);
+        assertThat(expanded.get(1).getName()).isEqualTo("col_t");
+        assertThat(expanded.get(1).getType()).isEqualTo(TIME_MILLIS);
+        assertThat(expanded.get(1).getHiveType()).isEqualTo(HiveType.HIVE_INT);
     }
 
     @Test

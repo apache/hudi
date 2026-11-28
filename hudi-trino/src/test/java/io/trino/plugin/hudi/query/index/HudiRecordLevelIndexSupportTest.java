@@ -20,6 +20,7 @@ import io.trino.spi.predicate.Range;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.predicate.ValueSet;
 import io.trino.spi.type.IntegerType;
+import io.trino.spi.type.UuidType;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -27,12 +28,18 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static io.trino.plugin.hudi.query.index.HudiRecordLevelIndexSupport.extractPredicatesForColumns;
 import static io.trino.spi.predicate.Domain.singleValue;
 import static io.trino.spi.predicate.Range.range;
 import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.DateTimeEncoding.packDateTimeWithZone;
+import static io.trino.spi.type.TimeType.TIME_MICROS;
+import static io.trino.spi.type.TimeZoneKey.UTC_KEY;
+import static io.trino.spi.type.TimestampWithTimeZoneType.TIMESTAMP_TZ_MILLIS;
+import static io.trino.spi.type.UuidType.javaUuidToTrinoUuid;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -296,6 +303,29 @@ public class HudiRecordLevelIndexSupportTest
         // The code should take the first value from the IN list for building the key
         assertThat(result).hasSize(3);
         assertThat(result).isEqualTo(List.of("value1", "value2", "value3"));
+    }
+
+    @Test
+    public void testConstructRecordKeysWithSchemaColumnTypes()
+    {
+        UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+        TupleDomain<String> uuidDomains = TupleDomain.withColumnDomains(Map.of("id", singleValue(UuidType.UUID, javaUuidToTrinoUuid(uuid))));
+        // A uuid keys as its canonical text, the form Hudi writes into the record key
+        assertThat(HudiRecordLevelIndexSupport.constructRecordKeys(uuidDomains, List.of("id"), true))
+                .containsExactly("123e4567-e89b-12d3-a456-426614174000");
+
+        // Types without a matching key form yield no keys, so no pruning, rather than keys that cannot match
+        TupleDomain<String> timestampDomains = TupleDomain.withColumnDomains(Map.of(
+                "id", createStringDomain("value1"),
+                "ts", singleValue(TIMESTAMP_TZ_MILLIS, packDateTimeWithZone(1_700_000_000_000L, UTC_KEY))));
+        assertThat(HudiRecordLevelIndexSupport.constructRecordKeys(timestampDomains, List.of("id", "ts"), true)).isEmpty();
+        TupleDomain<String> timeDomains = TupleDomain.withColumnDomains(Map.of("t", singleValue(TIME_MICROS, 1_000_000L)));
+        assertThat(HudiRecordLevelIndexSupport.constructRecordKeys(timeDomains, List.of("t"), true)).isEmpty();
+
+        // Types that exist with the property off key exactly as they do without it
+        TupleDomain<String> stringDomains = TupleDomain.withColumnDomains(Map.of("id", createStringDomain("value1")));
+        assertThat(HudiRecordLevelIndexSupport.constructRecordKeys(stringDomains, List.of("id"), true))
+                .isEqualTo(HudiRecordLevelIndexSupport.constructRecordKeys(stringDomains, List.of("id")));
     }
 
     @Test
