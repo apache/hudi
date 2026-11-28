@@ -138,7 +138,8 @@ public class RowDataQueryContexts {
     }
 
     public Object getValAsJava(RowData rowData, boolean allowsNull) {
-      Object val = this.javaTypeConverter.apply(fieldGetter.getFieldOrNull(rowData));
+      Object fieldValue = fieldGetter.getFieldOrNull(rowData);
+      Object val = fieldValue == null ? null : this.javaTypeConverter.apply(fieldValue);
       if (val == null && !allowsNull) {
         throw new HoodieException("The field value can not be null");
       }

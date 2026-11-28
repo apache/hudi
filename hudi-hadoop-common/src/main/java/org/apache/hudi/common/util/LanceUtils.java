@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -36,6 +38,7 @@ import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -46,12 +49,14 @@ import org.lance.file.LanceFileReader;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class LanceUtils extends FileFormatUtils {
 
@@ -179,7 +184,51 @@ public class LanceUtils extends FileFormatUtils {
                                                                                   StoragePath filePath,
                                                                                   List<String> columnList,
                                                                                   HoodieIndexVersion indexVersion) {
-    throw new UnsupportedOperationException("readColumnStatsFromMetadata is not yet supported for Lance format");
+    if (columnList == null || columnList.isEmpty()) {
+      return Collections.emptyList();
+    }
+
+    // Lance readers are engine-specific. Flink distributions do not include the Spark reader.
+    HoodieRecord.HoodieRecordType recordType;
+    try {
+      Class.forName("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory", false, getClass().getClassLoader());
+      recordType = HoodieRecord.HoodieRecordType.SPARK;
+    } catch (ClassNotFoundException e) {
+      recordType = HoodieRecord.HoodieRecordType.FLINK;
+    }
+
+    try (HoodieFileReader fileReader =
+             HoodieIOFactory.getIOFactory(storage)
+                 .getReaderFactory(recordType)
+                 .getFileReader(
+                     ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
+                     filePath,
+                     HoodieFileFormat.LANCE)) {
+      HoodieSchema fileSchema = fileReader.getSchema().getNonNullType();
+      List<Pair<String, HoodieSchemaField>> fieldsToIndex = columnList.stream()
+          .map(columnName -> HoodieSchemaUtils.getNestedField(fileSchema, columnName))
+          .filter(Option::isPresent)
+          .map(Option::get)
+          .collect(Collectors.toList());
+      if (fieldsToIndex.isEmpty()) {
+        return Collections.emptyList();
+      }
+
+      List<String> projectedColumns = fieldsToIndex.stream()
+          .map(Pair::getKey)
+          .collect(Collectors.toList());
+      HoodieSchema projectedSchema = HoodieSchemaUtils.projectSchema(fileSchema, projectedColumns);
+      try (ClosableIterator<HoodieRecord> recordIterator = fileReader.getRecordIterator(projectedSchema)) {
+        Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
+            HoodieTableMetadataUtil.collectColumnRangeMetadata(
+                recordIterator, fieldsToIndex, filePath.getName(), projectedSchema, storage.getConf(), indexVersion);
+        return fieldsToIndex.stream()
+            .map(field -> columnRangeMetadataMap.get(field.getKey()))
+            .collect(Collectors.toList());
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read column stats from Lance file " + filePath, e);
+    }
   }
 
   @Override

@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -60,6 +61,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD;
@@ -387,6 +389,12 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
   @Override
   public void writeRow(InternalRow row) throws IOException {
     super.write(row);
+  }
+
+  @Override
+  public boolean setColumnStatsCollector(Consumer<HoodieRecord> collector) {
+    setRecordWrittenCallback(row -> collector.accept(new HoodieSparkRecord(row, sparkSchema)));
+    return true;
   }
 
   @Override
