@@ -58,6 +58,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -460,6 +461,45 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertEquals(Collections.singletonList(hudiFileName),
           roView.getLatestBaseFiles(partitionPath).map(HoodieBaseFile::getFileName).collect(Collectors.toList()));
       assertEquals(1, fsView.getAllFileGroups(partitionPath).count());
+    }
+  }
+
+  /**
+   * A table of a non-native table format leaves out a data file whose name only the loose name parse accepts or
+   * rejects by throwing, next to a base file whose commit is older than the active timeline, a base file of a Flink
+   * rolled write token and a registered external file. The files are handed to the view as the metadata table
+   * lists them, since a storage listing leaves out the names with the external file marker.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"part-0000_00007.parquet", "0_0_0.parquet", "file1.parquet_hudiext", "file1.parquet__hudiext"})
+  void testDataFileHudiDidNotNameNextToFilesHudiNamed(String foreignFileName) throws Exception {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.TABLE_FORMAT.key(), "test-format");
+    basePath = tempDir.resolve("test-format").toString();
+    metaClient = HoodieTestUtils.init(basePath, getTableType(), properties);
+
+    String partitionPath = "2016/05/01";
+    String archivedFileId = UUID.randomUUID().toString();
+    String archivedFileName = FSUtils.makeBaseFileName("1", TEST_WRITE_TOKEN, archivedFileId, BASE_FILE_EXTENSION);
+    String commitTime = "3";
+    String rolledFileId = UUID.randomUUID().toString();
+    String rolledFileName = FSUtils.makeBaseFileName(commitTime, TEST_WRITE_TOKEN + "-1", rolledFileId, BASE_FILE_EXTENSION);
+    String externalFileName = ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker("file2.parquet", commitTime);
+    List<StoragePathInfo> files = Stream.of(archivedFileName, rolledFileName, externalFileName, foreignFileName)
+        .map(fileName -> new StoragePathInfo(new StoragePath(basePath + "/" + partitionPath, fileName), 0, false, (short) 0, 0, 0))
+        .collect(Collectors.toList());
+    saveAsComplete(metaClient.getActiveTimeline(),
+        INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime), new HoodieCommitMetadata());
+    metaClient.getTableFormat().commit(new HoodieCommitMetadata(),
+        INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, commitTime), null, metaClient, null);
+    metaClient.reloadActiveTimeline();
+
+    try (HoodieTableFileSystemView view = new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), files)) {
+      assertEquals(new HashSet<>(Arrays.asList(archivedFileName, rolledFileName, "file2.parquet")),
+          view.getLatestBaseFiles(partitionPath).map(HoodieBaseFile::getFileName).collect(Collectors.toSet()));
+      assertEquals(new HashSet<>(Arrays.asList(archivedFileId, rolledFileId, "file2.parquet")),
+          view.getAllFileGroups(partitionPath).map(fileGroup -> fileGroup.getFileGroupId().getFileId()).collect(Collectors.toSet()));
     }
   }
 

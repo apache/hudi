@@ -524,7 +524,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     boolean nativeTableFormat = NativeTableFormat.TABLE_FORMAT.equals(metaClient.getTableFormat().getName());
     return pathInfoList.stream()
         .filter(roFilePredicate)
-        .filter(pathInfo -> nativeTableFormat || FileNameParser.parseBaseFile(pathInfo.getPath().getName()).isPresent())
+        .filter(pathInfo -> nativeTableFormat || FileNameParser.isHudiNamedBaseFile(pathInfo.getPath().getName()))
         .map(HoodieBaseFile::new);
   }
 
