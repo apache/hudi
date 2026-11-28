@@ -148,6 +148,31 @@ public class TestHoodieAvroDataBlock {
   }
 
   /**
+   * Reads the block content with a reader schema that drops the record key field, so each record's key is skipped.
+   */
+  @Test
+  void testGetRecordIteratorWithProjectedReaderSchema() throws IOException {
+    List<HoodieRecord> records = generateRandomHoodieRecords(SCHEMA, 100);
+    Map<HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HeaderMetadataType.SCHEMA, SCHEMA.toString());
+    HoodieSchema valueOnly = HoodieSchema.parse("{\"type\": \"record\", \"name\": \"RandomRecord\", \"fields\": [{\"name\": \"value\", \"type\": \"double\"}]}");
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(() -> null, Option.of(createHoodieAvroDataBlockContent(SCHEMA, records)), false,
+        NULL_BLOCK_CONTENT_LOCATION, Option.of(valueOnly), header, new HashMap<>(), RECORD_KEY_FIELD);
+
+    try (ClosableIterator<HoodieRecord<Object>> recordIterator = dataBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
+      List<HoodieRecord> retrievedRecords = new ArrayList<>();
+      recordIterator.forEachRemaining(retrievedRecords::add);
+      assertEquals(records.size(), retrievedRecords.size());
+      for (int i = 0; i < records.size(); i++) {
+        GenericRecord expected = (GenericRecord) records.get(i).getData();
+        GenericRecord actual = (GenericRecord) retrievedRecords.get(i).getData();
+        assertEquals(valueOnly.toAvroSchema(), actual.getSchema());
+        assertEquals(expected.get("value"), actual.get("value"));
+      }
+    }
+  }
+
+  /**
    * Tests the getRecordIterator method of HoodieAvroDataBlock with input stream (read block lazily).
    *
    * @param useStreamingRead    Whether to use streaming read.

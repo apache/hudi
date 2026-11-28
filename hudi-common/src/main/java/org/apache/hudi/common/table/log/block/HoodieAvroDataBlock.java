@@ -180,6 +180,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     private byte[] content;
     private final SizeAwareDataInputStream dis;
     private final GenericDatumReader<IndexedRecord> reader;
+    private final Option<AvroProjectionReader> projectionReader;
     private Option<HoodieSchema> promotedSchema = Option.empty();
     private int totalRecords = 0;
     private int readRecords = 0;
@@ -203,8 +204,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema())) {
         this.reader = new GenericDatumReader<>(repairedWriterSchema.toAvroSchema(), repairedWriterSchema.toAvroSchema());
         this.promotedSchema = Option.of(readerSchema);
+        this.projectionReader = Option.empty();
       } else {
         this.reader = new GenericDatumReader<>(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema());
+        this.projectionReader = AvroProjectionReader.create(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema());
       }
     }
 
@@ -236,7 +239,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(this.content, this.dis.getNumberOfBytesRead(),
                 recordLength, decoderCache.get());
         decoderCache.set(decoder);
-        IndexedRecord record = this.reader.read(null, decoder);
+        IndexedRecord record = this.projectionReader.isPresent() ? this.projectionReader.get().read(decoder) : this.reader.read(null, decoder);
         this.dis.skipBytes(recordLength);
         this.readRecords++;
         if (this.promotedSchema.isPresent()) {
