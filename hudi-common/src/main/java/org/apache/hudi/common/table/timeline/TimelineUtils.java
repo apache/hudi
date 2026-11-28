@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieTimeTravelException;
@@ -57,6 +58,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -372,6 +374,63 @@ public class TimelineUtils {
       return timeline.readReplaceCommitMetadata(instant);
     } else {
       return timeline.readCommitMetadata(instant);
+    }
+  }
+
+  /**
+   * Returns the commit metadata of {@code instant}, like {@link #getCommitMetadata(HoodieInstant, HoodieTimeline)},
+   * but reads it from the archived timeline if the writer archived the instant after {@code timeline} was listed.
+   * See {@link #readInstantContentOrArchived}.
+   */
+  public static HoodieCommitMetadata getCommitMetadata(
+      HoodieTableMetaClient metaClient,
+      HoodieInstant instant,
+      HoodieTimeline timeline,
+      Supplier<HoodieArchivedTimeline> archivedTimelineSupplier) throws IOException {
+    return readInstantContentOrArchived(metaClient, timeline, archivedTimelineSupplier, instant, t -> getCommitMetadata(instant, t));
+  }
+
+  /**
+   * Reads content of a completed instant from a timeline.
+   */
+  @FunctionalInterface
+  public interface InstantContentReader<T> {
+    T read(HoodieTimeline timeline) throws IOException;
+  }
+
+  /**
+   * Reads the content of a completed instant listed on {@code timeline}, tolerating a concurrent archival.
+   * <p>
+   * Readers take no lock or lease on the timeline, so the writer's archiver can move a listed instant into the
+   * archived timeline before the reader opens its file, and the open fails with {@link FileNotFoundException}. In
+   * that case {@code reader} is applied to the archived timeline instead. Archival writes the archive entry before it
+   * deletes the active-timeline files, so the entry is present once the active file is missing.
+   *
+   * @param archivedTimelineSupplier called only when the active file is missing; must load the archived timeline from
+   *                                 at or before {@code instant}. Callers reading several instants should memoize it so
+   *                                 that the archive is loaded at most once.
+   * @throws HoodieIOException if the active file is missing and the archived timeline does not hold the instant
+   * @throws IOException       on any other read failure
+   */
+  public static <T> T readInstantContentOrArchived(HoodieTableMetaClient metaClient,
+                                                   HoodieTimeline timeline,
+                                                   Supplier<HoodieArchivedTimeline> archivedTimelineSupplier,
+                                                   HoodieInstant instant,
+                                                   InstantContentReader<T> reader) throws IOException {
+    try {
+      return reader.read(timeline);
+    } catch (IOException | HoodieIOException e) {
+      if (!ExceptionUtil.isCausedBy(e, FileNotFoundException.class)) {
+        throw e;
+      }
+      HoodieArchivedTimeline archivedTimeline = archivedTimelineSupplier.get();
+      if (archivedTimeline.isEmpty(instant)) {
+        throw new HoodieIOException(String.format("Instant %s of %s is missing from both the active and the archived timeline",
+            instant, metaClient.getBasePath()), e instanceof IOException ? (IOException) e : new IOException(e));
+      }
+      log.warn("Instant {} of {} was archived after the timeline was listed; reading its metadata from the archived timeline",
+          instant, metaClient.getBasePath());
+      return reader.read(archivedTimeline);
     }
   }
 
