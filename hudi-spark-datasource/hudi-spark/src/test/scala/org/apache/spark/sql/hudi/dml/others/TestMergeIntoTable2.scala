@@ -1176,6 +1176,17 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             checkExceptionContain(statement)("is only supported with commit time ordering")
             checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1", 10.0))
           }
+          // Matched clauses on source fields alone do not read the target, so the insert clause is accepted
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'del' as name, 0.0D as price, 300L as ts) s
+               | on t.id = s.id
+               | when matched and s.name = 'del' then delete
+               | when not matched then insert *
+             """.stripMargin)
+          checkAnswer(s"select id, name, price from $tableName order by id")(
+            (if (commitTimeOrdering) Seq(Seq(9, "a9", 90.0)) else Seq.empty): _*)
         }
       }
     }
@@ -1525,6 +1536,31 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            """.stripMargin)
         checkAnswer(s"select id, name, price from $tableName")(
           Seq(1, "n1", 11.0), Seq(3, "m3", 32.0), Seq(4, "m4", 41.0))
+
+        // Deleted again after a reinsert into another file group, id 1 has a deleted copy in more than one file group
+        // of a mor table, and one source row inserts it once
+        withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+          spark.sql(s"delete from $tableName where id = 1")
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'r1' as name, 13.0 as price) s
+               | on t.id = s.id
+               | when not matched then insert *
+             """.stripMargin)
+          spark.sql(s"delete from $tableName where id = 1")
+          checkAnswer(s"select id, name, price from $tableName")(Seq(3, "m3", 32.0), Seq(4, "m4", 41.0))
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'y1' as name, 14.0 as price) s
+               | on t.id = s.id
+               | when matched and s.name = 'del' then delete
+               | when not matched then insert *
+             """.stripMargin)
+          checkAnswer(s"select id, name, price from $tableName")(
+            Seq(1, "y1", 14.0), Seq(3, "m3", 32.0), Seq(4, "m4", 41.0))
+        }
       }
     }
   }

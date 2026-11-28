@@ -756,7 +756,8 @@ public class HoodieIndexUtils {
    * Pairs the located records of one record key with the records the file groups they are located in hold for the key,
    * file group by file group. A copy of the key that a merge-on-read log deleted is still located through its base
    * file, and when another file group holds the key live, that copy is left out rather than taking the not-matched
-   * clauses of the statement, which would write the key a second time.
+   * clauses of the statement, which would write the key a second time. A key that no file group holds live takes
+   * them once, in one of the file groups.
    */
   private static <R> List<Pair<HoodieRecord<R>, Option<HoodieRecord<R>>>> pairWithExistingRecordsOfKey(
       Iterable<HoodieRecord<R>> locatedRecords, Option<Iterable<HoodieRecord<R>>> existingRecords) {
@@ -766,12 +767,16 @@ public class HoodieIndexUtils {
     if (existingRecords.isPresent()) {
       existingRecords.get().forEach(record -> existingByFileGroup.computeIfAbsent(partitionPathAndFileId(record), k -> new ArrayList<>()).add(record));
     }
+    if (existingByFileGroup.isEmpty()) {
+      // The file group is picked by its partition path and file ID, so a recomputation picks it again
+      return pairWithExistingRecords(locatedByFileGroup.get(Collections.min(locatedByFileGroup.keySet())), Option.empty());
+    }
     List<Pair<HoodieRecord<R>, Option<HoodieRecord<R>>>> pairs = new ArrayList<>();
     locatedByFileGroup.forEach((fileGroup, located) -> {
       List<HoodieRecord<R>> existing = existingByFileGroup.get(fileGroup);
       for (Pair<HoodieRecord<R>, Option<HoodieRecord<R>>> pair
           : pairWithExistingRecords(located, existing == null ? Option.empty() : Option.<Iterable<HoodieRecord<R>>>of(existing))) {
-        if (pair.getRight().isPresent() || existingByFileGroup.isEmpty()) {
+        if (pair.getRight().isPresent()) {
           pairs.add(pair);
         }
       }
