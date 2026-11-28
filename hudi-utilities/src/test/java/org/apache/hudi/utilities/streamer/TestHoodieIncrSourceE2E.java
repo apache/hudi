@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase;
@@ -65,6 +66,7 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.Missing
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
@@ -177,15 +179,16 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
    *    - Verifies commit metadata contains only checkpoint="10"
    *
    * 2. Second sync:
-   *    - Uses different table version
-   *    - Continues from checkpoint "10" to "20"
-   *    - Verifies commit metadata contains checkpoint="20"
+   *    - Uses a write version different from the table version with auto upgrade disabled
+   *    - Fails without committing, leaving checkpoint "10" as the latest
    *
-   * 3. Third sync:
-   *    - Upgrades to table version 8
-   *    - Continues from checkpoint "20" to "30"
-   *    - Verifies commit metadata still uses checkpoint V1 format
-   *    - Verifies final checkpoint="30"
+   * 3. Third and fourth syncs:
+   *    - Write at the table version with auto upgrade disabled
+   *    - Continue from checkpoint "10" to "20" and then "30" in checkpoint V1 format
+   *
+   * 4. Fifth sync:
+   *    - Upgrades to table version 8 with auto upgrade enabled
+   *    - Continues from checkpoint "30" to "40", still in checkpoint V1 format
    */
   @ParameterizedTest
   @CsvSource({
@@ -216,9 +219,26 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "10");
     verifyLastInstantCommitMetadata(expectedMetadata);
 
-    // Then resume from ckp 1 and ingest till ckp 2 with table version Y.
+    // A write version that differs from the table version, with auto upgrade disabled, is refused
+    // in either direction and commits nothing.
+    TypedProperties mismatchedProps = setupBaseProperties(toggleVersion(tableVersion));
+    mismatchedProps.put("hoodie.metadata.enable", "false");
+    mismatchedProps.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
+    mismatchedProps.put(RETURN_CHECKPOINT_KEY, "20");
+    mismatchedProps.put("hoodie.write.auto.upgrade", "false");
+    Throwable cause = assertThrows(Exception.class,
+        () -> new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(mismatchedProps)).sync());
+    while (cause != null && !(cause instanceof HoodieUpgradeDowngradeException)) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause, "the sync should fail on the table and write version mismatch");
+    metaClient.reloadTableConfig();
+    assertEquals(HoodieTableVersion.fromVersionCode(Integer.parseInt(tableVersion)), metaClient.getTableConfig().getTableVersion());
+    verifyLastInstantCommitMetadata(expectedMetadata);
+
+    // Then resume from ckp 1 and ingest till ckp 2 at the table version.
     // Disable auto upgrade and MDT as we want to keep things as it is.
-    props = setupBaseProperties(toggleVersion(tableVersion));
+    props = setupBaseProperties(tableVersion);
     props.put("hoodie.metadata.enable", "false");
     // Dummy behavior injection to return ckp 2.
     props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
@@ -233,16 +253,14 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     ds = new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(props));
     ds.sync();
 
-    // We do not allow table version 8 and ingest with version 6 delta streamer. But not table with version 6
-    // and delta streamer with version 8.
     expectedMetadata = new HashMap<>();
     expectedMetadata.put("schema", "");
     expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "20");
     verifyLastInstantCommitMetadata(expectedMetadata);
 
-    // In the third round, disable MDT and auto upgrade, use table write version 8. The result is
+    // In the third round, disable MDT and auto upgrade and keep writing at the table version. The result is
     // no upgrade will happen.
-    props = setupBaseProperties("8");
+    props = setupBaseProperties(tableVersion);
     props.put("hoodie.metadata.enable", "false");
     // Dummy behavior injection to return ckp 1.
     props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);

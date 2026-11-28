@@ -251,11 +251,12 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
     
-    // For versions SIX and above, the original behavior should work
-    new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
-        .run(targetVersion, null);
-    
-    // Create fresh meta client to validate that version remained unchanged 
+    // The write path refuses a write version that differs from the table's version.
+    assertThrows(HoodieUpgradeDowngradeException.class,
+        () -> UpgradeDowngrade.needsUpgrade(originalMetaClient, config, targetVersion),
+        "The write path must throw when auto-upgrade is disabled and the versions differ");
+
+    // Create fresh meta client to validate that version remained unchanged
     HoodieTableMetaClient unchangedMetaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf().newInstance())
         .setBasePath(originalMetaClient.getBasePath())
@@ -266,6 +267,37 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     performDataValidationOnTable(unchangedMetaClient, "after auto-upgrade disabled test");
     
     log.info("Auto-upgrade disabled test passed for version {}", originalVersion);
+  }
+
+  /**
+   * The auto-upgrade gate belongs to the write path, which consults {@link UpgradeDowngrade#needsUpgrade}.
+   * {@link UpgradeDowngrade#run} serves explicit upgrade requests (the SQL procedure, the CLI), so it
+   * must upgrade whatever the flag says, rather than no-op and report success.
+   */
+  @ParameterizedTest
+  @MethodSource("versionsSixAndAbove")
+  public void testExplicitRunUpgradesWithAutoUpgradeDisabled(HoodieTableVersion originalVersion) throws Exception {
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion, "-mor");
+
+    Option<HoodieTableVersion> targetVersionOpt = getNextVersion(originalVersion);
+    if (!targetVersionOpt.isPresent()) {
+      log.info("Skipping explicit-run test for version {} (no higher version available)", originalVersion);
+      return;
+    }
+    HoodieTableVersion targetVersion = targetVersionOpt.get();
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
+
+    new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
+        .run(targetVersion, null);
+
+    HoodieTableMetaClient upgradedMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(originalMetaClient.getBasePath())
+        .build();
+    assertEquals(targetVersion, upgradedMetaClient.getTableConfig().getTableVersion(),
+        "An explicit run() should upgrade the table regardless of the auto-upgrade flag");
+    validateVersionSpecificProperties(upgradedMetaClient, targetVersion);
+    performDataValidationOnTable(upgradedMetaClient, "after explicit run() upgrade");
   }
 
   /**
@@ -332,7 +364,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     log.info("Testing needsUpgrade with auto-upgrade disabled and write version override");
     
     // Test case: Table at version 6, write version set to 8, auto-upgrade disabled
-    // Expected: needsUpgrade should return false and set write version to match table version
+    // Expected: needsUpgrade throws and leaves the write version as configured
     HoodieTableMetaClient metaClient = loadFixtureTable(HoodieTableVersion.SIX, "-mor");
     assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at version SIX");
@@ -346,10 +378,15 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     assertEquals(HoodieTableVersion.EIGHT, config.getWriteVersion(),
         "Initial write version should be EIGHT");
     
-    boolean result = UpgradeDowngrade.needsUpgrade(metaClient, config, HoodieTableVersion.EIGHT);
-    assertFalse(result, "needsUpgrade should return false when auto-upgrade is disabled");
-    assertEquals(HoodieTableVersion.SIX, config.getWriteVersion(),
-        "Write version should be set to match table version when auto-upgrade is disabled");
+    HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
+        () -> UpgradeDowngrade.needsUpgrade(metaClient, config, HoodieTableVersion.EIGHT));
+    assertEquals(String.format("Table version 6 of table %s does not match write version 8, and "
+            + "hoodie.write.auto.upgrade is disabled. To proceed, set hoodie.write.table.version=6 "
+            + "to use the table version, enable hoodie.write.auto.upgrade to upgrade the table, "
+            + "or upgrade the table to version 8 explicitly.", metaClient.getBasePath()),
+        exception.getMessage());
+    assertEquals(HoodieTableVersion.EIGHT, config.getWriteVersion(),
+        "The write version must not be rewritten when auto-upgrade is disabled");
   }
 
   /**
@@ -1273,7 +1310,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
+    protected boolean needsExplicitUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
       return true;
     }
   }
