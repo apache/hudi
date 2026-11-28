@@ -30,7 +30,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -114,7 +113,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
       throw new HoodieException("Dropping duplicates with bulk_insert in row writer path is not supported yet");
     }
 
-    boolean populateMetaFields = writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS);
+    boolean populateMetaFields = writeConfig.populateMetaFields();
     preExecute();
 
     BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows = getPartitioner(populateMetaFields, isTablePartitioned);
@@ -175,9 +174,9 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
    * Bulk-insert overwrite executors override this so the overlap-with-pending-clustering check
    * can fire before any writes materialize.
    *
-   * @param preparedRecords the dataset after {@code HoodieDatasetBulkInsertHelper.prepareForBulkInsert}
-   *                        has populated the {@code _hoodie_partition_path} meta field, so dynamic
-   *                        partition resolution can read it.
+   * @param preparedRecords the dataset after {@code HoodieDatasetBulkInsertHelper.prepareForBulkInsert};
+   *                        its {@code _hoodie_partition_path} column is only populated when meta
+   *                        fields are populated.
    */
   protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(Dataset<Row> preparedRecords) {
     return Collections.emptySet();
