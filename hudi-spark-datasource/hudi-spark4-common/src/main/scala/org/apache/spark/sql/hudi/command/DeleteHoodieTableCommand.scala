@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_WRITES_PREPPED_KEY
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.keygen.KeyGenUtils
 
@@ -33,6 +33,7 @@ import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{isSparkSqlOptimizedWrite, validateUpdatesAsDeletesAndInserts}
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 
@@ -74,10 +75,10 @@ object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieC
   }
 
   def inputPlan(sparkSession: SparkSession, dft: DeleteFromTable, catalogTable: HoodieCatalogTable): (LogicalPlan, Map[String, String]) = {
+    validateUpdatesAsDeletesAndInserts(sparkSession.sessionState.conf, catalogTable)
     val condition = sparkAdapter.extractDeleteCondition(dft)
 
-    val config = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val config = if (isSparkSqlOptimizedWrite(sparkSession.sessionState.conf, catalogTable)) {
       buildHoodieDeleteTableConfig(catalogTable, sparkSession) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
     } else {
       buildHoodieDeleteTableConfig(catalogTable, sparkSession)
@@ -95,8 +96,7 @@ object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieC
 
     val requiredCols = recordKeys ++ conditionColumns
 
-    val targetLogicalPlan = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val targetLogicalPlan = if (isSparkSqlOptimizedWrite(sparkSession.sessionState.conf, catalogTable)) {
       tryPruningDeleteRecordSchema(dft.table, requiredCols)
     } else {
       stripMetaFieldAttributes(dft.table)

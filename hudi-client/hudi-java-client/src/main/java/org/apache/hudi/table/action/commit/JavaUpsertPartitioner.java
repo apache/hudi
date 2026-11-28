@@ -239,6 +239,13 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
    * Returns a list of small files in the given partition path.
    */
   protected List<SmallFile> getSmallFiles(String partitionPath) {
+    if (config.shouldWriteUpdatesAsDeletesAndInserts()
+        && table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
+      // Small-file handling routes records into existing file groups through merges or log
+      // appends, but this write mode requires updates to append positional deletes and inserts
+      // to land in base files of file groups chosen by the insert partitioner
+      return Collections.emptyList();
+    }
 
     // smallFiles only for partitionPath
     List<SmallFile> smallFileLocations = new ArrayList<>();

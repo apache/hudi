@@ -95,6 +95,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());
+    validateNoPositionalDeletesUnderPendingCompaction(workloadProfile);
     log.info("Input workload profile :{}", workloadProfile);
     final Partitioner partitioner = getPartitioner(workloadProfile);
     try {

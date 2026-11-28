@@ -954,6 +954,30 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to write record positions to the block header for data blocks containing updates and delete blocks. "
           + "The record positions can be used to improve the performance of merging records from base and log files.");
 
+  public static final ConfigProperty<Boolean> WRITE_UPDATES_AS_DELETES_AND_INSERTS = ConfigProperty
+      .key("hoodie.write.updates.as.deletes.and.inserts")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled on a merge-on-read table, an upsert routes each update as a positional "
+          + "delete to the record's current file group plus an insert of the new version routed by the insert "
+          + "partitioner, instead of appending an update record to the current file group's log. Log files then "
+          + "carry only positional deletes and every live record stays in a base file, so table formats based on "
+          + "deletion vectors can represent the table exactly. Upserts, inserts and deletes require write table "
+          + "version 8 or higher, " + WRITE_RECORD_POSITIONS.key() + ", the BLOOM, SIMPLE, GLOBAL_BLOOM, "
+          + "GLOBAL_SIMPLE or RECORD_INDEX index (other index types write inserts to log files or do not locate "
+          + "records by base file position, and a custom index class is not supported), and commit-time ordering "
+          + "merge semantics. Prepped upserts, inserts and deletes and partial updates are not "
+          + "supported on merge-on-read tables. Compaction is not scheduled while an earlier delta commit is pending, "
+          + "and an upsert or delete that locates a record in a file group with a pending compaction is refused, since "
+          + "its positional delete would refer to the base file being compacted, so run compaction inline or at times "
+          + "when the writes do not update its file groups. A pending delta commit, including the inflight commit of a "
+          + "crashed writer until it is rolled back, holds off compaction scheduling for the whole table. A delta commit "
+          + "fails when a compaction requested after it started, as by a compactor without this config, covers a file "
+          + "group it wrote positional deletes into. Small-file "
+          + "routing is off, so each upsert writes the new versions to new file groups; schedule clustering to combine "
+          + "them. Every writer and table service of the table has to set this config.");
+
   public static final ConfigProperty<String> WRITE_PARTIAL_UPDATE_SCHEMA = ConfigProperty
       .key("hoodie.write.partial.update.schema")
       .defaultValue("")
@@ -2531,6 +2555,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(SPARK_SQL_MERGE_INTO_READS_TARGET_KEY, false);
   }
 
+  public boolean shouldWriteUpdatesAsDeletesAndInserts() {
+    return getBoolean(WRITE_UPDATES_AS_DELETES_AND_INSERTS);
+  }
+
   public boolean shouldWritePartialUpdates() {
     return !StringUtils.isNullOrEmpty(getString(WRITE_PARTIAL_UPDATE_SCHEMA));
   }
@@ -3847,6 +3875,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteRecordPositionsEnabled(boolean shouldWriteRecordPositions) {
       writeConfig.setValue(WRITE_RECORD_POSITIONS, String.valueOf(shouldWriteRecordPositions));
+      return this;
+    }
+
+    public Builder withWriteUpdatesAsDeletesAndInserts(boolean updatesAsDeletesAndInserts) {
+      writeConfig.setValue(WRITE_UPDATES_AS_DELETES_AND_INSERTS, String.valueOf(updatesAsDeletesAndInserts));
       return this;
     }
 

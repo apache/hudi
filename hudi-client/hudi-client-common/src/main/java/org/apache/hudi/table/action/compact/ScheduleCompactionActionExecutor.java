@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
@@ -73,6 +74,12 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
     this.operationType = operationType;
     checkArgument(operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.LOG_COMPACT,
         "Only COMPACT and LOG_COMPACT is supported");
+    if (operationType == WriteOperationType.LOG_COMPACT && config.shouldWriteUpdatesAsDeletesAndInserts()) {
+      // Log compaction rewrites the logged deletes (inline delete blocks or native delete log files),
+      // which breaks the delete-only, positionally consistent log layout this mode maintains
+      throw new HoodieNotSupportedException("Log compaction is not supported when "
+          + HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " is enabled");
+    }
     initPlanGenerator(context, config, table);
   }
 
@@ -102,6 +109,17 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
               earliestInflightOpt.get(), instantTime);
           return Option.empty();
         }
+      }
+    }
+    if (config.shouldWriteUpdatesAsDeletesAndInserts()) {
+      // A delta commit started before this compaction tombstones rows the plan misses, so the compacted base
+      // file would keep them under a later instant than the new copies, while this write mode treats the copy
+      // with the latest base file instant as the live one: the next update of such a key would delete the
+      // dead copy and leave the live one next to the new version
+      Option<HoodieInstant> earliestPendingDeltaCommit = table.getActiveTimeline().getDeltaCommitTimeline().filterInflightsAndRequested().firstInstant();
+      if (earliestPendingDeltaCommit.isPresent() && !compareTimestamps(earliestPendingDeltaCommit.get().requestedTime(), GREATER_THAN, instantTime)) {
+        log.info("Skipping to schedule compaction at {} since delta commit {} started earlier and is pending", instantTime, earliestPendingDeltaCommit.get());
+        return Option.empty();
       }
     }
 

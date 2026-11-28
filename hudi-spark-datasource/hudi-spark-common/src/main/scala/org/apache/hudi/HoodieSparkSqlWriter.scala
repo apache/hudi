@@ -387,6 +387,7 @@ class HoodieSparkSqlWriterInternal {
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .setMultipleBaseFileFormatsEnabled(hoodieConfig.getBoolean(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE))
           .setTableFormat(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
+          .setTableFormatConfigs(hoodieConfig.getProps)
           .setRecordDeleteFieldAndMarker(parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_KEY, null), parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_MARKER, null))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
@@ -904,6 +905,7 @@ class HoodieSparkSqlWriterInternal {
           .setComplexKeyGenEncoding(explicitComplexKeyGenEncoding(hoodieConfig))
           .setTableVersion(tableVersion)
           .setTableFormat(tableFormat)
+          .setTableFormatConfigs(hoodieConfig.getProps)
           .setTableStorageLayout(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_STORAGE_LAYOUT))
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(payloadClass)

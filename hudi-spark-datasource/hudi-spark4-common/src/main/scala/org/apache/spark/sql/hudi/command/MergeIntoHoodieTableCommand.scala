@@ -48,7 +48,7 @@ import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig, validateUpdatesAsDeletesAndInserts}
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand._
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
@@ -346,6 +346,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     this.sparkSession = sparkSession
     // TODO move to analysis phase
     // Create the write parameters
+    validateUpdatesAsDeletesAndInserts(sparkSession.sessionState.conf, hoodieCatalogTable)
     val props = buildMergeIntoConfig(hoodieCatalogTable)
     validate(props)
 
