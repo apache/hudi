@@ -44,7 +44,7 @@ import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
-import org.apache.spark.sql.catalyst.plans.LeftOuter
+import org.apache.spark.sql.catalyst.plans.{LeftAnti, LeftOuter}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -133,11 +133,15 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * Whether the write reads the records the source records match and evaluates the matched clauses on both before
    * it appends to the log files of a merge-on-read table, which a statement on a table with a record key asks for
-   * when a matched clause refers to a field of the target table in its condition or in an assigned value.
+   * when a matched clause refers to a field of the target table in its condition or in an assigned value, or, on a
+   * table without an ordering field, when it has a matched delete clause and a not-matched insert clause but no update
+   * clause: an index that reads the keys of the base files locates a key deleted in a log file, and only the read
+   * tells that such a record takes the insert clauses.
    * See [[HoodieWriteConfig.SPARK_SQL_MERGE_INTO_READS_TARGET_KEY]].
    */
-  private lazy val readsTargetRecordsOnWrite: Boolean = targetTableType == MOR_TABLE_TYPE_OPT_VAL && hasPrimaryKey() &&
-    mergeInto.matchedActions.exists { action =>
+  private lazy val readsTargetRecordsOnWrite: Boolean = targetTableType == MOR_TABLE_TYPE_OPT_VAL && hasPrimaryKey() && (
+    (hoodieCatalogTable.orderingFields.isEmpty && updatingActions.isEmpty && deletingActions.nonEmpty && insertingActions.nonEmpty)
+      || mergeInto.matchedActions.exists { action =>
       val assignedValues = action match {
         case update: UpdateAction => update.assignments.map(_.value)
         case _ => Seq.empty
@@ -145,7 +149,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       (action.condition.toSeq ++ assignedValues).exists(_.collect {
         case attr: AttributeReference if mergeInto.targetTable.outputSet.contains(attr) => attr
       }.nonEmpty)
-    }
+    })
 
   /**
    * Whether the write evaluates the matched clauses on the source record alone, as the append to the log files of
@@ -430,6 +434,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
       val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
       Project(tableMetaCols ++ incomingDataCols, joinData)
+    } else if (getOperationType(props) == INSERT_OPERATION_OPT_VAL) {
+      // Written as inserts, the source records skip the index lookup, so the ones matching the table are dropped here
+      sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftAnti, Some(mergeInto.mergeCondition), "NONE")
     } else {
       // For a target table with record key(s) configure, the source table is used
       mergeInto.sourceTable
@@ -626,8 +633,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       && getPartialUpdateMode(parameters).isEmpty)
   }
 
+  /**
+   * A table with record key(s) is upserted when the statement has a matched clause, since only the index
+   * lookup finds the target record the clause applies to.
+   */
   private def getOperationType(parameters: Map[String, String]) = {
-    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava)) && updatingActions.isEmpty) {
+    val hasMatchedClauseToApply = if (hasPrimaryKey()) mergeInto.matchedActions.nonEmpty else updatingActions.nonEmpty
+    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava))
+      && !hasMatchedClauseToApply) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL

@@ -1176,6 +1176,17 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             checkExceptionContain(statement)("is only supported with commit time ordering")
             checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1", 10.0))
           }
+          // Matched clauses on source fields alone do not read the target, so the insert clause is accepted
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'del' as name, 0.0D as price, 300L as ts) s
+               | on t.id = s.id
+               | when matched and s.name = 'del' then delete
+               | when not matched then insert *
+             """.stripMargin)
+          checkAnswer(s"select id, name, price from $tableName order by id")(
+            (if (commitTimeOrdering) Seq(Seq(9, "a9", 90.0)) else Seq.empty): _*)
         }
       }
     }
@@ -1392,6 +1403,165 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
       assertResult(instants)(createMetaClient(spark, tmp.getCanonicalPath).getActiveTimeline.getInstants)
       checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1", 10.0), Seq(2, "a2", 20.0))
+    }
+  }
+
+  Seq("cow", "mor").foreach { tableType =>
+    test(s"Test MergeInto without update clause on $tableType table without ordering field") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  dt string
+             | ) using hudi
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id'
+             | )
+             | partitioned by(dt)
+             | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 'p1'), (2, 'a2', 20.0, 'p1'), (3, 'a3', 30.0, 'p1'),"
+          + " (4, 'a4', 40.0, 'p2'), (5, 'a5', 50.0, 'p2')")
+
+        // Delete only with a condition: id 2 fails the condition and id 9 has no match
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'p1' as dt, 'del' as op union all select 2, 'p1', 'keep' union all select 9, 'p1', 'del') s
+             | on t.id = s.id
+             | when matched and s.op = 'del' then delete
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(2, "a2", 20.0, "p1"), Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"))
+
+        // Delete only without a condition: id 8 has no match
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 2 as id, 'p1' as dt union all select 8, 'p2') s
+             | on t.id = s.id
+             | when matched then delete
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"))
+
+        // Insert only without a condition: the matched id 3 is neither inserted again nor updated
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 3 as id, 'a3n' as name, 31.0 as price, 'p1' as dt union all select 6, 'a6', 60.0, 'p2') s
+             | on t.id = s.id
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"), Seq(6, "a6", 60.0, "p2"))
+
+        // Insert only with a condition: id 4 is matched and the unmatched id 10 fails the condition
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 4 as id, 'a4n' as name, 71.0 as price, 'p2' as dt
+             |  union all select 7, 'a7', 70.0, 'p1' union all select 10, 'a10', 5.0, 'p1') s
+             | on t.id = s.id
+             | when not matched and s.price > 50 then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"), Seq(6, "a6", 60.0, "p2"),
+          Seq(7, "a7", 70.0, "p1"))
+
+        // Delete and insert: the matched id 3 fails the delete condition and is not inserted again
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 5 as id, 'a5n' as name, 51.0 as price, 'p2' as dt, 'del' as op
+             |  union all select 3, 'a3n', 31.0, 'p1', 'keep' union all select 11, 'a11', 110.0, 'p1', 'ins') s
+             | on t.id = s.id
+             | when matched and s.op = 'del' then delete
+             | when not matched then insert (id, name, price, dt) values (s.id, s.name, s.price, s.dt)
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName")(
+          Seq(3, "a3", 30.0, "p1"), Seq(4, "a4", 40.0, "p2"), Seq(6, "a6", 60.0, "p2"), Seq(7, "a7", 70.0, "p1"),
+          Seq(11, "a11", 110.0, "p1"))
+      }
+    }
+  }
+
+  test("Test MergeInto without update clause inserts a source row whose key was deleted") {
+    withTempDir { tmp =>
+      for (tableType <- Seq("cow", "mor"); indexType <- Seq("SIMPLE", "BLOOM")) {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double
+             | ) using hudi
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  hoodie.index.type = '$indexType'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0), (2, 'a2', 20.0)")
+        // On a mor table the delete goes to a log file, while the base file still holds id 1
+        spark.sql(s"delete from $tableName where id = 1")
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'n1' as name, 11.0 as price
+             |  union all select 2, 'n2', 21.0 union all select 3, 'n3', 31.0) s
+             | on t.id = s.id
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(1, "n1", 11.0), Seq(2, "a2", 20.0), Seq(3, "n3", 31.0))
+
+        // With a matched delete clause the statement is upserted, and the deleted key still takes the insert clause
+        spark.sql(s"delete from $tableName where id = 3")
+        spark.sql(
+          s"""
+             | merge into $tableName t
+             | using (select 1 as id, 'x1' as name, 12.0 as price union all select 2, 'd2', 0.0
+             |  union all select 3, 'm3', 32.0 union all select 4, 'm4', 41.0) s
+             | on t.id = s.id
+             | when matched and s.name = 'd2' then delete
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(1, "n1", 11.0), Seq(3, "m3", 32.0), Seq(4, "m4", 41.0))
+
+        // Deleted again after a reinsert into another file group, id 1 has a deleted copy in more than one file group
+        // of a mor table, and one source row inserts it once
+        withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+          spark.sql(s"delete from $tableName where id = 1")
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'r1' as name, 13.0 as price) s
+               | on t.id = s.id
+               | when not matched then insert *
+             """.stripMargin)
+          spark.sql(s"delete from $tableName where id = 1")
+          checkAnswer(s"select id, name, price from $tableName")(Seq(3, "m3", 32.0), Seq(4, "m4", 41.0))
+          spark.sql(
+            s"""
+               | merge into $tableName t
+               | using (select 1 as id, 'y1' as name, 14.0 as price) s
+               | on t.id = s.id
+               | when matched and s.name = 'del' then delete
+               | when not matched then insert *
+             """.stripMargin)
+          checkAnswer(s"select id, name, price from $tableName")(
+            Seq(1, "y1", 14.0), Seq(3, "m3", 32.0), Seq(4, "m4", 41.0))
+        }
+      }
     }
   }
 

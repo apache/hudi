@@ -719,12 +719,14 @@ public class HoodieIndexUtils {
           return left;
         }, parallelism)
         .map(entry -> Pair.of(entry.getLeft(), Option.of(entry.getRight())));
-    HoodieData<HoodieRecord<R>> resolvedRecords = locatedRecords.mapToPair(record -> Pair.of(fileGroupAndRecordKey(record), record))
+    // A key is one record per partition unless the index is global
+    boolean globalIndex = hoodieTable.getIndex().isGlobal();
+    HoodieData<HoodieRecord<R>> resolvedRecords = locatedRecords.mapToPair(record -> Pair.of(recordIdentity(record, globalIndex), record))
         .groupByKey()
         .leftOuterJoin(merger.getExistingRecords(locationsAndKeys, hoodieTable)
-            .mapToPair(record -> Pair.of(fileGroupAndRecordKey(record), record)).groupByKey())
+            .mapToPair(record -> Pair.of(recordIdentity(record, globalIndex), record)).groupByKey())
         .values()
-        .flatMap(entry -> pairWithExistingRecords(entry.getLeft(), entry.getRight()).iterator())
+        .flatMap(entry -> pairWithExistingRecordsOfKey(entry.getLeft(), entry.getRight()).iterator())
         .flatMap(entry -> {
           HoodieRecord<R> incoming = entry.getLeft();
           if (!entry.getRight().isPresent()) {
@@ -748,6 +750,42 @@ public class HoodieIndexUtils {
           return Collections.singletonList(tagRecord(resolved, incoming.getCurrentLocation())).iterator();
         });
     return taggedRecords.filter(record -> !isLocatedExpressionPayloadRecord(record)).union(resolvedRecords);
+  }
+
+  /**
+   * Pairs the located records of one record key with the records the file groups they are located in hold for the key,
+   * file group by file group. A copy of the key that a merge-on-read log deleted is still located through its base
+   * file, and when another file group holds the key live, that copy is left out rather than taking the not-matched
+   * clauses of the statement, which would write the key a second time. A key that no file group holds live takes
+   * them once, in one of the file groups.
+   */
+  private static <R> List<Pair<HoodieRecord<R>, Option<HoodieRecord<R>>>> pairWithExistingRecordsOfKey(
+      Iterable<HoodieRecord<R>> locatedRecords, Option<Iterable<HoodieRecord<R>>> existingRecords) {
+    Map<Pair<String, String>, List<HoodieRecord<R>>> locatedByFileGroup = new HashMap<>();
+    locatedRecords.forEach(record -> locatedByFileGroup.computeIfAbsent(partitionPathAndFileId(record), k -> new ArrayList<>()).add(record));
+    Map<Pair<String, String>, List<HoodieRecord<R>>> existingByFileGroup = new HashMap<>();
+    if (existingRecords.isPresent()) {
+      existingRecords.get().forEach(record -> existingByFileGroup.computeIfAbsent(partitionPathAndFileId(record), k -> new ArrayList<>()).add(record));
+    }
+    if (existingByFileGroup.isEmpty()) {
+      // The file group is picked by its partition path and file ID, so a recomputation picks it again
+      return pairWithExistingRecords(locatedByFileGroup.get(Collections.min(locatedByFileGroup.keySet())), Option.empty());
+    }
+    List<Pair<HoodieRecord<R>, Option<HoodieRecord<R>>>> pairs = new ArrayList<>();
+    locatedByFileGroup.forEach((fileGroup, located) -> {
+      List<HoodieRecord<R>> existing = existingByFileGroup.get(fileGroup);
+      for (Pair<HoodieRecord<R>, Option<HoodieRecord<R>>> pair
+          : pairWithExistingRecords(located, existing == null ? Option.empty() : Option.<Iterable<HoodieRecord<R>>>of(existing))) {
+        if (pair.getRight().isPresent()) {
+          pairs.add(pair);
+        }
+      }
+    });
+    return pairs;
+  }
+
+  private static Object recordIdentity(HoodieRecord<?> record, boolean globalIndex) {
+    return globalIndex ? record.getRecordKey() : Pair.of(record.getPartitionPath(), record.getRecordKey());
   }
 
   /**
@@ -789,11 +827,6 @@ public class HoodieIndexUtils {
 
   private static Pair<String, String> partitionPathAndFileId(HoodieRecord<?> record) {
     return Pair.of(record.getPartitionPath(), record.getCurrentLocation().getFileId());
-  }
-
-  // The file IDs of the bucket index can repeat across partitions
-  private static Pair<Pair<String, String>, String> fileGroupAndRecordKey(HoodieRecord<?> record) {
-    return Pair.of(partitionPathAndFileId(record), record.getRecordKey());
   }
 
   /**
