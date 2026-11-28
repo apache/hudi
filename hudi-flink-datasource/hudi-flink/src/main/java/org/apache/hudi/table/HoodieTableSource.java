@@ -146,6 +146,7 @@ public class HoodieTableSource extends FileIndexReader implements
     SupportsFilterPushDown,
     LookupTableSource,
     SupportsReadingMetadata,
+    HoodieVectorSearchSupport,
     Serializable {
   private static final long serialVersionUID = 1L;
   private static final long NO_LIMIT_CONSTANT = -1;
@@ -741,6 +742,61 @@ public class HoodieTableSource extends FileIndexReader implements
   @VisibleForTesting
   public Configuration getConf() {
     return this.conf;
+  }
+
+  /**
+   * Returns the table options. Used by the vector search function to configure the snapshot reader.
+   */
+  public Configuration getTableConf() {
+    return this.conf;
+  }
+
+  /**
+   * Returns the full table row type, including columns that may have been projected away.
+   */
+  public RowType getTableRowType() {
+    return this.tableRowType;
+  }
+
+  /**
+   * Returns whether this source currently reads the table snapshot.
+   */
+  public boolean isSnapshotRead() {
+    return FlinkOptions.QUERY_TYPE_SNAPSHOT.equals(conf.get(FlinkOptions.QUERY_TYPE));
+  }
+
+  /**
+   * Returns whether this source reads as a streaming source.
+   */
+  public boolean isStreamingRead() {
+    return conf.get(FlinkOptions.READ_AS_STREAMING);
+  }
+
+  /**
+   * Returns a snapshot input format with the full table schema, no pushed-down filters, and no limit.
+   * Vector search needs a stable layout because its function serializes the full row type and reads
+   * the search column by position.
+   *
+   * <p>This always uses the legacy {@code InputFormat} snapshot reader; {@code read.source-v2.enabled}
+   * does not change the vector search path.
+   */
+  public InputFormat<RowData, ?> getVectorSearchInputFormat() {
+    HoodieTableSource fullProjection =
+        new HoodieTableSource(
+            this.schema,
+            this.path,
+            this.partitionKeys,
+            this.defaultPartName,
+            this.conf,
+            Collections.emptyList(),
+            null,
+            null,
+            Option.empty(),
+            null,
+            null,
+            this.metaClient,
+            this.internalSchemaManager);
+    return fullProjection.getInputFormat();
   }
 
   /**
