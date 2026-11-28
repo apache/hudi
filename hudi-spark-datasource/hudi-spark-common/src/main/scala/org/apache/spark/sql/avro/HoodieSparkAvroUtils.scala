@@ -34,9 +34,17 @@ import scala.collection.JavaConverters._
  *       This copy omits the upstream `RowReader` trait: it is unused in Hudi and references
  *       the version-specific vendored `AvroDeserializer`, which is not visible to this module.
  *
+ *       The object is deliberately not called `AvroUtils`. It lives in Spark's own package, so a
+ *       class with the same fully qualified name as Spark's (`org.apache.spark.sql.avro.AvroUtils`)
+ *       would shadow Spark's class whenever the Hudi jars come first on the classpath. Spark's
+ *       callers would then bind to this pinned Spark 3.3 fork instead: they lose members the fork
+ *       does not have (e.g. `nonNullUnionBranches`, see Hudi #20601), and a Spark patch release
+ *       can change the fork's constructor under them (SPARK-59108, see Hudi #20916). A distinct
+ *       name keeps the two copies independent.
+ *
  *       PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
-private[sql] object AvroUtils extends Logging {
+private[sql] object HoodieSparkAvroUtils extends Logging {
 
   def supportsDataType(dataType: DataType): Boolean = dataType match {
     case _: AtomicType => true

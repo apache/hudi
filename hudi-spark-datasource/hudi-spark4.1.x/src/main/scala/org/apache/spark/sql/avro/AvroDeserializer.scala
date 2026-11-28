@@ -27,7 +27,7 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.util.Utf8
 import org.apache.spark.sql.avro.AvroDeserializer.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead, RebaseSpec}
-import org.apache.spark.sql.avro.AvroUtils.{toFieldStr, AvroMatchedField}
+import org.apache.spark.sql.avro.HoodieSparkAvroUtils.{toFieldStr, AvroMatchedField}
 import org.apache.spark.sql.catalyst.{InternalRow, NoopFilters, StructFilters}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, DateTimeUtils, GenericArrayData, RebaseDateTime}
@@ -482,7 +482,7 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
                                catalystPath: Seq[String],
                                applyFilters: Int => Boolean): (CatalystDataUpdater, GenericRecord) => Boolean = {
 
-    val avroSchemaHelper = new AvroUtils.AvroSchemaHelper(
+    val avroSchemaHelper = new HoodieSparkAvroUtils.AvroSchemaHelper(
       avroType, catalystType, avroPath, catalystPath, positionalFieldMatch)
 
     avroSchemaHelper.validateNoExtraCatalystFields(ignoreNullable = true)

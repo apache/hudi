@@ -30,7 +30,7 @@ import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
 import org.apache.avro.util.Utf8
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
-import org.apache.spark.sql.avro.AvroUtils.{toFieldStr, AvroMatchedField}
+import org.apache.spark.sql.avro.HoodieSparkAvroUtils.{toFieldStr, AvroMatchedField}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecializedGetters, SpecificInternalRow}
 import org.apache.spark.sql.catalyst.util.{DateTimeUtils, RebaseDateTime}
@@ -343,7 +343,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
                                  catalystPath: Seq[String],
                                  avroPath: Seq[String]): InternalRow => Record = {
 
-    val avroSchemaHelper = new AvroUtils.AvroSchemaHelper(
+    val avroSchemaHelper = new HoodieSparkAvroUtils.AvroSchemaHelper(
       avroStruct, catalystStruct, avroPath, catalystPath, positionalFieldMatch)
 
     avroSchemaHelper.validateNoExtraCatalystFields(ignoreNullable = false)
