@@ -68,7 +68,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -154,7 +156,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
         log.info("Archiving instants {} for table {}", instantsToArchive, config.getBasePath());
         archive(context, instantsToArchive);
         log.info("Deleting archived instants {} for table {}", instantsToArchive, config.getBasePath());
-        success = deleteArchivedInstants(instantsToArchive, context);
+        success = deleteArchivedInstants(instantsToArchive);
       } else {
         log.info("No Instants to archive for table {}", config.getBasePath());
       }
@@ -416,42 +418,25 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
         .collect(Collectors.toList());
   }
 
-  private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
+  /**
+   * Deletes the archived instant files from the active timeline one action at a time, oldest action first.
+   * Within an action the files go in state order (requested, inflight, then completed), so a pending file
+   * never outlives its completed file, and a failed delete leaves every newer action with all of its files.
+   * Deleting actions oldest first keeps the active timeline free of holes for concurrent readers.
+   */
+  private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants) {
     log.info("Deleting instants {}", archivedInstants);
 
-    List<HoodieInstant> pendingInstants = new ArrayList<>();
-    List<HoodieInstant> completedInstants = new ArrayList<>();
-
-    for (HoodieInstant instant : archivedInstants) {
-      if (instant.isCompleted()) {
-        completedInstants.add(instant);
-      } else {
-        pendingInstants.add(instant);
-      }
-    }
-
-    context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants: " + config.getTableName());
-    // Delete the metadata files
-    // in HoodieInstant.State sequence: requested -> inflight -> completed,
-    // this is important because when a COMPLETED metadata file is removed first,
-    // other monitors on the timeline(such as the compaction or clustering services) would
-    // mistakenly recognize the pending file as a pending operation,
-    // then all kinds of weird bugs occur.
+    Map<Pair<String, String>, List<HoodieInstant>> instantsByAction = archivedInstants.stream()
+        .collect(Collectors.groupingBy(
+            instant -> Pair.of(instant.requestedTime(), InstantComparatorV1.getComparableAction(instant.getAction())),
+            LinkedHashMap::new,
+            Collectors.toList()));
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    if (!pendingInstants.isEmpty()) {
-      context.foreach(
-          pendingInstants,
-          instant -> activeTimeline.deleteInstantFileIfExists(instant),
-          Math.min(pendingInstants.size(), config.getArchiveDeleteParallelism())
-      );
-    }
-    if (!completedInstants.isEmpty()) {
-      // Due to the concurrency between deleting completed instants and reading data,
-      // there may be hole in the timeline, which can lead to errors when reading data.
-      // Therefore, the concurrency of deleting completed instants is temporarily disabled,
-      // and instants are deleted in ascending order to prevent the occurrence of such holes.
-      // See HUDI-7207 and #10325.
-      completedInstants.stream().forEach(activeTimeline::deleteInstantFileIfExists);
+    for (List<HoodieInstant> actionInstants : instantsByAction.values()) {
+      actionInstants.stream()
+          .sorted(Comparator.comparing(HoodieInstant::getState))
+          .forEach(activeTimeline::deleteInstantFileIfExists);
     }
     // Call Table Format archive to allow archiving in table format.
     table.getMetaClient().getTableFormat().archive(() -> archivedInstants, table.getContext(), table.getMetaClient(), table.getViewManager());

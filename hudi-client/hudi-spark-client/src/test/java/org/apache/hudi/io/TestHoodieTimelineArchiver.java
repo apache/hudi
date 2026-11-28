@@ -53,6 +53,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
@@ -71,6 +72,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -97,6 +99,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -902,6 +907,53 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       assertTrue(Arrays.equals(archivedTimeLine.getInstantReader().getInstantDetails(instant).get(),
           downgradedArchivedTimeline.getInstantReader().getInstantDetails(instant).get()));
     }
+  }
+
+  /**
+   * A completed instant file that cannot be deleted must stop archival without touching the newer
+   * archived actions: each keeps its requested, inflight and completed files.
+   */
+  @Test
+  void testFailedDeleteLeavesNewerArchivedActionsIntact() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 2, 3, 2);
+    // Reading the stray directory fails while writing the LSM timeline; keep going so the delete step runs.
+    writeConfig.setValue(HoodieWriteConfig.FAIL_ON_TIMELINE_ARCHIVING_ENABLE, "false");
+    Map<String, Integer> cleanStats = Collections.singletonMap("p1", 1);
+    testTable.doWriteOperation("00000001", WriteOperationType.UPSERT, Collections.singletonList("p1"), Collections.singletonList("p1"), 2);
+    testTable.doWriteOperation("00000002", WriteOperationType.UPSERT, Collections.emptyList(), Collections.singletonList("p1"), 2);
+    testTable.doCluster("00000003", Collections.emptyMap(), Collections.singletonList("p1"), 2);
+    testTable.doClean("00000004", cleanStats, Collections.emptyMap());
+    testTable.doWriteOperation("00000005", WriteOperationType.UPSERT, Collections.emptyList(), Collections.singletonList("p1"), 2);
+    testTable.doWriteOperation("00000006", WriteOperationType.UPSERT, Collections.emptyList(), Collections.singletonList("p1"), 2);
+    metaClient.reloadActiveTimeline();
+    replaceWithNonEmptyDirectory(metaClient.getActiveTimeline().getCommitsTimeline().firstInstant().get());
+
+    TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, HoodieSparkTable.create(writeConfig, context, metaClient));
+    assertThrows(HoodieIOException.class, () -> archiver.archiveIfRequired(context));
+
+    // The newer actions were in the failed batch: they reached the archive before the delete step.
+    HoodieArchivedTimeline archivedTimeline = TIMELINE_FACTORY.createArchivedTimeline(metaClient);
+    assertTrue(archivedTimeline.containsInstant("00000002"));
+    assertTrue(archivedTimeline.containsInstant("00000003"));
+    List<State> allStates = Arrays.asList(State.REQUESTED, State.INFLIGHT, State.COMPLETED);
+    assertEquals(allStates, statesOnTimeline("00000002"));
+    assertEquals(allStates, statesOnTimeline("00000003"));
+  }
+
+  private List<State> statesOnTimeline(String instantTime) {
+    return new ActiveTimelineV2(metaClient, false).getInstantsAsStream()
+        .filter(instant -> instant.requestedTime().equals(instantTime))
+        .map(HoodieInstant::getState)
+        .sorted()
+        .collect(Collectors.toList());
+  }
+
+  private void replaceWithNonEmptyDirectory(HoodieInstant instant) throws IOException {
+    Path instantPath = Paths.get(metaClient.getTimelinePath().toUri().getPath(), metaClient.getInstantFileNameGenerator().getFileName(instant));
+    byte[] content = Files.readAllBytes(instantPath);
+    Files.delete(instantPath);
+    Files.createDirectory(instantPath);
+    Files.write(instantPath.resolve(instantPath.getFileName()), content);
   }
 
   private HoodieInstant getHoodieInstant(String action, String instantTime) {

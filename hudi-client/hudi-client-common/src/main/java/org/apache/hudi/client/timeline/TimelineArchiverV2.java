@@ -118,7 +118,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         };
         this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
         log.debug("Deleting archived instants");
-        success = deleteArchivedActions(instantsToArchive, context);
+        success = deleteArchivedActions(instantsToArchive);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
         Supplier<List<HoodieInstant>> archivedInstants = () -> instantsToArchive.stream()
@@ -353,38 +353,17 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     });
   }
 
-  private boolean deleteArchivedActions(List<ActiveAction> activeActions, HoodieEngineContext context) {
-    List<HoodieInstant> pendingInstants = new ArrayList<>();
-    List<HoodieInstant> completedInstants = new ArrayList<>();
-
-    for (ActiveAction activeAction : activeActions) {
-      completedInstants.addAll(activeAction.getCompletedInstants());
-      pendingInstants.addAll(activeAction.getPendingInstants());
-    }
-
-    context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants: " + config.getTableName());
-    // Delete the metadata files
-    // in HoodieInstant.State sequence: requested -> inflight -> completed,
-    // this is important because when a COMPLETED metadata file is removed first,
-    // other monitors on the timeline(such as the compaction or clustering services) would
-    // mistakenly recognize the pending file as a pending operation,
-    // then all kinds of weird bugs occur.
+  /**
+   * Deletes the archived actions from the active timeline one at a time, in the given (ascending) order.
+   * Each action's pending files go before its completed files, so a pending file never outlives its
+   * completed file, and a failed delete leaves every newer action with all of its files. Deleting actions
+   * oldest first keeps the active timeline free of holes for concurrent readers.
+   */
+  private boolean deleteArchivedActions(List<ActiveAction> activeActions) {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    if (!pendingInstants.isEmpty()) {
-      context.foreach(
-          pendingInstants,
-          instant -> activeTimeline.deleteInstantFileIfExists(instant),
-          Math.min(pendingInstants.size(), config.getArchiveDeleteParallelism())
-      );
-    }
-    if (!completedInstants.isEmpty()) {
-      // Due to the concurrency between deleting completed instants and reading data,
-      // there may be hole in the timeline, which can lead to errors when reading data.
-      // Therefore, the concurrency of deleting completed instants is temporarily disabled,
-      // and instants are deleted in ascending order to prevent the occurrence of such holes.
-      // See HUDI-7207 and #10325.
-      completedInstants.stream()
-          .forEach(instant -> activeTimeline.deleteInstantFileIfExists(instant));
+    for (ActiveAction activeAction : activeActions) {
+      activeAction.getPendingInstants().forEach(activeTimeline::deleteInstantFileIfExists);
+      activeAction.getCompletedInstants().forEach(activeTimeline::deleteInstantFileIfExists);
     }
 
     return true;
