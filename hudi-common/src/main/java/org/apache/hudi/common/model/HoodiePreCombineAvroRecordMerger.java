@@ -63,7 +63,8 @@ public class HoodiePreCombineAvroRecordMerger extends HoodieAvroRecordMerger {
       } else {
         Option<IndexedRecord> indexedRecord = payload.getIndexedRecord(newSchema.toAvroSchema(), props);
         T mergedRecord = indexedRecord.map(recordContext::convertAvroRecord).orElse(null);
-        return BufferedRecords.fromEngineRecord(mergedRecord, newSchema, recordContext, orderingFields, newer.getRecordKey(), indexedRecord.isEmpty());
+        boolean isDelete = indexedRecord.isEmpty() || isDeleteRecord(payload, indexedRecord.get());
+        return BufferedRecords.fromEngineRecord(mergedRecord, newSchema, recordContext, orderingFields, newer.getRecordKey(), isDelete);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to combine records", e);

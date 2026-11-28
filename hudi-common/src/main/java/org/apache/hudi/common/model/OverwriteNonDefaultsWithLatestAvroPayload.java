@@ -79,6 +79,7 @@ public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLate
    * Merges the given records into one.
    * The fields in {@code baseRecord} has higher priority:
    * it is set up into the merged record if it is not null or equals to the default.
+   * If {@code mergedRecord} is a delete, {@code baseRecord} is returned unmerged.
    *
    * @param schema       The record schema
    * @param baseRecord   The base record to merge with
@@ -89,6 +90,9 @@ public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLate
   protected Option<IndexedRecord> mergeRecords(Schema schema, GenericRecord baseRecord, GenericRecord mergedRecord) {
     if (isDeleteRecord(baseRecord)) {
       return Option.empty();
+    } else if (isDeleteRecord(mergedRecord)) {
+      // A deleted row's values must not fill a later live row; separate commits would not.
+      return Option.of(baseRecord);
     } else {
       final GenericRecordBuilder builder = new GenericRecordBuilder(schema);
       List<Schema.Field> fields = schema.getFields();

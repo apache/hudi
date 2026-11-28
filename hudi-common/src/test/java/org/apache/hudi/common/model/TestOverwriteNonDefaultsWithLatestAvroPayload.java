@@ -30,6 +30,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -160,14 +162,6 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     delRecord1.put("city", "NY0");
     delRecord1.put("child", Collections.emptyList());
 
-    GenericRecord record2 = new GenericData.Record(schema.toAvroSchema());
-    record2.put("id", "1");
-    record2.put("partition", "partition0");
-    record2.put("ts", 0L);
-    record2.put("_hoodie_is_deleted", true);
-    record2.put("city", "NY0");
-    record2.put("child", Collections.emptyList());
-
     OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1);
     OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(delRecord1, 2);
 
@@ -177,8 +171,35 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     assertEquals(record1, payload1.getInsertValue(schema.toAvroSchema()).get());
     assertFalse(payload2.getInsertValue(schema.toAvroSchema()).isPresent());
 
-    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema.toAvroSchema()).get(), record2);
+    // nothing is filled from a delete, so the live record comes back as is
+    assertEquals(record1, payload1.combineAndGetUpdateValue(delRecord1, schema.toAvroSchema()).get());
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema.toAvroSchema()).isPresent());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testNewerLiveRecordDoesNotInheritFromOlderDelete(boolean nullableDeleteMarker) throws IOException {
+    Schema markerSchema = nullableDeleteMarker
+        ? Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.BOOLEAN))
+        : Schema.create(Schema.Type.BOOLEAN);
+    Object liveMarker = nullableDeleteMarker ? null : false;
+    Schema avroSchema = Schema.createRecord(Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
+        new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
+        new Schema.Field(HoodieRecord.HOODIE_IS_DELETED_FIELD, markerSchema, "", nullableDeleteMarker ? JsonProperties.NULL_VALUE : false),
+        new Schema.Field("city", Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)), "", JsonProperties.NULL_VALUE)
+    ));
+
+    GenericRecord olderDelete = deleteMarkerRecord(avroSchema, 1L, true, "NY0");
+    GenericRecord newerLive = deleteMarkerRecord(avroSchema, 2L, liveMarker, null);
+    OverwriteNonDefaultsWithLatestAvroPayload newerLivePayload = new OverwriteNonDefaultsWithLatestAvroPayload(newerLive, 2L);
+    assertEquals(deleteMarkerRecord(avroSchema, 2L, liveMarker, null),
+        newerLivePayload.combineAndGetUpdateValue(olderDelete, avroSchema).get());
+
+    GenericRecord olderLive = deleteMarkerRecord(avroSchema, 1L, liveMarker, "NY0");
+    GenericRecord newerDelete = deleteMarkerRecord(avroSchema, 2L, true, null);
+    OverwriteNonDefaultsWithLatestAvroPayload newerDeletePayload = new OverwriteNonDefaultsWithLatestAvroPayload(newerDelete, 2L);
+    assertFalse(newerDeletePayload.combineAndGetUpdateValue(olderLive, avroSchema).isPresent());
   }
 
   @Test
@@ -209,6 +230,15 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
 
     OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(record2, 1);
     assertEquals(payload2.combineAndGetUpdateValue(record1, avroSchema).get(), record3);
+  }
+
+  private static GenericRecord deleteMarkerRecord(Schema schema, long ts, Object isDeleted, String city) {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("ts", ts);
+    record.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, isDeleted);
+    record.put("city", city);
+    return record;
   }
 
   private static GenericRecord createRecordWithMetadataFields(HoodieSchema schema, String recordKey, String partitionPath) {

@@ -19,6 +19,8 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -27,6 +29,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -304,5 +308,75 @@ public class TestPartialUpdateAvroPayload {
     PartialUpdateAvroPayload payloadAfterPreCombine = payload3.preCombine(payload2, schema, properties);
     IndexedRecord finalOutputWithPreCombine = payloadAfterPreCombine.combineAndGetUpdateValue(record1, schema, properties).get();
     assertEquals(outputWithPreCombineUsed, finalOutputWithPreCombine);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testNewerLiveRecordDoesNotInheritFromOlderDelete(boolean withMetaFields) throws IOException {
+    Schema markerSchema = nullableDeleteMarkerSchema(withMetaFields);
+    Properties properties = new Properties();
+    properties.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
+
+    GenericRecord olderDelete = nullableDeleteMarkerRecord(markerSchema, 1L, true, "NY0");
+    GenericRecord newerLive = nullableDeleteMarkerRecord(markerSchema, 2L, null, null);
+    if (withMetaFields) {
+      // the delete arrived later; the live row must still keep its own meta fields
+      olderDelete.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, "002");
+      newerLive.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, "001");
+    }
+    // nothing is filled from the delete: same as the delete and the live row landing in separate commits
+    GenericRecord expected = new GenericData.Record((GenericData.Record) newerLive, true);
+    PartialUpdateAvroPayload olderPayload = new PartialUpdateAvroPayload(olderDelete, 1L);
+    PartialUpdateAvroPayload newerPayload = new PartialUpdateAvroPayload(newerLive, 2L);
+
+    assertEquals(expected, newerPayload.combineAndGetUpdateValue(olderDelete, markerSchema, properties).get());
+    for (PartialUpdateAvroPayload merged : Arrays.asList(
+        newerPayload.preCombine(olderPayload, markerSchema, properties),
+        olderPayload.preCombine(newerPayload, markerSchema, properties))) {
+      assertFalse(merged.isDeleted(markerSchema, properties));
+      assertEquals(expected, merged.getInsertValue(markerSchema).get());
+      assertEquals(2L, merged.getOrderingVal());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testNewerDeleteWinsOverOlderLiveRecord(boolean withMetaFields) throws IOException {
+    Schema markerSchema = nullableDeleteMarkerSchema(withMetaFields);
+    Properties properties = new Properties();
+    properties.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
+
+    GenericRecord olderLive = nullableDeleteMarkerRecord(markerSchema, 1L, null, "NY0");
+    GenericRecord newerDelete = nullableDeleteMarkerRecord(markerSchema, 2L, true, null);
+    PartialUpdateAvroPayload olderPayload = new PartialUpdateAvroPayload(olderLive, 1L);
+    PartialUpdateAvroPayload newerPayload = new PartialUpdateAvroPayload(newerDelete, 2L);
+
+    assertFalse(newerPayload.combineAndGetUpdateValue(olderLive, markerSchema, properties).isPresent());
+    assertFalse(olderPayload.combineAndGetUpdateValue(newerDelete, markerSchema, properties).isPresent());
+    for (PartialUpdateAvroPayload merged : Arrays.asList(
+        newerPayload.preCombine(olderPayload, markerSchema, properties),
+        olderPayload.preCombine(newerPayload, markerSchema, properties))) {
+      assertTrue(merged.isDeleted(markerSchema, properties));
+      assertFalse(merged.getInsertValue(markerSchema).isPresent());
+      assertEquals(2L, merged.getOrderingVal());
+    }
+  }
+
+  private static Schema nullableDeleteMarkerSchema(boolean withMetaFields) {
+    Schema schema = new Schema.Parser().parse("{\"type\": \"record\", \"name\": \"markerRecord\", \"fields\": ["
+        + "{\"name\": \"id\", \"type\": [\"null\", \"string\"], \"default\": null},"
+        + "{\"name\": \"ts\", \"type\": [\"null\", \"long\"], \"default\": null},"
+        + "{\"name\": \"_hoodie_is_deleted\", \"type\": [\"null\", \"boolean\"], \"default\": null},"
+        + "{\"name\": \"city\", \"type\": [\"null\", \"string\"], \"default\": null}]}");
+    return withMetaFields ? HoodieSchemaUtils.addMetadataFields(HoodieSchema.fromAvroSchema(schema)).toAvroSchema() : schema;
+  }
+
+  private static GenericRecord nullableDeleteMarkerRecord(Schema schema, long ts, Boolean isDeleted, String city) {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("ts", ts);
+    record.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, isDeleted);
+    record.put("city", city);
+    return record;
   }
 }
