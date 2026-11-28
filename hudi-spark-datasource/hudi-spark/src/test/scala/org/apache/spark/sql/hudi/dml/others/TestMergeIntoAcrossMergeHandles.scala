@@ -19,7 +19,10 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
-import org.apache.hudi.config.HoodieIndexConfig
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.io.HoodieWriteMergeHandle
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -104,6 +107,39 @@ class TestMergeIntoAcrossMergeHandles extends HoodieSparkSqlTestBase {
       StructField("ts", LongType, nullable = true),
       StructField("country", StringType, nullable = true)))
     spark.createDataFrame(rows.asJava, sourceSchema).createOrReplaceTempView(viewName)
+  }
+
+  test("Test MergeInto preserves the commit time of an ignored row") {
+    withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
+      withSQLConf(
+        HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key() -> classOf[HoodieWriteMergeHandle[_, _, _, _]].getName,
+        HoodieIndexConfig.INDEX_TYPE.key() -> "SIMPLE",
+        SPARK_SQL_OPTIMIZED_WRITES.key() -> "false") {
+        val tableName = generateTableName
+        createTableWithRows(tableName, s"${tmp.getCanonicalPath}/$tableName", "cow")
+        val ignoredCommitQuery = s"select _hoodie_commit_time from $tableName where name = 'a2'"
+        val originalCommit = spark.sql(ignoredCommitQuery).head().getString(0)
+
+        val sourceView = s"${tableName}_source"
+        createNullableSourceView(sourceView,
+          Row("a1", "scottsdale", 9, 2000L, "US"),
+          Row("a2", "ignored", -1, 2000L, "US"))
+
+        spark.sql(
+          s"""
+             |merge into $tableName t
+             |using $sourceView s
+             |on t.country = s.country and t.name = s.name
+             |when matched and s.rating > 0 then update set *
+           """.stripMargin)
+
+        checkRows(tableName)(
+          Seq("a1", "scottsdale", 9, 2000L, "US"),
+          Seq("a2", "nyc", 2, 1000L, "US"),
+          Seq("a3", "toronto", 3, 1000L, "CA"))
+        checkAnswer(ignoredCommitQuery)(Seq(originalCommit))
+      }
+    })
   }
 
   testOnTableTypesAndMergeHandles("Test MergeInto update with a non-nullable source") { tableType =>
