@@ -18,17 +18,24 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.StreamerUtil;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
+
+import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -67,6 +74,18 @@ public class HoodieScanContext implements Serializable {
   // Partition bucket id function for bucket pruning
   private final Function<String, Integer> partitionBucketIdFunc;
   private final long limit;
+  @Setter
+  private volatile HoodieTimelineTimeZone timelineTimeZone;
+
+  /** A reader planned before table creation resolves the timezone on its first split. */
+  @Nullable
+  public HoodieTimelineTimeZone getTimelineTimeZone() {
+    if (timelineTimeZone == null) {
+      timelineTimeZone = StreamerUtil.getTableConfig(path.toString(), HadoopConfigurations.getHadoopConf(conf))
+          .map(HoodieTableConfig::getTimelineTimezone).orElse(null);
+    }
+    return timelineTimeZone;
+  }
 
   public Duration getScanInterval() {
     return Duration.ofSeconds(conf.get(FlinkOptions.READ_STREAMING_CHECK_INTERVAL));

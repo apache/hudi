@@ -24,10 +24,10 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -51,6 +51,7 @@ import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cdc.CdcIterators;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.VectorConversionUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -58,8 +59,6 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
-
-import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -83,6 +82,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
 
   private final List<DataType> fieldTypes;
   private final MergeOnReadTableState tableState;
+  private transient HoodieTableMetaClient metaClient;
   // Fallback reader for non-CDC splits (e.g. snapshot reads when read.start-commit='earliest')
   private transient HoodieSplitReaderFunction fallbackReaderFunction;
   private transient DataType[] readFieldTypes;
@@ -111,14 +111,6 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
     ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
     this.tableState = tableState;
     this.fieldTypes = fieldTypes;
-  }
-
-  @Override
-  @Nullable
-  public HoodieTimelineTimeZone getTimelineTimeZone(HoodieSourceSplit split) {
-    return split instanceof HoodieCdcSourceSplit
-        ? super.getTimelineTimeZone(split)
-        : getFallbackReaderFunction().getTimelineTimeZone(split);
   }
 
   @Override
@@ -342,5 +334,12 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
         split.getLogPaths()
             .map(lp -> lp.stream().map(HoodieLogFile::new).collect(Collectors.toList()))
             .orElse(Collections.emptyList()));
+  }
+
+  private HoodieTableMetaClient getMetaClient() {
+    if (metaClient == null) {
+      metaClient = StreamerUtil.metaClientForReader(conf, getHadoopConf());
+    }
+    return metaClient;
   }
 }

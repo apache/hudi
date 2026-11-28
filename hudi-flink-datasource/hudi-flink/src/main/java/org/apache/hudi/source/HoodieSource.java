@@ -97,6 +97,9 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
     this.readerFunctionSupplier = readerFunctionSupplier;
     this.splitComparator = splitComparator;
     this.metaClient = metaClient;
+    if (metaClient != null) {
+      scanContext.setTimelineTimeZone(metaClient.getTableConfig().getTimelineTimezone());
+    }
     this.recordEmitter = recordEmitter;
     this.tableName = metaClient == null
         ? scanContext.getConf().get(FlinkOptions.TABLE_NAME)
@@ -131,9 +134,8 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
 
   @Override
   public SourceReader<T, HoodieSourceSplit> createReader(SourceReaderContext readerContext) throws Exception {
-    return HoodieSourceReader.create(
-        tableName, metaClient == null ? null : metaClient.getTableConfig().getTimelineTimezone(),
-        recordEmitter, scanContext, readerContext, readerFunctionSupplier, splitComparator);
+    return new HoodieSourceReader<T>(
+        tableName, recordEmitter, scanContext, readerContext, readerFunctionSupplier, splitComparator);
   }
 
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(
@@ -177,8 +179,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
         List<HoodieSourceSplit> splits = createBatchHoodieSplits();
         splitProvider.onDiscoveredSplits(splits);
       }
-      return new HoodieStaticSplitEnumerator(
-          tableName, metaClient.getTableConfig().getTimelineTimezone(), enumContext, splitProvider);
+      return new HoodieStaticSplitEnumerator(tableName, enumContext, splitProvider);
     }
   }
 

@@ -19,7 +19,6 @@
 package org.apache.hudi.source.reader;
 
 import org.apache.hudi.common.function.SerializableSupplier;
-import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
@@ -42,7 +41,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The split reader of Hoodie source.
@@ -66,7 +64,6 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final Queue<HoodieSourceSplit> splits;
   private final FlinkStreamReadMetrics readerMetrics;
-  private final AtomicReference<HoodieTimelineTimeZone> timelineTimeZone;
   private final SplitReaderFunction<T> readerFunction;
   private final Option<RecordLimiter> recordLimiter;
   private transient HoodieSourceSplit currentSplit;
@@ -85,7 +82,6 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
    */
   public HoodieSourceSplitReader(
       FlinkStreamReadMetrics readerMetrics,
-      AtomicReference<HoodieTimelineTimeZone> timelineTimeZone,
       SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
       SerializableComparator<HoodieSourceSplit> splitComparator,
       Option<RecordLimiter> recordLimiter) {
@@ -96,7 +92,6 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
     this.readerFunction = readerFunctionSupplier.get();
     this.recordLimiter = recordLimiter;
     this.readerMetrics = readerMetrics;
-    this.timelineTimeZone = timelineTimeZone;
   }
 
   @Override
@@ -119,9 +114,6 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
         return new RecordsBySplits<>(Collections.emptyMap(), Collections.emptySet());
       }
       currentSplit = nextSplit;
-      if (timelineTimeZone.get() == null) {
-        timelineTimeZone.compareAndSet(null, readerFunction.getTimelineTimeZone(currentSplit));
-      }
       readerMetrics.startSplit(currentSplit.splitId(), currentSplit.getLatestCommit());
       readerFunction.open(currentSplit);
     }

@@ -65,6 +65,7 @@ import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE_MERGE_ON_REA
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -243,8 +244,7 @@ public class TestStreamReadOperator {
         .emitDelete(true)
         .build();
 
-    assertEquals(HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue(), format.getTimelineTimeZone(),
-        "The default timezone applies while there is no table");
+    assertNull(format.getTimelineTimeZone());
 
     HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(lateConf);
     Properties utcTimeline = new Properties();

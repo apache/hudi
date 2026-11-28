@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -53,6 +52,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplitAssigner;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -130,11 +131,6 @@ public class MergeOnReadInputFormat
   private String tableName;
 
   /**
-   * Timeline timezone of the table, read once the table exists.
-   */
-  private transient HoodieTimelineTimeZone timelineTimeZone;
-
-  /**
    * Flag saying whether the input format has been closed.
    */
   @Getter
@@ -146,12 +142,7 @@ public class MergeOnReadInputFormat
    * The table metadata client
    */
   protected transient HoodieTableMetaClient metaClient;
-
-  /**
-   * Whether {@link #open} has reused the meta client {@link #getTimelineTimeZone} built for the
-   * first split, so later splits still get a fresh one on every open as before.
-   */
-  private transient boolean firstSplitOpened = false;
+  private transient HoodieTableMetaClient nextSplitMetaClient;
 
   /**
    * The hoodie write configuration.
@@ -186,17 +177,28 @@ public class MergeOnReadInputFormat
     return new Builder();
   }
 
+  /** Loads the timezone for metrics and reuses the client when opening the split. */
+  @Nullable
+  public HoodieTimelineTimeZone getTimelineTimeZone() {
+    HoodieTableMetaClient client = prepareMetaClient();
+    return client == null ? null : client.getTableConfig().getTimelineTimezone();
+  }
+
+  @Nullable
+  private HoodieTableMetaClient prepareMetaClient() {
+    if (nextSplitMetaClient == null) {
+      hadoopConf = HadoopConfigurations.getHadoopConf(conf);
+      nextSplitMetaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
+    }
+    return nextSplitMetaClient;
+  }
+
   @Override
   public void open(MergeOnReadInputSplit split) throws IOException {
     this.currentReadCount = 0L;
     this.closed = false;
-    this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
-    // getTimelineTimeZone() already built this for the first split; reuse it instead of
-    // reading hoodie.properties again. Later splits still get a fresh one, as before.
-    this.metaClient = !this.firstSplitOpened && this.metaClient != null
-        ? this.metaClient
-        : StreamerUtil.metaClientForReader(this.conf, hadoopConf);
-    this.firstSplitOpened = true;
+    this.metaClient = prepareMetaClient();
+    nextSplitMetaClient = null;
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
     this.iterator = initIterator(split);
     this.tableName = metaClient.getTableConfig().getTableName();
@@ -273,22 +275,6 @@ public class MergeOnReadInputFormat
     }
     this.iterator = null;
     this.closed = true;
-  }
-
-  /**
-   * Returns the timeline timezone of the table. A streaming read can start before the table exists, so
-   * the meta client is built on first use and the default is returned while there is no table yet.
-   * {@link #open} reuses this same meta client for the first split instead of building another one.
-   */
-  public HoodieTimelineTimeZone getTimelineTimeZone() {
-    if (timelineTimeZone == null) {
-      this.metaClient = StreamerUtil.metaClientForReader(this.conf, HadoopConfigurations.getHadoopConf(this.conf));
-      if (this.metaClient == null) {
-        return HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue();
-      }
-      timelineTimeZone = metaClient.getTableConfig().getTimelineTimezone();
-    }
-    return timelineTimeZone;
   }
 
   // -------------------------------------------------------------------------

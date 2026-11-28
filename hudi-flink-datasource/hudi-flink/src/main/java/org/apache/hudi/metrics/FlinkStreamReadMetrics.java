@@ -33,6 +33,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -74,18 +75,10 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
    */
   private final Map<String, Instant> activeSplitCommits = new ConcurrentHashMap<>();
 
-  /**
-   * For a table that exists when the metrics are created.
-   */
-  public FlinkStreamReadMetrics(MetricGroup metricGroup, String tableName, HoodieTimelineTimeZone timelineTimeZone) {
-    this(metricGroup, tableName, () -> timelineTimeZone);
+  public FlinkStreamReadMetrics(MetricGroup metricGroup, String tableName) {
+    this(metricGroup, tableName, () -> HoodieTimelineTimeZone.LOCAL);
   }
 
-  /**
-   * For a streaming read that can start before the table exists. {@code timelineTimeZone} supplies the
-   * timeline timezone of the table and is called each time an instant is parsed, which only happens
-   * once there is a table to read.
-   */
   public FlinkStreamReadMetrics(MetricGroup metricGroup, String tableName, Supplier<HoodieTimelineTimeZone> timelineTimeZone) {
     this(metricGroup, tableName, timelineTimeZone, Clock.systemUTC());
   }
@@ -106,8 +99,15 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
   }
 
   public void setIssuedInstant(String issuedInstant) {
+    setIssuedInstant(issuedInstant, timelineTimeZone.get());
+  }
+
+  public void setIssuedInstant(String issuedInstant, HoodieTimelineTimeZone timeZone) {
+    if (timeZone == null) {
+      return;
+    }
     try {
-      this.issuedInstant = parseInstant(issuedInstant);
+      this.issuedInstant = parseInstant(issuedInstant, timeZone);
     } catch (ParseException e) {
       log.warn("Invalid input issued instant: {}", issuedInstant);
     }
@@ -118,8 +118,12 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
    * before opening the split, so that a slow open or recovery replay counts as reading.
    */
   public void startSplit(String splitId, String splitLatestCommit) {
+    HoodieTimelineTimeZone zone = timelineTimeZone.get();
+    if (zone == null) {
+      return;
+    }
     try {
-      Instant commit = parseInstant(splitLatestCommit);
+      Instant commit = parseInstant(splitLatestCommit, zone);
       this.splitLatestCommit = commit;
       activeSplitCommits.put(splitId, commit);
     } catch (ParseException e) {
@@ -136,10 +140,8 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
     activeSplitCommits.remove(splitId);
   }
 
-  private Instant parseInstant(String instantTime) throws ParseException {
-    HoodieTimelineTimeZone timeZone = timelineTimeZone.get();
-    // LOCAL is the zone of the JVM that reads, which is what the one-argument parser applies
-    ZoneId zone = HoodieTimelineTimeZone.UTC.equals(timeZone) ? timeZone.getZoneId() : ZoneId.systemDefault();
+  private static Instant parseInstant(String instantTime, HoodieTimelineTimeZone timeZone) throws ParseException {
+    ZoneId zone = timeZone == HoodieTimelineTimeZone.UTC ? ZoneOffset.UTC : ZoneId.systemDefault();
     return HoodieInstantTimeGenerator.parseDateFromInstantTime(instantTime, zone).toInstant();
   }
 

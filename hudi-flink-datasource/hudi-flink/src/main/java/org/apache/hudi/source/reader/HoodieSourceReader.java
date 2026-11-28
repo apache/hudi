@@ -19,7 +19,6 @@
 package org.apache.hudi.source.reader;
 
 import org.apache.hudi.common.function.SerializableSupplier;
-import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
@@ -33,13 +32,10 @@ import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
 import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 
-import javax.annotation.Nullable;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The reader implementation of Hoodie Source.
@@ -49,34 +45,34 @@ public class HoodieSourceReader<T> extends
         SingleThreadMultiplexSourceReaderBase<HoodieRecordWithPosition<T>, T, HoodieSourceSplit, HoodieSourceSplit> {
   private final FlinkStreamReadMetrics readerMetrics;
 
-  public static <T> HoodieSourceReader<T> create(
+  public HoodieSourceReader(
           String tableName,
-          @Nullable HoodieTimelineTimeZone plannedTimeZone,
           RecordEmitter<HoodieRecordWithPosition<T>, T, HoodieSourceSplit> recordEmitter,
           HoodieScanContext scanContext,
           SourceReaderContext context,
           SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
           SerializableComparator<HoodieSourceSplit> splitComparator) {
-    // Fetchers can be restarted while the source reader and its metrics stay alive.
-    AtomicReference<HoodieTimelineTimeZone> timelineTimeZone = new AtomicReference<>(plannedTimeZone);
-    FlinkStreamReadMetrics metrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName, timelineTimeZone::get);
-    metrics.registerMetrics();
-    return new HoodieSourceReader<>(metrics, timelineTimeZone, recordEmitter, scanContext, context, readerFunctionSupplier, splitComparator);
+    this(createReaderMetrics(context, tableName, scanContext), recordEmitter, scanContext, context, readerFunctionSupplier, splitComparator);
   }
 
   @VisibleForTesting
   HoodieSourceReader(
           FlinkStreamReadMetrics readerMetrics,
-          AtomicReference<HoodieTimelineTimeZone> timelineTimeZone,
           RecordEmitter<HoodieRecordWithPosition<T>, T, HoodieSourceSplit> recordEmitter,
           HoodieScanContext scanContext,
           SourceReaderContext context,
           SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
           SerializableComparator<HoodieSourceSplit> splitComparator) {
-    super(() -> new HoodieSourceSplitReader<>(readerMetrics, timelineTimeZone, readerFunctionSupplier, splitComparator,
+    super(() -> new HoodieSourceSplitReader<>(readerMetrics, readerFunctionSupplier, splitComparator,
             scanContext.getLimit() == RecordLimiter.NO_LIMIT ? Option.empty() : Option.of(new RecordLimiter(scanContext.getLimit()))),
         recordEmitter, scanContext.getConf(), context);
     this.readerMetrics = readerMetrics;
+  }
+
+  private static FlinkStreamReadMetrics createReaderMetrics(SourceReaderContext context, String tableName, HoodieScanContext scanContext) {
+    FlinkStreamReadMetrics readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName, scanContext::getTimelineTimeZone);
+    readerMetrics.registerMetrics();
+    return readerMetrics;
   }
 
   @Override

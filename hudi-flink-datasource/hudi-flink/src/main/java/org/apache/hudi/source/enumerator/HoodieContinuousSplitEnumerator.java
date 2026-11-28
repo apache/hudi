@@ -53,9 +53,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
       HoodieContinuousSplitDiscover splitDiscover,
       HoodieScanContext scanContext,
       Option<HoodieSplitEnumeratorState> enumStateOpt) {
-    // splitDiscover resolves the table's real timeline timezone once discovery finds it, instead
-    // of a value frozen at construction time for a streaming read planned before the table exists.
-    super(tableName, splitDiscover::getTimelineTimeZone, enumeratorContext, splitProvider);
+    super(tableName, enumeratorContext, splitProvider);
     this.enumeratorContext = enumeratorContext;
     this.splitDiscover = splitDiscover;
     this.scanContext = scanContext;
@@ -109,7 +107,8 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
     if (!result.getSplits().isEmpty()) {
       splitProvider.onDiscoveredSplits(result.getSplits());
       if (enumeratorMetrics != null) {
-        position.get().getIssuedInstant().ifPresent(enumeratorMetrics::setIssuedInstant);
+        position.get().getIssuedInstant().ifPresent(
+            instant -> enumeratorMetrics.setIssuedInstant(instant, scanContext.getTimelineTimeZone()));
       }
       log.debug(
           "Added {} splits discovered between ({}, {}] to the assigner",

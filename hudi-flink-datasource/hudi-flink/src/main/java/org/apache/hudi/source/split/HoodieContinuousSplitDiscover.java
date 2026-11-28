@@ -18,8 +18,6 @@
 
 package org.apache.hudi.source.split;
 
-import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-
 import org.apache.flink.annotation.Internal;
 
 /**
@@ -30,10 +28,4 @@ public interface HoodieContinuousSplitDiscover {
 
   /** Discover the files appended between {@code lastInstant} and the last commit of current table */
   HoodieContinuousSplitBatch discoverSplits(String lastInstant);
-
-  /**
-   * Returns the timeline timezone of the table this discoverer reads, once discovery has found it.
-   * A streaming read can start before the table exists, so the default is returned until then.
-   */
-  HoodieTimelineTimeZone getTimelineTimeZone();
 }

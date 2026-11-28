@@ -19,8 +19,6 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.adapter.RichSourceFunctionAdapter;
-import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -323,12 +321,9 @@ public class StreamReadMonitoringFunction
     this.instantState.clear();
     if (this.issuedInstant != null) {
       this.instantState.add(this.issuedInstant);
-      // Before the first scan (e.g. a snapshot taken right after a checkpoint restore),
-      // metaClient is still null and the gauge would wrongly parse this instant with the
-      // LOCAL fallback zone instead of the table's real one. The checkpoint state above
-      // does not need the zone, so only the gauge update waits for the table to be known.
-      if (this.metaClient != null) {
-        this.readMetrics.setIssuedInstant(this.issuedInstant);
+      // A restored instant can be checkpointed before the first scan has found the table.
+      if (metaClient != null) {
+        readMetrics.setIssuedInstant(issuedInstant, metaClient.getTableConfig().getTimelineTimezone());
       }
     }
     if (this.issuedOffset != null) {
@@ -341,18 +336,8 @@ public class StreamReadMonitoringFunction
 
   private void registerMetrics() {
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    readMetrics = new FlinkStreamReadMetrics(metrics, tableName, this::getTimelineTimeZone);
+    readMetrics = new FlinkStreamReadMetrics(metrics, tableName);
     readMetrics.registerMetrics();
-  }
-
-  /**
-   * The metrics are registered before the table is guaranteed to exist, so the timezone comes from
-   * the meta client, which is created once the table does.
-   */
-  private HoodieTimelineTimeZone getTimelineTimeZone() {
-    return metaClient == null
-        ? HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue()
-        : metaClient.getTableConfig().getTimelineTimezone();
   }
 
   private static class SplitState implements Serializable {

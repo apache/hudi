@@ -181,17 +181,15 @@ class TestFlinkStreamReadMetrics {
   }
 
   @Test
-  void testTimelineTimeZoneIsLookedUpWhenAnInstantIsParsed() {
+  void testSplitMetricsWaitForTheTableTimeZone() {
     withDefaultZone("Asia/Shanghai", () -> {
-      // the table does not exist yet, then it is created with a UTC timeline
-      AtomicReference<HoodieTimelineTimeZone> tableTimeZone = new AtomicReference<>(HoodieTimelineTimeZone.LOCAL);
+      AtomicReference<HoodieTimelineTimeZone> tableTimeZone = new AtomicReference<>();
       createMetrics(tableTimeZone::get, Instant.parse("2026-11-11T10:10:00Z"));
+      metrics.startSplit("first", "20261111100000000");
+      assertEquals(0L, gauge("splitLatestCommit"));
       tableTimeZone.set(HoodieTimelineTimeZone.UTC);
-
-      metrics.setIssuedInstant("20261111100000000");
-
-      assertEquals(600L, gauge("issuedInstantDelay"));
-      assertEquals(Instant.parse("2026-11-11T10:00:00Z").getEpochSecond(), gauge("issuedInstant"));
+      metrics.startSplit("second", "20261111100000000");
+      assertEquals(Instant.parse("2026-11-11T10:00:00Z").getEpochSecond(), gauge("splitLatestCommit"));
     });
   }
 
