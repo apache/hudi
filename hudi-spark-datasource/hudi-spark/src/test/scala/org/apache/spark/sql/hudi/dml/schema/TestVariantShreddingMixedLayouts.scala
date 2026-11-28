@@ -2381,7 +2381,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     val format = new HoodieFileGroupReaderBasedFileFormat(
       "unused", HoodieTableSchema(unusedSchema,
         HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(unusedSchema, "unused", "hoodie.test")),
-      "unused", "000", Seq.empty, isMOR = false, isBootstrap = false, isIncremental = false,
+      "unused", None, Seq.empty, isMOR = false, isBootstrap = false, isIncremental = false,
       "", shouldUseRecordPosition = false, Seq.empty, isMultipleBaseFileFormatsEnabled = false,
       HoodieFileFormat.PARQUET)
 

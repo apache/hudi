@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -86,6 +87,31 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name, price, ts from $tableName")(
         Seq(1, "a1", 10.0, 1000)
       )
+    }
+  }
+
+  test("Test a cached view of a table reads no rows after the table is truncated") {
+    // On Spark 4 the refresh of the table after a write resolves a relation whose options differ from those of
+    // the relation in the cached plan, so it does not find the cached plan and the view is not re-executed
+    assume(HoodieSparkUtils.isSpark3, "A cached plan is not re-executed after a write on Spark 4")
+    Seq("cow", "mor").foreach { tableType =>
+      val tableName = generateTableName
+      val viewName = s"${tableName}_view"
+      spark.sql(
+        s"""
+           |create table $tableName (id int, name string, price double, ts long) using hudi
+           | tblproperties (type = '$tableType', primaryKey = 'id', orderingFields = 'ts')
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000)")
+      spark.sql(s"select id, name from $tableName").createOrReplaceTempView(viewName)
+      spark.sql(s"cache table $viewName")
+      checkAnswer(s"select id, name from $viewName")(Seq(1, "a1"))
+
+      spark.sql(s"truncate table $tableName")
+      withClue(s"$tableType table: ") {
+        checkAnswer(s"select id, name from $viewName")()
+      }
+      spark.sql(s"uncache table $viewName")
     }
   }
 
