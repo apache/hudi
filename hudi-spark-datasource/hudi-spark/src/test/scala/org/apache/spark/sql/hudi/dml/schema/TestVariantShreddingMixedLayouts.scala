@@ -1096,12 +1096,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         withSQLConf("hoodie.schema.on.read.enable" -> "true") {
           val instantBefore = latestCompletedInstant(tablePath)
           val filesBefore = listDataParquetFiles(tablePath)
-          // Under default configs the rename itself is refused (#19766, its own pin; a failed attempt
-          // leaves a REQUESTED instant behind). The column-drop knob short-circuits that check, so
-          // it is set around the DDL only.
-          withSQLConf("hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
-            spark.sql(s"alter table $tableName rename column v to w")
-          }
+          spark.sql(s"alter table $tableName rename column v to w")
           assert(latestCompletedInstant(tablePath) != instantBefore,
             s"[$leg] the rename must commit on its own instant")
           assert(listDataParquetFiles(tablePath) == filesBefore, s"[$leg] a rename rewrites no data file")

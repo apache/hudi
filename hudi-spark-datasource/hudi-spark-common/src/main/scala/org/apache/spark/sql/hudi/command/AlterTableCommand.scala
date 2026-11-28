@@ -272,12 +272,13 @@ object AlterTableCommand extends Logging {
       .setTimeGeneratorConfig(client.getConfig.getTimeGeneratorConfig)
       .build()
 
+    // Validate before the commit starts, so that a rejected change leaves no instant on the timeline
+    HoodieSparkTable.create(client.getConfig, client.getEngineContext).validateAlterSchema()
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType)
     val instantTime = client.startCommit(commitActionType)
     client.setOperationType(WriteOperationType.ALTER_SCHEMA)
 
     val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
-    hoodieTable.validateSchema()
     val timeLine = hoodieTable.getActiveTimeline
     val instantGenerator = metaClient.getTimelineLayout.getInstantGenerator
     val requested = instantGenerator.createNewInstant(State.REQUESTED, commitActionType, instantTime)

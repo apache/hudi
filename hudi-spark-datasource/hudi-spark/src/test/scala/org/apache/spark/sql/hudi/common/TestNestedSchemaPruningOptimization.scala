@@ -376,10 +376,8 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
   test("Nested struct predicate pushdown with schema on read and quoted column names") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        // NOTE: A top-level rename fails the incoming-schema check unless column drops are allowed. The nested
-        //       rename needs row-based reads, as in the renamed nested column test above.
+        // NOTE: The nested rename needs row-based reads, as in the renamed nested column test above.
         withSQLConf("hoodie.schema.on.read.enable" -> "true",
-          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
           SQLConf.PARQUET_VECTORIZED_READER_ENABLED.key -> "false") {
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"

@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSparkUtils, QuickstartUtils}
 import org.apache.hudi.common.config.HoodieStorageConfig
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
@@ -531,7 +531,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         withSparkSqlSessionConfig(
           "hoodie.schema.on.read.enable" -> "true",
-          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
           DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert") {
           val tableName = generateTableName
           val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
@@ -589,9 +588,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column by add rename and drop") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        withSparkSqlSessionConfig(
-          "hoodie.schema.on.read.enable" -> "true",
-          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
+        withSparkSqlSessionConfig("hoodie.schema.on.read.enable" -> "true") {
           val tableName = generateTableName
           val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
           spark.sql(
@@ -668,6 +665,48 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata.get.getMaxColumnId
   }
 
+  test("Test rename and drop column under default write configs") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        // A rename or a drop is an explicit schema change, so it must not need the column drop config of the write path
+        assert(!spark.sessionState.conf.contains(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key))
+        withSparkSqlSessionConfig("hoodie.schema.on.read.enable" -> "true") {
+          val tableName = generateTableName
+          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  orderingFields = 'ts'
+               | )
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000)")
+
+          spark.sql(s"alter table $tableName rename column price to newprice")
+          spark.sql(s"alter table $tableName drop column name")
+          assertResult(Seq("id", "newprice", "ts"))(
+            spark.table(tableName).schema.fieldNames.toSeq.filterNot(f => HoodieRecord.HOODIE_META_COLUMNS.contains(f)))
+          checkAnswer(createTestResult(tableName))(Seq(1, 10.0, 1000))
+
+          // Each DDL is its own ALTER_SCHEMA commit, and nothing is left pending on the timeline
+          val timeline = createMetaClient(spark, tablePath).getActiveTimeline
+          assertEquals(0, timeline.filterInflightsAndRequested().countInstants())
+          val operations = timeline.getCommitsTimeline.filterCompletedInstants().getInstants.asScala
+            .map(instant => timeline.readCommitMetadata(instant).getOperationType)
+          assertEquals(Seq(WriteOperationType.ALTER_SCHEMA, WriteOperationType.ALTER_SCHEMA), operations.drop(1))
+        }
+      }
+    }
+  }
+
   test("Test alter column nullability") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
@@ -699,9 +738,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column multiple times") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        withSparkSqlSessionConfig(
-          "hoodie.schema.on.read.enable" -> "true",
-          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
+        withSparkSqlSessionConfig("hoodie.schema.on.read.enable" -> "true") {
           val tableName = generateTableName
           val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
           spark.sql(
@@ -738,7 +775,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column with complex schema") {
     withTempDir { tmp =>
       withSQLConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert",
-        "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
         "hoodie.schema.on.read.enable" -> "true",
         "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
         val tableName = generateTableName
