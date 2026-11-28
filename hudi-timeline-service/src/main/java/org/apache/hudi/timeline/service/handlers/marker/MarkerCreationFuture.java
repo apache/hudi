@@ -37,16 +37,23 @@ public class MarkerCreationFuture extends CompletableFuture<String> {
   private final Context context;
   private final String markerDirPath;
   private final String markerName;
+  // ID the client keeps when it retries the request, or null if the client does not send one
+  private final String requestId;
   private boolean isSuccessful;
   @Getter(AccessLevel.NONE)
   private final HoodieTimer timer;
 
   public MarkerCreationFuture(Context context, String markerDirPath, String markerName) {
+    this(context, markerDirPath, markerName, null);
+  }
+
+  public MarkerCreationFuture(Context context, String markerDirPath, String markerName, String requestId) {
     super();
     this.timer = HoodieTimer.start();
     this.context = context;
     this.markerDirPath = markerDirPath;
     this.markerName = markerName;
+    this.requestId = requestId;
     this.isSuccessful = false;
   }
 
