@@ -22,14 +22,18 @@ package org.apache.spark.sql.hudi.dml.others
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.config.HoodieReaderConfig
+import org.apache.hudi.common.model.{HoodieRecordMerger, HoodieTableType}
 import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.functional.DeferredRecordIndexTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.{AnalysisException, Row}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.procedure.CustomSparkRecordMergerForClustering
 import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestUpdateTable extends HoodieSparkSqlTestBase {
@@ -585,6 +589,202 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           )
         }
       }
+    }
+  }
+
+  test("Test Update Table moves a record to the partition it gives it in a table without a record key") {
+    withRecordType()(withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, dep string) using hudi
+             | tblproperties (type = '$tableType')
+             | partitioned by (dep)
+             | location '$tablePath'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 'd1'), (2, 'a2', 'd1'), (3, 'a3', 'd2')")
+
+        // The compaction is left to the end of the test
+        withSQLConf(HoodieCompactionConfig.INLINE_COMPACT.key -> "false") {
+          // id 1 moves to a new partition and id 2 to one that holds a record, id 3 stays
+          spark.sql(s"update $tableName set dep = 'd3', name = 'a1u' where id = 1")
+          spark.sql(s"update $tableName set dep = 'd2' where id = 2")
+          spark.sql(s"update $tableName set name = 'a3u' where id = 3")
+          checkPartitionedRows(tableName, "dep")(Seq(1, "a1u", "d3"), Seq(2, "a2", "d2"), Seq(3, "a3u", "d2"))
+
+          // A statement that moves some of the records it updates
+          spark.sql(s"update $tableName set dep = if(id = 2, 'd1', dep), name = concat(name, 'v') where id in (1, 2)")
+        }
+        val expected = Seq(Seq(1, "a1uv", "d3"), Seq(2, "a2v", "d1"), Seq(3, "a3u", "d2"))
+        checkPartitionedRows(tableName, "dep")(expected: _*)
+        if (tableType == "mor") {
+          compactAndCheck(tableName)
+          checkPartitionedRows(tableName, "dep")(expected: _*)
+        }
+      }
+    })
+  }
+
+  test("Test Update Table moves a record across partitions only when its update applies under event time ordering") {
+    withTempDir { tmp =>
+      // A table without a record key, and one with a record key and a global index that moves records
+      Seq("cow", "mor").flatMap(tableType => Seq((tableType, ""), (tableType, "primaryKey = 'id', 'hoodie.index.type' = 'GLOBAL_SIMPLE',")))
+        .foreach { case (tableType, keyProps) =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (id int, name string, ts long, dep string) using hudi
+               | tblproperties (type = '$tableType', $keyProps preCombineField = 'ts')
+               | partitioned by (dep)
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 100, 'd1'), (2, 'a2', 100, 'd1')")
+          val unchanged = Seq(Seq(1, "a1", 100L, "d1", "dep=d1"), Seq(2, "a2", 100L, "d1", "dep=d1"))
+
+          withSQLConf(HoodieCompactionConfig.INLINE_COMPACT.key -> "false") {
+            // An update with a lower ordering value than the record leaves it as it is, whether or not it also gives
+            // the record another partition
+            spark.sql(s"update $tableName set ts = 90, name = 'a1u' where id = 1")
+            checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName order by id")(unchanged: _*)
+            spark.sql(s"update $tableName set ts = 90, name = 'a1u', dep = 'd2' where id = 1")
+            checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName order by id")(unchanged: _*)
+
+            // A statement that applies the update of id 2 only, which it moves
+            spark.sql(s"update $tableName set ts = if(id = 1, 90, 110), name = concat(name, 'u'), dep = 'd2' where id in (1, 2)")
+            // An update with the same ordering value as the record applies, so it moves the record
+            spark.sql(s"update $tableName set name = 'a2t', dep = 'd3' where id = 2")
+          }
+          val expected = Seq(Seq(1, "a1", 100L, "d1", "dep=d1"), Seq(2, "a2t", 110L, "d3", "dep=d3"))
+          checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName order by id")(expected: _*)
+          if (tableType == "mor") {
+            compactAndCheck(tableName)
+            checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName order by id")(expected: _*)
+          }
+        }
+    }
+  }
+
+  test("Test Update Table moves a record across partitions with a lower ordering value under commit time ordering") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, ts long, dep string) using hudi
+             | tblproperties (type = '$tableType', preCombineField = 'ts', 'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING')
+             | partitioned by (dep)
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 100, 'd1'), (2, 'a2', 100, 'd1')")
+        // The latest write wins whatever its ordering value, so the update applies and moves the record
+        spark.sql(s"update $tableName set ts = 90, name = 'a1u', dep = 'd2' where id = 1")
+        checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName order by id")(
+          Seq(1, "a1u", 90L, "d2", "dep=d2"), Seq(2, "a2", 100L, "d1", "dep=d1"))
+      }
+    }
+  }
+
+  Seq(true, false).foreach { partitionedIndex =>
+    val index = if (partitionedIndex) "partitioned" else "global"
+    test(s"Test Update Table keeps the $index record level index in step when it moves a record of a table without a record key") {
+      withTempDir { tmp =>
+        val indexConfig = if (partitionedIndex) "hoodie.metadata.record.level.index.enable" else "hoodie.metadata.global.record.level.index.enable"
+        withSQLConf(indexConfig -> "true") {
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               | create table $tableName (id int, name string, dep string) using hudi
+               | tblproperties (type = 'cow')
+               | partitioned by (dep)
+               | location '$tablePath'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 'd1'), (2, 'a2', 'd1')")
+          spark.sql(s"insert into $tableName values (3, 'a3', 'd2')")
+          spark.sql(s"update $tableName set dep = 'd2' where id = 1")
+          checkPartitionedRows(tableName, "dep")(Seq(1, "a1", "d2"), Seq(2, "a2", "d1"), Seq(3, "a3", "d2"))
+          // The entry of the old partition is gone and the moved record is indexed in its new partition
+          DeferredRecordIndexTestUtils.assertRecordIndexMatchesTable(spark, tablePath, HoodieTestUtils.getDefaultStorageConf)
+        }
+      }
+    }
+  }
+
+  test("Test Update Table keeps a record in its partition when its update has a lower nested ordering value") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, attributes struct<ts: long, src: string>, dep string) using hudi
+           | tblproperties (type = 'cow', orderingFields = 'attributes.ts')
+           | partitioned by (dep)
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName select 1, 'a1', named_struct('ts', 100L, 'src', 's1'), 'd1'")
+
+      // A lower nested ordering value leaves the record as it is, as the same update without a partition change does
+      spark.sql(s"update $tableName set attributes = named_struct('ts', 90L, 'src', 's2'), name = 'a1u', dep = 'd2' where id = 1")
+      checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(Seq(1, "a1", 100L, "d1", "dep=d1"))
+
+      spark.sql(s"update $tableName set attributes = named_struct('ts', 110L, 'src', 's2'), name = 'a1u', dep = 'd2' where id = 1")
+      checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(Seq(1, "a1u", 110L, "d2", "dep=d2"))
+    }
+  }
+
+  test("Test Update Table refuses to move a record of a merge-on-read table with a nested ordering field") {
+    withTempDir { tmp =>
+      val globalIndexProps = "primaryKey = 'id', 'hoodie.index.type' = 'GLOBAL_SIMPLE', 'hoodie.simple.index.update.partition.path' = 'true',"
+      Seq(("", "true"), (globalIndexProps, "true"), (globalIndexProps, "false")).foreach { case (keyProps, optimizedWrites) =>
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key -> optimizedWrites) {
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (id int, name string, attributes struct<ts: long, src: string>, dep string) using hudi
+               | tblproperties (type = 'mor', $keyProps orderingFields = 'attributes.ts')
+               | partitioned by (dep)
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName select 1, 'a1', named_struct('ts', 100L, 'src', 's1'), 'd1'")
+
+          checkExceptionContain(
+            s"update $tableName set attributes = named_struct('ts', 110L, 'src', 's2'), dep = 'd2' where id = 1")(
+            s"UPDATE cannot change the partition field(s) `dep` of merge-on-read table `spark_catalog.default.$tableName`, " +
+              "as its nested ordering field(s) `attributes.ts` cannot be written with the delete of a moved record.")
+          checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(
+            Seq(1, "a1", 100L, "d1", "dep=d1"))
+
+          // An update that changes no partition field is not refused
+          spark.sql(s"update $tableName set attributes = named_struct('ts', 110L, 'src', 's2'), name = 'a1u' where id = 1")
+          checkAnswer(s"select id, name, attributes.ts, dep, _hoodie_partition_path from $tableName")(
+            Seq(1, "a1u", 110L, "d1", "dep=d1"))
+        }
+      }
+    }
+  }
+
+  test("Test Update Table refuses to move a record across partitions when a custom merger decides whether its update applies") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, ts long, dep string) using hudi
+           | tblproperties (
+           |   type = 'cow',
+           |   orderingFields = 'ts',
+           |   'hoodie.write.record.merge.mode' = 'CUSTOM',
+           |   'hoodie.write.record.merge.strategy.id' = '${HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID}',
+           |   '${HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY}' = '${classOf[CustomSparkRecordMergerForClustering].getName}')
+           | partitioned by (dep)
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 100, 'd1')")
+
+      checkExceptionContain(s"update $tableName set ts = 110, dep = 'd2' where id = 1")(
+        s"UPDATE cannot change the partition field(s) `dep` of table `spark_catalog.default.$tableName` under the " +
+          "CUSTOM merge mode, as it cannot tell whether the merge applies the update to a record.")
+      checkAnswer(s"select id, name, ts, dep, _hoodie_partition_path from $tableName")(Seq(1, "a1", 100L, "d1", "dep=d1"))
     }
   }
 

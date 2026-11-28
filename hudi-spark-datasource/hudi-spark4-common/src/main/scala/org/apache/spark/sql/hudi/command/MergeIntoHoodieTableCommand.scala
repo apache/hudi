@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, RecordMergeMode}
-import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord, HoodieRecordMerger}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, PartialUpdateMode}
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
@@ -42,8 +42,9 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, Matc
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, AssertTrue, Attribute, AttributeReference, BoundReference, CaseWhen, CreateNamedStruct, EqualNullSafe, EqualTo, Expression, GetStructField, GreaterThan, GreaterThanOrEqual, If, IsNotNull, IsNull, Literal, Murmur3Hash, NamedExpression, Not, Or, PredicateHelper, UnspecifiedFrame, WindowExpression, WindowSpecDefinition}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
+import org.apache.spark.sql.catalyst.expressions.aggregate.{Count, Max}
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
@@ -429,7 +430,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
       val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
       val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
-      Project(tableMetaCols ++ incomingDataCols, joinData)
+      splitMovedRecords(joinData, tableMetaCols, incomingDataCols)
     } else {
       // For a target table with record key(s) configure, the source table is used
       mergeInto.sourceTable
@@ -488,6 +489,162 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     sparkAdapter.getUnsafeUtils.createDataFrameFrom(sparkSession, amendedPlan)
   }
+
+  /**
+   * The source records of a table without a record key, each with the meta columns of the target record it
+   * matches. A matched record that takes an update clause giving a partition column another value cannot be
+   * written back to the file group it was read from, so its source record holds the updated record in
+   * [[MergeIntoKeyGenerator.MOVED_RECORD_FIELD]] and is split in two: one at the location of the target record,
+   * which [[movedRecordClauses]] make delete it, and one without a location, which they insert into the partition
+   * of its values. The update clauses are tried in the order [[ExpressionPayload]] tries them, against the joined
+   * target row.
+   *
+   * A record is moved only when the write applies its update, which it decides by the ordering value of the
+   * source record. The statement fails when that cannot be told from the merge mode, see
+   * [[partitionChangeRefusal]], and when a moved record matches more than one source record, as each of them
+   * would insert it again.
+   */
+  private def splitMovedRecords(joinData: LogicalPlan,
+                                tableMetaCols: Seq[Attribute],
+                                incomingDataCols: Seq[Attribute]): LogicalPlan = {
+    val resolver = sparkSession.sessionState.conf.resolver
+    val targetDataAttrs = mergeInto.targetTable.output.filterNot(attr => isMetaField(attr.name))
+    val partitionAttrs = hoodieCatalogTable.partitionFields.toSeq.flatMap { field =>
+      targetDataAttrs.find(attr => resolver(attr.name, field))
+    }
+
+    def updated(action: UpdateAction, attr: Attribute): Expression = action.assignments.collectFirst {
+      case Assignment(assigned: Attribute, value) if attributeEquals(assigned, attr) => castIfNeeded(value, attr.dataType)
+    }.getOrElse(attr)
+
+    // A matched record holds the values the merge condition equates its columns to
+    val equatedValues = splitConjunctivePredicates(mergeInto.mergeCondition).collect {
+      case EqualTo(left, right) => Seq(left, right)
+      case EqualNullSafe(left, right) => Seq(left, right)
+    }
+
+    def keepsValue(attr: Attribute, value: Expression): Boolean = value.semanticEquals(attr) ||
+      equatedValues.exists(sides => sides.exists(_.semanticEquals(attr)) && sides.exists(_.semanticEquals(value)))
+
+    val conditions = updatingActions.map(_.condition.getOrElse(Literal.TrueLiteral))
+    val changesPartition = updatingActions.map { action =>
+      partitionAttrs.map(attr => updated(action, attr) -> attr)
+        .collect { case (value, attr) if !keepsValue(attr, value) => Not(EqualNullSafe(value, attr)): Expression }
+        .reduceOption(Or).getOrElse(Literal.FalseLiteral)
+    }
+    if (changesPartition.forall(_ == Literal.FalseLiteral)) {
+      Project(tableMetaCols ++ incomingDataCols, joinData)
+    } else {
+      val recordKeyCol = tableMetaCols.find(_.name == HoodieRecord.RECORD_KEY_METADATA_FIELD).get
+      val partitionPathCol = tableMetaCols.find(_.name == HoodieRecord.PARTITION_PATH_METADATA_FIELD).get
+      def updatedByClause(attr: Attribute): Expression = CaseWhen(conditions.zip(updatingActions.map(updated(_, attr))), attr)
+
+      // A merge that evaluates the clauses on the target record compares the ordering value of the updated record,
+      // and one that does not compares that of the source record. Null when the two disagree or the merge mode does
+      // not tell.
+      val (targetOrdering, sourceOrdering) = orderingFieldsAssociatedExpressions.map {
+        case (attr, expr) => (attr, castIfNeeded(expr, attr.dataType))
+      }.unzip
+      val mergeMode = hoodieCatalogTable.tableConfig.getRecordMergeMode
+      val bySource = appliesUpdate(mergeMode, targetOrdering, sourceOrdering)
+      val byUpdate = appliesUpdate(mergeMode, targetOrdering, targetOrdering.map(updatedByClause))
+      val updateApplies = If(EqualTo(bySource, byUpdate), bySource, Literal(null, BooleanType))
+      val changes = And(IsNotNull(recordKeyCol), CaseWhen(conditions.zip(changesPartition), Literal.FalseLiteral))
+      val moves = Alias(And(changes, EqualNullSafe(updateApplies, Literal.TrueLiteral)), "_moves_record")()
+      val withMoves = Project(joinData.output :+ moves, joinData)
+
+      // Source records of a matched record, spreading the ones that match no record by their values
+      val hashableCols = incomingDataCols.filter(col => new Murmur3Hash(Seq(col)).checkInputDataTypes().isSuccess)
+      val targetRecord = Seq(recordKeyCol, partitionPathCol,
+        if (hashableCols.isEmpty) Literal(0) else If(IsNull(recordKeyCol), new Murmur3Hash(hashableCols), Literal(0)))
+      val window = WindowSpecDefinition(targetRecord, Seq.empty, UnspecifiedFrame)
+      val matches = Alias(WindowExpression(Count(Literal(1)).toAggregateExpression(), window), "_matches")()
+      val movedMatches = Alias(WindowExpression(
+        Max(If(moves.toAttribute, Literal(1), Literal(0))).toAggregateExpression(), window), "_moved_matches")()
+      val counted = Window(Seq(matches, movedMatches), targetRecord, Seq.empty, withMoves)
+
+      val refused = And(changes, IsNull(updateApplies))
+      val violatesCardinality = And(IsNotNull(recordKeyCol),
+        And(GreaterThan(matches.toAttribute, Literal(1L)), EqualTo(movedMatches.toAttribute, Literal(1))))
+      val checked = Filter(And(
+        IsNull(new AssertTrue(Not(refused), Literal(partitionChangeRefusal))),
+        IsNull(new AssertTrue(Not(violatesCardinality), Literal(MOVED_RECORD_CARDINALITY_VIOLATION)))), counted)
+
+      val updatedRecord = CreateNamedStruct(targetDataAttrs.flatMap(attr => Seq(Literal(attr.name), updatedByClause(attr))))
+      val movedRecord = Alias(If(moves.toAttribute, updatedRecord, Literal(null, updatedRecord.dataType)),
+        MergeIntoKeyGenerator.MOVED_RECORD_FIELD)()
+      val matched = Project((tableMetaCols ++ incomingDataCols) :+ movedRecord, checked)
+
+      val insertsMovedRecord = AttributeReference("_inserts_moved_record", BooleanType, nullable = false)()
+      val split = Filter(
+        Or(Not(insertsMovedRecord), IsNotNull(movedRecord.toAttribute)),
+        Expand(Seq(matched.output :+ Literal.FalseLiteral, matched.output :+ Literal.TrueLiteral),
+          matched.output :+ insertsMovedRecord, matched))
+      Project(
+        tableMetaCols.map(attr => Alias(If(insertsMovedRecord, Literal(null, attr.dataType), attr), attr.name)()) ++
+          incomingDataCols :+ movedRecord.toAttribute,
+        split)
+    }
+  }
+
+  /**
+   * The failure of a statement that changes a partition column of a matched record of a table without a record key
+   * when it cannot tell whether the write applies the update, so the record is neither moved nor left where it was.
+   * See [[splitMovedRecords]].
+   */
+  private lazy val partitionChangeRefusal: String = {
+    val partitionFields = hoodieCatalogTable.partitionFields.map(field => s"`$field`").mkString(", ")
+    s"MERGE INTO cannot change the partition field(s) $partitionFields of a matched record in a table without a " +
+      "record key when it cannot tell whether the update applies: the ordering value the update gives the record " +
+      "and that of the source record must both apply it or both keep the record, under the " +
+      s"${hoodieCatalogTable.tableConfig.getRecordMergeMode} merge mode"
+  }
+
+  /**
+   * Whether the failure of the write comes from a check of [[splitMovedRecords]], which a task of the write raises
+   * under the write failure, and the message of that check.
+   */
+  private def movedRecordCheckFailure(e: Throwable): Option[String] = {
+    if (hasPrimaryKey()) {
+      None
+    } else {
+      Iterator.iterate(e)(_.getCause).takeWhile(_ != null).flatMap(t => Option(t.getMessage)).collectFirst {
+        case message if message.contains(partitionChangeRefusal) => partitionChangeRefusal
+        case message if message.contains(MOVED_RECORD_CARDINALITY_VIOLATION) => MOVED_RECORD_CARDINALITY_VIOLATION
+      }
+    }
+  }
+
+  /**
+   * The clauses of the statement for source records that carry [[MergeIntoKeyGenerator.MOVED_RECORD_FIELD]]. A
+   * source record holding a moved record takes none of the update and insert clauses of the statement: at the
+   * location of its target record it takes the delete clause, and without a location an insert clause that writes
+   * the moved record.
+   */
+  private case class MovedRecordClauses(movedRecord: BoundReference) {
+    private val moved: Expression = IsNotNull(movedRecord)
+
+    def otherwise(condition: Option[Expression]): Option[Expression] =
+      Some(And(IsNull(movedRecord), condition.getOrElse(Literal.TrueLiteral)))
+
+    def delete(condition: Option[Option[Expression]]): Option[Expression] =
+      Some(condition.map(_.map(Or(moved, _)).getOrElse(Literal.TrueLiteral)).getOrElse(moved))
+
+    def insert: (Expression, Seq[Alias]) = {
+      val fields = movedRecord.dataType.asInstanceOf[StructType].fields
+      moved -> fields.indices.map(i => Alias(GetStructField(movedRecord, i, Some(fields(i).name)), fields(i).name)())
+    }
+  }
+
+  /**
+   * [[MovedRecordClauses]] when the source records carry [[MergeIntoKeyGenerator.MOVED_RECORD_FIELD]], referring
+   * to it in the records the payload evaluates the clauses on. See [[splitMovedRecords]].
+   */
+  private def movedRecordClauses(props: Map[String, String]): Option[MovedRecordClauses] =
+    joinedExpectedOutput(props).zipWithIndex.collectFirst {
+      case (attr, ordinal) if attr.name == MergeIntoKeyGenerator.MOVED_RECORD_FIELD =>
+        MovedRecordClauses(BoundReference(ordinal, attr.dataType, attr.nullable))
+    }
 
   /**
    * Execute the update and delete action. All the matched and not-matched actions will
@@ -555,29 +712,34 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       }
     }
 
+    val movedRecords = movedRecordClauses(parameters)
+    def clauseCondition(condition: Option[Expression]): Option[Expression] =
+      movedRecords.map(_.otherwise(condition)).getOrElse(condition)
+
     writeParams ++= Seq(
       // Append (encoded) updating actions
       PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
         // NOTE: For updating clause we allow partial assignments, where only some of the fields of the target
         //       table's records are updated (w/ the missing ones keeping their existing values)
-        serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments)),
+        serializeConditionalAssignments(updatingActions.map(a => (clauseCondition(a.condition), a.assignments)),
           parameters,
           partialAssignmentMode = Some(PartialAssignmentMode.ORIGINAL_VALUE),
           keepUpdatedFieldsOnly = writePartialUpdates),
       // Append (encoded) inserting actions
       PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
-        serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)),
-          parameters,
-          partialAssignmentMode = Some(PartialAssignmentMode.NULL_VALUE),
-          keepUpdatedFieldsOnly = false,
-          validator = validateInsertingAssignmentExpression)
+        encodeAsBase64String(
+          bindConditionalAssignments(insertingActions.map(a => (clauseCondition(a.condition), a.assignments)),
+            parameters,
+            partialAssignmentMode = Some(PartialAssignmentMode.NULL_VALUE),
+            keepUpdatedFieldsOnly = false,
+            validator = validateInsertingAssignmentExpression) ++ movedRecords.map(_.insert))
     )
 
     // Append (encoded) deleting actions
-    writeParams ++= deletingActions.headOption.map {
-      case DeleteAction(condition) =>
-        PAYLOAD_DELETE_CONDITION -> serializeConditionalAssignments(Seq(condition -> Seq.empty),
-          parameters, keepUpdatedFieldsOnly = false)
+    val deleteCondition = deletingActions.headOption.map(_.condition)
+    writeParams ++= movedRecords.map(clauses => Some(clauses.delete(deleteCondition))).getOrElse(deleteCondition).map { condition =>
+      PAYLOAD_DELETE_CONDITION -> serializeConditionalAssignments(Seq(condition -> Seq.empty),
+        parameters, keepUpdatedFieldsOnly = false)
     }.toSeq
 
     // Append
@@ -595,10 +757,15 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_ORIGINAL_AVRO_PAYLOAD -> hoodieCatalogTable.tableConfig.getPayloadClass
     )
 
+    writeParams += HoodieWriteConfig.SPARK_SQL_MERGE_INTO_MOVES_RECORDS_KEY -> movesRecordsOffLookup(parameters).toString
     val (structName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(hoodieCatalogTable.tableName)
     val schema = convertStructTypeToHoodieSchema(hoodieCatalogTable.tableSchema, structName, namespace)
-    val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, enrichedSourceDF,
-      schemaFromCatalog = Option.apply(schema))
+    val (success, commitInstantTime, _, _, _, _) = try {
+      HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, enrichedSourceDF,
+        schemaFromCatalog = Option.apply(schema))
+    } catch {
+      case e: Exception if movedRecordCheckFailure(e).isDefined => throw new HoodieException(movedRecordCheckFailure(e).get, e)
+    }
     if (!success) {
       throw new HoodieException("Merge into Hoodie table command failed")
     }
@@ -711,7 +878,15 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
                                               props: Map[String, String],
                                               partialAssignmentMode: Option[PartialAssignmentMode] = None,
                                               keepUpdatedFieldsOnly: Boolean,
-                                              validator: Expression => Unit = scalaFunction1Noop): String = {
+                                              validator: Expression => Unit = scalaFunction1Noop): String =
+    encodeAsBase64String(
+      bindConditionalAssignments(conditionalAssignments, props, partialAssignmentMode, keepUpdatedFieldsOnly, validator))
+
+  private def bindConditionalAssignments(conditionalAssignments: Seq[(Option[Expression], Seq[Assignment])],
+                                         props: Map[String, String],
+                                         partialAssignmentMode: Option[PartialAssignmentMode],
+                                         keepUpdatedFieldsOnly: Boolean,
+                                         validator: Expression => Unit): Map[Expression, Seq[Alias]] = {
     val boundConditionalAssignments =
       conditionalAssignments.map {
         case (condition, assignments) =>
@@ -739,7 +914,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           boundCondition -> boundAssignmentExprs
       }.toMap
 
-    encodeAsBase64String(boundConditionalAssignments)
+    boundConditionalAssignments
   }
 
   /**
@@ -937,6 +1112,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     checkDeletingActions(deletingActions, props)
     checkMatchedConditions()
     checkInsertsOfReadTargetStatement(props)
+    checkPartitionAssignments(props)
   }
 
   /**
@@ -970,6 +1146,56 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       }
     }
   }
+
+  /**
+   * Refuses an update clause that gives a partition column of a table with a record key another value
+   * than the source value its record is looked up under. A non-global index finds the record in that
+   * partition only and writes it back there, holding the new value, and so does a global index that does not
+   * update the partition path, which re-keys the record onto the partition it is in.
+   */
+  private def checkPartitionAssignments(props: Map[String, String]): Unit = {
+    val movesRecordsOrCustomIndex = useGlobalIndex(props) ||
+      !StringUtils.isNullOrEmpty(props.getOrElse(HoodieIndexConfig.INDEX_CLASS_NAME.key, ""))
+    if (hasPrimaryKey() && hoodieCatalogTable.partitionFields.nonEmpty && !movesRecordsOrCustomIndex) {
+      partitionAssignmentsOffLookup.headOption.foreach { case (attr, lookup) =>
+        throw new HoodieAnalysisException(s"Detected disallowed assignment clause in MERGE INTO statement for " +
+          s"partition field `${attr.name}` for table `${hoodieCatalogTable.table.qualifiedName}`: only `${lookup.sql}`, " +
+          "the value the record is looked up under, can be assigned, as the index of the table does not move " +
+          "records across partitions.")
+      }
+    }
+  }
+
+  /**
+   * The partition columns that an update clause gives another value than the source value their record is looked
+   * up under, each with that source value.
+   */
+  private def partitionAssignmentsOffLookup: Seq[(Attribute, Expression)] = {
+    val partitionAssignments = updatingActions.flatMap(_.assignments).collect {
+      case Assignment(attr: Attribute, value)
+        if hoodieCatalogTable.partitionFields.exists(f => sparkSession.sessionState.conf.resolver(f, attr.name)) =>
+        attr -> value
+    }
+    // The source values a record is looked up under are resolved only for a statement that assigns a partition
+    // field, as a statement that does not, such as one that only deletes, need not read them from the source
+    lazy val lookupExpressions = recordKeyAttributeToConditionExpression ++ partitionFieldsAssociatedExpressions
+    partitionAssignments.flatMap { case (attr, value) =>
+      lookupExpressions.find { case (target, _) => attributeEquals(target, attr) }
+        .filter { case (_, lookup) =>
+          !castIfNeeded(value, attr.dataType).semanticEquals(castIfNeeded(lookup, attr.dataType)) &&
+            !value.semanticEquals(attr)
+        }
+        .map { case (_, lookup) => attr -> lookup }
+    }
+  }
+
+  /**
+   * Whether an update clause can move a record of a table with a record key to another partition than the one its
+   * source record names, which a global index that updates the partition path does.
+   * See [[HoodieWriteConfig.SPARK_SQL_MERGE_INTO_MOVES_RECORDS_KEY]].
+   */
+  private def movesRecordsOffLookup(props: Map[String, String]): Boolean =
+    hasPrimaryKey() && hoodieCatalogTable.partitionFields.nonEmpty && useGlobalIndex(props) && partitionAssignmentsOffLookup.nonEmpty
 
   private def checkDeletingActions(deletingActions: Seq[DeleteAction], props: Map[String, String]): Unit = {
     if (deletingActions.length > 1) {
@@ -1139,6 +1365,30 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 }
 
 object MergeIntoHoodieTableCommand {
+  /**
+   * The failure of a MERGE INTO that moves a record of a table without a record key which more than one source
+   * record matches, in the words of Spark's MERGE_CARDINALITY_VIOLATION error.
+   */
+  val MOVED_RECORD_CARDINALITY_VIOLATION: String = "The ON search condition of the MERGE statement matched a single " +
+    "row from the target table with multiple rows of the source table. This could result in the target row being " +
+    "operated on more than once with an update or delete operation and is not allowed."
+
+  /**
+   * Whether the write applies an update that gives a record of ordering value `current` the ordering value `updated`
+   * under `mergeMode`: under event time ordering, when the ordering value of the update is not lower than that of the
+   * record. Null when the merge mode does not tell, as a custom merger decides by its own rules.
+   */
+  def appliesUpdate(mergeMode: RecordMergeMode, current: Seq[Expression], updated: Seq[Expression]): Expression = {
+    def orderingValue(values: Seq[Expression]): Expression =
+      CreateNamedStruct(values.zipWithIndex.flatMap { case (value, i) => Seq(Literal(i.toString), value) })
+
+    Option(mergeMode) match {
+      case Some(RecordMergeMode.COMMIT_TIME_ORDERING) => Literal.TrueLiteral
+      case Some(RecordMergeMode.EVENT_TIME_ORDERING) if current.isEmpty => Literal.TrueLiteral
+      case Some(RecordMergeMode.EVENT_TIME_ORDERING) => GreaterThanOrEqual(orderingValue(updated), orderingValue(current))
+      case _ => Literal(null, BooleanType)
+    }
+  }
 
   val userGuideString: String = "To use the MERGE INTO statement on this MOR table, " +
     "please specify `UPDATE SET *` as the update statement to update all columns, " +

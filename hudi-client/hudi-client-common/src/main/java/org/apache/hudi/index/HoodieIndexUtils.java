@@ -833,6 +833,9 @@ public class HoodieIndexUtils {
     boolean requiresMergingWithOlderRecordVersion = shouldUpdatePartitionPath
         || (!isCommitTimeOrdered && table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ);
     DeleteContext deleteContext = DeleteContext.fromRecordSchema(properties, writerSchema);
+    // The partition such a Spark SQL MERGE INTO gives a record is known once its clauses are evaluated on the
+    // existing record, and can differ from the one its incoming record names.
+    boolean mergeIntoMovesRecords = config.isSparkSqlMergeIntoMovingRecords();
 
     // Pair of incoming record and the global location if meant for merged lookup in later stage
     HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations
@@ -843,7 +846,8 @@ public class HoodieIndexUtils {
           if (currentLocOpt.isPresent()) {
             HoodieRecordGlobalLocation currentLoc = currentLocOpt.get();
             boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup // handle event time ordering updates
-                || shouldUpdatePartitionPath && !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath())  // handle partition updates
+                || shouldUpdatePartitionPath
+                && (mergeIntoMovesRecords || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath()))  // handle partition updates
                 || (!isCommitTimeOrdered && incomingRecord.isDelete(deleteContext, properties)); // handle event time ordering deletes
             if (requiresMergingWithOlderRecordVersion && shouldDoMergedLookUpThenTag) {
               // the pair's right side is a non-empty Option, which indicates that a merged lookup will be performed

@@ -18,7 +18,8 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
+import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY, SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY}
+import org.apache.hudi.common.config.RecordMergeMode
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
@@ -26,7 +27,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, GetStructField, If, Literal}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, LogicalPlan, Project, UpdateTable}
@@ -35,8 +36,12 @@ import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.combineOptions
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
+import org.apache.spark.sql.types.{BooleanType, StructType}
+
+import scala.collection.JavaConverters._
 
 case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends DataWritingCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
@@ -57,7 +62,8 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
     val config = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
       // Set config to show that this is a prepped write.
-      buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
+      buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true") +
+        (SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY -> UpdateHoodieTableCommand.assignsPartitionField(sparkSession, catalogTable, ut).toString)
     } else {
       buildHoodieConfig(catalogTable)
     }
@@ -111,6 +117,100 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
     })
   }
 
+  /**
+   * Whether the write moves a record that the statement gives other partition values to the partition of those
+   * values. With a record key that takes a global index that updates the partition path, as for MERGE INTO. Without
+   * one, the prepped write deletes the record where it was read and inserts it into its new partition.
+   */
+  private def movesRecordsAcrossPartitions(sparkSession: SparkSession, catalogTable: HoodieCatalogTable): Boolean = {
+    if (catalogTable.primaryKeys.isEmpty) {
+      sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true"
+    } else {
+      MergeIntoHoodieTableCommand.useGlobalIndex(combineOptions(catalogTable, catalogTable.tableConfig,
+        sparkSession.sessionState.conf, defaultOpts = Map.empty))
+    }
+  }
+
+  /**
+   * Whether the prepped write moves a record that the statement gives other partition values: only when the write
+   * applies the update, as for a record that MERGE INTO moves. The move deletes the record where it was read and
+   * inserts it into its new partition, bypassing the merge of the update with the record, so a record whose update
+   * the merge would not apply keeps its partition values and takes the update in place, where the merge keeps the
+   * record as it is. Refuses the statement when the merge mode does not tell whether the update applies.
+   */
+  private def movesOnlyAppliedUpdates(catalogTable: HoodieCatalogTable,
+                                      resolver: Resolver,
+                                      targetAttrs: Seq[Attribute],
+                                      updatedValue: Attribute => Expression): Expression = {
+    val mergeMode = catalogTable.tableConfig.getRecordMergeMode
+    val orderingFields = catalogTable.orderingFields.asScala.toSeq.map(resolveOrderingField(resolver, targetAttrs, _))
+    val updateApplies = if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING && orderingFields.exists(_.isEmpty)) {
+      Literal(null, BooleanType)
+    } else {
+      val resolved = orderingFields.flatten
+      MergeIntoHoodieTableCommand.appliesUpdate(mergeMode,
+        resolved.map { case (attr, value) => value(attr) }, resolved.map { case (attr, value) => value(updatedValue(attr)) })
+    }
+    updateApplies match {
+      case Literal(null, _) =>
+        val partitionFields = catalogTable.partitionFields.map(field => s"`$field`").mkString(", ")
+        throw new HoodieAnalysisException(s"UPDATE cannot change the partition field(s) $partitionFields of table " +
+          s"`${catalogTable.table.qualifiedName}` under the ${catalogTable.tableConfig.getRecordMergeMode} merge mode, " +
+          "as it cannot tell whether the merge applies the update to a record.")
+      case updateApplies => updateApplies
+    }
+  }
+
+  /**
+   * Refuses to move a record of a merge-on-read table with a nested ordering field: the move deletes the record
+   * where it was read, and a delete log holds the ordering fields of the table as top-level columns.
+   */
+  private def validateMovedRecordsAreDeletable(catalogTable: HoodieCatalogTable,
+                                               resolver: Resolver,
+                                               targetAttrs: Seq[Attribute]): Unit = {
+    val nestedFields = catalogTable.orderingFields.asScala.toSeq
+      .filterNot(field => targetAttrs.exists(attr => resolver(attr.name, field)))
+    if (catalogTable.tableTypeName == MOR_TABLE_TYPE_OPT_VAL && nestedFields.nonEmpty
+      && catalogTable.tableConfig.getRecordMergeMode != RecordMergeMode.COMMIT_TIME_ORDERING) {
+      val partitionFields = catalogTable.partitionFields.map(field => s"`$field`").mkString(", ")
+      throw new HoodieAnalysisException(s"UPDATE cannot change the partition field(s) $partitionFields of merge-on-read " +
+        s"table `${catalogTable.table.qualifiedName}`, as its nested ordering field(s) " +
+        s"${nestedFields.map(field => s"`$field`").mkString(", ")} cannot be written with the delete of a moved record.")
+    }
+  }
+
+  /**
+   * The target attribute holding the ordering field `field` and the extraction of the field's value from a value of
+   * that attribute, following a nested field (`a.b`) into structs. None when the field does not resolve.
+   */
+  private def resolveOrderingField(resolver: Resolver,
+                                   targetAttrs: Seq[Attribute],
+                                   field: String): Option[(Attribute, Expression => Expression)] = {
+    val identity: Expression => Expression = e => e
+    targetAttrs.find(attr => resolver(attr.name, field)).map(attr => (attr, identity)).orElse {
+      val path = field.split('.')
+      targetAttrs.find(attr => resolver(attr.name, path.head)).flatMap { attr =>
+        path.tail.foldLeft(Option((identity, attr.dataType))) {
+          case (Some((value, struct: StructType)), name) =>
+            struct.fields.indexWhere(f => resolver(f.name, name)) match {
+              case -1 => None
+              case i => Some(((e: Expression) => GetStructField(value(e), i, Some(struct.fields(i).name)), struct.fields(i).dataType))
+            }
+          case _ => None
+        }.map { case (value, _) => (attr, value) }
+      }
+    }
+  }
+
+  private def assignsPartitionField(sparkSession: SparkSession, catalogTable: HoodieCatalogTable, ut: UpdateTable): Boolean = {
+    val resolver = sparkSession.sessionState.conf.resolver
+    val partitionFields = catalogTable.tableConfig.getPartitionFields.orElse(Array.empty)
+    ut.assignments.exists {
+      case Assignment(attr: AttributeReference, _) => partitionFields.exists(resolver(attr.name, _))
+      case _ => false
+    }
+  }
+
   private def catalogTable(sparkSession: SparkSession, ut: UpdateTable): HoodieCatalogTable = {
     sparkAdapter.resolveHoodieTable(ut.table) match {
       case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
@@ -129,14 +229,15 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
       case Assignment(attr: AttributeReference, value) => attr -> value
     }
 
-    // We don't support update queries changing partition column value.
-    validateNoAssignmentsToTargetTableAttr(
-      sparkSession.sessionState.conf.resolver,
-      hoodieCatalogTable.tableConfig.getPartitionFields.orElse(Array.empty),
-      tableId,
-      "partition field",
-      assignedAttributes
-    )
+    if (!movesRecordsAcrossPartitions(sparkSession, hoodieCatalogTable)) {
+      validateNoAssignmentsToTargetTableAttr(
+        sparkSession.sessionState.conf.resolver,
+        hoodieCatalogTable.tableConfig.getPartitionFields.orElse(Array.empty),
+        tableId,
+        "partition field",
+        assignedAttributes
+      )
+    }
 
     // We don't support update queries changing the primary key column value.
     validateNoAssignmentsToTargetTableAttr(
@@ -147,20 +248,43 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
       assignedAttributes
     )
 
-    val filteredOutput = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val optimizedWrites = sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true"
+    val filteredOutput = if (optimizedWrites) {
       ut.table.output
     } else {
       removeMetaFields(ut.table.output)
+    }
+
+    def updatedValue(targetAttr: Attribute): Expression = assignedAttributes.find(p => attributeEquals(p._1, targetAttr))
+      .map { case (_, expr) => castIfNeeded(expr, targetAttr.dataType) }
+      .getOrElse(targetAttr)
+    val resolver = sparkSession.sessionState.conf.resolver
+    val partitionAttrs = hoodieCatalogTable.partitionFields.flatMap { field =>
+      ut.table.output.find(attr => resolver(attr.name, field))
+    }
+    val changesPartition = partitionAttrs.exists(attr => !updatedValue(attr).semanticEquals(attr))
+    if (changesPartition) {
+      validateMovedRecordsAreDeletable(hoodieCatalogTable, resolver, ut.table.output)
+    }
+    val movesRecord = if (optimizedWrites && changesPartition) {
+      Some(movesOnlyAppliedUpdates(hoodieCatalogTable, resolver, ut.table.output, updatedValue))
+    } else {
+      None
     }
 
     val targetExprs = filteredOutput.map { targetAttr =>
       // NOTE: [[UpdateTable]] permits partial updates and therefore here we correlate assigned
       //       assigned attributes to the ones of the target table. Ones not being assigned
       //       will simply be carried over (from the old record)
-      assignedAttributes.find(p => attributeEquals(p._1, targetAttr))
-        .map { case (_, expr) => Alias(castIfNeeded(expr, targetAttr.dataType), targetAttr.name)() }
-        .getOrElse(targetAttr)
+      if (assignedAttributes.exists(p => attributeEquals(p._1, targetAttr))) {
+        val value = movesRecord.filter(_ => partitionAttrs.exists(attributeEquals(_, targetAttr)))
+          .map(If(_, updatedValue(targetAttr), targetAttr))
+          .getOrElse(updatedValue(targetAttr))
+        Alias(value, targetAttr.name)()
+      } else {
+        targetAttr
+      }
     }
 
     val condition = ut.condition.getOrElse(TrueLiteral)

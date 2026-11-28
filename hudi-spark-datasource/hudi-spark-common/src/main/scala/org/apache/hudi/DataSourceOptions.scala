@@ -451,6 +451,13 @@ object DataSourceWriteOptions {
   val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
 
   /**
+   * Config key with boolean value that indicates whether a prepped record written during a Spark SQL UPDATE may
+   * hold partition values other than those of the partition it was read from, so that the write moves it to the
+   * partition of its values.
+   */
+  val SPARK_SQL_WRITES_PREPPED_MOVES_RECORDS_KEY = "_hoodie.spark.sql.writes.prepped.moves.records";
+
+  /**
    * May be derive partition path from incoming df if not explicitly set.
    *
    * @param optParams Parameters to be translated

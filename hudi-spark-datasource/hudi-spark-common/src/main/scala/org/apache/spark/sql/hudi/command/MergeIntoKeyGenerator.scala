@@ -78,9 +78,18 @@ class MergeIntoKeyGenerator(props: TypedProperties) extends SqlKeyGenerator(prop
     if (partitionPath != null) {
       partitionPath.toString
     } else {
-      super.getPartitionPath(record)
+      super.getPartitionPath(movedRecord(record).getOrElse(record))
     }
   }
+
+  /**
+   * The updated record of the table that a source record carries in [[MergeIntoKeyGenerator.MOVED_RECORD_FIELD]]
+   * to insert it into the partition of its values.
+   */
+  private def movedRecord(record: GenericRecord): Option[GenericRecord] =
+    Option(record.getSchema.getField(MergeIntoKeyGenerator.MOVED_RECORD_FIELD))
+      .flatMap(field => Option(record.get(field.pos)))
+      .map(_.asInstanceOf[GenericRecord])
 
   override def getPartitionPath(row: Row): String = {
     val partitionPath = row.getString(PARTITION_PATH_META_FIELD_ORD)
@@ -116,4 +125,13 @@ class MergeIntoKeyGenerator(props: TypedProperties) extends SqlKeyGenerator(prop
    */
   private def carriesMetaField(record: GenericRecord, ord: Int): Boolean =
     record.getSchema.getFields.size > ord
+}
+
+object MergeIntoKeyGenerator {
+
+  /**
+   * Field of a source record of MERGE INTO on a table without a record key that holds the record its update
+   * clause produced, when the update gave the record another partition than the one it was read from.
+   */
+  val MOVED_RECORD_FIELD = "_hoodie_moved_record"
 }
