@@ -226,10 +226,10 @@ class ExpressionIndexSupport(spark: SparkSession,
    *
    * @param colStatsRecords [[HoodieData[HoodieMetadataColumnStats]]] bearing raw Column Stats Index records
    * @param queryColumns target columns to be included into the final table
+   * @param statsType type of the stored min / max values: the indexed expression's type, for ex INT for `hour(ts)`
    * @return reshaped table according to the format outlined above
    */
   private def transpose(colStatsRecords: HoodieData[HoodieMetadataColumnStats], queryColumns: Seq[String], statsType: DataType): (HoodieData[Row], StructType) = {
-    val tableSchemaFieldMap = tableSchema.fields.map(f => (f.name, f)).toMap
     // NOTE: We're sorting the columns to make sure final index schema matches layout
     //       of the transposed table
     val sortedTargetColumnsSet = TreeSet(queryColumns:_*)
@@ -263,12 +263,11 @@ class ExpressionIndexSupport(spark: SparkSession,
 
           checkState(minValueWrapper != null && maxValueWrapper != null, "Invalid Column Stats record: either both min/max have to be null, or both have to be non-null")
 
-          val colName = r.getColumnName
-          val colType = tableSchemaFieldMap(colName).dataType
-
+          // NOTE: A V1 value records only its physical type, for ex an INT for a DATE, so it is decoded with the type of
+          //       the expression the writer applied, not the source column's: INT for `hour(ts)` on a TIMESTAMP column
           val valueMetadata = getValueMetadata(r.getValueType)
-          val minValue = extractExpressionIndexValue(minValueWrapper, colType, valueMetadata, useJava8api)
-          val maxValue = extractExpressionIndexValue(maxValueWrapper, colType, valueMetadata, useJava8api)
+          val minValue = extractExpressionIndexValue(minValueWrapper, statsType, valueMetadata, useJava8api)
+          val maxValue = extractExpressionIndexValue(maxValueWrapper, statsType, valueMetadata, useJava8api)
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)

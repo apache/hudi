@@ -1582,6 +1582,53 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
+  test("Test Expression Index Of Table Version 8 Reads Stats Of The Expression's Type") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      withSQLConf("hoodie.write.table.version" -> "8", "hoodie.write.auto.upgrade" -> "false") {
+        spark.sql(
+          s"""CREATE TABLE $tableName (ts TIMESTAMP, day STRING, uuid STRING, rider STRING, fare DOUBLE, city STRING) USING HUDI
+             |PARTITIONED BY (city)
+             |LOCATION '$basePath'
+             |TBLPROPERTIES (primaryKey = 'uuid', preCombineField = 'ts', 'hoodie.write.table.version' = '8')
+             |""".stripMargin)
+        // One base file per partition
+        spark.sql(
+          s"""INSERT INTO $tableName VALUES
+             |(TIMESTAMP'2023-09-19 23:40:49','2023-09-19','u1','rider-A',19.10,'san_francisco'),
+             |(TIMESTAMP'2023-09-21 16:34:26','2023-09-21','u2','rider-E',93.50,'san_francisco'),
+             |(TIMESTAMP'2023-09-23 09:42:17','2023-09-23','u3','rider-F',34.15,'sao_paulo'),
+             |(TIMESTAMP'2023-09-19 02:38:07','2023-09-19','u4','rider-I',41.06,'chennai')
+             |""".stripMargin)
+        // Each index stores values of another type than its column: INT, STRING, DATE and TIMESTAMP
+        spark.sql(s"CREATE INDEX ts_hour ON $tableName USING column_stats(ts) options(expr='hour')")
+        spark.sql(s"CREATE INDEX ts_year ON $tableName USING column_stats(ts) options(expr='year')")
+        spark.sql(s"CREATE INDEX ts_day ON $tableName USING column_stats(ts) options(expr='date_format', format='yyyy-MM-dd')")
+        spark.sql(s"CREATE INDEX day_date ON $tableName USING column_stats(day) options(expr='to_date')")
+        spark.sql(s"CREATE INDEX day_ts ON $tableName USING column_stats(day) options(expr='to_timestamp')")
+      }
+      val metaClient = createMetaClient(spark, basePath)
+      assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
+      val definitions = metaClient.getIndexMetadata.get.getIndexDefinitions
+      assertEquals(Set("expr_index_ts_hour", "expr_index_ts_year", "expr_index_ts_day", "expr_index_day_date", "expr_index_day_ts"),
+        JavaConverters.asScalaSet(definitions.keySet()).toSet)
+      definitions.values().forEach(definition => assertEquals(HoodieIndexVersion.V1, definition.getVersion, definition.getIndexName))
+
+      withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+        "spark.sql.adaptive.enabled" -> "false") {
+        assertScan(tableName, "hour(ts) = 16", Seq("rider-E"), expectedFiles = 1)
+        assertScan(tableName, "hour(ts) IN (16, 19)", Seq("rider-E"), expectedFiles = 1)
+        assertScan(tableName, "year(ts) = 2023", Seq("rider-A", "rider-E", "rider-F", "rider-I"), expectedFiles = 3)
+        assertScan(tableName, "year(ts) IN (2023, 2024)", Seq("rider-A", "rider-E", "rider-F", "rider-I"), expectedFiles = 3)
+        assertScan(tableName, "year(ts) = 2024", Seq.empty, expectedFiles = 0)
+        assertScan(tableName, "date_format(ts, 'yyyy-MM-dd') = '2023-09-23'", Seq("rider-F"), expectedFiles = 1)
+        assertScan(tableName, "to_date(day) = DATE'2023-09-21'", Seq("rider-E"), expectedFiles = 1)
+        assertScan(tableName, "to_timestamp(day) = TIMESTAMP'2023-09-21 00:00:00'", Seq("rider-E"), expectedFiles = 1)
+      }
+    }
+  }
+
   /**
    * Test expression index with data skipping for date and timestamp based expressions.
    */
