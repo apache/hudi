@@ -31,7 +31,6 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
-import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.Option;
@@ -112,7 +111,6 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, Bef
     dfsCluster = hdfsTestService.start(true);
 
     Configuration hadoopConf = hdfsTestService.getHadoopConf();
-    hadoopConf.setInt(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, NetworkTestUtils.nextFreePort());
     hiveTestService = new HiveTestService(hadoopConf);
     server2 = hiveTestService.start();
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
