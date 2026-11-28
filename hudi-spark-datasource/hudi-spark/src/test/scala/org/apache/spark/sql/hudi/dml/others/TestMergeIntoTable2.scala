@@ -1794,4 +1794,329 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test MergeInto With A Merge Condition That Is Always False") {
+    withTempDir { tmp =>
+      // (record key, table type, index type, whether the index finds every key the table holds)
+      val keyProp = "primaryKey = 'id',"
+      Seq(("", "cow", "SIMPLE", true), ("", "mor", "SIMPLE", true), (keyProp, "cow", "SIMPLE", true),
+        (keyProp, "cow", "BLOOM", true), (keyProp, "mor", "RECORD_INDEX", true), (keyProp, "mor", "SIMPLE", false),
+        (keyProp, "mor", "BUCKET", false), (keyProp, "cow", "BUCKET", false)).foreach {
+        case (recordKeyProp, tableType, indexType, findsEveryKey) =>
+          withSQLConf("hoodie.index.type" -> indexType, "hoodie.bucket.index.num.buckets" -> "2",
+            "hoodie.metadata.global.record.level.index.enable" -> (indexType == "RECORD_INDEX").toString) {
+            val tableName = generateTableName
+            spark.sql(
+              s"""
+                 | create table $tableName (id int, name string, price double) using hudi
+                 | tblproperties ($recordKeyProp type = '$tableType')
+                 | location '${tmp.getCanonicalPath}/$tableName'
+               """.stripMargin)
+            spark.sql(s"insert into $tableName values (1, 'a1', 10.0)")
+            def source(ids: Int*): String =
+              ids.map(id => s"select $id as id, 'a$id' as name, ${id * 10.0}D as price").mkString("(", " union all ", ")")
+            def insertOnly(ids: Int*): String =
+              s"merge into $tableName t using ${source(ids: _*)} s on 1 != 1 when not matched then insert *"
+
+            if (!findsEveryKey) {
+              // The index cannot tell whether the table holds a key, so the statement stays refused
+              checkExceptionContain(insertOnly(2))(
+                "Currently only equality predicates are supported in MERGE INTO statement on record key table")
+              checkAnswer(s"select id, name, price from $tableName")(Seq(1, "a1", 10.0))
+            } else {
+              // No source record matches, so the not-matched clause inserts all of them, the one with the id of the
+              // table included on a table without a record key
+              val ids = if (recordKeyProp.isEmpty) Seq(1, 2, 3) else Seq(2, 3)
+              spark.sql(
+                s"""
+                   | merge into $tableName t using ${source(ids: _*)} s on 1 != 1
+                   | when matched then update set *
+                   | when not matched then insert *
+                 """.stripMargin)
+              val inserted = Seq(1, "a1", 10.0) +: ids.map(id => Seq(id, s"a$id", id * 10.0))
+              checkAnswer(s"select id, name, price from $tableName order by id, price")(inserted: _*)
+
+              // The first not-matched clause that accepts a source record inserts it, and no clause may accept it
+              spark.sql(
+                s"""
+                   | merge into $tableName t using ${source(5, 6, 7)} s on false
+                   | when matched then delete
+                   | when not matched and s.id = 5 then insert (id, name) values (s.id, concat(s.name, '-first'))
+                   | when not matched and s.id < 7 then insert *
+                 """.stripMargin)
+              // Without a not-matched clause the statement writes nothing
+              spark.sql(s"merge into $tableName t using ${source(8)} s on false when matched then delete")
+              val afterClauses = inserted ++ Seq(Seq(5, "a5-first", null), Seq(6, "a6", 60.0))
+              checkAnswer(s"select id, name, price from $tableName order by id, price")(afterClauses: _*)
+
+              if (recordKeyProp.nonEmpty) {
+                // A key the table already holds fails the insert, whatever the duplicate key policy of an INSERT INTO
+                Seq("none", "drop").foreach { policy =>
+                  withSQLConf("hoodie.datasource.insert.dup.policy" -> policy) {
+                    checkExceptionContain(insertOnly(6, 9))("Duplicate key found for insert statement, key is: ")
+                  }
+                }
+                checkAnswer(s"select id, name, price from $tableName order by id, price")(afterClauses: _*)
+
+                // Two inserted source records with one key the table does not hold fail the insert too
+                val sameKey = s"(select 10 as id, 'new' as name, 1.0D as price union all " +
+                  "select 10 as id, 'other' as name, 2.0D as price)"
+                checkExceptionContain(s"merge into $tableName t using $sameKey s on false when not matched then insert *")(
+                  "Duplicate key found for insert statement, key is: 10")
+                checkAnswer(s"select id, name, price from $tableName order by id, price")(afterClauses: _*)
+                // A source record no clause inserts does not count
+                spark.sql(s"merge into $tableName t using $sameKey s on false when not matched and s.name = 'new' then insert *")
+                checkAnswer(s"select id, name, price from $tableName order by id, price")(
+                  afterClauses :+ Seq(10, "new", 1.0): _*)
+
+                // Another merge condition that is not an equality on the record key stays refused
+                Seq("true", "t.id > s.id").foreach { condition =>
+                  checkExceptionContain(
+                    s"merge into $tableName t using ${source(9)} s on $condition when not matched then insert *")(
+                    "Currently only equality predicates are supported in MERGE INTO statement on record key table")
+                }
+              }
+            }
+          }
+      }
+
+      // The insert clauses must assign the ordering field of an event time ordering table, as in any MERGE INTO
+      val orderedTable = generateTableName
+      spark.sql(
+        s"""
+           | create table $orderedTable (id int, name string, ts long) using hudi
+           | tblproperties (primaryKey = 'id', preCombineField = 'ts', type = 'cow')
+           | location '${tmp.getCanonicalPath}/$orderedTable'
+         """.stripMargin)
+      checkExceptionContain(s"merge into $orderedTable t using (select 1 as id, 'a1' as name, 1L as ts) s on false " +
+        "when not matched then insert (id, name) values (s.id, s.name)")(
+        "No matching assignment found for target table ordering field `ts`")
+      checkAnswer(s"select id from $orderedTable")()
+    }
+  }
+
+  test("Test MergeInto With A Merge Condition That Is Always False Resolves Partition Fields And Evaluates Clause Conditions Once") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, dt string) using hudi
+           | tblproperties (primaryKey = 'id', type = 'cow')
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 'p1')")
+
+      // The source has to supply the partition field, as in a merge on the record key
+      checkExceptionContain(s"merge into $tableName t using (select 2 as id, 'a2' as name) s on false " +
+        "when not matched then insert (id, name) values (s.id, s.name)")("Failed to resolve partition fields `dt`")
+      checkAnswer(s"select id, name, dt from $tableName")(Seq(1, "a1", "p1"))
+
+      // A clause condition that is not deterministic decides each source record once
+      spark.sql(s"merge into $tableName t using (select cast(id as int) as id, concat('a', id) as name, 'p2' as dt " +
+        "from range(2, 42)) s on false when not matched and rand(7) < 0.5 then insert *")
+      val inserted = spark.sql(s"select id, name, dt from $tableName where id > 1").collect()
+      assert(inserted.nonEmpty && inserted.length < 40, s"inserted ${inserted.length} of 40 source records")
+      assert(inserted.forall(row => row.getString(1) == s"a${row.getInt(0)}" && row.getString(2) == "p2"))
+
+      // A clause that leaves out the partition field takes it from the source, and one that assigns it keeps its value
+      spark.sql(s"merge into $tableName t using (select 60 as id, 'a60' as name, 'p3' as dt union all " +
+        "select 61 as id, 'a61' as name, 'p3' as dt) s on false " +
+        "when not matched and s.id = 60 then insert (id, name) values (s.id, s.name) " +
+        "when not matched then insert (id, name, dt) values (s.id, s.name, 'p4')")
+      checkAnswer(s"select id, name, dt, _hoodie_partition_path from $tableName where id >= 60 order by id")(
+        Seq(60, "a60", "p3", "dt=p3"), Seq(61, "a61", "p4", "dt=p4"))
+
+      // The clause is refused before the statement runs
+      if (HoodieSparkUtils.gteqSpark3_4) {
+        checkExceptionContain(s"merge into $tableName t using (select 50 as id, 'a50' as name, 'p1' as dt) s on false " +
+          "when not matched then insert * when not matched by source then delete")(
+          "WHEN NOT MATCHED BY SOURCE clause is not supported in MERGE INTO statement on a Hudi table")
+      }
+    }
+  }
+
+  test("Test MergeInto With A Merge Condition That Is Always False Checks Inserted Records By The Key They Are Written With") {
+    withTempDir { tmp =>
+      // Two records of which the key generator makes one record key, from null and from empty key fields
+      val compositeTable = generateTableName
+      spark.sql(
+        s"""
+           | create table $compositeTable (id string, part string, price double) using hudi
+           | tblproperties (primaryKey = 'id,part', type = 'cow')
+           | location '${tmp.getCanonicalPath}/$compositeTable'
+         """.stripMargin)
+      spark.sql(s"insert into $compositeTable values ('x', 'p1', 10.0)")
+      Seq(("cast(null as string)", "cast(null as string)", "id:a,part:__null__"), ("''", "'__empty__'", "id:a,part:__empty__")).foreach {
+        case (firstPart, secondPart, recordKey) =>
+          checkExceptionContain(s"merge into $compositeTable t using (select 'a' as id, $firstPart as part, 1.0D as price " +
+            s"union all select 'a', $secondPart, 2.0D) s on false when not matched then insert *")(
+            s"Duplicate key found for insert statement, key is: $recordKey")
+      }
+      checkAnswer(s"select id, part, price from $compositeTable")(Seq("x", "p1", 10.0))
+
+      // Two equal values of which the key generator makes two record keys
+      val doubleTable = generateTableName
+      spark.sql(
+        s"""
+           | create table $doubleTable (id double, name string) using hudi
+           | tblproperties (primaryKey = 'id', type = 'cow')
+           | location '${tmp.getCanonicalPath}/$doubleTable'
+         """.stripMargin)
+      spark.sql(s"insert into $doubleTable values (1.0D, 'one')")
+      spark.sql(s"merge into $doubleTable t using (select 0.0D as id, 'positive' as name union all " +
+        "select cast('-0.0' as double), 'negative') s on false when not matched then insert *")
+      checkAnswer(s"select name, _hoodie_record_key from $doubleTable order by name")(
+        Seq("negative", "-0.0"), Seq("one", "1.0"), Seq("positive", "0.0"))
+
+      // One record key in two partitions is two keys to a partition-local index and one key to a global index
+      Seq(("SIMPLE", false), ("BLOOM", false), ("GLOBAL_SIMPLE", true), ("GLOBAL_BLOOM", true),
+        ("RECORD_LEVEL_INDEX", false), ("GLOBAL_RECORD_LEVEL_INDEX", true)).foreach {
+        case (indexType, isGlobal) =>
+          withSQLConf("hoodie.index.type" -> indexType,
+            "hoodie.metadata.global.record.level.index.enable" -> (indexType == "GLOBAL_RECORD_LEVEL_INDEX").toString,
+            "hoodie.metadata.record.level.index.enable" -> (indexType == "RECORD_LEVEL_INDEX").toString) {
+            val tableName = generateTableName
+            spark.sql(
+              s"""
+                 | create table $tableName (id int, name string, dt string) using hudi
+                 | tblproperties (primaryKey = 'id', type = 'cow')
+                 | partitioned by (dt)
+                 | location '${tmp.getCanonicalPath}/$tableName'
+               """.stripMargin)
+            spark.sql(s"insert into $tableName values (1, 'a1', 'p1')")
+            def insertBoth(firstDt: String, secondDt: String): String =
+              s"merge into $tableName t using (select 2 as id, 'a2' as name, '$firstDt' as dt " +
+                s"union all select 2, 'b2', '$secondDt') s on false when not matched then insert *"
+
+            checkExceptionContain(insertBoth("p2", "p2"))("Duplicate key found for insert statement, key is: 2")
+            checkAnswer(s"select id, name, dt from $tableName")(Seq(1, "a1", "p1"))
+            if (isGlobal) {
+              checkExceptionContain(insertBoth("p1", "p2"))("Duplicate key found for insert statement, key is: 2")
+              checkAnswer(s"select id, name, dt from $tableName")(Seq(1, "a1", "p1"))
+            } else {
+              spark.sql(insertBoth("p1", "p2"))
+              checkAnswer(s"select id, name, dt from $tableName order by id, dt")(
+                Seq(1, "a1", "p1"), Seq(2, "a2", "p1"), Seq(2, "b2", "p2"))
+            }
+          }
+      }
+    }
+  }
+
+  test("Test MergeInto With A Merge Condition That Is Always False Needs An Index That Finds Every Key") {
+    withTempDir { tmp =>
+      // Until the record level index is built, a lookup falls back to an index that reads the keys of the base files
+      Seq(("cow", true), ("mor", false)).foreach { case (tableType, findsEveryKey) =>
+        withSQLConf("hoodie.index.type" -> "RECORD_INDEX",
+          "hoodie.metadata.global.record.level.index.enable" -> "false") {
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (id int, name string, price double) using hudi
+               | tblproperties (primaryKey = 'id', type = '$tableType')
+               | location '${tmp.getCanonicalPath}/$tableName'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 10.0)")
+          def insertOnly(id: Int): String =
+            s"merge into $tableName t using (select $id as id, 'b$id' as name, 20.0D as price) s on false when not matched then insert *"
+          if (findsEveryKey) {
+            checkExceptionContain(insertOnly(1))("Duplicate key found for insert statement, key is: 1")
+            spark.sql(insertOnly(2))
+            checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1", 10.0), Seq(2, "b2", 20.0))
+          } else {
+            Seq(1, 2).foreach { id =>
+              checkExceptionContain(insertOnly(id))(
+                "Currently only equality predicates are supported in MERGE INTO statement on record key table")
+            }
+            checkAnswer(s"select id, name, price from $tableName")(Seq(1, "a1", 10.0))
+          }
+        }
+      }
+
+      // A write that disables the metadata table drops the record level index that is built
+      withSQLConf("hoodie.index.type" -> "RECORD_INDEX", "hoodie.metadata.global.record.level.index.enable" -> "true") {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, price double) using hudi
+             | tblproperties (primaryKey = 'id', type = 'mor')
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0)")
+        // An index that can index log files writes the insert to a log file
+        withSQLConf("hoodie.index.type" -> "INMEMORY") {
+          spark.sql(s"insert into $tableName values (2, 'a2', 20.0)")
+        }
+        val insertOnly =
+          s"merge into $tableName t using (select 2 as id, 'b2' as name, 30.0D as price) s on false when not matched then insert *"
+        checkExceptionContain(insertOnly)("Duplicate key found for insert statement, key is: 2")
+        withSQLConf("hoodie.metadata.enable" -> "false") {
+          checkExceptionContain(insertOnly)(
+            "Currently only equality predicates are supported in MERGE INTO statement on record key table")
+        }
+        checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1", 10.0), Seq(2, "a2", 20.0))
+      }
+
+      // A write that does not enable the record level index drops the built one when it rolls a failed write back
+      withSQLConf("hoodie.index.type" -> "RECORD_INDEX", "hoodie.metadata.global.record.level.index.enable" -> "true") {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, price double) using hudi
+             | tblproperties (primaryKey = 'id', type = 'mor')
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0)")
+        withSQLConf("hoodie.index.type" -> "INMEMORY") {
+          spark.sql(s"insert into $tableName values (2, 'a2', 20.0)")
+        }
+        val insertOnly =
+          s"merge into $tableName t using (select 2 as id, 'b2' as name, 30.0D as price) s on false when not matched then insert *"
+        withSQLConf("hoodie.metadata.global.record.level.index.enable" -> "false") {
+          Seq("Duplicate key found for insert statement, key is: 2",
+            "the record level index is not available, so the write cannot tell whether the table holds a record key",
+            "Currently only equality predicates are supported in MERGE INTO statement on record key table").foreach { error =>
+            checkExceptionContain(insertOnly)(error)
+            checkAnswer(s"select id, name, price from $tableName order by id")(Seq(1, "a1", 10.0), Seq(2, "a2", 20.0))
+          }
+        }
+      }
+
+      // Nor does a write that disables the metadata table read the record level index of a copy-on-write table
+      withSQLConf("hoodie.index.type" -> "RECORD_INDEX", "hoodie.metadata.global.record.level.index.enable" -> "true") {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (id int, name string, price double) using hudi
+             | tblproperties (primaryKey = 'id', type = 'cow')
+             | location '${tmp.getCanonicalPath}/$tableName'
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0)")
+        withSQLConf("hoodie.metadata.enable" -> "false") {
+          checkExceptionContain(
+            s"merge into $tableName t using (select 2 as id, 'b2' as name, 30.0D as price) s on false when not matched then insert *")(
+            "Currently only equality predicates are supported in MERGE INTO statement on record key table")
+        }
+        checkAnswer(s"select id, name, price from $tableName")(Seq(1, "a1", 10.0))
+      }
+
+      // An index class takes precedence over the index type
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (id int, name string, price double) using hudi
+           | tblproperties (primaryKey = 'id', type = 'cow')
+           | location '${tmp.getCanonicalPath}/$tableName'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', 10.0)")
+      withSQLConf("hoodie.index.class" -> "org.apache.hudi.index.HoodieInMemoryHashIndex") {
+        checkExceptionContain(
+          s"merge into $tableName t using (select 2 as id, 'b2' as name, 20.0D as price) s on false when not matched then insert *")(
+          "Currently only equality predicates are supported in MERGE INTO statement on record key table")
+      }
+      checkAnswer(s"select id, name, price from $tableName")(Seq(1, "a1", 10.0))
+    }
+  }
+
 }

@@ -42,7 +42,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, Matc
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, CaseWhen, EqualTo, Expression, IsNotNull, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -311,22 +311,25 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         if (resolvedFromCondition.exists { case (attr, _) => resolver(attr.name, partitionField) }) {
           Seq.empty
         } else {
-          try {
-            resolveFieldAssociationsBetweenSourceAndTarget(
-              resolver,
-              mergeInto.targetTable,
-              mergeInto.sourceTable,
-              Seq(partitionField),
-              "partition fields",
-              Seq.empty)
-          } catch {
-            case _: MergeIntoFieldResolutionException =>
-              throw new MergeIntoFieldResolutionException(
-                s"Failed to resolve partition fields `$partitionField` within the source-table output. " +
-                  s"Project `$partitionField` in the source query, or match on it in the ON condition.")
-          }
+          resolvePartitionFieldFromSource(partitionField)
         }
       }
+    }
+
+  private def resolvePartitionFieldFromSource(partitionField: String): Seq[(Attribute, Expression)] =
+    try {
+      resolveFieldAssociationsBetweenSourceAndTarget(
+        sparkSession.sessionState.conf.resolver,
+        mergeInto.targetTable,
+        mergeInto.sourceTable,
+        Seq(partitionField),
+        "partition fields",
+        Seq.empty)
+    } catch {
+      case _: MergeIntoFieldResolutionException =>
+        throw new MergeIntoFieldResolutionException(
+          s"Failed to resolve partition fields `$partitionField` within the source-table output. " +
+            s"Project `$partitionField` in the source query, or match on it in the ON condition.")
     }
 
   /**
@@ -344,18 +347,95 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
-    // TODO move to analysis phase
-    // Create the write parameters
-    val props = buildMergeIntoConfig(hoodieCatalogTable)
-    validate(props)
+    if (hasPrimaryKey() && matchesNoRecord && indexFindsEveryKey) {
+      insertSourceRecords()
+    } else {
+      // TODO move to analysis phase
+      // Create the write parameters
+      val props = buildMergeIntoConfig(hoodieCatalogTable)
+      validate(props)
 
-    val processedInputDf: DataFrame = getProcessedInputDf(props)
-    // Do the upsert
-    executeUpsert(processedInputDf, props)
-    // Refresh the table in the catalog
-    sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
+      val processedInputDf: DataFrame = getProcessedInputDf(props)
+      // Do the upsert
+      executeUpsert(processedInputDf, props)
+      // Refresh the table in the catalog
+      sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
+    }
 
     Seq.empty[Row]
+  }
+
+  /**
+   * Whether the merge condition is always false, so that no source record matches a record of the table.
+   */
+  private lazy val matchesNoRecord: Boolean = mergeInto.mergeCondition.foldable &&
+    Try(mergeInto.mergeCondition.eval()).toOption.contains(java.lang.Boolean.FALSE)
+
+  /**
+   * Whether the index finds every record key the table holds, so that the insert of a statement whose merge
+   * condition matches no record can fail on a key the table already has: a built record-level index that the write
+   * does not drop with the metadata table, or an index of a copy-on-write table that reads the keys of the base
+   * files, as a record-level index also does until it is built. A user-defined index class, which takes precedence
+   * over the index type, is not known to.
+   */
+  private lazy val indexFindsEveryKey: Boolean = {
+    val opts = combineOptions(hoodieCatalogTable, hoodieCatalogTable.tableConfig, sparkSession.sessionState.conf,
+      defaultOpts = Map.empty)
+    val indexType = opts.getOrElse(HoodieIndexConfig.INDEX_TYPE.key, HoodieIndex.IndexType.SIMPLE.name)
+    def isOneOf(types: HoodieIndex.IndexType*): Boolean = types.exists(_.name.equalsIgnoreCase(indexType))
+    val isRecordIndex = isOneOf(HoodieIndex.IndexType.RECORD_INDEX, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX,
+      HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
+    val keepsMetadataTable = opts.getOrElse(HoodieMetadataConfig.ENABLE.key, HoodieMetadataConfig.ENABLE.defaultValue.toString).toBoolean
+    val findsEveryKey = if (isRecordIndex && hoodieCatalogTable.tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
+      keepsMetadataTable
+    } else {
+      targetTableType == COW_TABLE_TYPE_OPT_VAL && (isRecordIndex || isOneOf(HoodieIndex.IndexType.SIMPLE,
+        HoodieIndex.IndexType.BLOOM, HoodieIndex.IndexType.GLOBAL_SIMPLE, HoodieIndex.IndexType.GLOBAL_BLOOM))
+    }
+    findsEveryKey && opts.get(HoodieIndexConfig.INDEX_CLASS_NAME.key).forall(_.isEmpty)
+  }
+
+  /**
+   * Runs a statement whose merge condition matches no record as the INSERT INTO it comes to: the first
+   * not-matched clause that accepts a source record inserts it, and the matched clauses apply to no record.
+   * This is how a table with a record key takes such a statement, as its merge condition is otherwise an
+   * equality on the record key. The insert fails on a key the table already holds, or that more than one
+   * inserted source record carries, as the upsert of a not-matched clause never writes a second record for
+   * one key.
+   */
+  private def insertSourceRecords(): Unit = {
+    if (insertingActions.nonEmpty) {
+      checkInsertingActions(insertingActions, buildMergeIntoConfig(hoodieCatalogTable))
+      // The source has to supply the partition fields, as it does for a merge on the record key, and gives a clause
+      // the ones it does not assign
+      val partitionAssignments = hoodieCatalogTable.partitionFields.toSeq.flatMap(resolvePartitionFieldFromSource)
+        .map { case (attr, value) => Assignment(attr, value) }
+      // The first clause that accepts a source record decides it, so each condition is evaluated once per record
+      val clauseIndex = Alias(CaseWhen(insertingActions.map(_.condition.getOrElse(Literal.TrueLiteral)).zipWithIndex.map {
+        case (condition, index) => (condition, Literal(index))
+      }), "_hoodie_merge_into_insert_clause")()
+      val sourceWithClause = Project(mergeInto.sourceTable.output :+ clauseIndex, mergeInto.sourceTable)
+      val values = insertingActions.map(action =>
+        alignAssignments(action.assignments ++ partitionAssignments, Some(PartialAssignmentMode.NULL_VALUE),
+          keepUpdatedFieldsOnly = false).map(_.value))
+      val output = mergeInto.targetTable.output.filterNot(attr => isMetaField(attr.name)).zip(values.transpose).map {
+        case (attr, clauseValues) =>
+          Alias(CaseWhen(clauseValues.zipWithIndex.map { case (value, index) =>
+            (EqualTo(clauseIndex.toAttribute, Literal(index)), castIfNeeded(value, attr.dataType))
+          }), attr.name)()
+      }
+      val query = InsertIntoHoodieTableCommand.alignQueryOutput(
+        Project(output, Filter(IsNotNull(clauseIndex.toAttribute), sourceWithClause)),
+        hoodieCatalogTable, Map.empty, sparkSession.sessionState.conf)
+      InsertIntoHoodieTableCommand.run(sparkSession, hoodieCatalogTable.table,
+        sparkAdapter.getUnsafeUtils.createDataFrameFrom(sparkSession, query).queryExecution.executedPlan,
+        Map.empty, overwrite = false, extraOptions = Map(
+          OPERATION.key -> INSERT_OPERATION_OPT_VAL,
+          SPARK_SQL_INSERT_INTO_OPERATION.key -> INSERT_OPERATION_OPT_VAL,
+          INSERT_DUP_POLICY.key -> FAIL_INSERT_DUP_POLICY,
+          HoodieSparkSqlWriter.SQL_MERGE_INTO_INSERTS.key -> "true"),
+        metrics = metrics)
+    }
   }
 
   private val updatingActions: Seq[UpdateAction] = mergeInto.matchedActions.collect { case u: UpdateAction => u}

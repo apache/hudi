@@ -54,6 +54,7 @@ import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.{ComplexKeyGenEncoding, KeyGeneratorType}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -125,6 +126,14 @@ object HoodieSparkSqlWriter {
    */
   val SQL_MERGE_INTO_WRITES: ConfigProperty[Boolean] =
     ConfigProperty.key("hoodie.internal.sql.merge.into.writes")
+      .defaultValue(false)
+
+  /**
+   * Set for a MERGE INTO that is written as an insert, which fails on a record key that more than one incoming
+   * record carries, besides the keys the duplicate key policy checks. This config is used for internal purposes.
+   */
+  val SQL_MERGE_INTO_INSERTS: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.internal.sql.merge.into.inserts")
       .defaultValue(false)
 
   /**
@@ -608,9 +617,9 @@ class HoodieSparkSqlWriterInternal {
               case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
             }
 
-            // Remove duplicates from incoming records based on existing keys from storage.
-            val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, operation, client)
             try {
+              // Remove duplicates from incoming records based on existing keys from storage.
+              val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, tableConfig, operation, client)
               val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
                 preppedSparkSqlWrites || preppedWriteOperation)
               (writeResult, client)
@@ -1362,21 +1371,47 @@ object HoodieSparkSqlWriterInternal {
     operation == WriteOperationType.INSERT
   }
 
+  // Without the record level index its lookup reads the keys of the base files only, which misses the keys in the log
+  // files of a merge-on-read table. The start of the commit may have dropped the index, as by rolling back a failed
+  // write with the index disabled.
+  private def validateRecordIndexFindsEveryKey(tableConfig: HoodieTableConfig, writeConfig: HoodieWriteConfig): Unit = {
+    val isRecordIndex = writeConfig.getIndexType match {
+      case HoodieIndex.IndexType.RECORD_INDEX | HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX |
+           HoodieIndex.IndexType.RECORD_LEVEL_INDEX => true
+      case _ => false
+    }
+    if (isRecordIndex && tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
+      && !tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
+      throw new HoodieException("Cannot insert the source records of a MERGE INTO whose merge condition is always false: " +
+        "the record level index is not available, so the write cannot tell whether the table holds a record key")
+    }
+  }
+
   def handleInsertDuplicates(incomingRecords: JavaRDD[HoodieRecord[_]],
                              hoodieConfig: HoodieConfig,
+                             tableConfig: HoodieTableConfig,
                              operation: WriteOperationType,
                              client: SparkRDDWriteClient[_]): JavaRDD[HoodieRecord[_]] = {
     // If no deduplication is needed, return the incoming records as is
     if (!isDeduplicationRequired(hoodieConfig) || !isDeduplicationNeeded(operation)) {
       incomingRecords
     } else {
+      val mergeIntoInserts = hoodieConfig.getBooleanOrDefault(HoodieSparkSqlWriter.SQL_MERGE_INTO_INSERTS)
+      if (mergeIntoInserts) {
+        validateRecordIndexFindsEveryKey(tableConfig, client.getConfig)
+      }
       // Resolve duplicates on the committing client's engine context and config rather than a throwaway
       // context. The record index lookup this triggers collects its counters into a registry owned by the
       // context that ran the lookup, and postCommit drains the client's context; a separate context would
       // strand those counters and the INSERT would publish none. See RecordIndexLookupMetrics.
-      DataSourceUtils.handleDuplicates(
+      val records = DataSourceUtils.handleDuplicates(
         client.getEngineContext.asInstanceOf[HoodieSparkEngineContext], incomingRecords,
         client.getConfig, shouldFailWhenDuplicatesFound(hoodieConfig))
+      if (mergeIntoInserts) {
+        DataSourceUtils.failOnRepeatedKeys(records, client.getConfig)
+      } else {
+        records
+      }
     }
   }
 }
