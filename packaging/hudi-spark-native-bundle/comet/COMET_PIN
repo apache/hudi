@@ -1,0 +1,33 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The Apache DataFusion Comet commit the overlay applies to, and the version
+# the modified build is installed as. Bumping COMET_COMMIT requires refreshing
+# OVERLAY_MANIFEST (build_comet.sh fails on any overlaid file whose upstream
+# content changed) and re-running the native bundle validation.
+# The commit is Comet 1.2.0 (ab46419fcc99) plus Comet fixes the bundle needs
+# that are not released yet: dynamic partition pruning for scans Comet bridges
+# into Arrow (apache/datafusion-comet#7761), empty-relation propagation through
+# grouped Comet aggregates, and a hook for external V1 scan providers. Move the
+# pin to an apache/datafusion-comet commit once those are merged.
+COMET_REPO=https://github.com/yihua/datafusion-comet.git
+COMET_COMMIT=6b6f728098e3759ff1623d21d7a04cdb015af3ba
+COMET_VERSION=1.2.0-hudi-3
+# hudi-rs is pinned in overlay/native/Cargo.toml and locked with its full
+# transitive graph in overlay/native/Cargo.lock. This line documents it for
+# humans; the Cargo files are the source of truth. The pin is a git revision
+# until TableBuilder::with_object_store and the read-path changes the bundle
+# uses are in a hudi-rs release.
+HUDI_RS_VERSION=0.7.0-dev (git 0d3ef77090d4)
