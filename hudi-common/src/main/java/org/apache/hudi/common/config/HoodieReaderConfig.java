@@ -59,6 +59,42 @@ public class HoodieReaderConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to use positions in the block header for data blocks containing updates and delete blocks for merging.");
 
+  public static final ConfigProperty<Long> LOG_READ_AHEAD_BYTES = ConfigProperty
+      .key("hoodie.read.log.readahead.bytes")
+      .defaultValue(64L * 1024 * 1024)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Bytes of a file slice's log files and log block contents that a merge-on-read log scan reads "
+          + "ahead of its merge at a time, so the merge of one block overlaps the fetch of the next. Files or blocks "
+          + "larger than this are read in line. Set to 0 to read the log files in line only.");
+
+  public static final ConfigProperty<String> LOG_READ_AHEAD_EXECUTOR_BYTES = ConfigProperty
+      .key("hoodie.read.log.readahead.executor.bytes")
+      .noDefaultValue("10% of the JVM heap, at most 512 MB")
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Bytes the log read-ahead of all merge-on-read log scans in one JVM may hold for a scan with "
+          + "this setting to fetch ahead. A scan whose next fetch does not fit reads that file or block in line instead "
+          + "of waiting. The setting applies to the scans that set it and can only lower the JVM-wide cap of 10% of "
+          + "the JVM heap, at most 512 MB.");
+
+  public static final ConfigProperty<Boolean> VECTORIZED_MOR_READ_ENABLED = ConfigProperty
+      .key("hoodie.read.mor.vectorized.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Whether a merge-on-read read that returns columnar batches merges the log records of a file "
+          + "slice into the vectorized base file batches, for tables with commit-time or event-time ordering and the "
+          + "built-in merging. Custom mergers, other payloads and partial updates keep the row-based merge.");
+
+  public static final ConfigProperty<Integer> VECTORIZED_MOR_READ_MAX_LOG_RECORDS = ConfigProperty
+      .key("hoodie.read.mor.vectorized.max.log.records")
+      .defaultValue(2_000_000)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("File slices with more log records than this are merged row by row by the vectorized "
+          + "merge-on-read read, which holds a slice's log records on the heap while it merges.");
+
   public static final ConfigProperty<Integer> LSM_SORT_MERGE_SPILL_THRESHOLD = ConfigProperty
       .key("hoodie.lsm.sort.merge.spill.threshold")
       .defaultValue(16)

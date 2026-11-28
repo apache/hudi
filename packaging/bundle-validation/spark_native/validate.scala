@@ -63,8 +63,8 @@ def probe(label: String, leftPath: String, rightPath: String): Unit = {
 
   // Comet does not recognize Hudi's file format and leaves the scan to Spark, but with
   // spark.comet.convert.parquet.enabled it bridges the scan's output into Arrow and runs everything
-  // above it natively. Copy-on-write keeps the vectorized read and bridges columnar to columnar;
-  // merge-on-read reads row by row because file group merging is row level. Asserting on the plan
+  // above it natively. Both table types keep the vectorized read and bridge columnar to columnar:
+  // merge-on-read merges its log records into the base file batches. Asserting on the plan
   // matters because Comet degrades silently: a mis-relocated Comet or a libcomet.so that failed to
   // load still returns correct results.
   val plan = query.queryExecution.executedPlan.toString

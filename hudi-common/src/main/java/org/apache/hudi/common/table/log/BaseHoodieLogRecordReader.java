@@ -427,6 +427,12 @@ public abstract class BaseHoodieLogRecordReader<T> {
       // merge the last read block when all the blocks are done reading
       if (!currentInstantLogBlocks.isEmpty() && !skipProcessingBlocks) {
         log.debug("Merging the final data blocks");
+        if (storage instanceof LogReadAheadStorage) {
+          // The blocks are merged from the bottom of the deque up; read their content ahead in that order
+          List<HoodieLogBlock> mergeOrder = new ArrayList<>(currentInstantLogBlocks.size());
+          currentInstantLogBlocks.descendingIterator().forEachRemaining(mergeOrder::add);
+          ((LogReadAheadStorage) storage).planBlockReads(mergeOrder);
+        }
         processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
       }
       // Done

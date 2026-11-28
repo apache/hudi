@@ -20,7 +20,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.{HoodieFileIndex, HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.HoodieSchemaRepair
@@ -28,11 +28,13 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.log.InstantRange
-import org.apache.hudi.common.table.read.{HoodieFileGroupReader, TableState}
+import org.apache.hudi.common.table.read.{BufferedRecordMergerFactory, HoodieFileGroupReader, TableState}
+import org.apache.hudi.common.table.read.lsm.LsmReaderUtils
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.io.MergeUtils
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
+import org.apache.hudi.sql.vectorized.RowBatchWriter
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
@@ -43,7 +45,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.{OutputWriterFactory, PartitionedFile, SparkColumnarFileReader, SparkSchemaTransformUtils}
+import org.apache.spark.sql.execution.datasources.{FileFormat, OutputWriterFactory, PartitionedFile, SparkColumnarFileReader, SparkSchemaTransformUtils}
 import org.apache.spark.sql.execution.datasources.orc.OrcUtils
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
@@ -224,17 +226,46 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   }
 
   /**
+   * Whether the table merges log records by commit time or event time with the built-in merging, so that the file
+   * group reader can merge them into base file batches. Null on a deserialized format, where it is never consulted.
+   */
+  @transient private lazy val vectorizedMorTableSupported: Boolean =
+    Option(tableMetaClient).flatten.exists { metaClient =>
+      val tableConfig = metaClient.getTableConfig
+      // The merge matches log records by row position or by the stored record key, and appends every partition value
+      !BufferedRecordMergerFactory.needsFullRowMerge(tableConfig) && tableConfig.populateMetaFields() &&
+        !LsmReaderUtils.shouldUseLsmReader(tableConfig, HoodieReaderConfig.MERGE_TYPE.defaultValue()) &&
+        !tableConfig.getPartitionFields.orElse(Array.empty[String]).exists(mandatoryFields.contains)
+    }
+
+  /**
+   * Whether a merge-on-read snapshot scan with output `schema` returns columnar batches, with the log records of each
+   * file slice merged into its vectorized base file batches by the file group reader.
+   */
+  private def supportsVectorizedMor(sparkSession: SparkSession, schema: StructType): Boolean = {
+    isMOR && !isIncremental && !isCDC && !isBootstrap && !isMultipleBaseFileFormatsEnabled &&
+      hoodieFileFormat == HoodieFileFormat.PARQUET && requiredFilters.isEmpty && !internalSchemaOpt.isPresent &&
+      sessionConf(sparkSession, HoodieReaderConfig.VECTORIZED_MOR_READ_ENABLED.key).forall(_.toBoolean) &&
+      !sessionConf(sparkSession, HoodieReaderConfig.MERGE_TYPE.key).exists(_.equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE)) &&
+      RowBatchWriter.isSupported(schema) && detectVectorColumnsCached(schema).isEmpty && vectorizedMorTableSupported
+  }
+
+  /** A session setting given as `key` or, as spark-submit passes it, `spark.key`. */
+  private def sessionConf(sparkSession: SparkSession, key: String): Option[String] =
+    sparkSession.conf.getOption(key).orElse(sparkSession.conf.getOption("spark." + key))
+
+  /**
    * Checks if the file format supports returning columnar batches, please refer to SPARK-40918.
    *
-   * NOTE: for MOR, a file slice with only a base file can still be read with the vectorized reader,
-   * but the scan as a whole cannot return batches because slices with log files are merged row by row.
+   * NOTE: a merge-on-read scan returns batches only where [[supportsVectorizedMor]] holds; otherwise slices with
+   * log files are merged row by row and the scan returns rows.
    */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     val vectorized = canReadVectorized(sparkSession, schema)
     // Required filters (the commit-time range of an incremental query) must hold for every row, but the
     // vectorized reader only uses them to prune row groups. Unless the plan already filters on them, return
     // rows rather than batches so that the base file read can evaluate them row by row; decoding stays vectorized.
-    val returningBatch = !isMOR && vectorized && !evaluateRequiredFiltersPerRow
+    val returningBatch = vectorized && !evaluateRequiredFiltersPerRow && (!isMOR || supportsVectorizedMor(sparkSession, schema))
     logDebug(s"supportReturningBatch: $returningBatch, supportVectorizedRead: $vectorized, " +
       s"isIncremental: $isIncremental, isCDC: $isCDC, isBootstrap: $isBootstrap, isMOR: $isMOR")
     returningBatch
@@ -246,7 +277,11 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                            partitionSchema: StructType,
                            sqlConf: SQLConf): Option[Seq[String]] = {
     val originalVectorTypes = super.vectorTypes(requiredSchema, partitionSchema, sqlConf)
-    if (mandatoryFields.isEmpty) {
+    if (isMOR) {
+      // A merge-on-read batch mixes the Parquet reader's vectors with row-id views and vectors written from log rows,
+      // so the generated code reads them through the ColumnVector interface
+      None
+    } else if (mandatoryFields.isEmpty) {
       originalVectorTypes
     } else {
       val regularVectorType = if (!sqlConf.offHeapColumnVectorEnabled) {
@@ -364,8 +399,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
     val baseFileReader = spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataStructType, vectorizedRead))
     val fileGroupBaseFileReader = if (isMOR && vectorizedRead) {
-      // for file group reader to perform read, we always need to read the record without vectorized reader because our merging is based on row level.
-      // TODO: please consider to support vectorized reader in file group reader
+      // The row-based merge of the file group reader reads base files row by row; its vectorized merge reads them
+      // with baseFileReader
       spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataStructType, enableVectorizedRead = false))
     } else {
       baseFileReader
@@ -388,6 +423,17 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val readerProps = TypedProperties.copy(metaClient.getTableConfig.getProps)
     options.foreach(kv => readerProps.setProperty(kv._1, kv._2))
     readerProps.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
+    // A merge-on-read scan that returns batches needs every file slice as batches, including slices with log files.
+    // Without the scan's decision in the options, it is recomputed the way supportBatch made it.
+    val scanReturnsBatch = isMOR && options.get(FileFormat.OPTION_RETURNING_BATCH).map(_.toBoolean)
+      .getOrElse(supportBatch(spark, outputSchema))
+    readerProps.setProperty(HoodieFileGroupReaderFunction.SCAN_RETURNS_BATCH_KEY, scanReturnsBatch.toString)
+    Seq(HoodieReaderConfig.VECTORIZED_MOR_READ_ENABLED.key, HoodieReaderConfig.VECTORIZED_MOR_READ_MAX_LOG_RECORDS.key,
+      HoodieReaderConfig.LOG_READ_AHEAD_BYTES.key, HoodieReaderConfig.LOG_READ_AHEAD_EXECUTOR_BYTES.key).foreach { key =>
+      if (!options.contains(key)) {
+        sessionConf(spark, key).foreach(readerProps.setProperty(key, _))
+      }
+    }
 
     val (baseReadRequiredSchema, readVectorColumns) = withVectorRewrite(readRequiredSchema)
     val baseFileReadSchemas = if (readVectorColumns.nonEmpty) {

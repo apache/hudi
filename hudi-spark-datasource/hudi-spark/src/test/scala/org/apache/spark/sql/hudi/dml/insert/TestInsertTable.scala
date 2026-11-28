@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.dml.insert
 
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.config.HoodieStorageConfig
+import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -937,7 +937,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(4, "a4", 10.0, 1000, "2023-12-06")
       )
 
-      withSQLConf(s"${SQLConf.PARQUET_RECORD_FILTER_ENABLED.key}" -> "true") {
+      // The counts below are the rows the row-based file group read emits before Spark's filter, so the scan
+      // must return rows rather than vectorized merge-on-read batches
+      withSQLConf(s"${SQLConf.PARQUET_RECORD_FILTER_ENABLED.key}" -> "true",
+        HoodieReaderConfig.VECTORIZED_MOR_READ_ENABLED.key -> "false") {
         checkAnswer(s"select price, ts, dt from $tableName where (id = 1 or name = 'a3') and price <> 10")(
           Seq(11.0, 2000, "2023-12-06")
         )
@@ -960,7 +963,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         assertResult(3)(df.queryExecution.sparkPlan.children(0).children(0).executeCollect().length)
       }
 
-      withSQLConf(s"${SQLConf.PARQUET_RECORD_FILTER_ENABLED.key}" -> "false") {
+      withSQLConf(s"${SQLConf.PARQUET_RECORD_FILTER_ENABLED.key}" -> "false",
+        HoodieReaderConfig.VECTORIZED_MOR_READ_ENABLED.key -> "false") {
         checkAnswer(s"select price, ts, dt from $tableName where (id = 1 or name = 'a3') and price <> 10")(
           Seq(11.0, 2000, "2023-12-06")
         )

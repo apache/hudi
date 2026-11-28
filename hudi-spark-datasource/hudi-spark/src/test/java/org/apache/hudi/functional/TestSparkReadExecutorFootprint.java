@@ -276,7 +276,7 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
             continue;
           }
           TableKind kind = query == ReadQuery.CDC ? TableKind.CDC : TableKind.PLAIN;
-          args.add(Arguments.of(version, type, kind, query, readShape(type, query)));
+          args.add(Arguments.of(version, type, kind, query, readShape(version, type, query)));
         }
       }
     }
@@ -284,16 +284,19 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
   }
 
   /**
-   * A read returns columnar batches when it scans base files without merging: snapshot and time
-   * travel reads of COPY_ON_WRITE tables, and read optimized reads.
+   * A read returns columnar batches when it scans base files without merging, or when it merges log
+   * records into the vectorized base file batches: read optimized reads, and snapshot and time
+   * travel reads of COPY_ON_WRITE tables and of MERGE_ON_READ tables at the current version. The
+   * version 6 MERGE_ON_READ tables here keep the row-based merge, since their table config does not
+   * pass HoodieFileGroupReaderBasedFileFormat#vectorizedMorTableSupported.
    */
-  private static ReadShape readShape(HoodieTableType type, ReadQuery query) {
+  private static ReadShape readShape(int version, HoodieTableType type, ReadQuery query) {
     switch (query) {
       case READ_OPTIMIZED:
         return ReadShape.COLUMNAR;
       case SNAPSHOT:
       case TIME_TRAVEL:
-        return type == COPY_ON_WRITE ? ReadShape.COLUMNAR : ReadShape.ROW;
+        return type == COPY_ON_WRITE || version == CURRENT_VERSION ? ReadShape.COLUMNAR : ReadShape.ROW;
       default:
         return ReadShape.ROW;
     }

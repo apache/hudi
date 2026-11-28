@@ -17,15 +17,16 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConversionUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.cdc.{CDCFileGroupIterator, HoodieCDCFileGroupSplit, HoodieCDCFileIndex}
 import org.apache.hudi.common.config.{HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.ParquetTableSchemaResolver
 import org.apache.hudi.common.table.log.InstantRange
-import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieRecordReader, TableState}
+import org.apache.hudi.common.table.read.{BatchSupport, HoodieFileGroupReader, HoodieRecordReader, TableState}
 import org.apache.hudi.common.table.read.lsm.{HoodieLsmFileGroupReader, LsmReaderUtils}
 import org.apache.hudi.common.util.{ConfigUtils, Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
@@ -33,6 +34,7 @@ import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.io.storage.VectorConversionUtils
+import org.apache.hudi.sql.vectorized.RowBatchWriter
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
@@ -53,7 +55,7 @@ import org.apache.spark.util.{SerializableConfiguration, Utils}
 import java.io.Closeable
 import java.nio.ByteBuffer
 
-import scala.collection.JavaConverters.mapAsJavaMapConverter
+import scala.collection.JavaConverters.{mapAsJavaMapConverter, seqAsJavaListConverter}
 import scala.reflect.ClassTag
 
 /**
@@ -148,64 +150,15 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
         val fileGroupName = FSUtils.getFileIdFromFilePath(sparkAdapter
           .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
         fileSliceMapping.getSlice(fileGroupName) match {
-          case Some(fileSlice) if !state.isCount && (state.requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
-            val tableConfig = state.tableState.getTableConfig
-            // requiredFilters preserve Spark's row-level filtering semantics, while instantRangeOpt
-            // keeps out-of-range records from participating in the file-group merge itself.
-            val readerContext = new SparkFileFormatInternalRowReaderContext(
-              fileGroupBaseFileReader.value, state.filters, state.requiredFilters, conf, tableConfig,
-              sparkRequiredSchema = Some(state.requiredSchema), instantRangeOpt = state.instantRangeOpt)
-            readerContext.enableLogicalTimestampFieldRepair(conf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
-            // The merger factory writes the payload class into the props it is given, so each file gets its own copy
-            val props = TypedProperties.copy(state.readerProps)
-            val baseFileLength = if (fileSlice.getBaseFile.isPresent) {
-              fileSlice.getBaseFile.get.getFileSize
+          case Some(fileSlice) if scanReturnsBatch(state) =>
+            if (fileSlice.getLogFiles.findAny().isPresent) {
+              readFileSliceBatches(file, fileSlice, fileSliceMapping, state, conf)
             } else {
-              0
+              readBaseFile(file, state, conf)
             }
-            val reader: HoodieRecordReader[InternalRow] =
-              if (LsmReaderUtils.shouldUseLsmReader(
-                tableConfig,
-                ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true))) {
-                HoodieLsmFileGroupReader.builder[InternalRow]()
-                  .withReaderContext(readerContext)
-                  .withTableState(state.tableState)
-                  .withLatestCommitTime(state.queryTimestamp)
-                  .withBaseFileOption(fileSlice.getBaseFile)
-                  .withLogFiles(fileSlice.getLogFiles)
-                  .withPartitionPath(fileSlice.getPartitionPath)
-                  .withDataSchema(state.dataSchema)
-                  .withRequestedSchema(state.requestedSchema)
-                  .withInternalSchemaOpt(state.internalSchemaOpt)
-                  .withProps(props)
-                  .withStart(file.start)
-                  .withLength(baseFileLength)
-                  .build()
-              } else {
-                HoodieFileGroupReader.builder[InternalRow]()
-                  .withReaderContext(readerContext)
-                  .withTableState(state.tableState)
-                  .withLatestCommitTime(state.queryTimestamp)
-                  .withBaseFileOption(fileSlice.getBaseFile)
-                  .withLogFiles(fileSlice.getLogFiles)
-                  .withPartitionPath(fileSlice.getPartitionPath)
-                  .withDataSchema(state.dataSchema)
-                  .withRequestedSchema(state.requestedSchema)
-                  .withInternalSchemaOpt(state.internalSchemaOpt)
-                  .withProps(props)
-                  .withStart(file.start)
-                  .withLength(baseFileLength)
-                  .withShouldUseRecordPosition(state.shouldUseRecordPosition)
-                  .build()
-              }
-            // Append partition values to rows and project to output schema
-            appendPartitionAndProject(
-              reader.getClosableIterator,
-              state.projectionInputSchema,
-              state.remainingPartitionSchema,
-              state.outputSchema,
-              fileSliceMapping.getPartitionValues,
-              state.fixedPartitionIndexes)
+
+          case Some(fileSlice) if !state.isCount && (state.requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
+            readFileSliceRows(file, fileSlice, fileSliceMapping, state, conf)
 
           case _ =>
             readBaseFile(file, state, conf)
@@ -227,6 +180,134 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
         readBaseFile(file, state, conf)
     }
     CloseableIteratorListener.addListener(iter)
+  }
+
+  private def scanReturnsBatch(state: HoodieFileGroupReadState): Boolean =
+    state.readerProps.getBoolean(SCAN_RETURNS_BATCH_KEY, false)
+
+  private def newReaderContext(state: HoodieFileGroupReadState,
+                               conf: StorageConfiguration[Configuration]): SparkFileFormatInternalRowReaderContext = {
+    // requiredFilters preserve Spark's row-level filtering semantics, while instantRangeOpt
+    // keeps out-of-range records from participating in the file-group merge itself.
+    val readerContext = new SparkFileFormatInternalRowReaderContext(
+      fileGroupBaseFileReader.value, state.filters, state.requiredFilters, conf, state.tableState.getTableConfig,
+      sparkRequiredSchema = Some(state.requiredSchema), instantRangeOpt = state.instantRangeOpt)
+    readerContext.enableLogicalTimestampFieldRepair(conf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
+    readerContext
+  }
+
+  /**
+   * Merges a file slice row by row and returns rows in the scan's output schema.
+   */
+  private def readFileSliceRows(file: PartitionedFile,
+                                fileSlice: FileSlice,
+                                fileSliceMapping: HoodiePartitionFileSliceMapping,
+                                state: HoodieFileGroupReadState,
+                                conf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+    val tableConfig = state.tableState.getTableConfig
+    val readerContext = newReaderContext(state, conf)
+    // The merger factory writes the payload class into the props it is given, so each file gets its own copy
+    val props = TypedProperties.copy(state.readerProps)
+    val baseFileLength = if (fileSlice.getBaseFile.isPresent) {
+      fileSlice.getBaseFile.get.getFileSize
+    } else {
+      0
+    }
+    val reader: HoodieRecordReader[InternalRow] =
+      if (LsmReaderUtils.shouldUseLsmReader(
+        tableConfig,
+        ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true))) {
+        HoodieLsmFileGroupReader.builder[InternalRow]()
+          .withReaderContext(readerContext)
+          .withTableState(state.tableState)
+          .withLatestCommitTime(state.queryTimestamp)
+          .withBaseFileOption(fileSlice.getBaseFile)
+          .withLogFiles(fileSlice.getLogFiles)
+          .withPartitionPath(fileSlice.getPartitionPath)
+          .withDataSchema(state.dataSchema)
+          .withRequestedSchema(state.requestedSchema)
+          .withInternalSchemaOpt(state.internalSchemaOpt)
+          .withProps(props)
+          .withStart(file.start)
+          .withLength(baseFileLength)
+          .build()
+      } else {
+        HoodieFileGroupReader.builder[InternalRow]()
+          .withReaderContext(readerContext)
+          .withTableState(state.tableState)
+          .withLatestCommitTime(state.queryTimestamp)
+          .withBaseFileOption(fileSlice.getBaseFile)
+          .withLogFiles(fileSlice.getLogFiles)
+          .withPartitionPath(fileSlice.getPartitionPath)
+          .withDataSchema(state.dataSchema)
+          .withRequestedSchema(state.requestedSchema)
+          .withInternalSchemaOpt(state.internalSchemaOpt)
+          .withProps(props)
+          .withStart(file.start)
+          .withLength(baseFileLength)
+          .withShouldUseRecordPosition(state.shouldUseRecordPosition)
+          .build()
+      }
+    // Append partition values to rows and project to output schema
+    appendPartitionAndProject(
+      reader.getClosableIterator,
+      state.projectionInputSchema,
+      state.remainingPartitionSchema,
+      state.outputSchema,
+      fileSliceMapping.getPartitionValues,
+      state.fixedPartitionIndexes)
+  }
+
+  /**
+   * Reads a file slice with log files as columnar batches, for a scan that returns batches. The file group reader
+   * merges the log records into the vectorized base file batches where it can (see
+   * [[HoodieFileGroupReader#getClosableBatchIterator]]), and returns the rows of its row-based merge as batches
+   * otherwise.
+   */
+  private def readFileSliceBatches(file: PartitionedFile,
+                                   fileSlice: FileSlice,
+                                   fileSliceMapping: HoodiePartitionFileSliceMapping,
+                                   state: HoodieFileGroupReadState,
+                                   conf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+    val tableConfig = state.tableState.getTableConfig
+    val props = TypedProperties.copy(state.readerProps)
+    val mergeType = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true)
+    // The batches of the file group reader hold the requested columns followed by the partition values
+    val batchesMatchOutput = state.projectionInputSchema.fieldNames.sameElements(state.requiredSchema.fieldNames) &&
+      state.remainingPartitionSchema == state.partitionSchema
+    if (!batchesMatchOutput || LsmReaderUtils.shouldUseLsmReader(tableConfig, mergeType)) {
+      toBatches(readFileSliceRows(file, fileSlice, fileSliceMapping, state, conf), state.outputSchema)
+    } else {
+      val readerContext = newReaderContext(state, conf)
+      val dataFields = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(state.dataSchema).fields
+      val fieldsByName = (dataFields ++ state.requiredSchema.fields).map(field => field.name -> field).toMap
+      readerContext.setBatchSupport(HOption.of[BatchSupport[InternalRow, _]](new SparkColumnarBatchSupport(baseFileReader.value, file, fieldsByName,
+        state, conf, fileSliceMapping.getPartitionValues, state.outputSchema)))
+      val baseFileLength = if (fileSlice.getBaseFile.isPresent) fileSlice.getBaseFile.get.getFileSize else 0L
+      val reader = HoodieFileGroupReader.builder[InternalRow]()
+        .withReaderContext(readerContext)
+        .withTableState(state.tableState)
+        .withLatestCommitTime(state.queryTimestamp)
+        .withBaseFileOption(fileSlice.getBaseFile)
+        .withLogFiles(fileSlice.getLogFiles)
+        .withPartitionPath(fileSlice.getPartitionPath)
+        .withDataSchema(state.dataSchema)
+        .withRequestedSchema(state.requestedSchema)
+        .withInternalSchemaOpt(state.internalSchemaOpt)
+        .withProps(props)
+        .withStart(file.start)
+        .withLength(baseFileLength)
+        .withShouldUseRecordPosition(state.shouldUseRecordPosition)
+        .build()
+      val batches = reader.getClosableBatchIterator[ColumnarBatch]()
+      new Iterator[ColumnarBatch] with Closeable {
+        override def hasNext: Boolean = batches.hasNext
+
+        override def next(): ColumnarBatch = batches.next()
+
+        override def close(): Unit = batches.close()
+      }.asInstanceOf[Iterator[InternalRow]]
+    }
   }
 
   private def readBaseFile(file: PartitionedFile,
@@ -281,6 +362,35 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
 }
 
 private[parquet] object HoodieFileGroupReaderFunction {
+
+  /**
+   * Set by the planner in the reader props when the scan returns columnar batches, so every file slice of the scan
+   * must be returned as batches.
+   */
+  val SCAN_RETURNS_BATCH_KEY = "hoodie.read.mor.vectorized.scan.returns.batch"
+
+  private val ROWS_PER_BATCH = 4096
+
+  /**
+   * Splits rows already in the scan's output schema into batches, for slices the file group reader does not read as
+   * batches in a scan that returns batches.
+   */
+  private def toBatches(rows: Iterator[InternalRow], outputSchema: StructType): Iterator[InternalRow] = {
+    // The rows may reuse one object, so each is copied before the next one is read
+    val batches = rows.map(_.copy()).grouped(ROWS_PER_BATCH).map { group =>
+      SparkAdapterSupport.sparkAdapter.makeColumnarBatch(RowBatchWriter.write(outputSchema, group.asJava), group.size)
+    }
+    new Iterator[ColumnarBatch] with Closeable {
+      override def hasNext: Boolean = batches.hasNext
+
+      override def next(): ColumnarBatch = batches.next()
+
+      override def close(): Unit = rows match {
+        case closeable: Closeable => closeable.close()
+        case _ =>
+      }
+    }.asInstanceOf[Iterator[InternalRow]]
+  }
 
   private def appendPartitionAndProject(iter: ClosableIterator[InternalRow],
                                         inputSchema: StructType,
