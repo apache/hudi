@@ -32,7 +32,8 @@ JIRA: https://issues.apache.org/jira/browse/HUDI-9332
 Revised for 1.3.0. The interface section now matches the interface that shipped in 1.1 and 1.2, and the
 revision extends it with notifications for every table service, table format settings in the table
 config, a coexisting metadata table, per-row format metadata columns, and write configuration defaults
-and validation supplied by the table format. Merge-on-read tables are covered by
+and validation supplied by the table format. It also states that the table format is fixed at table
+creation and records the alternatives considered. Merge-on-read tables are covered by
 [RFC-114](../rfc-114/rfc-114.md). Lock provider and conflict resolution hooks, and writers outside Hudi,
 are left to a later revision.
 
@@ -99,25 +100,58 @@ There will be a hudi table-property "hoodie.table.format" to identify the table 
   where its metadata is published) are stored in `hoodie.properties` when the table is created, by
   every writer that can create a table. Ingestion, a separate table service job and a reader of the
   same table therefore load the same settings, and no writer has to repeat them.
-- **The name resolves or the table fails to load.** The table format name is matched ignoring case.
+- **No secrets under the prefix.** Everything under `hoodie.table.format.` is written in plain text to
+  `hoodie.properties`, which anyone who can read the table can read. A table format takes credentials
+  and tokens, such as those of its catalog, from settings outside this prefix or from the environment,
+  and its documentation says so.
+- **The name resolves or the table fails to load.** The table format name is matched ignoring case
+  (open PR #20936).
   A name that matches no table format on the classpath fails the table load instead of falling back
   to the native format, since a writer that ignores the table format would complete instants the
-  table format never records.
+  table format never records. This holds for every reader and writer that loads the table, including
+  catalog sync, the CLI and query engines: one without the table format's jar used to read the table
+  as a native table and now fails until the jar is on its classpath. The release notes state this,
+  together with the case-insensitive match, under which a name written in another case now resolves
+  to the table format instead of the native format.
+
+### Table format lifecycle
+
+The table format is fixed when the table is created: `hoodie.table.format` is written to
+`hoodie.properties` at creation and every meta client loads it from there. Switching the table format
+of an existing table is not supported, in either direction. Switching to the native format would
+expose instants that completed in Hudi but that the table format never recorded, and switching from
+it would need the table format's metadata built from files and instants it never saw; converting an
+existing table needs its own design. Today a write that names a different `hoodie.table.format` than
+the table's is silently ignored; a planned change makes such a write fail fast.
 
 ### Actions the table format is notified of
 
 Every Hudi action that changes the table notifies the table format once the action is complete in
-the Hudi timeline, so the table format's metadata never lags behind a file rewrite.
+the Hudi timeline (a rollback also before it), so the table format's metadata never lags behind a
+file rewrite. The instant passed is the completed instant of the Hudi timeline, so a table service
+arrives under the action it completes as. Status is **shipped** (released, or merged for 1.3.0),
+**open PR** (in review), or **proposed** (designed here, not built).
 
-| Hudi action | Notification | When |
-|---|---|---|
-| commit, deltacommit, insert overwrite, clustering | `commit` | after the instant completes |
-| compaction, log compaction | `commit`, with the compaction's commit metadata | after the instant completes |
-| clean | `clean` | after the instant completes |
-| archival | `archive`, with the archived instants | after the instants are archived |
-| rollback, copy-on-write and merge-on-read | `rollback` before Hudi reverts the instant, `completedRollback` after the rollback completes | both |
-| savepoint | `savepoint` | after the savepoint completes |
-| restore | `restore` | after the restore completes |
+| Hudi action | Callback | Instant passed | Status |
+|---|---|---|---|
+| Write, copy-on-write | `commit` | completed `commit` | shipped, 1.1 |
+| Write, merge-on-read | `commit` | completed `deltacommit` | shipped, 1.1; RFC-114 writes: open PR #20167 |
+| Insert overwrite, clustering | `commit` | completed `replacecommit` | shipped, 1.1 |
+| Compaction | `commit`, operation type `COMPACT` | completed `commit` | shipped, 1.3.0 (#20877) |
+| Log compaction | `commit`, operation type `LOG_COMPACT` | completed `deltacommit` | shipped, 1.3.0 (#20877) |
+| Clean | `clean` | completed `clean` | shipped, 1.1 |
+| Archival | `archive` | the archived instants | shipped, 1.1 |
+| Rollback, copy-on-write | `rollback` before Hudi reverts, `completedRollback` after | instant rolled back; completed `rollback` | shipped, 1.1 |
+| Rollback, merge-on-read | `rollback` before Hudi reverts | instant rolled back | open PR #20167 |
+| Rollback, merge-on-read | `completedRollback` after | completed `rollback` | shipped, 1.1 |
+| Savepoint | `savepoint` | completed `savepoint` | shipped, 1.1 |
+| Restore | `rollback` per completed instant it reverts, no `completedRollback`; then `restore` | instant rolled back; completed `restore` | shipped, 1.1; per-instant `rollback` on merge-on-read: open PR #20167 |
+| Table creation, client start | table config defaults, write config defaults, validation | none | proposed |
+
+`rollback` runs only for an instant that is complete in the table format's timeline. An instant that
+the table format's timeline shows as inflight while Hudi's timeline shows it completed gets no
+`rollback`: Hudi finds it in its own timeline by requested time, reverts it there, and calls
+`completedRollback` once the rollback completes.
 
 ### Metadata:
 
@@ -181,9 +215,16 @@ so the table format loses those values unless Hudi carries them.
   format declares them, instead of silently dropping the values.
 - **Native format.** The native format declares none, so nothing changes for native tables.
 
+- **Constraints on the table format.** The declared names are reserved: a table column must not take
+  one, or every rewrite fails its name check. Since a custom write handle or clustering strategy can
+  bypass the refusals, a table format that declares columns should verify at commit that the base
+  files the commit wrote carry them. Flink copy-on-write upserts, Flink clustering and Flink
+  merge-on-read compaction refuse such a table, so it is written with the Spark or Java writer.
+
 A row that an update moves to another file group (the update as delete and insert mode of RFC-114) is
-written as new today, so it gets the new-row value; carrying the old value across the move is a
-follow-up.
+an update of that row and keeps its value as an in-place update does, getting `valueOnUpdate` of
+the value resolved at its old position. The writer will carry that value in a follow-up once the RFC-114 mode (#20167) and format meta columns (#20883) have merged. Until it lands, whichever
+of the two merges second makes the RFC-114 mode refuse a table format that declares columns.
 
 ### Write configuration defaults and validation
 
@@ -197,9 +238,10 @@ invariants.
 The table format supplies them:
 
 - **Table defaults at creation.** When a table is created with a non-native format, the table format
-  returns table config entries to store with the table. Settings that every writer of the table must
-  agree on (such as the RFC-114 mode) become table properties, so a second writer or a separate table
-  service job cannot omit them.
+  returns table config entries to store with the table, so a second writer or a separate table
+  service job cannot omit them. The RFC-114 mode stays a write config (see
+  [Alternatives considered](#alternatives-considered)); a table format that needs it supplies it as a
+  write default and refuses a client that turns it off.
 - **Write defaults.** When a write client or a table service client starts on the table, the table
   format returns write config defaults. They apply to settings the user did not set.
 - **Validation.** The table format validates the final write config against the table config and
@@ -211,6 +253,22 @@ The native format supplies no defaults and accepts every config, so native table
 ### Layout:
 
 The metadata corresponding to the table format (iceberg, ..) will be stored under .hoodie/ folder by default with location stored in hoodie.properties.
+
+### Alternatives considered
+
+- **Resolve format meta column values by record key instead of by position.** The values a table
+  format derives, such as row lineage, follow from a row's position in the file it was written to, and
+  the table format keeps no index from record key to value. A rewrite already reads the base file in
+  order and knows each row's position, so resolving by position needs no extra lookup.
+- **Let the table format fix up the values at commit instead of the write handles carrying them.** At
+  commit the table format sees file-level write stats only; recovering per-row values would mean
+  reading every rewritten base file and its predecessor again and joining them, and the values live in
+  the data files, which would then have to be rewritten.
+- **Keep the RFC-114 mode as a table property instead of a write config.** A table property makes every
+  writer and compaction scheduler agree. It stays a write config so that it can be turned on or off for
+  a table, including a native one, without a table config change. A scheduler without the mode is
+  covered by a commit-time check (#20167): a delta commit in the mode fails when a compaction requested after it
+  covers a file group it wrote positional deletes into.
 
 ## Integration
 
@@ -353,20 +411,19 @@ restore callbacks, the timeline and metadata factories, and copy-on-write tables
 settings in the table config, the coexisting metadata table, format meta columns, and merge-on-read
 tables through RFC-114. All of it is a no-op for native tables.
 
-**Step 3.** Write configuration defaults and validation from the table format, which turns the
-RFC-114 mode into a table property set by the table format.
+**Step 3.** Write configuration defaults and validation from the table format, so a table format that
+needs the RFC-114 mode supplies it to every writer and refuses a writer that turns it off.
 
 **Step 4.** Lock provider and conflict resolution from the table format, and writers outside Hudi,
 in a later revision.
 
-**Switching an existing Hudi table.** An existing table switches in place without rewriting data:
-stop writers until no instant is pending, build the table format's metadata from the latest completed
-state of the table, record that state as the table format's baseline, then set `hoodie.table.format`.
-The Hudi timeline is unchanged throughout, so switching back is setting the format to `native` and
-dropping the table format's metadata.
+**Existing tables.** Switching the table format of an existing table is not supported (see
+[Table format lifecycle](#table-format-lifecycle)).
 
 **Compatibility.** Every new method has a default that keeps today's behavior, so a table format
-built against 1.2 keeps working. Native tables see no change.
+built against 1.2 compiles and loads. It does receive callbacks it did not get before: `commit` for
+compaction and log compaction, told apart from writes by the commit metadata's operation type, and
+`rollback` for merge-on-read rollbacks. Native tables see no change.
 
 ## **Test Plan**
 
