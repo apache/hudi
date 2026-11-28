@@ -17,7 +17,11 @@
 nameOverride: ""
 fullnameOverride: ""
 
+podAnnotations: {}
+
 image:
+  # Optional immutable registry digest. Takes precedence over tag.
+  digest: ""
   repository: hudi-lakehouse-spark-connect
   tag: "4.1.3-hudi1.2.0"
   pullPolicy: IfNotPresent

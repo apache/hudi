@@ -37,17 +37,26 @@ metadata:
     app.kubernetes.io/part-of: hudi-lakehouse
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: minio
   template:
     metadata:
+      annotations:
+        # Filled by the installer when loading a local image.
+        hudi.apache.org/local-image-id: ""
       labels:
         app.kubernetes.io/name: minio
     spec:
+      securityContext:
+        # The Chainguard image runs as UID 65532; new PVCs are root-owned.
+        fsGroup: 65532
       containers:
         - name: minio
           image: cgr.dev/chainguard/minio:latest
+          imagePullPolicy: IfNotPresent
           args: ["server", "/data", "--console-address", ":9001"]
           env:
             - name: MINIO_ROOT_USER

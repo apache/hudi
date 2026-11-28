@@ -17,10 +17,25 @@ limitations under the License.
 -->
 # hudi-lakehouse
 
-Kubernetes packaging for running a Hudi lakehouse: deployable Helm charts for
-the components, plus a self-contained laptop environment to develop against.
+Packaging for running a Hudi lakehouse: Docker Compose for local use, deployable
+Helm charts for Kubernetes, and a laptop environment to develop against.
 
-## Quickstart (one command)
+For the local Kubernetes package with Spark Connect, Chat UI and MCP, see
+[the minikube installation guide](local-dev/INSTALL.md). Application images can
+be built from this checkout or reused locally; published images are not assumed.
+
+## Docker Compose (Docker only)
+
+```bash
+./hudi-lakehouse/docker/lakehouse.sh up --build
+```
+
+Starts MinIO, HMS, Spark Connect and the Agent Gateway, seeds sample Hudi tables,
+and verifies MCP queries. No host JDK, Maven or Kubernetes is required.
+See the [Docker installation guide](docker/README.md) for chat/LLM configuration,
+persistence, published-image configuration and the current release-packaging limits.
+
+## Kubernetes quickstart (one command)
 
 Prereqs: `docker`, `minikube`, `helm`, `kubectl`, `mvn`, a JDK (11/17 for the
 Hudi build; a JDK 23 for the Trino connector is auto-provisioned if missing).
@@ -44,7 +59,10 @@ table, registers it in the metastore, and queries it back through Trino:
  sao_paulo     |    33
 ```
 
-Tear down with `./hudi-lakehouse/local-dev/scripts/down.sh`.
+To resume with your existing data, run `./hudi-lakehouse/scripts/quickstart.sh`.
+Adding `--run-example` rewrites the `trips` table. See the
+[Trino developer guide](local-dev/README.md#developer-quickstart-trino) for
+commands to stop workloads or permanently clear the local tables and catalog.
 
 To query the same example through Spark Connect instead of Trino:
 
@@ -113,7 +131,7 @@ catalog, and query engines are independent. This directory keeps the
 | `local-dev/scripts/run-example.sh` | uploads the example job and submits it as a `SparkApplication` |
 | `local-dev/scripts/smoke-test.sh` | end-to-end assert: up → example → Trino row counts |
 | `local-dev/scripts/test-spark-connect.sh --restart-endpoint` | opt-in ADBC CRUD, endpoint restart, and persistence assertions against an existing Connect deployment |
-| `local-dev/scripts/down.sh` | full teardown |
+| `local-dev/scripts/down.sh` | stop workloads and preserve the catalog and table data |
 
 ## Deploying `hudi-trino` against real infrastructure
 

@@ -46,6 +46,11 @@ loopback, restart it reachable from the cluster:
   OLLAMA_HOST=0.0.0.0 ollama serve
 {{- end }}
 
+{{- if eq .Values.readinessProbePath "/health" }}
+Pod readiness checks the process only, keeping MCP routable without an LLM.
+Verify SQL/MCP separately; /ready still reports SQL and LLM dependency status.
+{{- else }}
 Readiness (kubectl -n {{ .Release.Namespace }} get pods) stays NotReady until
 both {{ .Values.sqlBackend }} and the LLM endpoint are reachable -- `curl localhost:8000/ready`
 shows per-dependency status.
+{{- end }}

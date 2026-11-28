@@ -55,7 +55,7 @@
 {{- end -}}
 {{- $k8sDefaults := dict
   "spark.kubernetes.namespace" .Release.Namespace
-  "spark.kubernetes.executor.container.image" (printf "%s:%s" .Values.image.repository .Values.image.tag)
+  "spark.kubernetes.executor.container.image" (include "hudi-spark-connect.image" .)
   "spark.kubernetes.container.image.pullPolicy" .Values.image.pullPolicy
   "spark.driver.bindAddress" "0.0.0.0"
   "spark.executorEnv.AWS_REGION" .Values.storage.s3.region

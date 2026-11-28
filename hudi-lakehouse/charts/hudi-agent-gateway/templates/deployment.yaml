@@ -14,6 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 {{- $g := .Values.gateway }}
+{{- $readinessPath := ternary .Values.readinessProbePath "/ready" (hasKey .Values "readinessProbePath") }}
+{{- if not (has $readinessPath (list "/ready" "/health")) }}
+{{- fail "readinessProbePath must be /ready or /health" }}
+{{- end }}
 {{- if not (has .Values.sqlBackend (list "trino" "spark-connect")) }}
 {{- fail "sqlBackend must be trino or spark-connect" }}
 {{- end }}
@@ -32,6 +36,10 @@ spec:
       {{- include "hudi-agent-gateway.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       labels:
         {{- include "hudi-agent-gateway.selectorLabels" . | nindent 8 }}
     spec:
@@ -40,7 +48,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: gateway
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "hudi-agent-gateway.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
@@ -128,7 +136,7 @@ spec:
             failureThreshold: 30
           readinessProbe:
             httpGet:
-              path: /ready
+              path: {{ $readinessPath | quote }}
               port: http
             periodSeconds: 10
             # /ready's own dependency checks budget up to ~8s (5s lakehouse ping +
