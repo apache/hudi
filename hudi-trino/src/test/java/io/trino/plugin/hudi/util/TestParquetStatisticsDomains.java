@@ -199,7 +199,10 @@ class TestParquetStatisticsDomains
                 // over an INT32 column would still be hashed as raw bytes against a filter built from four-byte
                 // integer hashes, so the guard has to drop it rather than lean on getDomain declining.
                 dropped("timestamp over an unannotated INT64", TIMESTAMP_MILLIS, plain(INT64), ALL),
-                dropped("varbinary over INT32", VARBINARY, plain(INT32), ALL));
+                dropped("varbinary over INT32", VARBINARY, plain(INT32), ALL),
+                // The bloom filter hashes a uuid lookup as its 16 raw bytes, while parquet-mr hashed a string-encoded
+                // uuid column as its 36 characters of text, so every lookup would miss and drop the row group
+                dropped("uuid over BINARY string", UUID, annotated(BINARY, LogicalTypeAnnotation.stringType()), ALL));
     }
 
     @ParameterizedTest

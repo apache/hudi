@@ -21,6 +21,8 @@ import io.trino.plugin.hudi.testing.NonProjectionCompatibleTestRecordMerger;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,6 +41,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ul>
  * So on the real-time table {@code sum(value)} is 199 (99 + 100), whereas the base-only view yields 110
  * (10 + 100) and the built-in newest-wins would yield 104 (99 + 5).
+ * <p>
+ * Every test runs with {@code schema_column_types_enabled} off and on; a custom merger keeps the Avro records either way.
  */
 public class TestHudiCustomMerger
         extends AbstractTestQueryFramework
@@ -54,44 +58,50 @@ public class TestHudiCustomMerger
                 .build();
     }
 
-    @Test
-    public void testReadOptimizedTableReturnsBaseFileValues()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testReadOptimizedTableReturnsBaseFileValues(boolean schemaColumnTypes)
     {
         // The read-optimized table reads base files only, so it reflects the initial insert.
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value FROM " + CustomMergerHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
-        assertThat(computeScalar("SELECT sum(value) FROM " + CustomMergerHudiTablesInitializer.TABLE_NAME))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT sum(value) FROM " + CustomMergerHudiTablesInitializer.TABLE_NAME))
                 .isEqualTo(110L);
     }
 
-    @Test
-    public void testRealtimeTableAppliesCustomMerger()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testRealtimeTableAppliesCustomMerger(boolean schemaColumnTypes)
     {
         // The real-time table merges base + log files. With the key-based custom merger:
         //  - k1 (odd) keeps the update (value 99, name k1_updated) -> proves merging happened (base was 10)
         //  - k2 (even) keeps the base (value 100, name k2_base) -> proves it is the custom rule, not newest-wins
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(99 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
     }
 
-    @Test
-    public void testRealtimeTableSumIsDistinctFromBaseAndNewestWins()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testRealtimeTableSumIsDistinctFromBaseAndNewestWins(boolean schemaColumnTypes)
     {
         // 199 uniquely identifies the custom merger: base-only would be 110, built-in newest-wins would be 104.
-        assertThat(computeScalar("SELECT sum(value) FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT sum(value) FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME))
                 .isEqualTo(199L);
     }
 
-    @Test
-    public void testNonProjectionCompatibleMergerMergesWithFullTableSchema()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testNonProjectionCompatibleMergerMergesWithFullTableSchema(boolean schemaColumnTypes)
     {
         // A merger that is not projection compatible makes the file-group reader ask for the FULL table
         // schema, so base and log reads must resolve data columns outside the query projection.
         // sum(value) projects neither key nor name, yet 199 proves the key-based merge still ran:
         // base-only would be 110 and the built-in newest-wins 104.
-        Session session = SessionBuilder.from(getSession())
+        Session session = SessionBuilder.from(session(schemaColumnTypes))
                 .withRecordMergerImpls(NonProjectionCompatibleTestRecordMerger.class.getName())
                 .build();
         assertThat(computeScalar(session, "SELECT sum(value) FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME))
@@ -101,5 +111,22 @@ public class TestHudiCustomMerger
                 session,
                 "SELECT key, name, value FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(99 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
+    }
+
+    @Test
+    public void testCustomMergerKeepsAvroRecordsWithSchemaColumnTypes()
+    {
+        // A user HoodieRecordMerger may cast records to Avro, so its table never merges Trino rows
+        assertThat(TestHudiMorMergeModeSemantics.trinoRowMergeSplits(
+                getQueryRunner(),
+                session(true),
+                "SELECT key, name, value FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME)).isZero();
+    }
+
+    private Session session(boolean schemaColumnTypes)
+    {
+        return SessionBuilder.from(getSession())
+                .withSchemaColumnTypesEnabled(schemaColumnTypes)
+                .build();
     }
 }

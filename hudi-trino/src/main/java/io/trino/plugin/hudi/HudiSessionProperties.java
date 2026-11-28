@@ -67,6 +67,13 @@ public class HudiSessionProperties
     private static final String IGNORE_ABSENT_PARTITIONS = "ignore_absent_partitions";
     static final String DYNAMIC_FILTERING_WAIT_TIMEOUT = "dynamic_filtering_wait_timeout";
     static final String RESOLVE_COLUMN_NAME_CASING_ENABLED = "resolve_column_name_casing_enabled";
+    static final String SCHEMA_COLUMN_TYPES_ENABLED = "schema_column_types_enabled";
+    static final String MOR_VECTORIZED_READ_ENABLED = "mor_vectorized_read_enabled";
+    static final String MOR_VECTORIZED_READ_PREDICATE_PUSHDOWN_ENABLED = "mor_vectorized_read_predicate_pushdown_enabled";
+    static final String MOR_VECTORIZED_READ_LOG_PREFETCH_ENABLED = "mor_vectorized_read_log_prefetch_enabled";
+    static final String MOR_VECTORIZED_READ_LOG_PREFETCH_MAX_SIZE = "mor_vectorized_read_log_prefetch_max_size";
+    static final String MOR_VECTORIZED_READ_EARLY_BASE_OPEN_ENABLED = "mor_vectorized_read_early_base_open_enabled";
+    static final String MOR_VECTORIZED_READ_ASYNC_LOAD_ENABLED = "mor_vectorized_read_async_load_enabled";
 
     // Internal configuration for debugging and testing
     static final String RECORD_LEVEL_INDEX_ENABLED = "record_level_index_enabled";
@@ -265,7 +272,42 @@ public class HudiSessionProperties
                         RESOLVE_COLUMN_NAME_CASING_ENABLED,
                         "Enable resolve column name casing",
                         hudiConfig.isResolveColumnNameCasingEnabled(),
-                        true));
+                        true),
+                booleanProperty(
+                        SCHEMA_COLUMN_TYPES_ENABLED,
+                        "Type data columns from the Hudi table schema instead of the metastore column types",
+                        hudiConfig.isSchemaColumnTypesEnabled(),
+                        true),
+                booleanProperty(
+                        MOR_VECTORIZED_READ_ENABLED,
+                        "Merge the log records of eligible merge-on-read splits into base file pages instead of row by row",
+                        hudiConfig.isMorVectorizedReadEnabled(),
+                        false),
+                booleanProperty(
+                        MOR_VECTORIZED_READ_PREDICATE_PUSHDOWN_ENABLED,
+                        "Push predicates and dynamic filters into the base file read of a vectorized MOR read that merges by position under commit time ordering",
+                        hudiConfig.isMorVectorizedReadPredicatePushdownEnabled(),
+                        false),
+                booleanProperty(
+                        MOR_VECTORIZED_READ_LOG_PREFETCH_ENABLED,
+                        "Fetch the log files of a split concurrently before a vectorized MOR read scans them",
+                        hudiConfig.isMorVectorizedReadLogPrefetchEnabled(),
+                        false),
+                dataSizeProperty(
+                        MOR_VECTORIZED_READ_LOG_PREFETCH_MAX_SIZE,
+                        "Most log file bytes of one split a vectorized MOR read fetches ahead",
+                        hudiConfig.getMorVectorizedReadLogPrefetchMaxSize(),
+                        false),
+                booleanProperty(
+                        MOR_VECTORIZED_READ_EARLY_BASE_OPEN_ENABLED,
+                        "Open the base file of a vectorized MOR read under commit time ordering while its log records load",
+                        hudiConfig.isMorVectorizedReadEarlyBaseOpenEnabled(),
+                        false),
+                booleanProperty(
+                        MOR_VECTORIZED_READ_ASYNC_LOAD_ENABLED,
+                        "Open merge-on-read splits read as Trino rows off the split's thread when the vectorized MOR read is on",
+                        hudiConfig.isMorVectorizedReadAsyncLoadEnabled(),
+                        false));
     }
 
     @Override
@@ -409,6 +451,41 @@ public class HudiSessionProperties
     public static boolean isResolveColumnNameCasingEnabled(ConnectorSession session)
     {
         return session.getProperty(RESOLVE_COLUMN_NAME_CASING_ENABLED, Boolean.class);
+    }
+
+    public static boolean isSchemaColumnTypesEnabled(ConnectorSession session)
+    {
+        return session.getProperty(SCHEMA_COLUMN_TYPES_ENABLED, Boolean.class);
+    }
+
+    public static boolean isMorVectorizedReadEnabled(ConnectorSession session)
+    {
+        return session.getProperty(MOR_VECTORIZED_READ_ENABLED, Boolean.class);
+    }
+
+    public static boolean isMorVectorizedReadPredicatePushdownEnabled(ConnectorSession session)
+    {
+        return session.getProperty(MOR_VECTORIZED_READ_PREDICATE_PUSHDOWN_ENABLED, Boolean.class);
+    }
+
+    public static boolean isMorVectorizedReadLogPrefetchEnabled(ConnectorSession session)
+    {
+        return session.getProperty(MOR_VECTORIZED_READ_LOG_PREFETCH_ENABLED, Boolean.class);
+    }
+
+    public static DataSize getMorVectorizedReadLogPrefetchMaxSize(ConnectorSession session)
+    {
+        return session.getProperty(MOR_VECTORIZED_READ_LOG_PREFETCH_MAX_SIZE, DataSize.class);
+    }
+
+    public static boolean isMorVectorizedReadEarlyBaseOpenEnabled(ConnectorSession session)
+    {
+        return session.getProperty(MOR_VECTORIZED_READ_EARLY_BASE_OPEN_ENABLED, Boolean.class);
+    }
+
+    public static boolean isMorVectorizedReadAsyncLoadEnabled(ConnectorSession session)
+    {
+        return session.getProperty(MOR_VECTORIZED_READ_ASYNC_LOAD_ENABLED, Boolean.class);
     }
 
     public static Duration getDynamicFilteringWaitTimeout(ConnectorSession session)
