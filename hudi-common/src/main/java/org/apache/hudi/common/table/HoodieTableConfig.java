@@ -79,6 +79,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -852,14 +853,19 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public HoodieTableFormat getTableFormat(TimelineLayoutVersion layoutVersion) {
     String tableFormat = getStringOrDefault(TABLE_FORMAT);
-    if (!tableFormat.equals(NativeTableFormat.TABLE_FORMAT)) {
+    if (!tableFormat.equalsIgnoreCase(NativeTableFormat.TABLE_FORMAT)) {
       ServiceLoader<HoodieTableFormat> loader = ServiceLoader.load(HoodieTableFormat.class);
+      List<String> foundFormats = new ArrayList<>();
+      foundFormats.add(NativeTableFormat.TABLE_FORMAT);
       for (HoodieTableFormat tableFormatImpl : loader) {
-        if (getString(TABLE_FORMAT).equals(tableFormatImpl.getName())) {
+        if (tableFormat.equalsIgnoreCase(tableFormatImpl.getName())) {
           tableFormatImpl.init(props);
           return tableFormatImpl;
         }
+        foundFormats.add(tableFormatImpl.getName());
       }
+      throw new HoodieException(String.format("Table format '%s' set by %s matches none of the table formats found %s; "
+          + "add the jar that provides it to the classpath", tableFormat, TABLE_FORMAT.key(), foundFormats));
     }
     return new NativeTableFormat(layoutVersion);
   }

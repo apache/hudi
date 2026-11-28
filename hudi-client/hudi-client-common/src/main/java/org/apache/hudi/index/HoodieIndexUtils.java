@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -78,6 +79,7 @@ import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
+import org.apache.hudi.io.HoodieKeyLocationFetchHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -864,6 +866,76 @@ public class HoodieIndexUtils {
     return requiresMergingWithOlderRecordVersion
         ? mergeForPartitionUpdatesAndDeletionsIfNeeded(incomingRecordsAndLocations, shouldUpdatePartitionPath, config, table, readerContext, writerSchema)
         : incomingRecordsAndLocations.map(Pair::getLeft);
+  }
+
+  /**
+   * Sets the row position of each located record of an update or delete that has none, for a merge-on-read write in
+   * the update-as-delete-insert write mode, which writes the delete of a located record as a positional delete. Only
+   * the indexes that read the keys of base files to locate records tag their positions, so this reads them for the
+   * records a global index or the record index located.
+   */
+  public static <R> HoodieData<HoodieRecord<R>> tagPositionsOfLocatedRecordsIfNeeded(HoodieData<HoodieRecord<R>> taggedRecords,
+                                                                                  WriteOperationType operationType,
+                                                                                  HoodieWriteConfig config,
+                                                                                  HoodieTable table) {
+    boolean updatesOrDeletes = operationType == WriteOperationType.UPSERT || operationType == WriteOperationType.DELETE;
+    return updatesOrDeletes && config.shouldWriteUpdatesAsDeletesAndInserts() && !table.isMetadataTable()
+        && table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
+        ? tagPositionsOfLocatedRecords(taggedRecords, config, table) : taggedRecords;
+  }
+
+  /**
+   * Sets the row position of each tagged record whose location has none, read from the latest base
+   * file of the located file group the way the simple index reads it. The update-as-delete-insert write
+   * mode writes the delete of a located record to the log as a positional delete against that base file.
+   */
+  private static <R> HoodieData<HoodieRecord<R>> tagPositionsOfLocatedRecords(HoodieData<HoodieRecord<R>> taggedRecords,
+                                                                           HoodieWriteConfig config,
+                                                                           HoodieTable table) {
+    List<Pair<String, HoodieBaseFile>> baseFiles = taggedRecords.filter(HoodieIndexUtils::isLocatedWithoutPosition)
+        .map(record -> Pair.of(record.getPartitionPath(), record.getCurrentLocation().getFileId()))
+        .distinct()
+        .collectAsList().stream()
+        .map(fileGroup -> Pair.of(fileGroup.getLeft(), (HoodieBaseFile) table.getBaseFileOnlyView()
+            .getLatestBaseFile(fileGroup.getLeft(), fileGroup.getRight())
+            .orElseThrow(() -> new HoodieIndexException("No base file to read record positions from in file group " + fileGroup))))
+        .collect(toList());
+    if (baseFiles.isEmpty()) {
+      return taggedRecords;
+    }
+    Option<BaseKeyGenerator> keyGeneratorOpt;
+    try {
+      keyGeneratorOpt = config.populateMetaFields()
+          ? Option.empty() : Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps()));
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create the key generator to read record keys", e);
+    }
+    HoodiePairData<Pair<HoodieKey, String>, Long> positions = table.getContext().parallelize(baseFiles, baseFiles.size())
+        .flatMap(baseFile -> new HoodieKeyLocationFetchHandle(config, table, baseFile, keyGeneratorOpt).locations())
+        .mapToPair(entry -> {
+          Pair<HoodieKey, HoodieRecordLocation> keyAndLocation = (Pair<HoodieKey, HoodieRecordLocation>) entry;
+          return Pair.of(Pair.of(keyAndLocation.getLeft(), keyAndLocation.getRight().getFileId()), keyAndLocation.getRight().getPosition());
+        });
+    HoodieData<HoodieRecord<R>> positionedRecords = taggedRecords.filter(HoodieIndexUtils::isLocatedWithoutPosition)
+        // NOTE: the record may hold an instance of [[InternalRow]] pointing into a shared, mutable buffer,
+        //       so it has to be copied before the shuffle
+        .mapToPair(record -> Pair.of(Pair.of(record.getKey(), record.getCurrentLocation().getFileId()), record.copy()))
+        .leftOuterJoin(positions)
+        .values()
+        .map(recordAndPosition -> {
+          HoodieRecord<R> record = recordAndPosition.getLeft();
+          HoodieRecordLocation location = record.getCurrentLocation();
+          long position = recordAndPosition.getRight().orElseThrow(() -> new HoodieIndexException(
+              "Record key " + record.getKey() + " is not in the base file of file group " + location.getFileId()));
+          HoodieRecord<R> positionedRecord = record.newInstance(record.getKey());
+          positionedRecord.setIgnoreIndexUpdate(record.getIgnoreIndexUpdate());
+          return tagRecord(positionedRecord, new HoodieRecordLocation(location.getInstantTime(), location.getFileId(), position));
+        });
+    return taggedRecords.filter(record -> !isLocatedWithoutPosition(record)).union(positionedRecords);
+  }
+
+  private static boolean isLocatedWithoutPosition(HoodieRecord<?> record) {
+    return record.isCurrentLocationKnown() && !HoodieRecordLocation.isPositionValid(record.getCurrentPosition());
   }
 
   public static <R> HoodieRecord<R> createNewTaggedHoodieRecord(HoodieRecord<R> oldRecord, HoodieRecordGlobalLocation location) {

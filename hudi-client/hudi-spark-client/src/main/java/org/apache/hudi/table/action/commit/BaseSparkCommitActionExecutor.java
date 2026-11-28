@@ -49,6 +49,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
@@ -228,11 +229,18 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       log.info("RDD PreppedRecords was persisted at: {}", inputRDD.getStorageLevel());
     }
 
+    HoodieData<HoodieRecord<T>> positionedRecords = HoodieIndexUtils.tagPositionsOfLocatedRecordsIfNeeded(inputRecords, operationType, config, table);
+    if (positionedRecords != inputRecords) {
+      // Both the workload profile and the write read the positions, which come from reading base files
+      positionedRecords.persist(config.getTaggedRecordStorageLevel(), context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
+    }
+
     // Handle records update with clustering
-    HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
+    HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(positionedRecords);
     log.info("Num spark partitions for inputRecords before triggering workload profile {}", inputRecordsWithClusteringUpdate.getNumPartitions());
 
     WorkloadProfile workloadProfile = prepareWorkloadProfile(inputRecordsWithClusteringUpdate);
+    validateNoPositionalDeletesUnderPendingCompaction(workloadProfile);
     Long sourceReadAndIndexDurationMs = null;
     if (sourceReadAndIndexTimer.isPresent()) {
       sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();

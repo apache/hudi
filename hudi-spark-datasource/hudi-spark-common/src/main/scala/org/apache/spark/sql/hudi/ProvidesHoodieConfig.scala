@@ -22,7 +22,7 @@ import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig}
-import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
 import org.apache.hudi.common.util.{ConfigUtils, HoodieTableConfigUtils, ReflectionUtils, StringUtils}
@@ -35,6 +35,7 @@ import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
+import org.apache.hudi.table.action.commit.BaseWriteHelper
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
@@ -44,7 +45,7 @@ import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{extractSparkPrefixedHoodieConfigs, filterHoodieConfigs, isUsingHiveCatalog}
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{buildOverridingOpts, buildOverridingOptsForDelete, combineOptions, getPartitionPathFieldWriteConfig}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{buildOverridingOpts, buildOverridingOptsForDelete, combineOptions, getPartitionPathFieldWriteConfig, validateUpdatesAsDeletesAndInserts}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.PARTITION_OVERWRITE_MODE
@@ -256,6 +257,10 @@ trait ProvidesHoodieConfig extends Logging {
       }
     } else {
       Map()
+    }
+
+    if (operation == UPSERT_OPERATION_OPT_VAL) {
+      validateUpdatesAsDeletesAndInserts(sparkSession.sessionState.conf, hoodieCatalogTable)
     }
 
     val staticOverwritePartitionPathOptions = staticOverwritePartitionPathOpt match {
@@ -571,6 +576,31 @@ object ProvidesHoodieConfig {
       DFSPropertiesConfiguration.getGlobalProps.getString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(),
         HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue.toString)
     ).toBoolean
+
+  /**
+   * Whether Spark SQL UPDATE and DELETE write prepped records located through their meta fields. A merge-on-read
+   * table writing updates as deletes and inserts needs the row position of each located record in its base file,
+   * which only the index lookup of a non-prepped write provides.
+   */
+  def isSparkSqlOptimizedWrite(sqlConf: SQLConf, catalogTable: HoodieCatalogTable): Boolean =
+    sqlConf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true" &&
+      !writesUpdatesAsDeletesAndInserts(sqlConf, catalogTable)
+
+  /**
+   * Refuses a statement that updates or deletes rows of a merge-on-read table without a primary key in the
+   * update-as-delete-insert write mode before it does any work, as the write client would. See
+   * [[BaseWriteHelper.keylessTableNotSupported]].
+   */
+  def validateUpdatesAsDeletesAndInserts(sqlConf: SQLConf, catalogTable: HoodieCatalogTable): Unit = {
+    if (writesUpdatesAsDeletesAndInserts(sqlConf, catalogTable) && !BaseWriteHelper.hasRecordKeyFields(catalogTable.tableConfig)) {
+      throw BaseWriteHelper.keylessTableNotSupported()
+    }
+  }
+
+  private def writesUpdatesAsDeletesAndInserts(sqlConf: SQLConf, catalogTable: HoodieCatalogTable): Boolean =
+    catalogTable.tableType == HoodieTableType.MERGE_ON_READ && java.lang.Boolean.parseBoolean(
+      combineOptions(catalogTable, catalogTable.tableConfig, sqlConf, defaultOpts = Map.empty)
+        .getOrElse(HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key, "false"))
 
   private def filterNullValues(opts: Map[String, String]): Map[String, String] =
     opts.filter { case (_, v) => v != null }

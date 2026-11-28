@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
@@ -307,6 +308,27 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
 
     // then
     verify(tableBuilder, times(1)).setTableVersion(HoodieTableVersion.SIX);
+  }
+
+  @Test
+  void testInitializeEmptyTableKeepsTableFormatConfigs() throws IOException {
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.targetTableName = "testTableName";
+    cfg.targetBasePath = "/fake/table/name";
+    cfg.tableType = "MERGE_ON_READ";
+    String formatConfigKey = HoodieTableConfig.TABLE_FORMAT.key() + ".example.catalog";
+    TypedProperties props = new TypedProperties();
+    props.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), HoodieTableVersion.SIX.versionCode());
+    props.put(formatConfigKey, "value1");
+    HoodieTableMetaClient.TableBuilder tableBuilder = spy(HoodieTableMetaClient.newTableBuilder());
+    doReturn(null).when(tableBuilder).initTable(any(), anyString());
+    StreamSync streamSync = new StreamSync(cfg, mock(SparkSession.class), props, mock(HoodieSparkEngineContext.class),
+        new HoodieHadoopStorage(mock(FileSystem.class)), mock(Configuration.class), client -> true,
+        getSchemaProvider("InputBatch", false), Option.empty(), mock(SourceFormatAdapter.class), Option.empty(), false);
+
+    streamSync.initializeEmptyTable(tableBuilder, "", null);
+
+    assertEquals("value1", tableBuilder.build().getProperty(formatConfigKey));
   }
 
   private StreamSync setupStreamSync() {

@@ -1335,6 +1335,21 @@ public class HoodieTableMetaClient implements Serializable {
           }
         }
       }
+      return setTableFormatConfigs(props);
+    }
+
+    /**
+     * Keeps the {@code hoodie.table.format.*} settings among the given properties. Settings of a
+     * pluggable table format are its own to interpret; they must reach {@link HoodieTableFormat#init}
+     * through the table config from the very first commit on.
+     */
+    public TableBuilder setTableFormatConfigs(Map<?, ?> props) {
+      String tableFormatPrefix = HoodieTableConfig.TABLE_FORMAT.key() + ".";
+      props.forEach((key, value) -> {
+        if (key instanceof String && ((String) key).startsWith(tableFormatPrefix) && value != null) {
+          this.others.put(key, String.valueOf(value));
+        }
+      });
       return this;
     }
 
@@ -1363,6 +1378,7 @@ public class HoodieTableMetaClient implements Serializable {
           }
         }
       }
+      setTableFormatConfigs(properties);
 
       if (hoodieConfig.contains(HoodieTableConfig.DATABASE_NAME)) {
         setDatabaseName(hoodieConfig.getString(HoodieTableConfig.DATABASE_NAME));

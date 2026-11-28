@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -36,6 +37,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.JavaLazyInsertIterable;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
@@ -90,11 +92,15 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
+  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> taggedRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
+    HoodieData<HoodieRecord<T>> taggedData = HoodieListData.eager(taggedRecords);
+    HoodieData<HoodieRecord<T>> positionedData = HoodieIndexUtils.tagPositionsOfLocatedRecordsIfNeeded(taggedData, operationType, config, table);
+    List<HoodieRecord<T>> inputRecords = positionedData == taggedData ? taggedRecords : positionedData.collectAsList();
 
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());
+    validateNoPositionalDeletesUnderPendingCompaction(workloadProfile);
     log.info("Input workload profile :{}", workloadProfile);
     final Partitioner partitioner = getPartitioner(workloadProfile);
     try {

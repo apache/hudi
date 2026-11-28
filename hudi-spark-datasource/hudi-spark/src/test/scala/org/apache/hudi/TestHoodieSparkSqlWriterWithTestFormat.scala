@@ -30,6 +30,7 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.tableformat.TestTableFormat
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -537,6 +538,24 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
       .mode(SaveMode.Append).save(tablePath1)
+  }
+
+  @Test
+  def testTableFormatConfigsKeptAtTableCreation(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val formatConfigKey = s"${HoodieTableConfig.TABLE_FORMAT.key}.test-format.catalog"
+    val (tableName, tablePath) = ("hoodie_table_format_configs", s"$tempBasePath" + "_1")
+    Seq((1, "a1", 1000L)).toDF("id", "name", "ts").write.format("hudi")
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
+      .option(HoodieTableConfig.TABLE_FORMAT.key, "test-format")
+      .option(formatConfigKey, "value1")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .mode(SaveMode.Overwrite).save(tablePath)
+
+    assertEquals("value1", TestTableFormat.getInitProperties(tableName).getProperty(formatConfigKey))
+    assertEquals("value1", createMetaClient(spark, tablePath).getTableConfig.getProps.getProperty(formatConfigKey))
   }
 
   @Test
