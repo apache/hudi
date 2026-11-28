@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BatchSupport;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -147,5 +148,19 @@ class TestBatchMatcher {
     matcher.leftovers().forEachRemaining(leftovers::add);
     assertEquals(1, leftovers.size());
     assertSame(b, leftovers.get(0));
+  }
+
+  @Test
+  void testKeyBasedDeleteAppliesToEveryRowWithTheKey() {
+    Map<Object, BufferedRecord<String>> byKey = new HashMap<>();
+    BufferedRecord<String> delete = new BufferedRecord<>("d", 0, null, null, HoodieOperation.DELETE);
+    byKey.put(BATCHES.toEngineKey("d"), delete);
+    BatchMatcher<String> matcher = new BatchMatcher.KeyBased<>(byKey);
+
+    // A base file can hold the same key twice
+    Object[] batch = {"d", "x", "d"};
+    assertSame(delete, matcher.take(BATCHES, batch, 0, 0));
+    assertNull(matcher.take(BATCHES, batch, 0, 1));
+    assertSame(delete, matcher.take(BATCHES, batch, 0, 2));
   }
 }

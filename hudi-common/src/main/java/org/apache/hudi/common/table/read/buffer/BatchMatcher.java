@@ -45,7 +45,8 @@ public interface BatchMatcher<T> {
   <B> boolean untouched(BatchSupport<T, B> batchSupport, B batch, int column, int numRows);
 
   /**
-   * Removes and returns the log record of a row, or null when it has none.
+   * Returns the log record of a row, or null when it has none. An update is removed once returned; a delete matched by
+   * key applies to every base row with its key.
    */
   <B> BufferedRecord<T> take(BatchSupport<T, B> batchSupport, B batch, int column, int row);
 
@@ -79,7 +80,16 @@ public interface BatchMatcher<T> {
 
     @Override
     public <B> BufferedRecord<T> take(BatchSupport<T, B> batchSupport, B batch, int column, int row) {
-      return batchSupport.isNullAt(batch, column, row) ? null : byKey.remove(batchSupport.getEngineKey(batch, column, row));
+      if (batchSupport.isNullAt(batch, column, row)) {
+        return null;
+      }
+      // A base file can hold more than one row with the same key, and a delete of the key applies to each of them
+      Object key = batchSupport.getEngineKey(batch, column, row);
+      BufferedRecord<T> record = byKey.get(key);
+      if (record != null && !record.isDelete()) {
+        byKey.remove(key);
+      }
+      return record;
     }
 
     @Override

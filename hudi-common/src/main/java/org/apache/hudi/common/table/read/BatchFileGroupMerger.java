@@ -43,11 +43,11 @@ import java.util.function.UnaryOperator;
  */
 class BatchFileGroupMerger<T, B> implements ClosableIterator<B> {
 
-  private static final int OUTPUT_BATCH_ROWS = 4096;
+  static final int OUTPUT_BATCH_ROWS = 4096;
 
   private final BatchSupport<T, B> batchSupport;
   private final ClosableIterator<B> baseBatches;
-  private final BatchMatcher<T> matcher;
+  private BatchMatcher<T> matcher;
   private final BufferedRecordMerger<T> merger;
   private final boolean commitTimeOrdering;
   private final RecordContext<T> recordContext;
@@ -59,6 +59,8 @@ class BatchFileGroupMerger<T, B> implements ClosableIterator<B> {
   private final HoodieSchema outputSchema;
   private final ArrayDeque<B> ready = new ArrayDeque<>();
   private final List<T> pendingRows = new ArrayList<>();
+  // The log records no base row took, read one output batch at a time once the base batches are done
+  private Iterator<BufferedRecord<T>> leftovers;
   private boolean leftoversDone;
 
   /**
@@ -94,14 +96,16 @@ class BatchFileGroupMerger<T, B> implements ClosableIterator<B> {
   @Override
   public boolean hasNext() {
     while (ready.isEmpty() && !(leftoversDone && pendingRows.isEmpty())) {
-      if (baseBatches.hasNext()) {
+      if (leftovers == null && baseBatches.hasNext()) {
         mergeBaseBatch(baseBatches.next());
       } else if (!leftoversDone) {
-        Iterator<BufferedRecord<T>> leftovers = matcher.leftovers();
-        while (leftovers.hasNext()) {
+        if (leftovers == null) {
+          leftovers = matcher.leftovers();
+        }
+        while (ready.isEmpty() && leftovers.hasNext()) {
           addLogRow(leftovers.next());
         }
-        leftoversDone = true;
+        leftoversDone = !leftovers.hasNext();
       } else {
         flushRows();
       }
@@ -198,5 +202,11 @@ class BatchFileGroupMerger<T, B> implements ClosableIterator<B> {
   @Override
   public void close() {
     baseBatches.close();
+    // The engine may keep a closed iterator until its task ends: drop the log records
+    matcher = null;
+    leftovers = null;
+    leftoversDone = true;
+    ready.clear();
+    pendingRows.clear();
   }
 }
