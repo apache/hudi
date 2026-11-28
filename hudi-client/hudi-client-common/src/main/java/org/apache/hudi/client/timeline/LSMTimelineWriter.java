@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ActiveAction;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.util.Option;
@@ -56,8 +57,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -196,6 +199,81 @@ public class LSMTimelineWriter {
     HoodieLSMTimelineManifest newManifest = latestManifest.copy(filesToRemove);
     newManifest.addFile(getFileEntry(fileToAdd));
     createManifestFile(newManifest, latestVersion);
+  }
+
+  /**
+   * Removes archived instants strictly before the cutoff (epoch milliseconds) in one snapshot.
+   * The caller must hold the archive lock for the duration of this operation.
+   */
+  public void trimBefore(long cutoffMillis) throws IOException {
+    String cutoff = HoodieInstantTimeGenerator.formatDateBasedOnTimeZone(new Date(cutoffMillis));
+    int version = LSMTimeline.latestSnapshotVersion(metaClient, archivePath);
+    HoodieLSMTimelineManifest current = LSMTimeline.latestSnapshotManifest(metaClient, version, archivePath);
+    HoodieLSMTimelineManifest next = new HoodieLSMTimelineManifest();
+    boolean changed = false;
+    for (HoodieLSMTimelineManifest.LSMFileEntry entry : current.getFiles()) {
+      String name = entry.getFileName();
+      if (!isBeforeCutoff(LSMTimeline.getMinInstantTime(name), cutoff)) {
+        next.addFile(entry);
+        continue;
+      }
+      changed = true;
+      if (!isBeforeCutoff(LSMTimeline.getMaxInstantTime(name), cutoff)) {
+        trimBoundaryFile(name, cutoff).ifPresent(next::addFile);
+      }
+    }
+    if (changed) {
+      // A publication failure can leave the new manifest visible through version-list fallback.
+      // Leave unreferenced parquet files to clean(); never roll back by deleting published data.
+      createManifestFile(next, version);
+    }
+  }
+
+  private static boolean isBeforeCutoff(String instant, String cutoff) {
+    // Use the same ordering for record filtering and the min/max encoded in archive file names.
+    return instant.compareTo(cutoff) < 0;
+  }
+
+  private Option<HoodieLSMTimelineManifest.LSMFileEntry> trimBoundaryFile(String name, String cutoff) throws IOException {
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
+    StoragePath staged = new StoragePath(archivePath, ".trim-" + UUID.randomUUID() + HoodieFileFormat.PARQUET.getFileExtension());
+    String min = null;
+    String max = null;
+    try {
+      try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
+          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(config, new StoragePath(archivePath, name));
+           ClosableIterator<IndexedRecord> records = reader.getIndexedRecordIterator(schema, schema);
+           HoodieFileWriter writer = openWriter(staged)) {
+        while (records.hasNext()) {
+          IndexedRecord record = records.next();
+          String time = record.get(0).toString();
+          if (!isBeforeCutoff(time, cutoff)) {
+            writer.write(time, new HoodieAvroIndexedRecord(record), schema);
+            min = min == null || time.compareTo(min) < 0 ? time : min;
+            max = max == null || time.compareTo(max) > 0 ? time : max;
+          }
+        }
+      }
+      if (min == null) {
+        return Option.empty();
+      }
+      // Only single-digit layers are readable. Never reuse an existing path: it may belong
+      // to another source file in this batch or to a snapshot that is no longer the latest.
+      int sourceLayer = LSMTimeline.getFileLayer(name);
+      for (int offset = 0; offset < 10; offset++) {
+        String replacement = newFileName(min, max, (sourceLayer + offset) % 10);
+        StoragePath target = new StoragePath(archivePath, replacement);
+        if (!metaClient.getStorage().exists(target)) {
+          if (!metaClient.getStorage().rename(staged, target)) {
+            throw new IOException("Failed to promote trimmed archive file to " + target);
+          }
+          return Option.of(getFileEntry(replacement));
+        }
+      }
+      throw new IOException("No unused archive file name for trimmed range " + min + " to " + max);
+    } finally {
+      deleteIfExists(staged);
+    }
   }
 
   private void createManifestFile(HoodieLSMTimelineManifest manifest, int currentVersion) throws IOException {
