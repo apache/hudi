@@ -23,6 +23,8 @@ import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -80,6 +82,17 @@ public class TestSerDeHelper {
     String result = SerDeHelper.toJson(internalSchema);
     InternalSchema convertedSchema = SerDeHelper.fromJson(result).get();
     Assertions.assertEquals(internalSchema, convertedSchema);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"FLOAT", "Int8"})
+  public void testVectorTypeRoundTrip(String elementType) {
+    Types.VectorType vector = Types.VectorType.get(3, elementType, "FIXED_BYTES");
+    InternalSchema schema = new InternalSchema(Types.RecordType.get(Types.Field.get(0, "embedding", vector)));
+
+    String json = SerDeHelper.toJson(schema);
+    Assertions.assertTrue(json.contains("\"vector[3, " + elementType + ", FIXED_BYTES]\""));
+    Assertions.assertEquals(vector, SerDeHelper.fromJson(json).get().findType("embedding"));
   }
 
   @Test

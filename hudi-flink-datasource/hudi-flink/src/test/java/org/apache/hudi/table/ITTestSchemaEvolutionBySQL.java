@@ -18,9 +18,16 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestTableEnvs;
 
@@ -31,8 +38,10 @@ import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.ObjectPath;
+import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +53,7 @@ import java.util.concurrent.ExecutionException;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -54,6 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public abstract class ITTestSchemaEvolutionBySQL {
   protected static final String CATALOG_NAME = "hudi_catalog";
   protected static final String DB_NAME = "hudi";
+  private static final ObjectPath VECTOR_TABLE = new ObjectPath(DB_NAME, "vectors");
   private TableEnvironment tableEnv;
   protected Catalog catalog;
 
@@ -98,6 +109,66 @@ public abstract class ITTestSchemaEvolutionBySQL {
     if (catalog != null) {
       catalog.close();
     }
+  }
+
+  @Test
+  void testRenameVectorColumn() throws Exception {
+    createVectorTable();
+    tableEnv.executeSql("ALTER TABLE vectors RENAME embedding TO embedding_v2");
+    assertEquals("embedding_v2:3,features:2", vectorOption());
+    InternalSchema schema = committedSchema(1);
+    assertNull(schema.findField("embedding"));
+    assertEquals(Types.VectorType.get(3, "FLOAT", "FIXED_BYTES"), schema.findType("embedding_v2"));
+    assertEquals(Types.VectorType.get(2, "DOUBLE", "FIXED_BYTES"), schema.findType("features"));
+  }
+
+  @Test
+  void testDropVectorColumns() throws Exception {
+    createVectorTable();
+    tableEnv.executeSql("ALTER TABLE vectors DROP embedding");
+    assertEquals("features:2", vectorOption());
+    InternalSchema schema = committedSchema(1);
+    assertNull(schema.findField("embedding"));
+    assertEquals(Types.VectorType.get(2, "DOUBLE", "FIXED_BYTES"), schema.findType("features"));
+
+    tableEnv.executeSql("ALTER TABLE vectors DROP features");
+    assertNull(vectorOption());
+    assertNull(committedSchema(2).findField("features"));
+  }
+
+  private void createVectorTable() {
+    // Drop trailing columns so Hive's positional type checks do not interfere with the vector ALTERs.
+    tableEnv.executeSql("CREATE TABLE vectors (id INT PRIMARY KEY NOT ENFORCED, features ARRAY<DOUBLE>, embedding ARRAY<FLOAT>) "
+        + "WITH ('connector'='hudi', 'table.type'='COPY_ON_WRITE', 'precombine.field'='id', 'hoodie.vector.columns'='embedding:3,features:2')");
+  }
+
+  private String vectorPath() throws TableNotExistException {
+    return catalog.getTable(VECTOR_TABLE).getOptions().get(FlinkOptions.PATH.key());
+  }
+
+  private String vectorOption() throws TableNotExistException {
+    return catalog.getTable(VECTOR_TABLE).getOptions().get(FlinkOptions.VECTOR_COLUMNS.key());
+  }
+
+  private InternalSchema committedSchema(int expectedCommits) throws TableNotExistException {
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(vectorPath(), new Configuration());
+    assertEquals(expectedCommits, metaClient.getCommitsTimeline().filterCompletedInstants().countInstants());
+    return new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata().get();
+  }
+
+  @Test
+  void testInvalidVectorTypeFailsBeforeSchemaCommit() throws Exception {
+    createVectorTable();
+    CatalogBaseTable before = catalog.getTable(VECTOR_TABLE);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(vectorPath(), new Configuration());
+    List<HoodieInstant> instants = metaClient.getActiveTimeline().getInstants();
+    TableException error = assertThrows(TableException.class,
+        () -> tableEnv.executeSql("ALTER TABLE vectors MODIFY embedding ARRAY<STRING>"));
+    assertTrue(error.getCause().getMessage().contains("VECTOR column 'embedding' must use ARRAY<FLOAT>"), error.getMessage());
+    assertEquals(instants, metaClient.reloadActiveTimeline().getInstants());
+    CatalogBaseTable after = catalog.getTable(VECTOR_TABLE);
+    assertEquals(before.getUnresolvedSchema(), after.getUnresolvedSchema());
+    assertEquals(before.getOptions(), after.getOptions());
   }
 
   @Test
