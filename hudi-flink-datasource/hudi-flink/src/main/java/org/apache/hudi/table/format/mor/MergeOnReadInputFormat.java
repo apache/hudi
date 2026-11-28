@@ -139,10 +139,9 @@ public class MergeOnReadInputFormat
   protected final InternalSchemaManager internalSchemaManager;
 
   /**
-   * The table metadata client
+   * Metadata for the current split, shared by the metrics lookup and the record reader.
    */
   protected transient HoodieTableMetaClient metaClient;
-  private transient HoodieTableMetaClient nextSplitMetaClient;
 
   /**
    * The hoodie write configuration.
@@ -177,28 +176,24 @@ public class MergeOnReadInputFormat
     return new Builder();
   }
 
-  /** Loads the timezone for metrics and reuses the client when opening the split. */
   @Nullable
   public HoodieTimelineTimeZone getTimelineTimeZone() {
-    HoodieTableMetaClient client = prepareMetaClient();
-    return client == null ? null : client.getTableConfig().getTimelineTimezone();
+    ensureMetaClient();
+    return metaClient == null ? null : metaClient.getTableConfig().getTimelineTimezone();
   }
 
-  @Nullable
-  private HoodieTableMetaClient prepareMetaClient() {
-    if (nextSplitMetaClient == null) {
+  private void ensureMetaClient() {
+    if (metaClient == null) {
       hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-      nextSplitMetaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
+      metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
     }
-    return nextSplitMetaClient;
   }
 
   @Override
   public void open(MergeOnReadInputSplit split) throws IOException {
     this.currentReadCount = 0L;
     this.closed = false;
-    this.metaClient = prepareMetaClient();
-    nextSplitMetaClient = null;
+    ensureMetaClient();
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
     this.iterator = initIterator(split);
     this.tableName = metaClient.getTableConfig().getTableName();
@@ -274,6 +269,7 @@ public class MergeOnReadInputFormat
       this.iterator.close();
     }
     this.iterator = null;
+    this.metaClient = null;
     this.closed = true;
   }
 

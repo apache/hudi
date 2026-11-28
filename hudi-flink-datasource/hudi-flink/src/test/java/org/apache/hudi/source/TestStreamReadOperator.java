@@ -48,6 +48,7 @@ import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -67,6 +68,10 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 
 /**
  * Test cases for {@link StreamReadOperator}.
@@ -108,12 +113,13 @@ public class TestStreamReadOperator {
 
       List<MergeOnReadInputSplit> splits = generateSplits(func);
       assertThat("Should have 4 splits", splits.size(), is(4));
-      for (MergeOnReadInputSplit split : splits) {
-        // Process this element to enqueue to mail-box.
-        harness.processElement(split, -1);
-
-        // Run the mail-box once to read all records from the given split.
-        assertThat("Should process 1 split", processor.runMailboxStep());
+      try (MockedStatic<StreamerUtil> streamer = mockStatic(StreamerUtil.class, CALLS_REAL_METHODS)) {
+        for (MergeOnReadInputSplit split : splits) {
+          harness.processElement(split, -1);
+          assertTrue(processor.runMailboxStep());
+        }
+        // The metric lookup and open share a client for each split, and close clears it.
+        streamer.verify(() -> StreamerUtil.metaClientForReader(any(), any()), times(splits.size()));
       }
       // Assert the output has expected elements.
       TestData.assertRowDataEquals(harness.extractOutputValues(), TestData.DATA_SET_INSERT);
