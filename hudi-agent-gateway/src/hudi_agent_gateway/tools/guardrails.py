@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import sqlglot
 from sqlglot import exp
+from sqlglot.dialects.spark import Spark
+from sqlglot.parsers.spark import SparkParser
 
 from hudi_agent_gateway.tools.registry import ToolInputError
 
@@ -54,6 +56,18 @@ _SPARK_TABLE_FUNCTIONS = _SPARK_HUDI_TABLE_FUNCTIONS | frozenset({
 })
 
 
+class _SparkConnectParser(SparkParser):
+    # Field names in NAMED_STRUCT are string expressions, including ANSI keywords.
+    FUNCTIONS = {
+        **SparkParser.FUNCTIONS,
+        "NAMED_STRUCT": lambda args: exp.Anonymous(this="NAMED_STRUCT", expressions=args),
+    }
+
+
+class _SparkConnectDialect(Spark):
+    Parser = _SparkConnectParser
+
+
 def enforce_guardrails(
     sql: str, row_cap: int, *, dialect: str = "trino", spark_catalog: str = "spark_catalog"
 ) -> str:
@@ -63,8 +77,9 @@ def enforce_guardrails(
     :class:`ToolInputError` on any violation.
     """
     hint = f"Provide exactly one read-only SELECT statement ({dialect} SQL)."
+    sql_dialect = _SparkConnectDialect() if dialect == "spark" else dialect
     try:
-        statements = sqlglot.parse(sql, read=dialect)
+        statements = sqlglot.parse(sql, read=sql_dialect)
     except sqlglot.errors.SqlglotError as e:
         raise ToolInputError(f"could not parse SQL: {e}", hint=hint) from e
 
@@ -90,7 +105,7 @@ def enforce_guardrails(
         if dialect == "spark":
             _validate_spark_node(node, spark_catalog=spark_catalog, hint=hint)
 
-    return _cap_limit(stmt, row_cap).sql(dialect=dialect)
+    return _cap_limit(stmt, row_cap).sql(dialect=sql_dialect)
 
 
 def _validate_spark_node(node: object, *, spark_catalog: str, hint: str) -> None:

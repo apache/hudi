@@ -29,14 +29,16 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 from urllib.parse import unquote, urlparse
 
 from pyspark.errors import PySparkException
+from pyspark.sql.connect.dataframe import DataFrame
 from pyspark.sql.connect.session import SparkSession
 
 from hudi_agent_gateway.config import GatewaySettings
 from hudi_agent_gateway.tools.lakehouse_client import QueryError, QueryResult, QueryTimeoutError
+from hudi_agent_gateway.tools.spark_connect_result import encode_result, spark_sql_type
 
 
 class _RequestSparkSession(SparkSession):
@@ -118,15 +120,17 @@ class SparkConnectClient:
                 return QueryResult(
                     columns=["column_name", "data_type", "is_nullable"],
                     rows=[
-                        [f.name, f.dataType.simpleString(), "YES" if f.nullable else "NO"]
+                        [f.name, spark_sql_type(f.dataType), "YES" if f.nullable else "NO"]
                         for f in df.schema.fields[:max_rows]
                     ],
                 )
             # Limit before collecting, including metadata queries outside guardrails.
-            df = df.limit(max_rows)
-            columns = df.columns
+            limited = cast(DataFrame, df.limit(max_rows))
             op.check_cancelled()
-            return QueryResult(columns=columns, rows=[list(row) for row in df.collect()])
+            # PySpark 4.1's collect() uses _to_table() to get both from one execution.
+            # toArrow() instead casts the data to a separately analyzed schema.
+            table, schema = limited._to_table()
+            return encode_result(table, schema)
         finally:
             with op.lock:
                 op.session = None

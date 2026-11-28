@@ -22,13 +22,18 @@ import json
 import threading
 import weakref
 from contextlib import contextmanager
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import httpx
+import pyarrow as pa
 import pytest
 from fastmcp import Client
 from pydantic import ValidationError
 from pyspark.errors import PySparkException
+from pyspark.sql import types as T
+from pyspark.sql.pandas.types import to_arrow_schema
 from pyspark.sql.types import IntegerType, StringType, StructField, StructType
 
 from hudi_agent_gateway.agent import build_system_prompt
@@ -40,6 +45,7 @@ from hudi_agent_gateway.tools.guardrails import enforce_guardrails
 from hudi_agent_gateway.tools.lakehouse_client import QueryError, QueryResult, QueryTimeoutError
 from hudi_agent_gateway.tools.registry import ToolInputError
 from hudi_agent_gateway.tools.spark_connect_client import SparkConnectClient, _RequestSparkSession
+from hudi_agent_gateway.tools.spark_connect_result import encode_result
 
 
 @pytest.mark.parametrize("closed", [True, False])
@@ -60,10 +66,7 @@ def test_session_gc_does_not_close_an_already_stopped_client(closed):
 class DataFrame:
     def __init__(self, session):
         self.session = session
-        self.columns = ["id"]
-        self.schema = StructType(
-            [StructField("id", IntegerType(), False), StructField("region", StringType())]
-        )
+        self.schema = StructType([StructField("id", IntegerType(), False)])
         self.limits = []
         self.collected = False
 
@@ -71,14 +74,14 @@ class DataFrame:
         self.limits.append(rows)
         return self
 
-    def collect(self):
+    def _to_table(self):
         self.collected = True
         self.session.started.set()
         if self.session.release is not None:
             self.session.release.wait(3)
         if self.session.error:
             raise self.session.error
-        return [(i,) for i in range(self.limits[-1])] if self.columns else []
+        return pa.table({"id": range(self.limits[-1])}), self.schema
 
 
 class Session:
@@ -155,6 +158,123 @@ async def test_pyspark_collect_is_bounded_and_session_closes(settings):
         assert session.catalog_name == "spark_catalog" and session.schema_name == "default"
 
 
+def test_query_encodes_spark_types():
+    amount = T.DecimalType(38, 10)
+    item = StructType().add("amount", amount).add("note", StringType())
+    schema = (
+        StructType()
+        .add("items", T.ArrayType(StructType().add("item", item)))
+        .add("labels", T.MapType(StringType(), T.ArrayType(T.BinaryType())))
+        .add("by_key", T.MapType(T.ArrayType(IntegerType()), item))
+        .add("by_date", T.MapType(T.DateType(), T.TimestampType()))
+        .add("local", T.TimestampNTZType())
+        .add("_hoodie_commit_time", StringType())
+        .add("_hoodie_record_key", StringType())
+        .add("missing", item)
+    )
+    exact = "1234567890123456789012345678.1200000000"
+    data = {"amount": Decimal(exact), "note": None}
+    local = datetime(2024, 11, 3, 1, 30, 0, 123456)
+    row = [
+        [{"item": data}, None], [("blob", [b"\x00\xff", None])],
+        [([1, 2], data)], [(date(2024, 11, 3), local.replace(tzinfo=UTC))],
+        local, "20241103013000123", "00042", None,
+    ]
+    table = pa.Table.from_arrays([[v] for v in row], schema=to_arrow_schema(schema))
+    result = encode_result(table, schema)
+    assert result.columns == schema.names
+    assert result.column_types == [
+        "array<struct<`item`:struct<`amount`:decimal(38,10),`note`:string>>>",
+        "map<string,array<binary>>",
+        "map<array<int>,struct<`amount`:decimal(38,10),`note`:string>>",
+        "map<date,timestamp>", "timestamp_ntz", "string", "string",
+        "struct<`amount`:decimal(38,10),`note`:string>",
+    ]
+    encoded = {"amount": exact, "note": None}
+    assert result.rows == [[
+        [{"item": encoded}, None], {"blob": ["AP8=", None]}, [[[1, 2], encoded]],
+        [["2024-11-03", "2024-11-03T01:30:00.123456+00:00"]], "2024-11-03T01:30:00.123456",
+        "20241103013000123", "00042", None,
+    ]]
+
+
+@pytest.mark.parametrize("has_schema", [True, False])
+async def test_query_uses_execution_schema(settings, has_schema):
+    session = Session()
+    session.df.schema = StructType().add("x", IntegerType())
+    executed = StructType().add("x", StringType())
+    table = pa.table({"x": ["00042"]})
+    session.df._to_table = Mock(return_value=(table, executed if has_schema else None))
+    with pyspark_client(spark_settings(settings), session) as (client, _):
+        result = await client.execute("SELECT x FROM v", timeout=1, max_rows=10)
+    assert result.column_types == ["string"] and result.rows == [["00042"]]
+
+
+@pytest.mark.parametrize("has_schema", [True, False])
+def test_time_precision_requires_execution_schema(has_schema):
+    ms, us = T.TimeType(3), T.TimeType(6)
+    nested = T.MapType(ms, T.ArrayType(StructType().add("t", us)))
+    schema = StructType().add("ms", ms).add("us", us).add("nested", nested)
+    table = pa.Table.from_arrays(
+        [[123_000_000], [123_456_000], [[(123_000_000, [{"t": 123_456_000}])]]],
+        schema=to_arrow_schema(schema),
+    )
+    result = encode_result(table, schema if has_schema else None)
+    ms_type, us_type = ("time(3)", "time(6)") if has_schema else ("time", "time")
+    assert result.column_types == [ms_type, us_type, f"map<{ms_type},array<struct<`t`:{us_type}>>>"]
+    ms_value, us_value = "00:00:00.123", "00:00:00.123456"
+    assert result.rows == [[ms_value, us_value, [[ms_value, [{"t": us_value}]]]]]
+
+
+def test_duplicate_fields_use_schema_order_and_strict_json_numbers():
+    # Connect can rename the fields in the Arrow batch. The SQL schema retains both names.
+    field = StructType().add("a:b", T.DoubleType()).add("a:b", T.DoubleType())
+    schema = StructType().add("s", T.ArrayType(field))
+    physical = pa.list_(pa.struct([("a:b_0", pa.float64()), ("a:b_1", pa.float64())]))
+    column = pa.array([[{"a:b_0": float("nan"), "a:b_1": float("-inf")}, None]], type=physical)
+    result = encode_result(pa.table({"s": column}), schema)
+    assert result.column_types == ["array<struct<`a:b`:double,`a:b`:double>>"]
+    assert json.loads(json.dumps(result.rows, allow_nan=False)) == [[[["NaN", "-Infinity"], None]]]
+
+
+def test_extended_dates_and_timestamps():
+    table = pa.table({
+        "d": pa.array([-719529, -719469, 2932897], type=pa.date32()),
+        "ts": pa.array([-62167219200000001, -1, 253402300800000001],
+                       type=pa.timestamp("us", tz="America/New_York")),
+        "ntz": pa.array([-62167219200000000, 0, 253402300800000000], type=pa.timestamp("us")),
+    })
+    assert encode_result(table, None).rows == [
+        ["-0001-12-31", "-0001-12-31T23:59:59.999999+00:00", "0000-01-01T00:00:00"],
+        ["0000-02-29", "1969-12-31T23:59:59.999999+00:00", "1970-01-01T00:00:00"],
+        ["+10000-01-01", "+10000-01-01T00:00:00.000001+00:00", "+10000-01-01T00:00:00"],
+    ]
+
+
+@pytest.mark.parametrize("key_type", [T.ByteType(), T.ShortType(), T.IntegerType(), T.LongType()])
+def test_integer_map_keys_match_trino_json(key_type):
+    schema = StructType().add("m", T.MapType(key_type, StringType()))
+    mapping = {-1: "negative", 0: None, 1: "positive"}
+    table = pa.Table.from_arrays([[list(mapping.items())]], schema=to_arrow_schema(schema))
+    result = encode_result(table, schema)
+    assert result.rows == [[json.loads(json.dumps(mapping))]]
+
+
+def test_bigint_map_keys_round_trip_as_decimal_strings():
+    keys = [2**53, 2**53 + 1, -(2**63), 2**63 - 1]
+    schema = (StructType().add("m", T.MapType(T.LongType(), T.LongType()))
+              .add("nested", T.MapType(T.ArrayType(StructType().add("k", T.LongType())),
+                                       T.IntegerType())))
+    table = pa.Table.from_arrays([
+        [[(k, i) for i, k in enumerate(keys)]],
+        [[([{"k": k}], i) for i, k in enumerate(keys)]],
+    ], schema=to_arrow_schema(schema))
+    result = encode_result(table, schema)
+    mapping, nested = json.loads(json.dumps(result.rows))[0]
+    assert mapping == {str(k): i for i, k in enumerate(keys)}
+    assert nested == [[[{"k": str(k)}], i] for i, k in enumerate(keys)]
+
+
 @pytest.mark.parametrize("failure", ["query", "catalog"])
 async def test_pyspark_failures_close_session(settings, failure):
     session = Session()
@@ -184,12 +304,28 @@ async def test_pyspark_query_error_is_actionable_and_redacted(settings):
 
 async def test_pyspark_describe_uses_schema_without_collecting(settings):
     session = Session()
+    session.df.schema.add("region", StringType())
     with pyspark_client(spark_settings(settings), session) as (client, _):
         out = await client.describe("SELECT * FROM t LIMIT 0", timeout=1, max_rows=2)
         assert out.columns == ["column_name", "data_type", "is_nullable"]
         assert out.rows == [["id", "int", "NO"], ["region", "string", "YES"]]
         assert not session.df.collected
         assert session.closed.is_set()
+
+
+async def test_describe_and_query_agree_on_struct_field_names(settings):
+    schema = StructType().add("s", T.ArrayType(StructType().add("a:int,b`c", StringType())))
+    describe, query = Session(), Session()
+    describe.df.schema = schema
+    empty = pa.Table.from_batches([], schema=to_arrow_schema(schema))
+    query.df._to_table = Mock(return_value=(empty, schema))
+    s = spark_settings(settings)
+    with pyspark_client(s, describe, query) as (client, _):
+        registry = build_registry(s, client)
+        metadata = json.loads(await registry.get("describe_table").handler(table="t"))
+        result = json.loads(await registry.get("query_lakehouse").handler(sql="SELECT * FROM t"))
+    assert metadata["rows"] == [["s", "array<struct<`a:int,b``c`:string>>", "YES"]]
+    assert result["column_types"] == [metadata["rows"][0][1]]
 
 
 @pytest.mark.parametrize("cancel_task", [False, True])
