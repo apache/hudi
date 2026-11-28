@@ -244,9 +244,9 @@ public class TestSparkUpdatesAsDeletesAndInserts extends SparkClientFunctionalTe
   private static Stream<Arguments> indexAndWriteMode() {
     Stream<Arguments> deleteInsertMode = Stream.of("SIMPLE", "BLOOM", "GLOBAL_SIMPLE", "GLOBAL_BLOOM", "RECORD_INDEX")
         .map(index -> Arguments.of(index, true));
-    // Outside the mode only the bloom and simple indexes tag the position of every record they locate, since a
-    // global index drops it in the merged lookup of a delete
-    Stream<Arguments> updateMode = Stream.of("SIMPLE", "BLOOM")
+    // Outside the mode a global index tags the position of every record it locates only without the merged lookup of
+    // partition path updates, which the global bloom index then skips
+    Stream<Arguments> updateMode = Stream.of("SIMPLE", "BLOOM", "GLOBAL_BLOOM")
         .map(index -> Arguments.of(index, false));
     return Stream.concat(deleteInsertMode, updateMode);
   }
@@ -254,7 +254,7 @@ public class TestSparkUpdatesAsDeletesAndInserts extends SparkClientFunctionalTe
   /**
    * Each index type the update-as-delete-insert write mode allows writes the base file position of each record an
    * upsert updates or deletes, and of each key a delete removes, to the log of a merge-on-read table, and so do the
-   * bloom and simple indexes outside the mode.
+   * bloom, simple and global bloom indexes outside the mode.
    */
   @ParameterizedTest
   @MethodSource("indexAndWriteMode")
@@ -265,7 +265,8 @@ public class TestSparkUpdatesAsDeletesAndInserts extends SparkClientFunctionalTe
     HoodieIndex.IndexType indexType = HoodieIndex.IndexType.valueOf(index);
     HoodieWriteConfig config = getConfigBuilder(true, HoodieIndex.IndexType.SIMPLE)
         .withProperties(keyGenProps())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(keyGenProps()).withIndexType(indexType).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(keyGenProps()).withIndexType(indexType)
+            .withGlobalBloomIndexUpdatePartitionPath(updatesAsDeletesAndInserts).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withEnableGlobalRecordLevelIndex(indexType == HoodieIndex.IndexType.RECORD_INDEX).build())
         .withWriteUpdatesAsDeletesAndInserts(updatesAsDeletesAndInserts)

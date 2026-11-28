@@ -739,6 +739,21 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
   }
 
   /**
+   * With multiple base file formats a file group can have an HFile base file whatever the table's base file format is.
+   */
+  @Test
+  void testMultipleBaseFileFormatsRejectedInDeleteInsertMode() throws Exception {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE.key(), "true");
+    properties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
+    metaClient = HoodieTestUtils.init(storageConf, basePath, getTableType(), properties);
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.SIMPLE)
+        .withWriteUpdatesAsDeletesAndInserts(true)
+        .build();
+    assertWriteRejected(config, WriteOperationType.UPSERT, HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE.key());
+  }
+
+  /**
    * An update or delete of a table without a primary key whose writer generates the record keys cannot locate
    * the current version of a row by its key.
    */

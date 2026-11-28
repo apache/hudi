@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.core.io.storage.HoodieIOFactory
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.action.commit.BaseWriteHelper
@@ -206,6 +206,54 @@ class TestUpdatesAsDeletesAndInsertsWithSql extends HoodieSparkSqlTestBase {
       }
       checkAnswer(s"select id, name, price, dt from $tableName order by id")(
         Seq(1, "a1", 10.0, "p1"), Seq(2, "a2", 20.0, "p1"))
+    }
+  }
+
+  Seq("GLOBAL_BLOOM", "GLOBAL_SIMPLE").foreach { indexType =>
+    test(s"Test MERGE INTO moving a record to another partition with $indexType index without the write mode") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        withSQLConf("hoodie.index.type" -> indexType) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  dt string
+               |) using hudi
+               | partitioned by (dt)
+               | location '$tablePath'
+               | tblproperties (
+               |  type = 'mor',
+               |  primaryKey = 'id',
+               |  'hoodie.record.merge.mode' = 'COMMIT_TIME_ORDERING'
+               | )
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 'p1'), (2, 'a2', 20.0, 'p1'), (3, 'a3', 30.0, 'p1'),"
+            + " (4, 'a4', 40.0, 'p2'), (5, 'a5', 50.0, 'p2')")
+          // Key 1 is updated in place, and key 2 moves from p1 to p2, which deletes its old copy from the file group in p1
+          spark.sql(
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 'a1u' as name, 11.0 as price, 'p1' as dt
+               |  union all select 2, 'a2m', 21.0, 'p2') s
+               |on t.id = s.id
+               |when matched then update set *
+             """.stripMargin)
+          val expected = Seq(Seq(1, "a1u", 11.0, "p1"), Seq(2, "a2m", 21.0, "p2"), Seq(3, "a3", 30.0, "p1"),
+            Seq(4, "a4", 40.0, "p2"), Seq(5, "a5", 50.0, "p2"))
+          checkAnswer(s"select id, name, price, dt from $tableName order by id")(expected: _*)
+
+          withSQLConf(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1") {
+            spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
+          }
+          assertEquals(1, HoodieTestUtils.createMetaClient(HoodieTestUtils.getDefaultStorageConf, tablePath)
+            .getActiveTimeline.getCommitTimeline.filterCompletedInstants.countInstants)
+          checkAnswer(s"select id, name, price, dt from $tableName order by id")(expected: _*)
+        }
+      }
     }
   }
 

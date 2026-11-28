@@ -229,7 +229,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       log.info("RDD PreppedRecords was persisted at: {}", inputRDD.getStorageLevel());
     }
 
-    HoodieData<HoodieRecord<T>> positionedRecords = HoodieIndexUtils.tagMissingRecordPositionsIfNeeded(inputRecords, operationType, config, table);
+    HoodieData<HoodieRecord<T>> positionedRecords = HoodieIndexUtils.tagPositionsOfLocatedRecordsIfNeeded(inputRecords, operationType, config, table);
     if (positionedRecords != inputRecords) {
       // Both the workload profile and the write read the positions, which come from reading base files
       positionedRecords.persist(config.getTaggedRecordStorageLevel(), context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));

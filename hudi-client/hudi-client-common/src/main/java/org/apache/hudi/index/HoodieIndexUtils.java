@@ -874,15 +874,14 @@ public class HoodieIndexUtils {
    * the indexes that read the keys of base files to locate records tag their positions, so this reads them for the
    * records a global index or the record index located.
    */
-  public static <R> HoodieData<HoodieRecord<R>> tagMissingRecordPositionsIfNeeded(HoodieData<HoodieRecord<R>> taggedRecords,
+  public static <R> HoodieData<HoodieRecord<R>> tagPositionsOfLocatedRecordsIfNeeded(HoodieData<HoodieRecord<R>> taggedRecords,
                                                                                   WriteOperationType operationType,
                                                                                   HoodieWriteConfig config,
                                                                                   HoodieTable table) {
-    boolean updatesOrDeletes = operationType == WriteOperationType.UPSERT || operationType == WriteOperationType.UPSERT_PREPPED
-        || operationType == WriteOperationType.DELETE || operationType == WriteOperationType.DELETE_PREPPED;
+    boolean updatesOrDeletes = operationType == WriteOperationType.UPSERT || operationType == WriteOperationType.DELETE;
     return updatesOrDeletes && config.shouldWriteUpdatesAsDeletesAndInserts() && !table.isMetadataTable()
         && table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ
-        ? tagMissingRecordPositions(taggedRecords, config, table) : taggedRecords;
+        ? tagPositionsOfLocatedRecords(taggedRecords, config, table) : taggedRecords;
   }
 
   /**
@@ -890,7 +889,7 @@ public class HoodieIndexUtils {
    * file of the located file group the way the simple index reads it. The update-as-delete-insert write
    * mode writes the delete of a located record to the log as a positional delete against that base file.
    */
-  private static <R> HoodieData<HoodieRecord<R>> tagMissingRecordPositions(HoodieData<HoodieRecord<R>> taggedRecords,
+  private static <R> HoodieData<HoodieRecord<R>> tagPositionsOfLocatedRecords(HoodieData<HoodieRecord<R>> taggedRecords,
                                                                            HoodieWriteConfig config,
                                                                            HoodieTable table) {
     List<Pair<String, HoodieBaseFile>> baseFiles = taggedRecords.filter(HoodieIndexUtils::isLocatedWithoutPosition)

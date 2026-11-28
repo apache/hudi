@@ -95,7 +95,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> taggedRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
     HoodieData<HoodieRecord<T>> taggedData = HoodieListData.eager(taggedRecords);
-    HoodieData<HoodieRecord<T>> positionedData = HoodieIndexUtils.tagMissingRecordPositionsIfNeeded(taggedData, operationType, config, table);
+    HoodieData<HoodieRecord<T>> positionedData = HoodieIndexUtils.tagPositionsOfLocatedRecordsIfNeeded(taggedData, operationType, config, table);
     List<HoodieRecord<T>> inputRecords = positionedData == taggedData ? taggedRecords : positionedData.collectAsList();
 
     WorkloadProfile workloadProfile =
