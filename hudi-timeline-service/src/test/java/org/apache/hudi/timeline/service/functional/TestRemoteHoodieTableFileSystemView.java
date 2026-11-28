@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TestHoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.TimelineServiceTestHarness;
@@ -165,6 +166,21 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(completed, inflight);
     return new HoodieFileGroup("", "data",
         activeTimeline.getCommitsTimeline().filterCompletedInstants());
+  }
+
+  /**
+   * The remote view reports a failure of the server as an HTTP error, which does not carry the server's
+   * exception, so the listing the server runs is checked on a local view of the same timeline.
+   */
+  @Override
+  protected void assertListingFailsOnDataFileHudiDidNotName(String partitionPath) {
+    assertThrows(HoodieRemoteException.class, () -> roView.getLatestBaseFiles(partitionPath).count());
+    try (SyncableFileSystemView localView =
+             super.getFileSystemView(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false)) {
+      Exception exception = assertThrows(Exception.class, () -> localView.getLatestBaseFiles(partitionPath).count());
+      assertTrue(exception instanceof InvalidHoodiePathException || exception.getCause() instanceof InvalidHoodiePathException,
+          "a native table must list the data file Hudi did not name but got: " + exception);
+    }
   }
 
   private static RemoteHoodieTableFileSystemView initFsView(HoodieTableMetaClient metaClient,

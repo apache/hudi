@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.storage.StoragePath;
 
@@ -49,6 +50,9 @@ public final class FileNameParser {
   static final Pattern NATIVE_LOG_FILE_PATTERN =
       Pattern.compile("^([^._]+)_((\\d+)-(\\d+)-(\\d+))_([^_]+)_(\\d+)\\.(log|deletes|cdc)\\.([^.]+)$");
   private static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
+  // <taskPartitionId>-<stageId>-<taskAttemptId>, with -<rollNumber> when a Flink task writes a file group more than once in a commit
+  private static final Pattern BASE_FILE_WRITE_TOKEN_PATTERN = Pattern.compile("^\\d+-\\d+-\\d+(-\\d+)?$");
+  private static final Pattern COMMIT_TIME_PATTERN = Pattern.compile("^\\d+$");
   private static final char UNDERSCORE = '_';
   private static final char DOT = '.';
 
@@ -127,6 +131,30 @@ public final class FileNameParser {
         actualFileName.substring(firstUnderscoreIndex + 1, secondUnderscoreIndex),
         actualFileName.substring(secondUnderscoreIndex + 1, commitTimeEndIndex),
         dotIndex < 0 ? "" : actualFileName.substring(dotIndex)));
+  }
+
+  /**
+   * Checks whether a file name is one Hudi gives a base file: {@code <fileId>_<writeToken>_<commitTime><fileExtension>}
+   * as the Hudi writers generate it, or an externally created file registered with the {@code _hudiext} marker.
+   *
+   * <p>Unlike {@link #parseBaseFile(String)}, this rejects the loose form without a write token, and returns false
+   * instead of throwing for a name that ends with the external file marker but carries no commit time.</p>
+   *
+   * @param fileName file name or full path
+   * @return true when the name is a base file name Hudi gives
+   */
+  public static boolean isHudiNamedBaseFile(String fileName) {
+    Option<BaseFileName> baseFileName;
+    try {
+      baseFileName = parseBaseFile(fileName);
+    } catch (HoodieException e) {
+      return false;
+    }
+    if (!baseFileName.isPresent() || !COMMIT_TIME_PATTERN.matcher(baseFileName.get().getCommitTime()).matches()) {
+      return false;
+    }
+    return ExternalFilePathUtil.isExternallyCreatedFile(getActualFileName(fileName))
+        || BASE_FILE_WRITE_TOKEN_PATTERN.matcher(baseFileName.get().getWriteToken()).matches();
   }
 
   /**
