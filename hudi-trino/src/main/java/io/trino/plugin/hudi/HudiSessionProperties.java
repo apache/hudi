@@ -67,6 +67,7 @@ public class HudiSessionProperties
     private static final String IGNORE_ABSENT_PARTITIONS = "ignore_absent_partitions";
     static final String DYNAMIC_FILTERING_WAIT_TIMEOUT = "dynamic_filtering_wait_timeout";
     static final String RESOLVE_COLUMN_NAME_CASING_ENABLED = "resolve_column_name_casing_enabled";
+    static final String SCHEMA_COLUMN_TYPES_ENABLED = "schema_column_types_enabled";
 
     // Internal configuration for debugging and testing
     static final String RECORD_LEVEL_INDEX_ENABLED = "record_level_index_enabled";
@@ -265,6 +266,11 @@ public class HudiSessionProperties
                         RESOLVE_COLUMN_NAME_CASING_ENABLED,
                         "Enable resolve column name casing",
                         hudiConfig.isResolveColumnNameCasingEnabled(),
+                        true),
+                booleanProperty(
+                        SCHEMA_COLUMN_TYPES_ENABLED,
+                        "Type data columns from the Hudi table schema instead of the metastore column types",
+                        hudiConfig.isSchemaColumnTypesEnabled(),
                         true));
     }
 
@@ -409,6 +415,11 @@ public class HudiSessionProperties
     public static boolean isResolveColumnNameCasingEnabled(ConnectorSession session)
     {
         return session.getProperty(RESOLVE_COLUMN_NAME_CASING_ENABLED, Boolean.class);
+    }
+
+    public static boolean isSchemaColumnTypesEnabled(ConnectorSession session)
+    {
+        return session.getProperty(SCHEMA_COLUMN_TYPES_ENABLED, Boolean.class);
     }
 
     public static Duration getDynamicFilteringWaitTimeout(ConnectorSession session)

@@ -59,6 +59,7 @@ public class HudiConfig
     private boolean ignoreAbsentPartitions;
     private Duration dynamicFilteringWaitTimeout = new Duration(1, SECONDS);
     private boolean resolveColumnNameCasingEnabled;
+    private boolean schemaColumnTypesEnabled;
 
     // Internal configuration for debugging and testing
     private boolean isRecordLevelIndexEnabled = true;
@@ -467,6 +468,19 @@ public class HudiConfig
     public HudiConfig setResolveColumnNameCasingEnabled(boolean resolveColumnNameCasingEnabled)
     {
         this.resolveColumnNameCasingEnabled = resolveColumnNameCasingEnabled;
+        return this;
+    }
+
+    public boolean isSchemaColumnTypesEnabled()
+    {
+        return schemaColumnTypesEnabled;
+    }
+
+    @Config("hudi.schema-column-types.enabled")
+    @ConfigDescription("Type data columns from the Hudi table schema instead of the metastore column types")
+    public HudiConfig setSchemaColumnTypesEnabled(boolean schemaColumnTypesEnabled)
+    {
+        this.schemaColumnTypesEnabled = schemaColumnTypesEnabled;
         return this;
     }
 }
